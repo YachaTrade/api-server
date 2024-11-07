@@ -1,0 +1,88 @@
+[package]
+name = "api-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+#DB
+##POSTGRES
+sqlx = { version = "0.8.1", features = [
+    "runtime-tokio",
+    "postgres",
+    "tls-rustls",
+    "bigdecimal",
+    "chrono",
+    "json",
+] }
+
+
+##REDIS
+redis = { version = "0.25.4", features = [
+    "tokio-comp",
+    "cluster-async",
+    "tokio-rustls-comp",
+    "json",
+] }
+
+#AWS
+aws-sdk-s3 = "1.41.0"
+aws-config = { version = "1.5.4", features = ["behavior-version-latest"] }
+
+
+#ASYNC
+tokio = { version = "1.38.0", features = ["full"] }
+
+#SERVER
+axum = { version = "0.7.5", features = ["multipart"] }
+tower-http = { version = "0.5.2", features = ["full"] }
+axum-server = { version = "0.6", features = ["tls-rustls"] }
+tower = { version = "0.4", features = ["full"] }
+tower_governor = "0.4.2"
+tower-sessions-core = "0.12.2"
+tower-cookies = "0.10.0"
+
+#SWAGGER
+utoipa = { version = "4.2.3", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "7.1.0", features = ["axum"] }
+anyhow = "1.0.92"
+
+
+#DOTENV
+dotenv = "0.15.0"
+
+#RAYON
+rayon = "1.10.0"
+
+
+#TRACING
+tracing-subscriber = { version = "0.3.18", features = [
+    "time",
+    "env-filter",
+    "json",
+    "registry",
+    "ansi",
+] }
+tracing = "0.1.40"
+
+
+
+bytes = "1.8.0"
+
+
+lazy_static = "1.5.0"
+
+
+#SERDE
+serde = "1.0.203"
+serde_json = "1.0.117"
+uuid = "1.11.0"
+rand = "0.8.5"
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22.1"
+
+
+#alloy
+alloy = { version = "0.5", features = ["signer-keystore"] }
+
+
+bigdecimal = { version = "0.4.6", features = ["serde-json"] } # '-' not '_'
