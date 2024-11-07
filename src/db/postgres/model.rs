@@ -62,27 +62,15 @@ pub struct Token {
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
 pub struct Thread {
-    #[serde(rename = "threadId")]
     pub thread_id: i32,
-    #[serde(rename = "tokenId")]
     pub token_id: String,
-    #[serde(rename = "authorId")]
     pub author_id: String,
-    #[serde(rename = "content")]
     pub content: String,
-    #[serde(rename = "createdAt")]
-    #[schema(value_type = String, example = "2023-06-01T12:00:00Z")]
     pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[schema(value_type = String, example = "2023-06-01T12:00:00Z")]
     pub updated_at: DateTime<Utc>,
-    #[serde(rename = "rootId")]
     pub root_id: Option<i32>,
-    #[serde(rename = "likesCount")]
     pub likes_count: i32,
-    #[serde(rename = "replyCount")]
     pub reply_count: i32,
-    #[serde(rename = "imageUri")]
     pub image_uri: Option<String>,
 }
 impl Thread {
