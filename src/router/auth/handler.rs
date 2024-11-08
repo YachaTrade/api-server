@@ -181,7 +181,7 @@ pub async fn auth_session(
 }
 /// Delete authentication session
 #[utoipa::path(
-    post,
+    delete,
     path = Path::DeleteSession.as_str(),
     operation_id = "Delete authentication session", 
     params(
