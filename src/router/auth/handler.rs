@@ -159,10 +159,11 @@ pub async fn auth_session(
 
     let max_age = 7 * 24 * 60 * 60; // 7일
 
-    let cookie = format!(
-        "session={}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age={}",
-        session_id, max_age
-    );
+    // let cookie = format!(
+    //     "session={}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age={}",
+    //     session_id, max_age
+    // );
+    let cookie = format!("session={}; Path=/; Max-Age={}", session_id, max_age);
     // let cookie = format!(
     //     "session={}; ;Domain=localhost; Path=/; Max-Age={};S",
     //     session_id, max_age
