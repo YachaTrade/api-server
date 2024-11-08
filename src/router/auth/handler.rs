@@ -22,6 +22,7 @@ use crate::{
         controller::{account::AccountController, session::SessionController},
         model::Account,
     },
+    env,
     result::{AppError, AppJsonResult, AppResult},
     state::AppState,
 };
@@ -159,15 +160,23 @@ pub async fn auth_session(
 
     let max_age = 7 * 24 * 60 * 60; // 7일
 
-    // let cookie = format!(
-    //     "session={}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age={}",
-    //     session_id, max_age
-    // );
-    let cookie = format!("session={}; Path=/; Max-Age={}", session_id, max_age);
-    // let cookie = format!(
-    //     "session={}; ;Domain=localhost; Path=/; Max-Age={};S",
-    //     session_id, max_age
-    // );
+    let cookie = {
+        let environment = env::get_env("ENVIRONMENT");
+
+        let ip = env::get_env("IP");
+        if environment == "development" {
+            format!(
+                "session={}; Path=/; Max-Age={}; Domain={}",
+                session_id, max_age, ip
+            )
+        } else {
+            format!(
+                "session={}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age={}; Domain={}",
+                session_id, max_age, ip
+            )
+        }
+    };
+
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
         .header(
