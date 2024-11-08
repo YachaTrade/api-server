@@ -16,12 +16,7 @@ use std::{
 
 use anyhow::Result;
 use axum::{
-    error_handling::HandleErrorLayer,
-    http::{Method, StatusCode, Uri},
-    middleware as axum_middleware,
-    response::IntoResponse,
-    routing::get,
-    BoxError, Router,
+    error_handling::HandleErrorLayer, http::{Method, StatusCode, Uri}, middleware as axum_middleware, response::IntoResponse, routing::get, BoxError, Extension, Router
 };
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
@@ -137,7 +132,7 @@ async fn main() -> Result<()> {
     let root = Router::new().route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()
         .merge(root)
-        .merge(auth::router())
+        .merge(auth::router().layer(Extension(app_state.clone())))
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
