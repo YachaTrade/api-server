@@ -166,10 +166,7 @@ pub async fn auth_session(
         let ip = env::get_env("IP");
         info!("environment = {:?}", environment);
         if environment == "development" {
-            format!(
-                "session={}; Path=/; Max-Age={}; Domain={}",
-                session_id, max_age, ip
-            )
+            format!("session={}; Path=/; Max-Age={};", session_id, max_age)
         } else {
             format!(
                 "session={}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age={}; Domain={}",
