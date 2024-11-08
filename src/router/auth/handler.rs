@@ -164,6 +164,7 @@ pub async fn auth_session(
         let environment = env::get_env("ENVIRONMENT");
 
         let ip = env::get_env("IP");
+        info!("environment = {:?}", environment);
         if environment == "development" {
             format!(
                 "session={}; Path=/; Max-Age={}; Domain={}",
@@ -176,7 +177,7 @@ pub async fn auth_session(
             )
         }
     };
-
+    info!("cookie = {:?}", cookie);
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
         .header(
