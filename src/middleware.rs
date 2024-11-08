@@ -55,16 +55,17 @@ use tracing::info;
 //     Ok(next.run(req).await)
 // }
 pub async fn authenticate_user(
+    State(state): State<AppState>,
     cookies: Cookies,
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
     // Body 타입으로 통일
-    let state = req
-        .extensions()
-        .get::<AppState>()
-        .expect("AppState not found in extensions")
-        .clone();
+    // let state = req
+    //     .extensions()
+    //     .get::<AppState>()
+    //     .expect("AppState not found in extensions")
+    //     .clone();
 
     let session_key = match cookies.get("session") {
         Some(cookie) => cookie.value().to_string(),
