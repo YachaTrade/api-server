@@ -15,8 +15,6 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route(Path::Nonce.as_str(), post(auth_nonce))
         .route(Path::Session.as_str(), post(auth_session))
-        .route(
-            Path::DeleteSession.as_str(),
-            delete(auth_delete_session).route_layer(middleware::from_fn(authenticate_user)), // route_layer 사용
-        )
+        .route(Path::DeleteSession.as_str(), delete(auth_delete_session))
+        .layer(middleware::from_fn(authenticate_user))
 }

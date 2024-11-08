@@ -132,7 +132,7 @@ async fn main() -> Result<()> {
     let root = Router::new().route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()
         .merge(root)
-        .merge(auth::router().layer(Extension(app_state.clone())))
+        .merge(auth::router())
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
