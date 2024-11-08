@@ -66,7 +66,7 @@ pub async fn authenticate_user(
     //     .get::<AppState>()
     //     .expect("AppState not found in extensions")
     //     .clone();
-
+    info!("Request = {:?}", req);
     let session_key = match cookies.get("session") {
         Some(cookie) => cookie.value().to_string(),
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),
