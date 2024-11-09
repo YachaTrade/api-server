@@ -161,9 +161,9 @@ pub async fn auth_session(
     let max_age = 7 * 24 * 60 * 60; // 7일
 
     //추후 프론트 배포시 samesite = strict 로 변경
-    //Secure 추가
+    //Secure 추가  SameSite=None;
     let cookie = format!(
-        "session={};  HttpOnly; SameSite=None; Path=/; Max-Age={};",
+        "session={}; HttpOnly; Path=/; Max-Age={};",
         session_id, max_age,
     );
     info!("cookie = {:?}", cookie);
