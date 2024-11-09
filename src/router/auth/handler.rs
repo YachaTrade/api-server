@@ -160,20 +160,10 @@ pub async fn auth_session(
 
     let max_age = 7 * 24 * 60 * 60; // 7일
 
-    let cookie = {
-        let environment = env::get_env("ENVIRONMENT");
-
-        let ip = env::get_env("IP");
-        info!("environment = {:?}", environment);
-        if environment == "development" {
-            format!("session={}; Path=/; Max-Age={};", session_id, max_age)
-        } else {
-            format!(
-                "session={}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age={}; Domain={}",
-                session_id, max_age, ip
-            )
-        }
-    };
+    let cookie = format!(
+        "session={}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age={};",
+        session_id, max_age,
+    );
     info!("cookie = {:?}", cookie);
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
