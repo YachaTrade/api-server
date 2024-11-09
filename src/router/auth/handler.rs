@@ -167,7 +167,7 @@ pub async fn auth_session(
     //     session_id, max_age,
     // );
     let cookie = format!(
-        "session={}; ;Domain=localhost; Path=/; Max-Age={};S",
+        "session={}; HttpOnly; Domain=localhost; Path=/; Max-Age={};SameSite=None",
         session_id, max_age
     );
     info!("cookie = {:?}", cookie);
