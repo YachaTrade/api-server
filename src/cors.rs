@@ -34,7 +34,7 @@ pub fn get_cors() -> CorsLayer {
             http::Method::POST,
             http::Method::PATCH,
             http::Method::DELETE,
-            // http::Method::OPTIONS,
+            http::Method::OPTIONS,
         ])
         .allow_credentials(true)
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
