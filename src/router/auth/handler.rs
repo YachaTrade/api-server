@@ -136,7 +136,7 @@ pub async fn auth_session(
         .del_nonce(&address)
         .await
         .map_err(|err| AppError::RedisError(err.to_string()))?;
-    let session_id = generate_session_id(address.as_str());
+    let session_id = generate_session_id(address.as_str(), nonce.as_str());
     redis
         .set_session(&session_id, &address, *EXPIRATION_SESSION_KEY)
         .await
@@ -167,7 +167,7 @@ pub async fn auth_session(
     //     session_id, max_age,
     // );
     let cookie = format!(
-        "session={}; HttpOnly; Domain=localhost; Path=/; Max-Age={};SameSite=None",
+        "session={}; HttpOnly; Path=/; Max-Age={};SameSite=None",
         session_id, max_age
     );
     info!("cookie = {:?}", cookie);
@@ -216,8 +216,8 @@ pub async fn auth_delete_session(
 }
 
 //충돌 방지
-//session 키를 주소와
-fn generate_session_id(address: &str) -> String {
+//session 키를 주소와 nonce 로 생성
+fn generate_session_id(address: &str, nonce: &str) -> String {
     // UUID 생성
     let uuid = Uuid::new_v4();
 
@@ -226,9 +226,6 @@ fn generate_session_id(address: &str) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-
-    // 랜덤 논스 생성
-    let nonce: u64 = thread_rng().gen();
 
     // 블록체인 주소, 체인ID, 타임스탬프, UUID, 논스를 모두 결합
     let combined = format!(
