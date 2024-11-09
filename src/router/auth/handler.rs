@@ -162,9 +162,13 @@ pub async fn auth_session(
 
     //추후 프론트 배포시 samesite = strict 로 변경
     //Secure 추가  SameSite=None;
+    // let cookie = format!(
+    //     "session={}; HttpOnly; Path=/; Max-Age={}",
+    //     session_id, max_age,
+    // );
     let cookie = format!(
-        "session={}; HttpOnly; Path=/; Max-Age={}",
-        session_id, max_age,
+        "session={}; ;Domain=localhost; Path=/; Max-Age={};S",
+        session_id, max_age
     );
     info!("cookie = {:?}", cookie);
     let body = Json(AuthSessionResponse { account });
