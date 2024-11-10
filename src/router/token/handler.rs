@@ -69,7 +69,12 @@ pub async fn update_token(
     let token_controller = TokenController::new(state.postgres.clone());
 
     let token = get_token_with_retry(&token_controller, tx.clone()).await?;
+    info!("update_token : token = {:?}", token);
     if token.creator != creator_address {
+        info!(
+            "token.creator = {:?}, creator_address = {:?}",
+            token.creator, creator_address
+        );
         return Err(AppError::BadRequest("Unauthroized Token".to_string()));
     }
 
