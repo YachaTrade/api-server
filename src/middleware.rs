@@ -60,15 +60,6 @@ pub async fn authenticate_user(
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
-    // Body 타입으로 통일
-    // let state = req
-    //     .extensions()
-    //     .get::<AppState>()
-    //     .expect("AppState not found in extensions")
-    //     .clone();
-    info!("Header ={:#?}", req.headers());
-    info!("Request = {:?}", req);
-    info!("Cookies = {:?}", cookies);
     let session_key = match cookies.get("session") {
         Some(cookie) => cookie.value().to_string(),
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),
