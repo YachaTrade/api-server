@@ -5,6 +5,7 @@ use axum::http::{
 };
 use std::time::Duration;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tracing::info;
 
 use crate::env;
 pub fn get_cors() -> CorsLayer {
@@ -21,7 +22,8 @@ pub fn get_cors() -> CorsLayer {
             if let Ok(localhost_origin) = format!("http://localhost:{}", allow_cors_port).parse() {
                 origins.push(localhost_origin);
             }
-            if let Ok(test_client) = "https://main.d3j5jzvozo0dgk.amplifyapp.com".parse() {
+            if let Ok(test_client) = env::get_env("CORS_ALLOWED_ORIGINS").parse() {
+                info!("CORS_ALLOWED_ORIGINS: {:?}", test_client);
                 origins.push(test_client);
             }
         }
