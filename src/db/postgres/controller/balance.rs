@@ -18,7 +18,7 @@ impl BalanceController {
             r#"
             SELECT 
                 b.token_id,
-                COALESCE(b.amount::text, '0') as amount,
+                COALESCE(b.current_amount::text, '0') as amount,
                 t.image_uri
             FROM 
                 balance b
@@ -27,7 +27,7 @@ impl BalanceController {
             WHERE 
                 b.account_id = $1
             ORDER BY 
-                b.amount DESC
+                b.current_amount DESC
             "#,
             account_id
         )

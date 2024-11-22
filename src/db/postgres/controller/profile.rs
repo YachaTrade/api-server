@@ -56,7 +56,7 @@ impl ProfileController {
                     r#"
                     SELECT 
                         b.token_id,
-                        COALESCE(b.amount::text, '0') as amount,
+                        COALESCE(b.current_amount::text, '0') as amount,
                         t.image_uri
                     FROM 
                         balance b
@@ -67,7 +67,7 @@ impl ProfileController {
                     WHERE 
                         a.nickname = $1
                     ORDER BY 
-                        b.amount DESC
+                        b.current_amount DESC
                     "#,
                     nickname
                 )
@@ -80,7 +80,7 @@ impl ProfileController {
                     r#"
                     SELECT 
                         b.token_id,
-                        COALESCE(b.amount::text, '0') as amount,
+                        COALESCE(b.current_amount::text, '0') as amount,
                         t.image_uri
                     FROM 
                         balance b
@@ -89,7 +89,7 @@ impl ProfileController {
                     WHERE 
                         b.account_id = $1
                     ORDER BY 
-                        b.amount DESC
+                        b.current_amount DESC
                     "#,
                     address
                 )
