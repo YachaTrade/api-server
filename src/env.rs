@@ -5,23 +5,37 @@ pub fn get_env(key: &str) -> String {
 
 #[derive(Debug, Clone)]
 pub struct DBEnv {
-    // pub db_url: String,
-    pub user: String,
-    pub password: String,
-    pub db_name: String,
-    pub host: String,
-    pub port: String,
+    // Primary DB
+    pub primary_db_user: String,
+    pub primary_db_password: String,
+    pub primary_db_name: String,
+    pub primary_db_host: String,
+    pub primary_db_port: String,
+    
+    // Replica DB
+    pub replica_db_user: String,
+    pub replica_db_password: String,
+    pub replica_db_name: String,
+    pub replica_db_host: String,
+    pub replica_db_port: String,
 }
 
 impl DBEnv {
     pub fn new() -> Self {
         DBEnv {
-            // db_url: get_env("DB_URL"),
-            user: get_env("DB_USER"),
-            password: get_env("DB_PASSWORD"),
-            host: get_env("DB_HOST"),
-            port: get_env("DB_PORT"),
-            db_name: get_env("DB_NAME"),
+            // Primary DB
+            primary_db_user: get_env("PRIMARY_DB_USER"),
+            primary_db_password: get_env("PRIMARY_DB_PASSWORD"),
+            primary_db_host: get_env("PRIMARY_DB_HOST"),
+            primary_db_port: get_env("PRIMARY_DB_PORT"),
+            primary_db_name: get_env("PRIMARY_DB_NAME"),
+            
+            // Replica DB
+            replica_db_user: get_env("REPLICA_DB_USER"),
+            replica_db_password: get_env("REPLICA_DB_PASSWORD"),
+            replica_db_host: get_env("REPLICA_DB_HOST"),
+            replica_db_port: get_env("REPLICA_DB_PORT"),
+            replica_db_name: get_env("REPLICA_DB_NAME"),
         }
     }
 }

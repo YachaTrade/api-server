@@ -17,7 +17,7 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(Account, Account)> {
-        let mut tx = self.db.pool.begin().await?;
+        let mut tx = self.db.write_pool.begin().await?;
 
         self.insert_follow(&mut tx, &follower, &following).await?;
         // let follower_account = self.update_follower_count(&mut tx, &follower, 1).await?;
@@ -56,7 +56,7 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(Account, Account)> {
-        let mut tx = self.db.pool.begin().await?;
+        let mut tx = self.db.write_pool.begin().await?;
 
         self.delete_follow(&mut tx, &follower, &following).await?;
 
@@ -154,7 +154,7 @@ impl FollowController {
             limit,
             offset
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(self.db.get_read_pool())
         .await?;
 
         Ok(followers)
@@ -180,7 +180,7 @@ impl FollowController {
             limit,
             offset
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(self.db.get_read_pool())
         .await?;
 
         Ok(following)

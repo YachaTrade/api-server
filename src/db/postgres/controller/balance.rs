@@ -31,7 +31,7 @@ impl BalanceController {
             "#,
             account_id
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(self.db.get_read_pool())
         .await?;
         Ok(balances)
     }

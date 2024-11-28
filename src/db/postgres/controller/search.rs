@@ -51,7 +51,7 @@ impl SearchController {
             "#,
             query
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(self.db.get_read_pool())
         .await
         .context("Failed to search tokens")?;
         info!("token_responses: {:?}", rows);

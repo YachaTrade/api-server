@@ -22,7 +22,7 @@ impl ThreadController {
     ) -> Result<Thread> {
         let mut tx = self
             .db
-            .pool
+            .get_write_pool()
             .begin()
             .await
             .context("Failed to begin transaction")?;
@@ -83,7 +83,7 @@ impl ThreadController {
             FROM thread
             "#
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await
         .context("Failed to get last thread id")?;
 
@@ -97,13 +97,13 @@ impl ThreadController {
             "SELECT * FROM thread WHERE thread_id = $1",
             thread_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await
         .map_err(|e| anyhow!("Failed to fetch thread: {}", e))
     }
 
     pub async fn like_thread(&self, thread_id: i32, user_id: &str) -> Result<Thread> {
-        let mut transaction = self.db.pool.begin().await?;
+        let mut transaction = self.db.get_write_pool().begin().await?;
 
         // Try to insert a new like
         let insert_result = sqlx::query!(
@@ -138,7 +138,7 @@ impl ThreadController {
     }
 
     pub async fn unlike_thread(&self, thread_id: i32, user_id: &str) -> Result<Thread> {
-        let mut tx = self.db.pool.begin().await?;
+        let mut tx = self.db.get_write_pool().begin().await?;
 
         let updated_thread = sqlx::query_as!(
             Thread,
@@ -184,7 +184,7 @@ impl ThreadController {
     #[cfg(test)]
     pub async fn get_thread_replies(&self, root_id: i32) -> Result<Vec<Thread>> {
         sqlx::query_as!(Thread, "SELECT * FROM thread WHERE root_id = $1", root_id)
-            .fetch_all(&self.db.pool)
+            .fetch_all(self.db.get_read_pool())
             .await
             .map_err(|e| anyhow!("Failed to fetch thread replies: {}", e))
     }
@@ -196,7 +196,7 @@ impl ThreadController {
             "#,
             token_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await;
         match result {
             Ok(row) => Ok(row.reply_count),
@@ -209,7 +209,7 @@ impl ThreadController {
             "DELETE FROM token_reply_count WHERE token_id = $1",
             token_id
         )
-        .execute(&self.db.pool)
+        .execute(self.db.get_write_pool())
         .await?;
         Ok(())
     }

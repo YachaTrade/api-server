@@ -21,7 +21,7 @@ impl SessionController {
         debug!("Setting session: {} -> {}", session_id, address);
         let account_controller = AccountController::new(self.db.clone());
 
-        let mut tx = self.db.pool.begin().await?;
+        let mut tx = self.db.get_write_pool().begin().await?;
 
         // 계정 가져오기 또는 생성
         let account = account_controller.get_or_create_account(address).await?;
@@ -52,7 +52,7 @@ impl SessionController {
             "#,
             session_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await?;
         Ok(session.account_id)
     }
@@ -64,7 +64,7 @@ impl SessionController {
             "#,
             address
         )
-        .execute(&self.db.pool)
+        .execute(self.db.get_write_pool())
         .await?;
 
         let rows_affected = result.rows_affected();
@@ -84,7 +84,7 @@ impl SessionController {
             "#,
             session_id
         )
-        .execute(&self.db.pool)
+        .execute(self.db.get_write_pool())
         .await?;
 
         let rows_affected = result.rows_affected();

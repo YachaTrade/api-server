@@ -33,7 +33,7 @@ impl AccountController {
             account.like_count,
          
         )
-        .execute(&self.db.pool)
+        .execute(self.db.get_write_pool())
         .await
         .context("Fail insert Account")?;
         Ok(())
@@ -49,50 +49,71 @@ impl AccountController {
         debug!("nickname : {:?}", nickname);
         debug!("image_uri : {:?}", image_uri);
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new("UPDATE account SET ");
-    
-        let mut updates = Vec::new();
-    
+        let mut changed = false;
+
         if let Some(image_uri) = image_uri {
-            updates.push(("image_uri", image_uri));
-        }
-        if let Some(nickname) = nickname {
-            updates.push(("nickname", nickname));
-        }
-        if let Some(bio) = bio {
-            updates.push(("bio", bio));
-        }
-    
-        for (i, (field, value)) in updates.iter().enumerate() {
-            if i > 0 {
-                query_builder.push(", ");
+            if !changed {
+                query_builder.push(" image_uri = ");
+            } else {
+                query_builder.push(" , image_uri = ");
             }
-            query_builder.push(format!(" {} = ", field));
-            query_builder.push_bind(value);
+            query_builder.push_bind(image_uri);
+            changed = true;
         }
-    
-        query_builder.push(" WHERE id = ");
+
+        if let Some(nickname) = nickname {
+            if !changed {
+                query_builder.push(" nickname = ");
+            } else {
+                query_builder.push(" , nickname = ");
+            }
+            query_builder.push_bind(nickname);
+            changed = true;
+        }
+
+        if let Some(bio) = bio {
+            if !changed {
+                query_builder.push(" bio = ");
+            } else {
+                query_builder.push(" , bio = ");
+            }
+            query_builder.push_bind(bio);
+            changed = true;
+        }
+
+        query_builder.push(" WHERE account_id = ");
         query_builder.push_bind(address);
-    
-        query_builder.push(" RETURNING *");
-    
-        let updated_account = query_builder
-            .build_query_as::<Account>()
-            .fetch_one(&self.db.pool)
-            .await?;
-    
-        Ok(updated_account)
+
+        let mut query = query_builder.build();
+        query.execute(self.db.get_write_pool()).await?;
+
+        let account = sqlx::query_as!(
+            Account,
+            r#"
+            SELECT account_id,image_uri,nickname,bio,follower_count,following_count,like_count
+            FROM account
+            WHERE account_id = $1
+            "#,
+            address
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?;
+
+        Ok(account)
     }
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
         let account = sqlx::query_as!(
             Account,
             r#"
-            SELECT * FROM account WHERE account_id = $1
+            SELECT account_id,image_uri,nickname,bio,follower_count,following_count,like_count
+            FROM account
+            WHERE account_id = $1
             "#,
             account_id
         )
-        .fetch_one(&self.db.pool)
-        .await?;
-
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .context("Fail get Account")?;
         Ok(account)
     }
     pub async fn get_or_create_account(&self, address: &str) -> Result<Account> {

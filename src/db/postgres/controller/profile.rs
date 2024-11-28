@@ -28,7 +28,7 @@ impl ProfileController {
                     "SELECT * FROM account WHERE nickname = $1",
                     nickname
                 )
-                .fetch_one(&self.db.pool)
+                .fetch_one(self.db.get_read_pool())
                 .await?
             }
             Identifier::Address(address) => {
@@ -37,7 +37,7 @@ impl ProfileController {
                     "SELECT * FROM account WHERE account_id = $1",
                     address
                 )
-                .fetch_one(&self.db.pool)
+                .fetch_one(self.db.get_read_pool())
                 .await?
             }
         };
@@ -71,7 +71,7 @@ impl ProfileController {
                     "#,
                     nickname
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
             Identifier::Address(address) => {
@@ -93,7 +93,7 @@ impl ProfileController {
                     "#,
                     address
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
         };
@@ -115,7 +115,7 @@ impl ProfileController {
                     "#,
                     nickname
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
             Identifier::Address(address) => {
@@ -129,7 +129,7 @@ impl ProfileController {
                     "#,
                     address
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
         };
@@ -151,7 +151,7 @@ impl ProfileController {
                     "#,
                     nickname
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
             Identifier::Address(address) => {
@@ -165,7 +165,7 @@ impl ProfileController {
                     "#,
                     address
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
         };
@@ -187,7 +187,7 @@ impl ProfileController {
                     "#,
                     nickname
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             },
             Identifier::Address(address) => {
@@ -201,7 +201,7 @@ impl ProfileController {
                     "#,
                     address
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
         };
@@ -223,7 +223,7 @@ impl ProfileController {
                     "#,
                     nickname
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             },
             Identifier::Address(address) => {
@@ -237,7 +237,7 @@ impl ProfileController {
                     "#,
                     address
                 )
-                .fetch_all(&self.db.pool)
+                .fetch_all(self.db.get_read_pool())
                 .await?
             }
         };

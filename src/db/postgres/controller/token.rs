@@ -20,7 +20,7 @@ impl TokenController {
             "#,
             token_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await?;
 
         Ok(token)
@@ -33,7 +33,7 @@ impl TokenController {
             "#,
             tx
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await?;
 
         Ok(token)
@@ -47,7 +47,6 @@ impl TokenController {
         website: Option<String>,
         creator: String,
     ) -> Result<Token> {
-        // Log the update request
         debug!("Update token Request by {}", creator);
 
         // Perform the update
@@ -70,7 +69,7 @@ impl TokenController {
             transaction_hash,
             creator,
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(self.db.get_read_pool())
         .await
         .context("Failt Update token metadata")?;
         debug!("Updated token = {:?}", token);
