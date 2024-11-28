@@ -49,6 +49,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::thread::handler::like_thread,
         router::thread::handler::unlike_thread,
         router::token::handler::update_token,
+        router::chart::handler::get_chart,
     ),
     components(schemas(
         router::auth::handler::AuthNonceRequest,
@@ -75,9 +76,14 @@ use utoipa_swagger_ui::SwaggerUi;
         router::thread::handler::ThreadResponse,
         router::token::handler::UpdateTokenRequest,
         router::token::handler::UpdateTokenResponse,
+        router::chart::handler::ChartResponse,
+        router::chart::handler::ChartQuery,
         db::postgres::model::Account,
         db::postgres::model::Token,
         db::postgres::model::Thread,
+        db::postgres::model::Token,
+        db::postgres::model::Chart,
+        
 
     )),
     tags(
@@ -88,6 +94,8 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Thread",description="Thread management endpoints"),
         (name="Token",description="Token management endpoints"),
         (name="Profile",description="Profile management endpoints"),
+        (name="Search",description="Search endpoints"),
+        (name="Chart",description="Chart endpoints")
     )
 )]
 pub struct ApiDoc;
