@@ -51,10 +51,11 @@ pub async fn get_chart(
     Path(token): Path<String>,
     Query(query): Query<ChartQuery>,
 ) -> AppJsonResult<ChartResponse> {
+    info!("Chart request for token: {}", token);
     let chart_interval = ChartInterval::from_str(&query.interval)
         .map_err(|err| AppError::BadRequest(format!("Invalid chart interval: {}", err)))?;
 
-    let pagination = query.pagination.unwrap_or(0);
+    let pagination = query.pagination.unwrap_or(1);
 
     let chart_controller = ChartController::new(state.postgres.clone());
 

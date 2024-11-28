@@ -6,12 +6,13 @@ use crate::db::postgres::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use tracing::info;
 
 pub struct ChartController {
     pub db: Arc<PostgresDatabase>,
 }
 
-impl<'a> ChartController {
+impl ChartController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         ChartController { db }
     }
@@ -22,8 +23,11 @@ impl<'a> ChartController {
         pagination: i16,
     ) -> Result<Vec<Chart>> {
         let chart_interval: i16 = interval.into();
-        let offset = (pagination as i64) * 300;
-
+        let offset = ((pagination - 1) as i64) * 300;
+        info!(
+            "Chart request for token: {}, interval: {:?}, pagination: {}",
+            token_id, chart_interval, pagination
+        );
         let charts = sqlx::query_as::<_, Chart>(
             r#"
             SELECT 
@@ -47,8 +51,9 @@ impl<'a> ChartController {
         .bind(chart_interval)
         .bind(offset)
         .fetch_all(self.db.get_read_pool())
-        .await?;
-
+        .await
+        .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
+        info!("Chart = {:?}", charts);
         Ok(charts)
     }
 }

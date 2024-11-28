@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     db, env,
     middleware::authenticate_user,
-    router::{self, account, auth, balance, search, thread, token},
+    router::{self, account, auth, balance, chart, search, thread, token},
     state::AppState,
     types,
 };
@@ -152,6 +152,7 @@ async fn main() -> Result<()> {
         )))
         .merge(balance::router())
         .merge(search::router())
+        .merge(chart::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()
