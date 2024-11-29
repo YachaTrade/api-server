@@ -23,6 +23,7 @@ impl ChartController {
         pagination: i16,
     ) -> Result<Vec<Chart>> {
         let chart_interval: i16 = interval.into();
+        let pagination = if pagination <= 0 { 1 } else { pagination };
         let offset = ((pagination - 1) as i64) * 300;
         info!(
             "Chart request for token: {}, interval: {:?}, pagination: {}",

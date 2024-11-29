@@ -20,7 +20,7 @@ pub struct ChartResponse {
     pub data: Vec<Chart>,
     pub token_id: String,
     pub interval: String,
-    pub pagination: i16,
+    pub pagenation: i16,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -40,7 +40,7 @@ pub struct ChartQuery {
     params(
         ("token" = String, Path, description = "Token ID"),
         ("interval" = String, Query, description = "Chart interval (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)"),
-        ("pagination" = Option<i16>, Query, description = "Page number (0-based, returns 300 records per page)")
+        ("pagination" = Option<i16>, Query, description = "Page number (default 0, returns 300 records per page)")
     ),
     tag = "Chart",
     operation_id="get chart data"
@@ -55,19 +55,19 @@ pub async fn get_chart(
     let chart_interval = ChartInterval::from_str(&query.interval)
         .map_err(|err| AppError::BadRequest(format!("Invalid chart interval: {}", err)))?;
 
-    let pagination = query.pagination.unwrap_or(1);
+    let pagenation = query.pagination.unwrap_or(0);
 
     let chart_controller = ChartController::new(state.postgres.clone());
 
     let chart = chart_controller
-        .get_chart(&token, chart_interval, pagination)
+        .get_chart(&token, chart_interval, pagenation)
         .await
         .map_err(|err| AppError::InternalError(format!("Failed to get chart: {}", err)))?;
     let chart_response = ChartResponse {
         data: chart,
         token_id: token,
         interval: chart_interval.to_str().to_string(),
-        pagination,
+        pagenation,
     };
     Ok(Json(chart_response))
 }
