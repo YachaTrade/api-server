@@ -49,6 +49,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::thread::handler::like_thread,
         router::thread::handler::unlike_thread,
         router::token::handler::update_token,
+        router::token::handler::get_token,
         router::chart::handler::get_chart,
     ),
     components(schemas(
@@ -75,7 +76,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::thread::handler::ThreadRequest,
         router::thread::handler::ThreadResponse,
         router::token::handler::UpdateTokenRequest,
-        router::token::handler::UpdateTokenResponse,
+        router::token::handler::TokenResponse,
         router::chart::handler::ChartResponse,
         router::chart::handler::ChartQuery,
         db::postgres::model::Account,
@@ -144,9 +145,7 @@ async fn main() -> Result<()> {
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
-        .merge(token::router().layer(ServiceBuilder::new().layer(
-            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
-        )))
+        .merge(token::router(app_state.clone()).layer(ServiceBuilder::new()))
         .merge(thread::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))

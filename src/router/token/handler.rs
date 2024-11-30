@@ -1,18 +1,53 @@
 use std::time::Duration;
 
-use axum::{extract::State, Extension, Json};
+use axum::{
+    extract::{Path, State},
+    Extension, Json,
+};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 
+use super::path::TokenPath;
 use crate::{
     db::postgres::{controller::token::TokenController, model::Token},
     result::{AppError, AppJsonResult},
     state::AppState,
 };
 
-use super::path::Path;
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TokenResponse {
+    token: Token,
+}
+/// Get token metadata
+#[utoipa::path(
+    get,
+    path = TokenPath::GetToken.docs_str(),
+    params(
+        ("token address" = String, description = "Get Token metadata by token address")
+    ),
+    responses(
+        (status = 200, description = "Token updated successfully", body = TokenResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    
+    tag = "Token"
+)]
+pub async fn get_token(
+    State(state): State<AppState>,
+    Path(token_id): Path<String>,
+) -> AppJsonResult<TokenResponse> {
+    info!("Get token Request for token_id: {}", token_id);
+    let token_controller = TokenController::new(state.postgres.clone());
+    let token = token_controller
+        .get_token(token_id)
+        .await
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+    Ok(Json(TokenResponse { token }))
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTokenRequest {
@@ -27,21 +62,17 @@ pub struct UpdateTokenRequest {
     #[schema(example = "null,https://meme_token.org")]
     website: Option<String>,
 }
-#[derive(Debug, Serialize, ToSchema)]
-pub struct UpdateTokenResponse {
-    token: Token,
-}
 
 /// Update token metadata
 #[utoipa::path(
     put,
-    path = Path::UpdateToken.as_str(),
+    path = TokenPath::UpdateToken.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),
     request_body = UpdateTokenRequest,
     responses(
-        (status = 200, description = "Token updated successfully", body = UpdateTokenResponse),
+        (status = 200, description = "Token updated successfully", body = TokenResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
@@ -56,7 +87,7 @@ pub async fn update_token(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
     Json(payload): Json<UpdateTokenRequest>,
-) -> AppJsonResult<UpdateTokenResponse> {
+) -> AppJsonResult<TokenResponse> {
     let UpdateTokenRequest {
         tx,
         description,
@@ -87,7 +118,7 @@ pub async fn update_token(
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 
-    Ok(Json(UpdateTokenResponse { token }))
+    Ok(Json(TokenResponse { token }))
 }
 
 async fn get_token_with_retry(

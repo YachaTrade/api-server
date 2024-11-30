@@ -1,12 +1,21 @@
 pub mod path;
 
 pub mod handler;
-use axum::{routing::put, Router};
-use handler::update_token;
-use path::Path;
+use axum::{
+    middleware,
+    routing::{get, put},
+    Router,
+};
+use handler::{get_token, update_token};
+use path::TokenPath;
 
-use crate::state::AppState;
+use crate::{middleware::authenticate_user, state::AppState};
 
-pub fn router() -> Router<AppState> {
-    Router::new().route(Path::UpdateToken.as_str(), put(update_token))
+pub fn router(state: AppState) -> Router<AppState> {
+    Router::new()
+        .route(TokenPath::GetToken.as_str(), get(get_token))
+        .route(
+            TokenPath::UpdateToken.as_str(),
+            put(update_token).layer(middleware::from_fn_with_state(state, authenticate_user)),
+        )
 }

@@ -6,7 +6,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
 };
-use anyhow::anyhow;
+
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -28,10 +28,10 @@ pub struct ChartQuery {
     interval: String,
     pagination: Option<i16>,
 }
-
+///Get Chart data
 #[utoipa::path(
     get,
-    path = "/chart/{token}",
+    path = "/chart/:token",
     responses(
         (status = 200, description = "Success", body = ChartResponse),
         (status = 404, description = "Chart not found"),
@@ -43,7 +43,7 @@ pub struct ChartQuery {
         ("pagination" = Option<i16>, Query, description = "Page number (default 0, returns 300 records per page)")
     ),
     tag = "Chart",
-    operation_id="get chart data"
+    
 )]
 #[instrument(skip(state, token, query))]
 pub async fn get_chart(
