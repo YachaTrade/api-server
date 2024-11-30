@@ -25,25 +25,23 @@ pub struct TokenResponse {
     get,
     path = TokenPath::GetToken.docs_str(),
     params(
-        ("token address" = String, description = "Get Token metadata by token address")
+        ("token" = String, Path, description = "Token address")
     ),
     responses(
-        (status = 200, description = "Token updated successfully", body = TokenResponse),
+        (status = 200, description = "Token fetched successfully", body = TokenResponse),
         (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    
     tag = "Token"
 )]
 pub async fn get_token(
     State(state): State<AppState>,
-    Path(token_id): Path<String>,
+    Path(token): Path<String>,
 ) -> AppJsonResult<TokenResponse> {
-    info!("Get token Request for token_id: {}", token_id);
+    info!("Get token Request for token: {}", token);
     let token_controller = TokenController::new(state.postgres.clone());
     let token = token_controller
-        .get_token(token_id)
+        .get_token(token)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
     Ok(Json(TokenResponse { token }))
