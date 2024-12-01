@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
+#[derive(Debug)]
 pub enum Identifier {
     Nickname(String),
     Address(String), // 이더리움 주소
@@ -38,7 +39,7 @@ pub struct SearchTokenResponse {
     pub name: String,
     pub symbol: String,
     pub image_uri: String,
-    pub description: String,
+    pub description: Option<String>,
     pub created_at: i64,
     pub user_info: UserInfoResponse, //token 의 creator -> account table -> select nickname, image uri
     pub reply_count: String,         //token.id -> token_reply_count table -> reply_count
@@ -51,7 +52,7 @@ pub struct SearchTokenRow {
     pub name: String,
     pub symbol: String,
     pub image_uri: String,
-    pub description: String,
+    pub description: Option<String>,
     pub created_at: i64,
     pub reply_count: String,
     pub price: String,

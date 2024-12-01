@@ -16,7 +16,7 @@ use super::path::Path;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateThreadRequest {
-    coin_id: String,
+    token_id: String,
     content: String,
     parent_id: Option<i32>,
 }
@@ -28,7 +28,7 @@ pub struct ThreadResponse {
 #[derive(ToSchema)]
 pub struct CreateThreadFormData {
     #[schema(example = json!({
-        "coin_id": "coin_address",
+        "token_id": "token_address",
         "content": "Your Content",
         "root_id": "Null or root Thread ID"
     }))]
@@ -51,7 +51,7 @@ pub struct CreateThreadFormData {
         description = "Create Thread data and image",
         example = json!({
             "data": {
-                "coin_id": "coin address",
+                "token_id": "coin address",
                 "content":"Your Content",
                 "root_id": "Null or Parent Thread ID"
             },
@@ -79,7 +79,7 @@ pub async fn create_thread(
     let mut form_data = None;
     let mut image_data = None;
     let mut content_type = None;
-    info!("Multipart = {:?}", multipart);
+
     while let Some(field) = multipart
         .next_field()
         .await
@@ -135,7 +135,7 @@ pub async fn create_thread(
 
     let thread = thread_controller
         .create_thread(
-            form_data.coin_id,
+            form_data.token_id,
             account_id.clone(),
             form_data.content,
             form_data.parent_id,
@@ -216,7 +216,7 @@ pub async fn unlike_thread(
 
     let thread_controller = ThreadController::new(state.postgres.clone());
     let thread = thread_controller
-        .like_thread(thread_id, &session_address)
+        .unlike_thread(thread_id, &session_address)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 

@@ -84,13 +84,21 @@ impl AccountController {
         query_builder.push(" WHERE account_id = ");
         query_builder.push_bind(address);
 
-        let mut query = query_builder.build();
+        let  query = query_builder.build();
         query.execute(self.db.get_write_pool()).await?;
-
-        let account = sqlx::query_as!(
+        
+        // Get updated account
+        let updated_account = sqlx::query_as!(
             Account,
             r#"
-            SELECT account_id,image_uri,nickname,bio,follower_count,following_count,like_count
+            SELECT 
+                account_id,
+                image_uri,
+                nickname,
+                bio,
+                follower_count,
+                following_count,
+                like_count
             FROM account
             WHERE account_id = $1
             "#,
@@ -99,7 +107,7 @@ impl AccountController {
         .fetch_one(self.db.get_read_pool())
         .await?;
 
-        Ok(account)
+        Ok(updated_account)
     }
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
         let account = sqlx::query_as!(

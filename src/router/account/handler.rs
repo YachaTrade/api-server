@@ -55,7 +55,6 @@ pub struct AccountResponse {
 #[utoipa::path(
     patch,
     path = Path::UpdateAccount.as_str(),
-    operation_id = "update account profile",
     request_body(
         content = UpdateAccountFormData,
         content_type = "multipart/form-data",
@@ -182,7 +181,6 @@ pub struct AddLikeRequest {
     patch,
     path = Path::AddAccountLike.as_str(),
     request_body = AddLikeRequest,
-    operation_id = "add account like",
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),
@@ -234,7 +232,6 @@ pub struct RemoveLikeRequest{
     patch,
     path = Path::RemoveAccountLike.as_str(),
     request_body = RemoveLikeRequest,
-    operation_id = "remove account like",
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),
@@ -277,7 +274,6 @@ pub async fn remove_account_like(
 #[utoipa::path(
     get,
     path = Path::GetAccount.as_str(),
-    operation_id = "get account session check",
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),

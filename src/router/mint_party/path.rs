@@ -1,12 +1,12 @@
 #[derive(Debug)]
-pub enum ProfilePath {
+pub enum MintPartyPath {
     UpdateMintParty,
 }
 
-impl ProfilePath {
+impl MintPartyPath {
     pub fn as_str(&self) -> &'static str {
         match self {
-            ProfilePath::UpdateMintParty => "/mint_party/update",
+            MintPartyPath::UpdateMintParty => "/mint_party/update",
         }
     }
 }

@@ -4,9 +4,9 @@ use crate::{
     db::postgres::PostgresDatabase,
     types::response::{SearchTokenResponse, SearchTokenRow, UserInfoResponse},
 };
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tracing::info;
+use tracing::{error, info};
 pub struct SearchController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -17,6 +17,9 @@ impl SearchController {
     }
 
     pub async fn search_order_tokens(&self, query: &str) -> Result<Vec<SearchTokenResponse>> {
+        let search_query = format!("%{}%", query.to_lowercase());
+        info!("Searching tokens with query: {}", search_query);
+
         let rows = sqlx::query_as!(
             SearchTokenRow,
             r#"
@@ -25,7 +28,7 @@ impl SearchController {
                     t.name as "name!",
                     t.symbol as "symbol!",
                     t.image_uri as "image_uri!",
-                    t.description as "description!",
+                    t.description as "description",
                     t.created_at as "created_at",
                     COALESCE(trc.reply_count::TEXT, '0') as "reply_count!",
                     c.price::TEXT as "price!",
@@ -49,12 +52,20 @@ impl SearchController {
                     t.created_at DESC
                 LIMIT 50
             "#,
-            query
+            search_query
         )
         .fetch_all(self.db.get_read_pool())
         .await
-        .context("Failed to search tokens")?;
-        info!("token_responses: {:?}", rows);
+        .map_err(|err| {
+            error!("Database error while searching tokens: {:?}", err);
+            anyhow!("Failed to search tokens: {}", err)
+        })?;
+
+        info!("Found {} token results", rows.len());
+        if rows.is_empty() {
+            info!("No tokens found for query: {}", search_query);
+        }
+
         let tokens: Vec<SearchTokenResponse> = rows
             .into_par_iter()
             .map(|row| SearchTokenResponse {

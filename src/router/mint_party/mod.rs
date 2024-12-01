@@ -2,6 +2,7 @@ use axum::{
     routing::{get, put},
     Router,
 };
+use path::MintPartyPath;
 
 use crate::state::AppState;
 
@@ -10,7 +11,7 @@ pub mod path;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
-        path::ProfilePath::UpdateMintParty.as_str(),
+        MintPartyPath::UpdateMintParty.as_str(),
         put(handler::update_mint_party),
     )
 }

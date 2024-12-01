@@ -9,7 +9,6 @@ use axum::{
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
 
-use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use tracing::{info, instrument};
@@ -22,7 +21,6 @@ use crate::{
         controller::{account::AccountController, session::SessionController},
         model::Account,
     },
-    env,
     result::{AppError, AppJsonResult, AppResult},
     state::AppState,
 };
@@ -50,7 +48,6 @@ pub struct AuthNonceResponse {
 #[utoipa::path(
     post,
     path = Path::Nonce.as_str(),
-    operation_id = "Generate authentication nonce", 
     request_body = AuthNonceRequest,
     responses(
         (status = 200, description = "Nonce generated successfully", body = AuthNonceResponse),
@@ -96,7 +93,6 @@ pub struct AuthSessionResponse {
 #[utoipa::path(
     post,
     path = Path::Session.as_str(),
-    operation_id = "Generate authentication session", 
     request_body = AuthSessionRequest,
     responses(
         (status = 200, description = "Session created successfully", body = AuthSessionResponse),
@@ -186,7 +182,6 @@ pub async fn auth_session(
 #[utoipa::path(
     delete,
     path = Path::DeleteSession.as_str(),
-    operation_id = "Delete authentication session", 
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),

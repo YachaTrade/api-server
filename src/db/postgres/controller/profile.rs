@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use rayon::iter::IntoParallelIterator;
+use tracing::info;
 
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ impl ProfileController {
         ProfileController { db }
     }
     pub async fn get_profile(&self, identifier: &Identifier) -> Result<Account> {
+        info!("identifier: {:?}", identifier);
         let account = match identifier {
             Identifier::Nickname(nickname) => {
                 sqlx::query_as!(
@@ -68,6 +70,7 @@ impl ProfileController {
                         a.nickname = $1
                     ORDER BY 
                         b.current_amount DESC
+                    LIMIT 50
                     "#,
                     nickname
                 )
@@ -90,6 +93,7 @@ impl ProfileController {
                         b.account_id = $1
                     ORDER BY 
                         b.current_amount DESC
+                    LIMIT 50
                     "#,
                     address
                 )
@@ -112,6 +116,7 @@ impl ProfileController {
                     JOIN account a ON t.author_id = a.account_id
                     WHERE a.nickname = $1
                     ORDER BY t.created_at DESC
+                    LIMIT 50
                     "#,
                     nickname
                 )
@@ -126,6 +131,7 @@ impl ProfileController {
                     FROM thread
                     WHERE author_id = $1
                     ORDER BY created_at DESC
+                    LIMIT 50
                     "#,
                     address
                 )
@@ -148,6 +154,7 @@ impl ProfileController {
                     JOIN account a ON t.creator = a.account_id
                     WHERE a.nickname = $1
                     ORDER BY t.created_at DESC
+                    LIMIT 50
                     "#,
                     nickname
                 )
@@ -162,6 +169,7 @@ impl ProfileController {
                     FROM token
                     WHERE creator = $1
                     ORDER BY created_at DESC
+                    LIMIT 50
                     "#,
                     address
                 )
@@ -184,6 +192,7 @@ impl ProfileController {
                     JOIN account a1 ON f.following_id = a1.account_id
                     JOIN account a2 ON f.follower_id = a2.account_id
                     WHERE a1.nickname = $1
+                    LIMIT 50
                     "#,
                     nickname
                 )
@@ -198,6 +207,7 @@ impl ProfileController {
                     FROM follow f
                     JOIN account a ON f.follower_id = a.account_id
                     WHERE f.following_id = $1
+                    LIMIT 50
                     "#,
                     address
                 )
@@ -220,6 +230,7 @@ impl ProfileController {
                     JOIN account a1 ON f.follower_id = a1.account_id
                     JOIN account a2 ON f.following_id = a2.account_id
                     WHERE a1.nickname = $1
+                    LIMIT 50
                     "#,
                     nickname
                 )
@@ -234,6 +245,7 @@ impl ProfileController {
                     FROM follow f
                     JOIN account a ON f.following_id = a.account_id
                     WHERE f.follower_id = $1
+                    LIMIT 50
                     "#,
                     address
                 )

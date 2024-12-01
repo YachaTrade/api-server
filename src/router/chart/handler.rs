@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 
+use super::path::ChartPath;
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ChartResponse {
     pub data: Vec<Chart>,
@@ -28,10 +30,11 @@ pub struct ChartQuery {
     interval: String,
     pagination: Option<i16>,
 }
+
 ///Get Chart data
 #[utoipa::path(
     get,
-    path = "/chart/:token",
+    path = ChartPath::GetChart.docs_str(),
     responses(
         (status = 200, description = "Success", body = ChartResponse),
         (status = 404, description = "Chart not found"),
@@ -43,7 +46,6 @@ pub struct ChartQuery {
         ("pagination" = Option<i16>, Query, description = "Page number (default 0, returns 300 records per page)")
     ),
     tag = "Chart",
-    
 )]
 #[instrument(skip(state, token, query))]
 pub async fn get_chart(
