@@ -113,7 +113,7 @@ pub async fn create_thread(
     let thread_controller = ThreadController::new(state.postgres.clone());
 
     let image_uri = if let Some(image_data) = image_data {
-        let r2_client = state.r2client.clone();
+        let s3_client = state.s3_client.clone();
         let content_type = content_type.unwrap_or("image/jpg".to_string());
         let last_thread_id = thread_controller.get_last_thread_id().await?;
 
@@ -125,7 +125,7 @@ pub async fn create_thread(
             last_thread_id + 1
         };
 
-        let image_uri = r2_client
+        let image_uri = s3_client
             .upload_thread_image_file(&account_id, next_thread_id, image_data, &content_type)
             .await?;
         Some(image_uri)

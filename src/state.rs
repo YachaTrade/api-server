@@ -1,24 +1,24 @@
 use std::sync::Arc;
 
-use crate::db::{postgres::PostgresDatabase, r2::R2Client, redis::RedisDatabase};
+use crate::db::{postgres::PostgresDatabase, redis::RedisDatabase, s3::S3Client};
 
 #[derive(Clone)]
 pub struct AppState {
     pub postgres: Arc<PostgresDatabase>,
     pub redis: Arc<RedisDatabase>,
-    pub r2client: Arc<R2Client>,
+    pub s3_client: Arc<S3Client>,
 }
 
 impl AppState {
     pub async fn new() -> Self {
         let redis = Arc::new(RedisDatabase::new().await);
         let postgres = Arc::new(PostgresDatabase::new().await);
-        let r2client = Arc::new(R2Client::new().await);
+        let s3_client = Arc::new(S3Client::new().await);
 
         Self {
             postgres,
             redis,
-            r2client,
+            s3_client,
         }
     }
 }

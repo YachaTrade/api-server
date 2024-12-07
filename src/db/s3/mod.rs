@@ -8,30 +8,30 @@ use bytes::Bytes;
 use tracing::info;
 
 #[derive(Debug)]
-pub struct R2Client {
+pub struct S3Client {
     client: Client,
     bucket: String,
 }
 
-impl R2Client {
+impl S3Client {
     pub async fn new() -> Self {
-        let account_id = env::get_env("R2_ACCOUNT_ID");
-        let bucket = env::get_env("R2_BUCKET");
-        let access_key_id = env::get_env("R2_ACCESS_KEY_ID");
-        let secret_access_key = env::get_env("R2_SECRET_ACCESS_KEY");
+        let account_id = env::get_env("S3_ACCOUNT_ID");
+        let bucket = env::get_env("S3_BUCKET");
+        let access_key_id = env::get_env("S3_ACCESS_KEY_ID");
+        let secret_access_key = env::get_env("S3_SECRET_ACCESS_KEY");
         let credentials = Credentials::new(
             access_key_id,
             secret_access_key,
             None,
             None,
-            "cloudflare-r2",
+            "cloudflare-s3",
         );
 
         let config = aws_config::from_env()
             .credentials_provider(credentials)
             .region(Region::new("auto"))
             .endpoint_url(format!(
-                "https://{}.r2.cloudflarestorage.com/{}",
+                "https://{}.s3.cloudflarestorage.com/{}",
                 account_id, bucket
             ))
             .load()
@@ -39,7 +39,7 @@ impl R2Client {
 
         let client = Client::new(&config);
 
-        R2Client {
+        S3Client {
             client,
             bucket: bucket.to_string(),
         }
@@ -66,16 +66,16 @@ impl R2Client {
             .send()
             .await?;
         info!("Uploaded Result ={:?}", result);
-        info!("Uploaded file to R2: key={}", key);
+        info!("Uploaded file to S3: key={}", key);
         let environment = env::get_env("ENVIRONMENT");
         if environment == "development" {
             return Ok(format!(
-                "https://pub-56950a3ba13e4c43ba0b2e803fd9b2f1.r2.dev/{}/{}",
+                "https://pub-56950a3ba13e4c43ba0b2e803fd9b2f1.s3.dev/{}/{}",
                 self.bucket, key
             ));
         } else {
             return Ok(format!(
-                "https://c7dff00d9c1deefa16a9c134c98dd4a4.r2.cloudflarestorage.com/{}/{}",
+                "https://c7dff00d9c1deefa16a9c134c98dd4a4.s3.cloudflarestorage.com/{}/{}",
                 self.bucket, key
             ));
         }
@@ -98,16 +98,16 @@ impl R2Client {
             .send()
             .await?;
         info!("Uploaded Result ={:?}", result);
-        info!("Uploaded file to R2: key={}", key);
+        info!("Uploaded file to S3: key={}", key);
         let environment = env::get_env("ENVIRONMENT");
         if environment == "development" {
             return Ok(format!(
-                "https://pub-56950a3ba13e4c43ba0b2e803fd9b2f1.r2.dev/{}/{}",
+                "https://pub-56950a3ba13e4c43ba0b2e803fd9b2f1.s3.dev/{}/{}",
                 self.bucket, key
             ));
         } else {
             return Ok(format!(
-                "https://c7dff00d9c1deefa16a9c134c98dd4a4.r2.cloudflarestorage.com/{}/{}",
+                "https://c7dff00d9c1deefa16a9c134c98dd4a4.s3.cloudflarestorage.com/{}/{}",
                 self.bucket, key
             ));
         }
