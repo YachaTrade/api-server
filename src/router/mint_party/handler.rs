@@ -64,3 +64,13 @@ pub async fn update_mint_party(
 
     Ok(Json(UpdateMintPartyResponse { mint_party }))
 }
+
+pub struct LastJoinMintPartyResponse {
+    mint_partys: Vec<MintParty>,
+}
+
+pub async fn get_last_join_mint_party(
+    State(state): State<AppState>,
+) -> AppJsonResult<LastJoinMintPartyResponse> {
+    
+}

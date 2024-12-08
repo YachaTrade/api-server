@@ -172,6 +172,7 @@ pub struct MintParty {
     pub account_id: String,
     pub funding_amount: BigDecimal,
     pub allow_white_list_count: i16,
+    pub current_white_list_count: i16,
     pub total_deposit_amount: BigDecimal,
     pub is_finished: bool,
     pub is_closed: bool,
@@ -185,5 +186,6 @@ pub struct MintParty {
     pub twitter: Option<String>,
     pub telegram: Option<String>,
     pub website: Option<String>,
+    #[serde(skip_serializing)]
     pub is_updated: bool,
 }

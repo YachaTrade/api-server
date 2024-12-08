@@ -59,7 +59,21 @@ impl MintPartyController {
         Ok(mint_party)
     }
 
-    // pub async fn get_account_mint_party_balance(&self,account_id:String)->Result<{
+    pub async fn get_last_join_mint_party(&self) -> Result<Vec<MintParty>> {
+        let mint_party = sqlx::query_as!(
+            MintParty,
+            r#"
+            SELECT * 
+            FROM mint_party 
+            WHERE is_closed = false AND is_finished = false
+            ORDER BY (allow_white_list_count - current_white_list_count) ASC
+            LIMIT 5
+            "#
+        )
+        .fetch_all(&self.db.write_pool)
+        .await
+        .map_err(|err| anyhow!("Fail get_last_join_mint_party Reason :{err}"))?;
 
-    // }
+        Ok(mint_party)
+    }
 }
