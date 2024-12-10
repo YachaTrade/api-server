@@ -115,24 +115,10 @@ async fn main() -> Result<()> {
     let app_state = AppState::new().await;
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            // 밀리초당 허용되는 요청 수를 설정합니다.
-            // 여기서는 300밀리초(0.3초)마다 1개의 요청을 허용합니다.
-            // 즉, 초당 약 3.33개의 요청을 허용합니다.
             .per_second(100)
-            // 버스트 크기를 설정합니다.
-            // 이는 짧은 시간 동안 한 번에 처리할 수 있는 최대 요청 수입니다.
-            // 여기서는 최대 300개의 요청을 버스트로 허용합니다.
             .burst_size(10)
-            // 클라이언트 식별을 위해 HTTP 헤더를 사용하도록 설정합니다.
-            // 이는 X-Forwarded-For 또는 X-Real-IP와 같은 헤더를 통해
-            // 클라이언트의 실제 IP를 식별하는 데 유용합니다.
             .use_headers()
-            // 요청을 구분하기 위한 키 추출기를 설정합니다.
-            // SmartIpKeyExtractor는 클라이언트 IP를 지능적으로 추출하여
-            // 프록시나 로드 밸런서 뒤에 있는 실제 클라이언트 IP를 식별합니다.
-            // 기본은 PeerIpKeyExtractor reverse proxy = SmartIpKeyExtractor
             .key_extractor(SmartIpKeyExtractor)
-            // 설정을 완료하고 GovernorConfig 인스턴스를 생성합니다.
             .finish()
             .unwrap(),
     );
@@ -161,9 +147,9 @@ async fn main() -> Result<()> {
         )
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
-        .layer(GovernorLayer {
-            config: governor_conf,
-        })
+        // .layer(GovernorLayer {
+        //     config: governor_conf,
+        // })
         .with_state(app_state)
         .fallback(handler_404);
 
