@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::db::{postgres::PostgresDatabase, redis::RedisDatabase, s3::S3Client};
+use crate::db::{aws::S3Client, postgres::PostgresDatabase, redis::RedisDatabase};
 
 #[derive(Clone)]
 pub struct AppState {
