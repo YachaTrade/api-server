@@ -92,7 +92,7 @@ pub async fn update_account(
     let mut form_data = None;
     let mut image_data = None;
     let mut content_type = None;
-
+    
     while let Some(field) = multipart
         .next_field()
         .await
@@ -120,7 +120,7 @@ pub async fn update_account(
     }
 
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing account data".into()))?;
-
+    info!("form_data = {:#?}", form_data);
     if form_data.nick_name.is_none() &&  form_data.bio.is_none() && image_data.is_none(){
         return Err(AppError::BadRequest(
             "At least one of nickName or image must be provided".into(),
@@ -143,12 +143,12 @@ pub async fn update_account(
             Some(trimmed)
         }
     });
-
+    
     let image_uri = if let Some(image_data) = image_data {
         let s3_client = state.s3_client.clone();
         let content_type = content_type.unwrap_or("image/jpg".to_string());
         let image_uri = s3_client
-            .upload_profile_image_file(&session_address, image_data, &content_type)
+            .upload_profile_image_file(&session_address, image_data, content_type)
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
         Some(image_uri)

@@ -1,27 +1,29 @@
 use crate::env;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use aws_config::Region;
+use aws_sdk_s3::Config;
 use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
 use bytes::Bytes;
-use tracing::info;
-
+use tracing::{error, info};
 #[derive(Debug)]
 pub struct S3Client {
     client: Client,
-    bucket: String,
+    bucket_name: String,
+    region: String,
 }
 
 impl S3Client {
     pub async fn new() -> Self {
-        let bucket = env::get_env("AWS_BUCKET_NAME");
+        let bucket_name = env::get_env("AWS_BUCKET_NAME");
         let access_key = env::get_env("AWS_ACCESS_KEY");
         let secret_access_key = env::get_env("AWS_SECRET_ACCESS_KEY");
         let credentials = Credentials::new(access_key, secret_access_key, None, None, "aws-s3");
+        let region = Region::new("ap-northeast-1");
 
         let config = aws_config::from_env()
             .credentials_provider(credentials)
-            .region(Region::new("ap-northeast-2"))
+            .region(region.clone())
             .load()
             .await;
 
@@ -29,7 +31,8 @@ impl S3Client {
 
         S3Client {
             client,
-            bucket: bucket.to_string(),
+            bucket_name: bucket_name.to_string(),
+            region: region.to_string(),
         }
     }
     /*
@@ -46,43 +49,66 @@ impl S3Client {
         let result = self
             .client
             .put_object()
-            .bucket(&self.bucket)
+            .bucket(&self.bucket_name)
             .key(&key)
             .body(ByteStream::from(body))
             .content_type(content_type)
             .send()
-            .await?;
+            .await
+            .map_err(|err| anyhow!("Update failed Reason : {err}"))?;
         info!("Uploaded Result ={:?}", result);
         info!("Uploaded file to S3: key={}", key);
 
         Ok(self.get_presigned_url(&key).await?)
     }
-    pub async fn upload_profile_image_file<'a>(
+    pub async fn upload_profile_image_file(
         &self,
         account_id: &str,
         body: Bytes,
-        content_type: &str,
+        content_type: String,
     ) -> Result<String> {
-        let key = format!("profile/{account_id}");
+        let key = format!("profile/{}", account_id);
+        info!(
+            "Uploading profile image to S3: key={}, content_type={}",
+            key, content_type
+        );
+
         let result = self
             .client
             .put_object()
-            .bucket(&self.bucket)
+            .bucket(&self.bucket_name)
             .key(&key)
             .body(ByteStream::from(body))
             .content_type(content_type)
             .send()
-            .await?;
-        info!("Uploaded Result ={:?}", result);
-        info!("Uploaded file to S3: key={}", key);
+            .await;
 
-        Ok(self.get_presigned_url(&key).await?)
+        match result {
+            Ok(output) => {
+                info!(
+                    "Successfully uploaded profile image to S3: key={}, output={:?}",
+                    key, output
+                );
+                Ok(format!(
+                    "https://{}.s3.{}.amazonaws.com/{}",
+                    self.bucket_name, self.region, key
+                ))
+            }
+            Err(err) => {
+                error!(
+                    "Failed to upload profile image to S3: key={}, error={:?}",
+                    key, err
+                );
+                error!("Error details: {:?}", err.to_string());
+                Err(anyhow!("Update profile image failed. Error: {}", err))
+            }
+        }
     }
     pub async fn get_file(&self, key: &str) -> Result<Bytes> {
         let result = self
             .client
             .get_object()
-            .bucket(&self.bucket)
+            .bucket(&self.bucket_name)
             .key(key)
             .send()
             .await?;
@@ -93,7 +119,7 @@ impl S3Client {
     pub async fn delete_file(&self, key: &str) -> Result<()> {
         self.client
             .delete_object()
-            .bucket(&self.bucket)
+            .bucket(&self.bucket_name)
             .key(key)
             .send()
             .await?;
@@ -105,7 +131,7 @@ impl S3Client {
         let presigned_request = self
             .client
             .get_object()
-            .bucket(&self.bucket)
+            .bucket(&self.bucket_name)
             .key(key)
             .presigned(aws_sdk_s3::presigning::PresigningConfig::expires_in(
                 std::time::Duration::from_secs(3600),
