@@ -17,9 +17,8 @@ impl SearchController {
     }
 
     pub async fn search_order_tokens(&self, query: &str) -> Result<Vec<SearchTokenResponse>> {
-        let search_query = format!("%{}%", query.to_lowercase());
-        info!("Searching tokens with query: {}", search_query);
-
+        let search_pattern = format!("%{}%", query.to_lowercase());
+        info!("Search pattern: {}", search_pattern);
         let rows = sqlx::query_as!(
             SearchTokenRow,
             r#"
@@ -52,19 +51,11 @@ impl SearchController {
                     t.created_at DESC
                 LIMIT 50
             "#,
-            search_query
+            search_pattern
         )
         .fetch_all(self.db.get_read_pool())
         .await
-        .map_err(|err| {
-            error!("Database error while searching tokens: {:?}", err);
-            anyhow!("Failed to search tokens: {}", err)
-        })?;
-
-        info!("Found {} token results", rows.len());
-        if rows.is_empty() {
-            info!("No tokens found for query: {}", search_query);
-        }
+        .map_err(|err| anyhow!("Failed to search tokens: {}", err))?;
 
         let tokens: Vec<SearchTokenResponse> = rows
             .into_par_iter()
