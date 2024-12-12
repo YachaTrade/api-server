@@ -12,7 +12,9 @@ pub enum Identifier {
 #[derive(Serialize, FromRow, ToSchema)]
 pub struct HoldTokenResponse {
     pub token_id: String,
-    pub amount: Option<String>,
+    pub symbol: String,
+    pub price: String,
+    pub amount: String,
     pub image_uri: String,
 }
 

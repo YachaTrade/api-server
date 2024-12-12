@@ -17,13 +17,17 @@ impl BalanceController {
             HoldTokenResponse,
             r#"
             SELECT 
-                b.token_id,
-                COALESCE(b.current_amount::text, '0') as amount,
-                t.image_uri
+                b.token_id as "token_id!: String",
+                b.current_amount::text as "amount!: String",
+                t.symbol as "symbol!: String",
+                c.price::text as "price!: String",
+                t.image_uri as "image_uri!: String"
             FROM 
                 balance b
-            LEFT JOIN 
+            JOIN 
                 token t ON b.token_id = t.token_id
+            JOIN
+                curve c ON b.token_id = c.token_id
             WHERE 
                 b.account_id = $1
             ORDER BY 

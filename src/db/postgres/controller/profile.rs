@@ -52,54 +52,74 @@ impl ProfileController {
         identifier: &Identifier,
     ) -> Result<Vec<HoldTokenResponse>> {
         let holdings = match identifier {
-            Identifier::Nickname(nickname) => {
-                sqlx::query_as!(
-                    HoldTokenResponse,
-                    r#"
+            Identifier::Nickname(nickname) => sqlx::query!(
+                r#"
                     SELECT 
-                        b.token_id,
-                        COALESCE(b.current_amount::text, '0') as amount,
-                        t.image_uri
+                        b.token_id as "token_id!: String",
+                        t.symbol as "symbol!: String",
+                        c.price::text as "price!: String",
+                        b.current_amount::text as "amount!: String",
+                        t.image_uri as "image_uri!: String"
                     FROM 
                         balance b
                     JOIN 
                         account a ON b.account_id = a.account_id
-                    LEFT JOIN 
+                    JOIN 
                         token t ON b.token_id = t.token_id
+                    JOIN
+                        curve c ON b.token_id = c.token_id
                     WHERE 
                         a.nickname = $1
                     ORDER BY 
                         b.current_amount DESC
                     LIMIT 50
                     "#,
-                    nickname
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
-            Identifier::Address(address) => {
-                sqlx::query_as!(
-                    HoldTokenResponse,
-                    r#"
+                nickname
+            )
+            .fetch_all(self.db.get_read_pool())
+            .await?
+            .into_iter()
+            .map(|row| HoldTokenResponse {
+                token_id: row.token_id,
+                symbol: row.symbol,
+                price: row.price,
+                amount: row.amount,
+                image_uri: row.image_uri,
+            })
+            .collect(),
+            Identifier::Address(address) => sqlx::query!(
+                r#"
                     SELECT 
-                        b.token_id,
-                        COALESCE(b.current_amount::text, '0') as amount,
-                        t.image_uri
+                        b.token_id as "token_id!: String",
+                        t.symbol as "symbol!: String",
+                        c.price::text as "price!: String",
+                        b.current_amount::text as "amount!: String",
+                        t.image_uri as "image_uri!: String"
                     FROM 
                         balance b
-                    LEFT JOIN 
+                    JOIN 
                         token t ON b.token_id = t.token_id
+                    JOIN
+                        curve c ON b.token_id = c.token_id
                     WHERE 
                         b.account_id = $1
                     ORDER BY 
                         b.current_amount DESC
                     LIMIT 50
                     "#,
-                    address
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
+                address
+            )
+            .fetch_all(self.db.get_read_pool())
+            .await?
+            .into_iter()
+            .map(|row| HoldTokenResponse {
+                token_id: row.token_id,
+                symbol: row.symbol,
+                price: row.price,
+                amount: row.amount,
+                image_uri: row.image_uri,
+            })
+            .collect(),
         };
 
         Ok(holdings)
