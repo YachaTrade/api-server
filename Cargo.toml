@@ -86,3 +86,4 @@ alloy = { version = "0.5", features = ["signer-keystore"] }
 
 
 bigdecimal = { version = "0.4.6", features = ["serde-json"] } # '-' not '_'
+aws-sdk-cloudfront = "1.55.0"
