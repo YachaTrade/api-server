@@ -79,13 +79,12 @@ use utoipa_swagger_ui::SwaggerUi;
         router::token::handler::TokenResponse,
         router::chart::handler::ChartResponse,
         router::chart::handler::ChartQuery,
+        router::search::handler::SearchResponse,
         db::postgres::model::Account,
         db::postgres::model::Token,
         db::postgres::model::Thread,
         db::postgres::model::Token,
         db::postgres::model::Chart,
-        
-
     )),
     tags(
         (name="Auth",description = "Authentication endpoints"),
