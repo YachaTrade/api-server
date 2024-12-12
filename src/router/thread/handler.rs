@@ -2,6 +2,7 @@ use axum::{
     extract::{Multipart, State},
     Extension, Json,
 };
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, instrument};
 use utoipa::ToSchema;
@@ -35,7 +36,7 @@ pub struct CreateThreadFormData {
     pub data: String, // JSON string
 
     #[schema(format = "binary")]
-    pub image: Option<Vec<u8>>,
+    pub image: Option<Bytes>,
 }
 
 /// Create thread
@@ -75,68 +76,94 @@ pub async fn create_thread(
     Extension(session_address): Extension<String>,
     mut multipart: Multipart,
 ) -> AppJsonResult<ThreadResponse> {
-    let account_id = session_address;
+    info!("Creating thread for user: {}", session_address);
+
+    // 필드 파싱을 위한 헬퍼 함수
+    async fn parse_field(
+        field: axum::extract::multipart::Field<'_>,
+    ) -> Result<(String, Option<String>, Option<(Bytes, String)>), AppError> {
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "data" => {
+                let data = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(e.to_string()))?;
+                Ok((name, Some(data), None))
+            }
+            "image" => {
+                let content_type = field
+                    .content_type()
+                    .map(|ct| ct.to_string())
+                    .unwrap_or_else(|| "image/jpeg".to_string());
+                let bytes = field
+                    .bytes()
+                    .await
+                    .map_err(|e| AppError::BadRequest(e.to_string()))?;
+                Ok((name, None, Some((bytes, content_type))))
+            }
+            _ => Ok((name, None, None)),
+        }
+    }
+
+    // multipart 데이터 파싱
     let mut form_data = None;
-    let mut image_data = None;
-    let mut content_type = None;
+    let mut image_info = None;
 
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?
+        .map_err(|e| AppError::BadRequest(e.to_string()))?
     {
-        let name = field.name().unwrap_or("").to_string();
-        // content_type = field.content_type().unwrap().to_string();
-        // info!("name = {}", name);
-        if name == "data" {
-            let data: String = field
-                .text()
-                .await
-                .map_err(|err| AppError::BadRequest(err.to_string()))?;
-            // info!("data = {}", data);
-            form_data = Some(
-                serde_json::from_str::<CreateThreadRequest>(&data)
-                    .map_err(|err| AppError::BadRequest(err.to_string()))?,
-            );
-        } else if name == "image" {
-            content_type = field.content_type().map(|ct| ct.to_string());
-            info!("content_type = {:?}", content_type);
-            image_data = Some(
-                field
-                    .bytes()
-                    .await
-                    .map_err(|err| AppError::BadRequest(err.to_string()))?,
-            );
+        let (name, text_data, file_data) = parse_field(field).await?;
+        match name.as_str() {
+            "data" if text_data.is_some() => {
+                form_data = Some(
+                    serde_json::from_str::<CreateThreadRequest>(&text_data.unwrap())
+                        .map_err(|e| AppError::BadRequest(e.to_string()))?,
+                );
+            }
+            "image" if file_data.is_some() => {
+                image_info = file_data;
+            }
+            _ => {}
         }
     }
+
+    // 요청 데이터 검증
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing thread data".into()))?;
     let thread_controller = ThreadController::new(state.postgres.clone());
 
-    let image_uri = if let Some(image_data) = image_data {
-        let s3_client = state.s3_client.clone();
-        let content_type = content_type.unwrap_or("image/jpg".to_string());
+    // 이미지 업로드
+    let image_uri = if let Some((image_data, content_type)) = image_info {
         let last_thread_id = thread_controller.get_last_thread_id().await?;
-
-        // last_thread_id가 0이면 첫 번째 스레드이므로 0 유지
-        // 0이 아니면 last_thread_id + 1
         let next_thread_id = if last_thread_id == 0 {
             0
         } else {
             last_thread_id + 1
         };
 
-        let image_uri = s3_client
-            .upload_thread_image_file(&account_id, next_thread_id, image_data, &content_type)
-            .await?;
-        Some(image_uri)
+        info!("Uploading thread image with content-type: {}", content_type);
+        Some(
+            state
+                .s3_client
+                .upload_thread_image_file(
+                    &session_address,
+                    next_thread_id,
+                    image_data,
+                    &content_type,
+                )
+                .await?,
+        )
     } else {
         None
     };
 
+    // 스레드 생성
     let thread = thread_controller
         .create_thread(
             form_data.token_id,
-            account_id.clone(),
+            session_address,
             form_data.content,
             form_data.parent_id,
             image_uri,

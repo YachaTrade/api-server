@@ -2,6 +2,7 @@ use axum::{
     extract::{Multipart, State},
     Extension, Json, 
 };
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use utoipa::ToSchema;
@@ -32,7 +33,7 @@ pub struct UpdateAccountFormData {
     pub data: UpdateAccountRequest, // JSON string
 
     #[schema(format = "binary")]
-    pub image: Option<Vec<u8>>,
+    pub image: Option<Bytes>,
 }
 
 
@@ -88,94 +89,96 @@ pub async fn update_account(
     mut multipart: Multipart,
 ) -> AppJsonResult<AccountResponse> {
     info!("Updating account for user: {}", session_address);
-    
-    let mut form_data = None;
-    let mut image_data = None;
-    let mut content_type = None;
-    
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?
-    {
+
+    // 필드 파싱을 위한 헬퍼 함수
+    async fn parse_field(field: axum::extract::multipart::Field<'_>) -> Result<(String, Option<String>, Option<(Bytes, String)>), AppError> {
         let name = field.name().unwrap_or("").to_string();
-        if name == "data" {
-            let data: String = field
-                .text()
-                .await
-                .map_err(|err| AppError::BadRequest(err.to_string()))?;
-            form_data = Some(
-                serde_json::from_str::<UpdateAccountRequest>(&data)
-                    .map_err(|err| AppError::BadRequest(err.to_string()))?,
-            );
-        } else if name == "image" {
-            content_type = field.content_type().map(|ct| ct.to_string());
-            image_data = Some(
-                field
-                    .bytes()
-                    .await
-                    .map_err(|err| AppError::BadRequest(err.to_string()))?,
-            );
+        match name.as_str() {
+            "data" => {
+                let data = field.text().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
+                Ok((name, Some(data), None))
+            },
+            "image" => {
+                let content_type = field.content_type()
+                    .map(|ct| ct.to_string())
+                    .unwrap_or_else(|| {
+                        if field.file_name().map(|f| f.ends_with(".png")).unwrap_or(false) {
+                            "image/png".to_string()
+                        } else {
+                            "image/jpeg".to_string()
+                        }
+                    });
+                let bytes = field.bytes().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
+                Ok((name, None, Some((bytes, content_type))))
+            },
+            _ => Ok((name, None, None))
         }
     }
 
+    // multipart 데이터 파싱
+    let mut form_data = None;
+    let mut image_info = None;
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| AppError::BadRequest(e.to_string()))? {
+        let (name, text_data, file_data) = parse_field(field).await?;
+        match name.as_str() {
+            "data" if text_data.is_some() => {
+                form_data = Some(serde_json::from_str::<UpdateAccountRequest>(
+                    &text_data.unwrap()
+                ).map_err(|e| AppError::BadRequest(e.to_string()))?);
+            },
+            "image" if file_data.is_some() => {
+                image_info = file_data;
+            },
+            _ => {}
+        }
+    }
+
+    // 요청 데이터 검증
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing account data".into()))?;
-    info!("form_data = {:#?}", form_data);
-    if form_data.nick_name.is_none() &&  form_data.bio.is_none() && image_data.is_none(){
-        return Err(AppError::BadRequest(
-            "At least one of nickName or image must be provided".into(),
-        ));
+    if form_data.nick_name.is_none() && form_data.bio.is_none() && image_info.is_none() {
+        return Err(AppError::BadRequest("At least one of nickName, bio, or image must be provided".into()));
     }
 
-    let nick_name = form_data.nick_name.and_then(|name| {
-        let trimmed = name.replace(" ", "");
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed)
-        }
-    });
-    let bio =  form_data.bio.and_then(|name| {
-        let trimmed = name.replace(" ", "");
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed)
-        }
-    });
-    
-    let image_uri = if let Some(image_data) = image_data {
-        let s3_client = state.s3_client.clone();
-        let content_type = content_type.unwrap_or("image/jpg".to_string());
-        let image_uri = s3_client
+    // 텍스트 필드 처리
+    let clean_text = |text: Option<String>| {
+        text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+    };
+
+    // 이미지 업로드
+    let image_uri = if let Some((image_data, content_type)) = image_info {
+        info!("Uploading image with content-type: {}", content_type);
+        Some(state.s3_client
             .upload_profile_image_file(&session_address, image_data, content_type)
             .await
-            .map_err(|err| AppError::InternalError(err.to_string()))?;
-        Some(image_uri)
+            .map_err(|e| AppError::InternalError(e.to_string()))?)
     } else {
         None
     };
 
+    // 계정 업데이트
     let account_controller = AccountController::new(state.postgres.clone());
     let updated_account = account_controller
-        .update_account(&session_address, image_uri, nick_name,bio)
+        .update_account(
+            &session_address,
+            image_uri,
+            clean_text(form_data.nick_name),
+            clean_text(form_data.bio)
+        )
         .await
-        .map_err(|err| {
-            info!("update Account Error {:?}", err);
-            AppError::BadRequest(err.to_string())
-        })?;
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
-    Ok(Json(AccountResponse {
-        account: updated_account,
-    }))
+    Ok(Json(AccountResponse { account: updated_account }))
 }
+
+
+
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddLikeRequest {
     #[schema(example = "target_address")]
     pub target_address: String,
 }
-
 /// Add account like
 #[utoipa::path(
     patch,
