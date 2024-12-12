@@ -19,6 +19,7 @@ impl AccountController {
     }
 
     pub async fn insert_account(&self, account: Account) -> Result<()> {
+        
         sqlx::query!(
             r#"
             INSERT INTO account (account_id, image_uri,nickname,bio, follower_count, following_count,like_count)
@@ -45,9 +46,7 @@ impl AccountController {
         nickname: Option<String>,
         bio: Option<String>,
     ) -> Result<Account> {
-        debug!("bio : {:?}", bio);
-        debug!("nickname : {:?}", nickname);
-        debug!("image_uri : {:?}", image_uri);
+    
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new("UPDATE account SET ");
         let mut changed = false;
 
