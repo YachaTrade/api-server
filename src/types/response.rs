@@ -25,6 +25,11 @@ pub struct AccountInfo {
     pub image_uri: String,
 }
 
+pub struct MintPartyInfo {
+    pub mint_party_id: String,
+    pub mint_party_image_uri: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TokenInfoResponse {
     pub token_id: String,
@@ -55,6 +60,7 @@ pub struct SearchTokenInfo {
     pub is_king: bool,
     pub score: f64,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct SearchTokenRaw {
     pub token_id: String,
@@ -98,6 +104,45 @@ impl From<SearchTokenRaw> for SearchTokenResponse {
     }
 }
 
+#[derive(FromRow)]
+pub struct MintPartyRaw {
+    // Account fields
+    pub account_id: String,
+    pub nickname: String,
+    pub account_image_uri: String,
+    // MintParty fields
+    pub mint_party_id: String,
+    pub name: String,
+    pub symbol: String,
+    pub description: Option<String>,
+    pub image_uri: String,
+    pub current_white_list_count: i16,
+    pub allow_white_list_count: i16,
+    pub funding_amount: BigDecimal,
+    pub total_deposit_amount: BigDecimal,
+}
+
+impl From<MintPartyRaw> for MintPartyResponse {
+    fn from(row: MintPartyRaw) -> Self {
+        Self {
+            account_info: AccountInfo {
+                account_id: row.account_id,
+                nickname: row.nickname,
+                image_uri: row.account_image_uri,
+            },
+            mint_party_id: row.mint_party_id,
+            name: row.name,
+            symbol: row.symbol,
+            description: row.description.unwrap_or_default(),
+            image_uri: row.image_uri,
+            current_white_list_count: row.current_white_list_count.to_string(),
+            allow_white_list_count: row.allow_white_list_count.to_string(),
+            funding_amount: row.funding_amount.to_string(),
+            total_deposit_amount: row.total_deposit_amount.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct MintPartyResponse {
     pub account_info: AccountInfo,
@@ -111,3 +156,48 @@ pub struct MintPartyResponse {
     pub funding_amount: String,
     pub total_deposit_amount: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct MintPartyDepositListRaw {
+    pub account_id: String,
+    pub nickname: String,
+    pub account_image_uri: String,
+    pub comment: Option<String>,
+    pub mint_party_id: String,
+    pub created_at: i64,
+    pub amount: BigDecimal,
+    pub is_white_list: bool,
+    pub transaction_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MintPartyDepositList {
+    pub account_info: AccountInfo,
+    pub comment: Option<String>,
+    pub mint_party_id: String,
+    pub created_at: i64,
+    pub amount: BigDecimal,
+    pub is_white_list: bool,
+    pub transaction_hash: String,
+}
+// #[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+// pub struct MintPartyBalance {
+//     pub id: String,
+//     pub account_info: AccountInfo,
+//     pub mint_party_info: MintPartyInfo,
+//     pub amount: BigDecimal,
+//     pub claim_status: MintPartyClaimStatus,
+//     pub created_at: i64,
+//     pub is_claimable: bool,
+//     pub transaction_hash: String,
+//     pub token_id: Option<String>,
+// }
+
+// #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, ToSchema)]
+// #[sqlx(type_name = "mint_party_claim_status", rename_all = "lowercase")]
+// pub enum MintPartyClaimStatus {
+//     Pending,
+//     Approved,
+//     Closed,
+//     Success,
+// }

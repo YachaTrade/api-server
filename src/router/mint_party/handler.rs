@@ -9,12 +9,15 @@ use tracing::info;
 use utoipa::{schema, ToSchema};
 
 use crate::{
-    db::postgres::{controller::mint_party::MintPartyController, model::MintParty},
+    db::postgres::{
+        controller::mint_party::{self, MintPartyController},
+        model::MintParty,
+    },
     result::{AppError, AppJsonResult},
     state::AppState,
     types::{
         order_type::{MintPartyOrderType, OrderDirection},
-        response::MintPartyResponse,
+        response::{MintPartyDepositList, MintPartyResponse},
     },
 };
 #[derive(Debug, Deserialize, ToSchema)]
@@ -122,3 +125,34 @@ pub async fn get_mint_party_list(
 // pub async fn get_mint_party_deposit_list(State(state): State<AppState>) -> AppJsonResult<todo!()> {
 
 // }
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MintPartyDepositListResopnse {
+    pub deposit_list: Vec<MintPartyDepositList>,
+}
+pub async fn get_mint_party_deposit_list(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+) -> AppJsonResult<MintPartyDepositListResopnse> {
+    let mint_party_controller = MintPartyController::new(state.postgres.clone());
+
+    let mint_party_deposit_list = mint_party_controller
+        .get_mint_party_deposit_list(session_address)
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    Ok(Json(MintPartyDepositListResopnse {
+        deposit_list: mint_party_deposit_list,
+    }))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MintPartyBalanceResponse {}
+
+pub async fn get_mint_party_balance(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+) -> AppJsonResult<MintPartyBalanceResponse> {
+    let mint_party_controller = MintPartyController::new(state.postgres.clone());
+
+    Ok(Json(MintPartyBalanceResponse {}))
+}

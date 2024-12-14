@@ -15,7 +15,7 @@ impl ThreadController {
     pub async fn create_thread(
         &self,
         token_id: String,
-        author_id: String,
+        account_id: String,
         content: String,
         root_id: Option<i32>,
         image_uri: Option<String>,
@@ -43,12 +43,12 @@ impl ThreadController {
         let thread = sqlx::query_as!(
             Thread,
             r#"
-            INSERT INTO thread (token_id, author_id, content,root_id,image_uri)
+            INSERT INTO thread (token_id, account_id, content,root_id,image_uri)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *
             "#,
             token_id,
-            author_id,
+            account_id,
             content,
             root_id,
             image_uri

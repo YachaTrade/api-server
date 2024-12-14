@@ -147,7 +147,7 @@ impl From<ChartInterval> for i16 {
 pub struct Thread {
     pub thread_id: i32,
     pub token_id: String,
-    pub author_id: String,
+    pub account_id: String,
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub root_id: Option<i32>,
@@ -156,11 +156,16 @@ pub struct Thread {
     pub image_uri: Option<String>,
 }
 impl Thread {
-    pub fn new(token_id: String, author_id: String, content: String, root_id: Option<i32>) -> Self {
+    pub fn new(
+        token_id: String,
+        account_id: String,
+        content: String,
+        root_id: Option<i32>,
+    ) -> Self {
         Self {
             thread_id: 0,
             token_id,
-            author_id,
+            account_id,
             content,
             created_at: Utc::now(),
             root_id,

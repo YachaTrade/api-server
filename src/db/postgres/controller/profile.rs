@@ -133,7 +133,7 @@ impl ProfileController {
                     r#"
                     SELECT t.*
                     FROM thread t
-                    JOIN account a ON t.author_id = a.account_id
+                    JOIN account a ON t.account_id = a.account_id
                     WHERE a.nickname = $1
                     ORDER BY t.created_at DESC
                     LIMIT 50
@@ -149,7 +149,7 @@ impl ProfileController {
                     r#"
                     SELECT *
                     FROM thread
-                    WHERE author_id = $1
+                    WHERE account_id = $1
                     ORDER BY created_at DESC
                     LIMIT 50
                     "#,
