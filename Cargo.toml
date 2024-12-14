@@ -27,7 +27,7 @@ redis = { version = "0.25.4", features = [
 #AWS
 aws-sdk-s3 = "1.41.0"
 aws-config = { version = "1.5.4", features = ["behavior-version-latest"] }
-
+aws-sdk-cloudfront = "1.55.0"
 
 #ASYNC
 tokio = { version = "1.38.0", features = ["full"] }
@@ -86,4 +86,5 @@ alloy = { version = "0.5", features = ["signer-keystore"] }
 
 
 bigdecimal = { version = "0.4.6", features = ["serde-json"] } # '-' not '_'
-aws-sdk-cloudfront = "1.55.0"
+
+urlencoding = "2.1"

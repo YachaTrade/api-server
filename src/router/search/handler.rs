@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 use super::path::Path as SearchPath;
 
 use crate::db::postgres::controller::search::SearchController;
-use crate::result::AppJsonResult;
+use crate::result::{AppError, AppJsonResult};
 
 use crate::state::AppState;
 use crate::types::response::SearchTokenResponse;
@@ -58,6 +58,9 @@ pub async fn search_token(
     State(state): State<AppState>,
 ) -> AppJsonResult<SearchResponse> {
     let search_contoller = SearchController::new(state.postgres.clone());
-    let tokens = search_contoller.search_order_tokens(&token).await?;
-    Ok(Json(SearchResponse { tokens }))
+    let tokens = search_contoller.search_order_tokens(&token).await;
+    match tokens {
+        Ok(tokens) => Ok(Json(SearchResponse { tokens })),
+        Err(err) => Err(AppError::InternalError(err.to_string())),
+    }
 }
