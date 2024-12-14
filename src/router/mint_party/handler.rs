@@ -1,6 +1,10 @@
-use axum::{extract::State, Extension, Json};
-use rayon::iter::Update;
+use axum::{
+    extract::{Query, State},
+    Extension, Json,
+};
+
 use serde::{Deserialize, Serialize};
+
 use tracing::info;
 use utoipa::{schema, ToSchema};
 
@@ -8,6 +12,10 @@ use crate::{
     db::postgres::{controller::mint_party::MintPartyController, model::MintParty},
     result::{AppError, AppJsonResult},
     state::AppState,
+    types::{
+        order_type::{MintPartyOrderType, OrderDirection},
+        response::MintPartyResponse,
+    },
 };
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateMintPartyRequest {
@@ -65,12 +73,52 @@ pub async fn update_mint_party(
     Ok(Json(UpdateMintPartyResponse { mint_party }))
 }
 
-// pub struct LastJoinMintPartyResponse {
-//     mint_partys: Vec<MintParty>,
-// }
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MintPartyListResponse {
+    pub mint_party: Vec<MintPartyResponse>,
+}
+pub async fn get_last_join_mint_party(
+    State(state): State<AppState>,
+) -> AppJsonResult<MintPartyListResponse> {
+    let mint_party_controller = MintPartyController::new(state.postgres.clone());
+    let last_join_mint_party = mint_party_controller
+        .get_last_join_mint_party()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
 
-// pub async fn get_last_join_mint_party(
-//     State(state): State<AppState>,
-// ) -> AppJsonResult<LastJoinMintPartyResponse> {
+    Ok(Json(MintPartyListResponse {
+        mint_party: last_join_mint_party,
+    }))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MintPartyQuery {
+    #[serde(rename = "order_type", default)]
+    pub order_type: MintPartyOrderType,
+    #[serde(default)]
+    pub direction: OrderDirection,
+    pub pagination: Option<i16>,
+}
+
+pub async fn get_mint_party_list(
+    State(state): State<AppState>,
+    Query(query): Query<MintPartyQuery>,
+) -> AppJsonResult<MintPartyListResponse> {
+    let mint_party_controller = MintPartyController::new(state.postgres.clone());
+    let mint_party_list = mint_party_controller
+        .get_mint_partys(
+            query.order_type,
+            query.direction,
+            Some(query.pagination.unwrap_or(0)),
+        )
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+    Ok(Json(MintPartyListResponse {
+        mint_party: mint_party_list,
+    }))
+}
+
+// pub async fn get_mint_party_deposit_list(State(state): State<AppState>) -> AppJsonResult<todo!()> {
 
 // }
