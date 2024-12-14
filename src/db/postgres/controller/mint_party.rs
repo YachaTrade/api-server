@@ -1,52 +1,17 @@
 use crate::{
     db::postgres::{model::MintParty, PostgresDatabase},
+    router::mint_party,
     types::{
         order_type::{MintPartyOrderType, OrderDirection},
-        response::{AccountInfo, MintPartyResponse},
+        response::{
+            AccountInfo, MintPartyDepositList, MintPartyDepositListRaw, MintPartyRaw,
+            MintPartyResponse,
+        },
     },
 };
 use anyhow::{anyhow, Result};
-use bigdecimal::BigDecimal;
-use sqlx::FromRow;
-use std::sync::Arc;
-#[derive(FromRow)]
-struct MintPartyRaw {
-    // Account fields
-    account_id: String,
-    nickname: String,
-    account_image_uri: String,
-    // MintParty fields
-    mint_party_id: String,
-    name: String,
-    symbol: String,
-    description: Option<String>,
-    image_uri: String,
-    current_white_list_count: i16,
-    allow_white_list_count: i16,
-    funding_amount: BigDecimal,
-    total_deposit_amount: BigDecimal,
-}
 
-impl From<MintPartyRaw> for MintPartyResponse {
-    fn from(row: MintPartyRaw) -> Self {
-        Self {
-            account_info: AccountInfo {
-                account_id: row.account_id,
-                nickname: row.nickname,
-                image_uri: row.account_image_uri,
-            },
-            mint_party_id: row.mint_party_id,
-            name: row.name,
-            symbol: row.symbol,
-            description: row.description.unwrap_or_default(),
-            image_uri: row.image_uri,
-            current_white_list_count: row.current_white_list_count.to_string(),
-            allow_white_list_count: row.allow_white_list_count.to_string(),
-            funding_amount: row.funding_amount.to_string(),
-            total_deposit_amount: row.total_deposit_amount.to_string(),
-        }
-    }
-}
+use std::sync::Arc;
 
 pub struct MintPartyController {
     pub db: Arc<PostgresDatabase>,
@@ -70,6 +35,7 @@ impl MintPartyController {
 
         Ok(mint_party)
     }
+
     pub async fn update_mint_party_metadata(
         &self,
         transaction_hash: String,
@@ -200,4 +166,55 @@ impl MintPartyController {
 
         Ok(rows.into_iter().map(MintPartyResponse::from).collect())
     }
+
+    pub async fn get_mint_party_deposit_list(
+        &self,
+        account_id: String,
+    ) -> Result<Vec<MintPartyDepositList>> {
+        let rows = sqlx::query_as!(
+            MintPartyDepositListRaw,
+            r#"
+            SELECT 
+                a.account_id,
+                a.nickname,
+                a.image_uri as account_image_uri,
+                mpd.comment,
+                mpd.mint_party_id,
+                mpd.created_at,
+                mp.funding_amount as amount,
+                mpd.is_white_list,
+                mpd.transaction_hash
+            FROM mint_party_deposit_list mpd
+            JOIN account a ON mpd.account_id = a.account_id
+            JOIN mint_party mp ON mpd.mint_party_id = mp.mint_party_id
+            WHERE mp.account_id = $1
+              AND mp.is_closed = false
+              AND mp.is_finished = false
+            ORDER BY mpd.created_at DESC
+            "#,
+            account_id
+        )
+        .fetch_all(&self.db.read_pool)
+        .await
+        .map_err(|err| anyhow!("Failed to get mint party deposit list: {err}"))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| MintPartyDepositList {
+                account_info: AccountInfo {
+                    nickname: row.nickname,
+                    account_id: row.account_id,
+                    image_uri: row.account_image_uri,
+                },
+                comment: row.comment,
+                mint_party_id: row.mint_party_id,
+                created_at: row.created_at,
+                amount: row.amount,
+                is_white_list: row.is_white_list,
+                transaction_hash: row.transaction_hash,
+            })
+            .collect())
+    }
+
+    // pub async fn get_mint_party_balance(&self,account_id:String)->Result<
 }

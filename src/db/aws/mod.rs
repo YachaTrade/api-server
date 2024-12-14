@@ -23,6 +23,7 @@ const CDN_DOMAIN: &str = "d1469zz8b08zl.cloudfront.net";
 impl S3Client {
     pub async fn new() -> Self {
         let bucket_name = env::get_env("AWS_BUCKET_NAME");
+        info!("S3 bucket name from env: {}", bucket_name);
         let access_key = env::get_env("AWS_ACCESS_KEY");
         let secret_access_key = env::get_env("AWS_SECRET_ACCESS_KEY");
         let distribution_id = env::get_env("AWS_CLOUDFRONT_DISTRIBUTION_ID");
