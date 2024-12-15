@@ -296,6 +296,7 @@ pub async fn get_account(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<AccountResponse> {
+    info!("Get account for account: {}", session_address);
     let account_controller = AccountController::new(state.postgres.clone());
     let account = account_controller
         .get_account(&session_address)
