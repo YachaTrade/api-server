@@ -3,6 +3,8 @@ use std::sync::Arc;
 use crate::db::postgres::{model::Thread, PostgresDatabase};
 use anyhow::{anyhow, Context, Result};
 
+use tracing::info;
+
 pub struct ThreadController {
     db: Arc<PostgresDatabase>,
 }
@@ -51,11 +53,11 @@ impl ThreadController {
             account_id,
             content,
             root_id,
-            image_uri
+            image_uri,
         )
         .fetch_one(tx.as_mut())
         .await
-        .context("Failed to create thread")?;
+        .map_err(|e| anyhow!("Failed to create thread: {}", e))?;
 
         if let Some(root_id) = root_id {
             sqlx::query!(
@@ -102,14 +104,20 @@ impl ThreadController {
         .map_err(|e| anyhow!("Failed to fetch thread: {}", e))
     }
 
-    pub async fn like_thread(&self, thread_id: i32, user_id: &str) -> Result<Thread> {
+    pub async fn like_thread(
+        &self,
+        thread_id: i32,
+        account_id: &str,
+        token_id: &str,
+    ) -> Result<Thread> {
         let mut transaction = self.db.get_write_pool().begin().await?;
 
         // Try to insert a new like
         let insert_result = sqlx::query!(
-            "INSERT INTO thread_likes (thread_id, account_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            "INSERT INTO thread_likes (thread_id, account_id,token_id) VALUES ($1, $2,$3) ON CONFLICT DO NOTHING",
             thread_id,
-            user_id
+            account_id,
+            token_id
         )
         .execute(&mut *transaction)
         .await?;
@@ -137,7 +145,12 @@ impl ThreadController {
         Ok(updated_thread)
     }
 
-    pub async fn unlike_thread(&self, thread_id: i32, user_id: &str) -> Result<Thread> {
+    pub async fn unlike_thread(
+        &self,
+        thread_id: i32,
+        account_id: &str,
+        token_id: &str,
+    ) -> Result<Thread> {
         let mut tx = self.db.get_write_pool().begin().await?;
 
         let updated_thread = sqlx::query_as!(
@@ -145,7 +158,7 @@ impl ThreadController {
             r#"
             WITH deleted_like AS (
                 DELETE FROM thread_likes
-                WHERE thread_id = $1 AND account_id = $2
+                WHERE thread_id = $1 AND account_id = $2 AND token_id = $3
                 RETURNING thread_id
             )
             UPDATE thread t
@@ -155,7 +168,8 @@ impl ThreadController {
             RETURNING *
             "#,
             thread_id,
-            user_id
+            account_id,
+            token_id
         )
         .fetch_optional(tx.as_mut())
         .await
@@ -181,6 +195,23 @@ impl ThreadController {
 
         Ok(thread)
     }
+
+    pub async fn get_thread_like_by_token_and_account(
+        &self,
+        account_id: &str,
+        token_id: &str,
+    ) -> Result<Vec<i32>> {
+        info!("token_id: {}, account_id: {}", token_id, account_id);
+        sqlx::query_scalar!(
+            "SELECT thread_id FROM thread_likes WHERE token_id = $1 AND account_id = $2",
+            token_id,
+            account_id
+        )
+        .fetch_all(self.db.get_read_pool())
+        .await
+        .map_err(|e| anyhow!("Failed to fetch thread like: {}", e))
+    }
+
     #[cfg(test)]
     pub async fn get_thread_replies(&self, root_id: i32) -> Result<Vec<Thread>> {
         sqlx::query_as!(Thread, "SELECT * FROM thread WHERE root_id = $1", root_id)

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart, Path, State},
     Extension, Json,
 };
 use bytes::Bytes;
@@ -8,12 +8,15 @@ use tracing::{debug, info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::{controller::thread::ThreadController, model::Thread},
+    db::postgres::{
+        controller::thread::ThreadController,
+        model::{Thread, ThreadLike},
+    },
     result::{AppError, AppJsonResult},
     state::AppState,
 };
 
-use super::path::Path;
+use super::path::Path as ThreadPath;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateThreadRequest {
@@ -42,7 +45,7 @@ pub struct CreateThreadFormData {
 /// Create thread
 #[utoipa::path(
     post,
-    path = Path::CreateThread.as_str(),
+    path = ThreadPath::CreateThread.docs_str(),
     params(
        ("session" = String, Cookie, description = "Session token for authentication")
     ),
@@ -158,7 +161,6 @@ pub async fn create_thread(
     } else {
         None
     };
-
     // 스레드 생성
     let thread = thread_controller
         .create_thread(
@@ -168,7 +170,8 @@ pub async fn create_thread(
             form_data.parent_id,
             image_uri,
         )
-        .await?;
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
 
     Ok(Json(ThreadResponse { thread }))
 }
@@ -177,12 +180,13 @@ pub async fn create_thread(
 pub struct ThreadRequest {
     #[schema(example = 1)]
     thread_id: i32,
+    token_id: String,
 }
 
 /// Like thread
 #[utoipa::path(
     post,
-    path = Path::LikeThread.as_str(),
+    path = ThreadPath::LikeThread.docs_str(),
     params(
        ("session" = String, Cookie, description = "Session token for authentication")
     ),
@@ -204,11 +208,14 @@ pub async fn like_thread(
     Extension(session_address): Extension<String>,
     Json(payload): Json<ThreadRequest>,
 ) -> AppJsonResult<ThreadResponse> {
-    let ThreadRequest { thread_id } = payload;
+    let ThreadRequest {
+        thread_id,
+        token_id,
+    } = payload;
 
     let thread_controller = ThreadController::new(state.postgres.clone());
     let thread = thread_controller
-        .like_thread(thread_id, &session_address)
+        .like_thread(thread_id, &session_address, &token_id)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 
@@ -217,7 +224,7 @@ pub async fn like_thread(
 /// Unlike thread
 #[utoipa::path(
     post,
-    path = Path::UnLikeThread.as_str(),
+    path = ThreadPath::UnLikeThread.docs_str(),
     params(
        ("session" = String, Cookie, description = "Session token for authentication")
     ),
@@ -239,13 +246,64 @@ pub async fn unlike_thread(
     Extension(session_address): Extension<String>,
     Json(payload): Json<ThreadRequest>,
 ) -> AppJsonResult<ThreadResponse> {
-    let ThreadRequest { thread_id } = payload;
+    let ThreadRequest {
+        thread_id,
+        token_id,
+    } = payload;
 
     let thread_controller = ThreadController::new(state.postgres.clone());
     let thread = thread_controller
-        .unlike_thread(thread_id, &session_address)
+        .unlike_thread(thread_id, &session_address, &token_id)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 
     Ok(Json(ThreadResponse { thread }))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ThreadLikeResponse {
+    pub thread_ids: Vec<i32>,
+}
+
+/// Get thread likes by account and token
+#[utoipa::path(
+    get,
+    path = ThreadPath::GetThreadLike.docs_str(),
+    params(
+        ("token_id" = String, Path, description = "Token ID to get likes for"),
+        ("session" = String, Cookie, description = "Session token for authentication")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved thread likes", body = ThreadLikeResponse),
+        (status = 400, description = "Bad request", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(
+        ("session" = [])
+    ),
+    tag="Thread"
+)]
+#[instrument(skip(state, session_address))]
+pub async fn get_thread_like_by_account(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Path(token_id): Path<String>, // 경로 파라미터로 token_id 추가
+) -> AppJsonResult<ThreadLikeResponse> {
+    // token_id check
+    if !token_id.starts_with("0x")
+        || token_id.len() != 42
+        || !token_id[2..].chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err(AppError::BadRequest(
+            "Invalid token address format".to_string(),
+        ));
+    }
+    let thread_controller = ThreadController::new(state.postgres.clone());
+
+    let thread_ids = thread_controller
+        .get_thread_like_by_token_and_account(&session_address, &token_id)
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+    Ok(Json(ThreadLikeResponse { thread_ids }))
 }

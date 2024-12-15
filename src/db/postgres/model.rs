@@ -149,12 +149,13 @@ pub struct Thread {
     pub token_id: String,
     pub account_id: String,
     pub content: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: i64,
     pub root_id: Option<i32>,
     pub likes_count: i32,
     pub reply_count: i32,
     pub image_uri: Option<String>,
 }
+
 impl Thread {
     pub fn new(
         token_id: String,
@@ -162,18 +163,32 @@ impl Thread {
         content: String,
         root_id: Option<i32>,
     ) -> Self {
+        let timestamp = chrono::Utc::now().timestamp();
         Self {
             thread_id: 0,
             token_id,
             account_id,
             content,
-            created_at: Utc::now(),
+            created_at: timestamp,
             root_id,
             likes_count: 0,
             reply_count: 0,
             image_uri: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+pub struct ThreadLike {
+    #[serde(skip_serializing)]
+    pub thread_like_id: i32,
+    pub thread_id: i32,
+    #[serde(skip_serializing)]
+    pub token_id: String,
+    #[serde(skip_serializing)]
+    pub account_id: String,
+    #[serde(skip_serializing)]
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
