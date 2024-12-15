@@ -119,9 +119,9 @@ impl AccountController {
         let account = sqlx::query_as!(
             Account,
             r#"
-            SELECT account_id,image_uri,nickname,bio,follower_count,following_count,like_count
+            SELECT *
             FROM account
-            WHERE account_id = $1
+            WHERE account_id = $1   
             "#,
             account_id
         )
