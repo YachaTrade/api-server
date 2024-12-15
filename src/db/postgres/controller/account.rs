@@ -102,7 +102,7 @@ impl AccountController {
                 following_count,
                 like_count
             FROM account
-            WHERE account_id = $1
+            WHERE LOWER(account_id) = LOWER($1)
             "#,
             address
         )
@@ -118,7 +118,7 @@ impl AccountController {
             r#"
             SELECT *
             FROM account
-            WHERE account_id = $1   
+            WHERE LOWER(account_id) = LOWER($1)
             "#,
             account_id
         )
