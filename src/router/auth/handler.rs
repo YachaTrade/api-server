@@ -161,10 +161,10 @@ pub async fn auth_session(
     //추후 프론트 배포시 samesite = strict 로 변경
     let mut cookie = Cookie::new("session", session_id);
     cookie.set_http_only(true);
-    cookie.set_domain("api-server.nad.fun"); // 변경
+    // cookie.set_domain("nad.fun"); // 변경
     cookie.set_secure(true);
     cookie.set_path("/");
-    cookie.set_same_site(tower_cookies::cookie::SameSite::Strict);
+    // cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::days(7));
 
     info!("cookie = {:?}", cookie);
