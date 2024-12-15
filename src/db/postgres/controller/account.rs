@@ -1,13 +1,9 @@
 use std::sync::Arc;
 
-use crate::{
-    db::postgres::{model::Account, PostgresDatabase},
-    env,
-};
+use crate::db::postgres::{model::Account, PostgresDatabase};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
 use sqlx::{Postgres, QueryBuilder};
-use tracing::debug;
 
 pub struct AccountController {
     pub db: Arc<PostgresDatabase>,
@@ -44,7 +40,7 @@ impl AccountController {
         )
         .fetch_one(self.db.get_write_pool())
         .await
-        .context("Failed to upsert Account")?;
+        .map_err(|err| anyhow!("Fail upsert account Reason :{err} address: {}", err))?;
         Ok(account)
     }
     pub async fn update_account(
@@ -111,7 +107,8 @@ impl AccountController {
             address
         )
         .fetch_one(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|err| anyhow!("Fail update account Reason :{err} address: {}", err))?;
 
         Ok(updated_account)
     }
@@ -127,7 +124,7 @@ impl AccountController {
         )
         .fetch_one(self.db.get_read_pool())
         .await
-        .context("Fail get Account")?;
+        .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
         Ok(account)
     }
 }
