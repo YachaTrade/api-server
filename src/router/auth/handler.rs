@@ -1,13 +1,16 @@
 use std::str::FromStr;
 
 use alloy::{primitives::Address, signers::Signature};
+use axum::http::header::{HeaderValue, SET_COOKIE};
 use axum::{
     extract::State,
-    http::{HeaderValue, Response, StatusCode},
+    http::{Response, StatusCode},
     response::IntoResponse,
     Extension, Json,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
+use tower_cookies::cookie::time::Duration;
+use tower_cookies::Cookie;
 
 use serde::{Deserialize, Serialize};
 
@@ -137,13 +140,14 @@ pub async fn auth_session(
         .set_session(&session_id, &address, *EXPIRATION_SESSION_KEY)
         .await
         .map_err(|err| AppError::RedisError(err.to_string()))?;
-    //session key는 postgres 에 어떻게 저장할거냐?
+    //session key는 postgres에 어떻게 저장할거냐?
     let postgres = state.postgres.clone();
 
     // 여기선 account 가 없을수가 없음
     let account_controller = AccountController::new(postgres.clone());
+    let account = Account::new(address.clone());
     let account = account_controller
-        .get_or_create_account(&address)
+        .upsert_account(account)
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
 
@@ -154,24 +158,20 @@ pub async fn auth_session(
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
 
-    let max_age = 7 * 24 * 60 * 60; // 7일
-
     //추후 프론트 배포시 samesite = strict 로 변경
-    //Secure 추가  SameSite=None;
-    // let cookie = format!(
-    //     "session={}; HttpOnly; Path=/; Max-Age={}",
-    //     session_id, max_age,
-    // );
-    let cookie = format!(
-        "session={};HttpOnly;Secure;Path=/;Max-Age={};SameSite=None",
-        session_id, max_age
-    );
+    let mut cookie = Cookie::new("session", session_id);
+    cookie.set_http_only(true);
+    cookie.set_secure(true);
+    cookie.set_path("/");
+    cookie.set_same_site(tower_cookies::cookie::SameSite::Strict);
+    cookie.set_max_age(Duration::days(7));
+
     info!("cookie = {:?}", cookie);
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
         .header(
-            axum::http::header::SET_COOKIE,
-            HeaderValue::from_str(&cookie).unwrap(),
+            SET_COOKIE,
+            HeaderValue::from_str(&cookie.to_string()).unwrap(),
         )
         .body(body.into_response())
         .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -207,7 +207,22 @@ pub async fn auth_delete_session(
         .await
         .map_err(|err| AppError::RedisError(err.to_string()))?;
 
-    Ok(StatusCode::OK.into_response())
+    // Remove session cookie by setting its expiry to a past date
+    let mut cookie = Cookie::new("session", "");
+    cookie.set_http_only(true);
+    cookie.set_secure(true);
+    cookie.set_path("/");
+    cookie.set_same_site(tower_cookies::cookie::SameSite::Strict);
+    cookie.set_max_age(Duration::ZERO);
+
+    let mut response = StatusCode::OK.into_response();
+    response.headers_mut().insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&cookie.to_string())
+            .map_err(|err| AppError::InternalError(err.to_string()))?,
+    );
+
+    Ok(response)
 }
 
 //충돌 방지

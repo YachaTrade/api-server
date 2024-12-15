@@ -18,12 +18,21 @@ impl AccountController {
         AccountController { db }
     }
 
-    pub async fn insert_account(&self, account: Account) -> Result<()> {
-        
-        sqlx::query!(
+    pub async fn upsert_account(&self, account: Account) -> Result<Account> {
+        let account = sqlx::query_as!(
+            Account,
             r#"
-            INSERT INTO account (account_id, image_uri,nickname,bio, follower_count, following_count,like_count)
-            VALUES ($1, $2, $3, $4,$5,$6,$7)
+            INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count, like_count)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (account_id) 
+            DO UPDATE SET
+                image_uri = $2,
+                nickname = $3,
+                bio = $4,
+                follower_count = $5,
+                following_count = $6,
+                like_count = $7
+                RETURNING *
             "#,
             account.account_id,
             account.image_uri,
@@ -32,12 +41,11 @@ impl AccountController {
             account.follower_count,
             account.following_count,
             account.like_count,
-         
         )
-        .execute(self.db.get_write_pool())
+        .fetch_one(self.db.get_write_pool())
         .await
-        .context("Fail insert Account")?;
-        Ok(())
+        .context("Failed to upsert Account")?;
+        Ok(account)
     }
     pub async fn update_account(
         &self,
@@ -46,7 +54,6 @@ impl AccountController {
         nickname: Option<String>,
         bio: Option<String>,
     ) -> Result<Account> {
-    
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new("UPDATE account SET ");
         let mut changed = false;
 
@@ -83,16 +90,16 @@ impl AccountController {
         query_builder.push(" WHERE account_id = ");
         query_builder.push_bind(address);
 
-        let  query = query_builder.build();
+        let query = query_builder.build();
         query.execute(self.db.get_write_pool()).await?;
-        
+
         // Get updated account
         let updated_account = sqlx::query_as!(
             Account,
             r#"
             SELECT 
                 account_id,
-                image_uri,
+                image_uri, 
                 nickname,
                 bio,
                 follower_count,
@@ -122,15 +129,5 @@ impl AccountController {
         .await
         .context("Fail get Account")?;
         Ok(account)
-    }
-    pub async fn get_or_create_account(&self, address: &str) -> Result<Account> {
-        match self.get_account(address).await {
-            Ok(account) => Ok(account),
-            Err(_) => {
-                let account = Account::new(address.to_string());
-                self.insert_account(account.clone()).await?;
-                Ok(account)
-            }
-        }
     }
 }

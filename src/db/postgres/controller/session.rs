@@ -19,12 +19,8 @@ impl SessionController {
 
     pub async fn set_session(&self, session_id: &str, address: &str) -> Result<()> {
         debug!("Setting session: {} -> {}", session_id, address);
-        let account_controller = AccountController::new(self.db.clone());
 
         let mut tx = self.db.get_write_pool().begin().await?;
-
-        // 계정 가져오기 또는 생성
-        let account = account_controller.get_or_create_account(address).await?;
 
         // 기존 세션 삭제 및 새 세션 삽입
         sqlx::query!(
@@ -35,7 +31,7 @@ impl SessionController {
             SET id = EXCLUDED.id
             "#,
             session_id,
-            account.account_id,
+            address
         )
         .execute(tx.as_mut())
         .await?;
