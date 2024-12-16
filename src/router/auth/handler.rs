@@ -164,7 +164,7 @@ pub async fn auth_session(
     // cookie.set_domain("nad.fun"); // 변경
     cookie.set_secure(true);
     cookie.set_path("/");
-    // cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::days(7));
 
     info!("cookie = {:?}", cookie);
@@ -213,7 +213,7 @@ pub async fn auth_delete_session(
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");
-    cookie.set_same_site(tower_cookies::cookie::SameSite::Strict);
+    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::ZERO);
 
     let mut response = StatusCode::OK.into_response();
@@ -238,7 +238,7 @@ fn generate_session_id(address: &str, nonce: &str) -> String {
         .unwrap()
         .as_nanos();
 
-    // 블록체인 주소, 체인ID, 타임스탬프, UUID, 논스를 모두 결합
+    // 주소, 체인ID, 타임스탬프, UUID, 논스를 모두 결합
     let combined = format!(
         "{}-{}-{}-{}",
         address,   // 유저 address
