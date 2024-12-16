@@ -88,3 +88,5 @@ alloy = { version = "0.5", features = ["signer-keystore"] }
 bigdecimal = { version = "0.4.6", features = ["serde-json"] } # '-' not '_'
 
 urlencoding = "2.1"
+
+clap = { version = "4.4.11", features = ["derive"] }
