@@ -26,6 +26,7 @@ use tower_governor::{
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+use clap::Parser;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -102,7 +103,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::response::MintPartyBalance,
             types::response::MintPartyDepositList,
             types::response::MintPartyInfo,
-            
+            types::response::AccountInfo,
+            types::response::TokenInfoResponse,
+            types::response::SearchTokenResponse,
+            types::response::SearchTokenInfo,
+       
             db::postgres::model::Account,
             db::postgres::model::Token,
             db::postgres::model::Thread,
@@ -127,6 +132,14 @@ use utoipa_swagger_ui::SwaggerUi;
 )]
 pub struct ApiDoc;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Port number for the server (default: 3000, can be overridden by HTTP_PORT env var)
+    #[arg(short, long)]
+    port: Option<u16>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     info!("Axum server started");
@@ -135,8 +148,16 @@ async fn main() -> Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
+    let args = Args::parse();
+    
     let ip = env::get_env("IP");
-    let port = env::get_env("HTTP_PORT");
+    // 우선순위: 1. 커맨드 라인 인자 2. 환경변수 3. 기본값(8000)
+    let port = args.port
+        .map(|p| p.to_string())
+        .or_else(|| std::env::var("HTTP_PORT").ok())
+        .unwrap_or_else(|| "8000".to_string());
+
+    info!("Server will start on {}:{}", ip, port);
 
     let app_state = AppState::new().await;
     let governor_conf = Arc::new(
