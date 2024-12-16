@@ -160,10 +160,10 @@ pub async fn auth_session(
 
     //추후 프론트 배포시 samesite = strict 로 변경
     let mut cookie = Cookie::new("session", session_id);
-    cookie.set_http_only(true);
-    // cookie.set_domain("nad.fun"); // 변경
-    cookie.set_secure(true);
-    cookie.set_path("/");
+    // cookie.set_http_only(true);
+    // // cookie.set_domain("nad.fun"); // 변경
+    // cookie.set_secure(true);
+    // cookie.set_path("/");
     // cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::days(7));
 
@@ -210,9 +210,9 @@ pub async fn auth_delete_session(
 
     // Remove session cookie by setting its expiry to a past date
     let mut cookie = Cookie::new("session", "");
-    cookie.set_http_only(true);
-    cookie.set_secure(true);
-    cookie.set_path("/");
+    // cookie.set_http_only(true);
+    // cookie.set_secure(true);
+    // cookie.set_path("/");
     // cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
     cookie.set_max_age(Duration::ZERO);
 
