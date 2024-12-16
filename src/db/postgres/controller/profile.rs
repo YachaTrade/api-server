@@ -63,6 +63,7 @@ impl ProfileController {
                         t.created_at as "created_at!",
                         t.pair as pair,
                         t.is_listing as "is_listing!",
+                        t.create_transaction_hash as transaction_hash,
                         c.price::text as "price!"
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
@@ -89,6 +90,7 @@ impl ProfileController {
                         t.created_at as "created_at!",
                         t.pair as pair,
                         t.is_listing as "is_listing!",
+                        t.create_transaction_hash as transaction_hash,
                         c.price::text as "price!"
                     FROM token t
                     JOIN curve c ON t.token_id = c.token_id

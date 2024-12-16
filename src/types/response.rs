@@ -21,6 +21,7 @@ pub struct CreateTokenResponse {
     pub price: String,
     // pub total_supply: String,
     pub is_listing: bool,
+    pub transaction_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
