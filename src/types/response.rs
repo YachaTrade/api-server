@@ -12,9 +12,15 @@ pub enum Identifier {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct CreateTokenResponse {
     pub token_id: String,
+    pub name: String,
     pub symbol: String,
-    pub price: String,
     pub image_uri: String,
+    pub description: Option<String>,
+    pub created_at: i64,
+    pub pair: Option<String>,
+    pub price: String,
+    // pub total_supply: String,
+    pub is_listing: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]

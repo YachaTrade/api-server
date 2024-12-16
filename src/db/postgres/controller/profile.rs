@@ -56,9 +56,14 @@ impl ProfileController {
                     r#"
                     SELECT 
                         t.token_id as "token_id!",
+                        t.name as "name!",
                         t.symbol as "symbol!",
-                        c.price::text as "price!",
-                        t.image_uri as "image_uri!"
+                        t.image_uri as "image_uri!",
+                        t.description as description,
+                        t.created_at as "created_at!",
+                        t.pair as pair,
+                        t.is_listing as "is_listing!",
+                        c.price::text as "price!"
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     JOIN curve c ON t.token_id = c.token_id
@@ -77,9 +82,14 @@ impl ProfileController {
                     r#"
                     SELECT 
                         t.token_id as "token_id!",
+                        t.name as "name!",
                         t.symbol as "symbol!",
-                        c.price::text as "price!",
-                        t.image_uri as "image_uri!"
+                        t.image_uri as "image_uri!",
+                        t.description as description,
+                        t.created_at as "created_at!",
+                        t.pair as pair,
+                        t.is_listing as "is_listing!",
+                        c.price::text as "price!"
                     FROM token t
                     JOIN curve c ON t.token_id = c.token_id
                     WHERE t.creator = $1
