@@ -1,16 +1,15 @@
 use anyhow::Result;
 
-use rayon::iter::IntoParallelIterator;
 use tracing::info;
 
 use std::sync::Arc;
 
 use crate::{
     db::postgres::{
-        model::{Account, Thread, Token},
+        model::{Account, Thread},
         PostgresDatabase,
     },
-    types::response::{HoldTokenResponse, Identifier},
+    types::response::{CreateTokenResponse, HoldTokenResponse, Identifier},
 };
 
 pub struct ProfileController {
@@ -46,7 +45,56 @@ impl ProfileController {
 
         Ok(account)
     }
+    pub async fn get_created_tokens(
+        &self,
+        identifier: &Identifier,
+    ) -> Result<Vec<CreateTokenResponse>> {
+        let tokens = match identifier {
+            Identifier::Nickname(nickname) => {
+                sqlx::query_as!(
+                    CreateTokenResponse,
+                    r#"
+                    SELECT 
+                        t.token_id as "token_id!",
+                        t.symbol as "symbol!",
+                        c.price::text as "price!",
+                        t.image_uri as "image_uri!"
+                    FROM token t
+                    JOIN account a ON t.creator = a.account_id
+                    JOIN curve c ON t.token_id = c.token_id
+                    WHERE a.nickname = $1
+                    ORDER BY t.created_at DESC
+                    LIMIT 50
+                    "#,
+                    nickname
+                )
+                .fetch_all(self.db.get_read_pool())
+                .await?
+            }
+            Identifier::Address(address) => {
+                sqlx::query_as!(
+                    CreateTokenResponse,
+                    r#"
+                    SELECT 
+                        t.token_id as "token_id!",
+                        t.symbol as "symbol!",
+                        c.price::text as "price!",
+                        t.image_uri as "image_uri!"
+                    FROM token t
+                    JOIN curve c ON t.token_id = c.token_id
+                    WHERE t.creator = $1
+                    ORDER BY t.created_at DESC
+                    LIMIT 50
+                    "#,
+                    address
+                )
+                .fetch_all(self.db.get_read_pool())
+                .await?
+            }
+        };
 
+        Ok(tokens)
+    }
     pub async fn get_holding_token(
         &self,
         identifier: &Identifier,
@@ -161,44 +209,6 @@ impl ProfileController {
         };
 
         Ok(replies)
-    }
-
-    pub async fn get_created_tokens(&self, identifier: &Identifier) -> Result<Vec<Token>> {
-        let tokens = match identifier {
-            Identifier::Nickname(nickname) => {
-                sqlx::query_as!(
-                    Token,
-                    r#"
-                    SELECT t.*
-                    FROM token t
-                    JOIN account a ON t.creator = a.account_id
-                    WHERE a.nickname = $1
-                    ORDER BY t.created_at DESC
-                    LIMIT 50
-                    "#,
-                    nickname
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
-            Identifier::Address(address) => {
-                sqlx::query_as!(
-                    Token,
-                    r#"
-                    SELECT *
-                    FROM token
-                    WHERE creator = $1
-                    ORDER BY created_at DESC
-                    LIMIT 50
-                    "#,
-                    address
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
-        };
-
-        Ok(tokens)
     }
 
     pub async fn get_followers(&self, identifier: &Identifier) -> Result<Vec<Account>> {

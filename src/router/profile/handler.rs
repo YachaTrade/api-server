@@ -1,11 +1,11 @@
 use crate::{
     db::postgres::{
         controller::profile::ProfileController,
-        model::{Account, Thread, Token},
+        model::{Account, Thread},
     },
     result::AppJsonResult,
     state::AppState,
-    types::response::{HoldTokenResponse, Identifier},
+    types::response::{CreateTokenResponse, HoldTokenResponse, Identifier},
 };
 
 use axum::{
@@ -34,7 +34,7 @@ pub struct RepliesResponse {
 }
 #[derive(ToSchema, Serialize)]
 pub struct CreatedTokensResponse {
-    tokens: Vec<Token>,
+    tokens: Vec<CreateTokenResponse>,
 }
 
 #[derive(ToSchema, Serialize)]
