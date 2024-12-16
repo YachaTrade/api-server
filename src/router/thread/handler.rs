@@ -4,14 +4,11 @@ use axum::{
 };
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, instrument};
+use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::{
-        controller::thread::ThreadController,
-        model::{Thread, ThreadLike},
-    },
+    db::postgres::{controller::thread::ThreadController, model::Thread},
     result::{AppError, AppJsonResult},
     state::AppState,
 };
@@ -223,7 +220,7 @@ pub async fn like_thread(
 }
 /// Unlike thread
 #[utoipa::path(
-    post,
+    delete,
     path = ThreadPath::UnLikeThread.docs_str(),
     params(
        ("session" = String, Cookie, description = "Session token for authentication")
@@ -275,8 +272,9 @@ pub struct ThreadLikeResponse {
     ),
     responses(
         (status = 200, description = "Successfully retrieved thread likes", body = ThreadLikeResponse),
-        (status = 400, description = "Bad request", body = ErrorResponse),
-        (status = 401, description = "Unauthorized", body = ErrorResponse)
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
     ),
     security(
         ("session" = [])
