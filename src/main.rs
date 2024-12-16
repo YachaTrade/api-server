@@ -58,7 +58,7 @@ use clap::Parser;
         router::mint_party::handler::get_mint_party_list,
         router::mint_party::handler::get_mint_party_deposit_list,
         router::mint_party::handler::get_mint_party_balance,
-
+        
 
     ),
     components(
@@ -113,6 +113,7 @@ use clap::Parser;
             db::postgres::model::Thread,
             db::postgres::model::Token,
             db::postgres::model::Chart,
+            db::postgres::model::MintParty
     )),
     tags(
         (name="Auth",description = "Authentication endpoints"),
