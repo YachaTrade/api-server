@@ -29,15 +29,14 @@ pub fn router(app_state: AppState) -> Router<AppState> {
         )
         .route(
             MintPartyPath::GetMintPartyDepositList.as_str(),
-            get(handler::get_mint_party_deposit_list),
+            get(handler::get_mint_party_deposit_list).layer(middleware::from_fn_with_state(
+                app_state.clone(),
+                authenticate_user,
+            )),
         )
-        .layer(middleware::from_fn_with_state(
-            app_state.clone(),
-            authenticate_user,
-        ))
         .route(
             MintPartyPath::GetMintPartyBalanceList.as_str(),
-            get(handler::get_mint_party_balance),
+            get(handler::get_mint_party_balance)
+                .layer(middleware::from_fn_with_state(app_state, authenticate_user)),
         )
-        .layer(middleware::from_fn_with_state(app_state, authenticate_user))
 }

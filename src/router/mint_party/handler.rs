@@ -5,7 +5,6 @@ use axum::{
 
 use serde::{Deserialize, Serialize};
 
-use tracing::info;
 use utoipa::{schema, ToSchema};
 
 use crate::{
