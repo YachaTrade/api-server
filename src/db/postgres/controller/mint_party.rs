@@ -4,12 +4,13 @@ use crate::{
     types::{
         order_type::{MintPartyOrderType, OrderDirection},
         response::{
-            AccountInfo, MintPartyDepositList, MintPartyDepositListRaw, MintPartyRaw,
-            MintPartyResponse,
+            AccountInfo, MintPartyBalance, MintPartyBalanceRaw, MintPartyClaimStatus,
+            MintPartyDepositList, MintPartyDepositListRaw, MintPartyRaw, MintPartyResponse,
         },
     },
 };
 use anyhow::{anyhow, Result};
+use tracing::info;
 
 use std::sync::Arc;
 
@@ -23,6 +24,7 @@ impl MintPartyController {
     }
 
     pub async fn get_mint_party_tx(&self, tx: String) -> Result<MintParty> {
+        info!("tx: {}", tx);
         let mint_party = sqlx::query_as!(
             MintParty,
             r#"
@@ -31,7 +33,8 @@ impl MintPartyController {
             tx
         )
         .fetch_one(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|err| anyhow!("Fail get mint_party Reason :{err}"))?;
 
         Ok(mint_party)
     }
@@ -45,16 +48,19 @@ impl MintPartyController {
         website: Option<String>,
         creator: String,
     ) -> Result<MintParty> {
+        // Single query to check and update atomically
         let mint_party = sqlx::query_as!(
             MintParty,
             r#"
-            UPDATE mint_party
+            UPDATE mint_party 
             SET description = $1,
                 twitter = $2,
                 telegram = $3,
                 website = $4,
                 is_updated = true
-            WHERE transaction_hash = $5 AND account_id = $6
+            WHERE transaction_hash = $5 
+                AND account_id = $6
+                AND is_updated = false 
             RETURNING *
             "#,
             description,
@@ -64,9 +70,10 @@ impl MintPartyController {
             transaction_hash,
             creator
         )
-        .fetch_one(&self.db.write_pool)
+        .fetch_optional(&self.db.write_pool)
         .await
-        .map_err(|err| anyhow!("Fail update mint_party Reason :{err}"))?;
+        .map_err(|err| anyhow!("Failed to update mint party. Reason: {}", err))?
+        .ok_or_else(|| anyhow!("Mint Party is already updated"))?;
 
         Ok(mint_party)
     }
@@ -167,54 +174,83 @@ impl MintPartyController {
         Ok(rows.into_iter().map(MintPartyResponse::from).collect())
     }
 
+    pub async fn get_mint_party_balance(
+        &self,
+        account_id: String,
+    ) -> Result<Vec<MintPartyBalance>> {
+        let raw_balances = sqlx::query_as!(
+            MintPartyBalanceRaw,
+            r#"
+            SELECT 
+                
+                a.account_id,
+                a.nickname as account_nickname,
+                a.image_uri as account_image_uri,
+                mp.mint_party_id,
+                mp.name as mint_party_name,
+                mp.symbol as mint_party_symbol,
+                mp.image_uri as mint_party_image_uri,
+                mb.amount,
+                mb.claim_status as "claim_status: MintPartyClaimStatus",
+                mb.created_at,
+                mb.is_claimable,
+                mb.transaction_hash,
+                mb.token_id
+            FROM mint_party_balance mb
+            INNER JOIN mint_party mp ON mb.mint_party_id = mp.mint_party_id
+            INNER JOIN account a ON mb.account_id = a.account_id
+            WHERE mb.account_id = $1
+            ORDER BY mb.created_at DESC
+            "#,
+            account_id
+        )
+        .fetch_all(&self.db.read_pool)
+        .await
+        .map_err(|e| anyhow!("Failed to fetch mint party balances: {}", e))?;
+
+        Ok(raw_balances.into_iter().map(Into::into).collect())
+    }
+
     pub async fn get_mint_party_deposit_list(
         &self,
         account_id: String,
     ) -> Result<Vec<MintPartyDepositList>> {
-        let rows = sqlx::query_as!(
+        info!("account_id: {}", account_id);
+        let raw_list = sqlx::query_as!(
             MintPartyDepositListRaw,
             r#"
+            WITH active_mint_parties AS (
+                SELECT mint_party_id 
+                FROM mint_party 
+                WHERE account_id = $1 
+                AND is_closed = false 
+                
+            )
             SELECT 
                 a.account_id,
-                a.nickname,
+                a.nickname as account_nickname,
                 a.image_uri as account_image_uri,
                 mpd.comment,
-                mpd.mint_party_id,
+                mp.mint_party_id,
+                mp.name as mint_party_name,
+                mp.symbol as mint_party_symbol,
+                mp.image_uri as mint_party_image_uri,
                 mpd.created_at,
                 mp.funding_amount as amount,
                 mpd.is_white_list,
                 mpd.transaction_hash
             FROM mint_party_deposit_list mpd
-            JOIN account a ON mpd.account_id = a.account_id
-            JOIN mint_party mp ON mpd.mint_party_id = mp.mint_party_id
-            WHERE mp.account_id = $1
-              AND mp.is_closed = false
-              AND mp.is_finished = false
+            INNER JOIN mint_party mp ON mpd.mint_party_id = mp.mint_party_id
+            INNER JOIN account a ON mpd.account_id = a.account_id
+            INNER JOIN active_mint_parties amp ON mpd.mint_party_id = amp.mint_party_id
             ORDER BY mpd.created_at DESC
             "#,
             account_id
         )
         .fetch_all(&self.db.read_pool)
         .await
-        .map_err(|err| anyhow!("Failed to get mint party deposit list: {err}"))?;
-
-        Ok(rows
-            .into_iter()
-            .map(|row| MintPartyDepositList {
-                account_info: AccountInfo {
-                    nickname: row.nickname,
-                    account_id: row.account_id,
-                    image_uri: row.account_image_uri,
-                },
-                comment: row.comment,
-                mint_party_id: row.mint_party_id,
-                created_at: row.created_at,
-                amount: row.amount,
-                is_white_list: row.is_white_list,
-                transaction_hash: row.transaction_hash,
-            })
-            .collect())
+        .map_err(|e| anyhow!("Failed to fetch mint party deposits: {}", e))?;
+        info!("Mint party deposit list: {:#?}", raw_list);
+        Ok(raw_list.into_iter().map(Into::into).collect())
     }
-
-    // pub async fn get_mint_party_balance(&self,account_id:String)->Result<
 }

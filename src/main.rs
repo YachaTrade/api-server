@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     db, env,
     middleware::authenticate_user,
-    router::{self, account, auth, balance, chart, profile, search, thread, token},
+    router::{self, account, auth, balance, chart, mint_party, profile, search, thread, token},
     state::AppState,
     types,
 };
@@ -52,41 +52,62 @@ use utoipa_swagger_ui::SwaggerUi;
         router::token::handler::update_token,
         router::token::handler::get_token,
         router::chart::handler::get_chart,
+        router::mint_party::handler::update_mint_party,
+        router::mint_party::handler::get_last_join_mint_party,
+        router::mint_party::handler::get_mint_party_list,
+        router::mint_party::handler::get_mint_party_deposit_list,
+        router::mint_party::handler::get_mint_party_balance,
+
+
     ),
-    components(schemas(
-        router::auth::handler::AuthNonceRequest,
-        router::auth::handler::AuthNonceResponse,
-        router::auth::handler::AuthSessionRequest,
-        router::auth::handler::AuthSessionResponse,
-        types::response::HoldTokenResponse,
-        router::account::handler::UpdateAccountRequest,
-        router::account::handler::UpdateAccountFormData,
-        router::account::handler::AccountResponse,
+    components(
+        schemas(
+            router::auth::handler::AuthNonceRequest,
+            router::auth::handler::AuthNonceResponse,
+            router::auth::handler::AuthSessionRequest,
+            router::auth::handler::AuthSessionResponse,
+            types::response::HoldTokenResponse,
+            router::account::handler::UpdateAccountRequest,
+            router::account::handler::UpdateAccountFormData,
+            router::account::handler::AccountResponse,
    
-        router::account::handler::AddLikeRequest,
-        router::account::handler::RemoveLikeRequest,
-        router::profile::handler::ProfileResponse,
-        router::profile::handler::HeldTokensResponse,
-        router::profile::handler::RepliesResponse,
-        router::profile::handler::CreatedTokensResponse,
-        // router::profile::handler::FollowersResponse,
-        // router::profile::handler::FollowingResponse,
-        router::search::handler::SearchResponse,
-        router::thread::handler::CreateThreadRequest,
-        router::thread::handler::CreateThreadFormData,
-        router::thread::handler::ThreadRequest,
-        router::thread::handler::ThreadResponse,
-        router::thread::handler::ThreadLikeResponse,
-        router::token::handler::UpdateTokenRequest,
-        router::token::handler::TokenResponse,
-        router::chart::handler::ChartResponse,
-        router::chart::handler::ChartQuery,
-        router::search::handler::SearchResponse,
-        db::postgres::model::Account,
-        db::postgres::model::Token,
-        db::postgres::model::Thread,
-        db::postgres::model::Token,
-        db::postgres::model::Chart,
+            router::account::handler::AddLikeRequest,
+            router::account::handler::RemoveLikeRequest,
+            router::profile::handler::ProfileResponse,
+            router::profile::handler::HeldTokensResponse,
+            router::profile::handler::RepliesResponse,
+            router::profile::handler::CreatedTokensResponse,
+            // router::profile::handler::FollowersResponse,
+            // router::profile::handler::FollowingResponse,
+            router::search::handler::SearchResponse,
+            router::thread::handler::CreateThreadRequest,
+            router::thread::handler::CreateThreadFormData,
+            router::thread::handler::ThreadRequest,
+            router::thread::handler::ThreadResponse,
+            router::thread::handler::ThreadLikeResponse,
+            router::token::handler::UpdateTokenRequest,
+            router::token::handler::TokenResponse,
+            router::chart::handler::ChartResponse,
+            router::chart::handler::ChartQuery,
+            router::search::handler::SearchResponse,
+            router::mint_party::handler::UpdateMintPartyRequest,
+            router::mint_party::handler::UpdateMintPartyResponse,
+            router::mint_party::handler::MintPartyListResponse,
+            router::mint_party::handler::MintPartyBalanceResponse,
+            router::mint_party::handler::MintPartyDepositListResopnse,
+            router::mint_party::handler::MintPartyQuery,
+            types::order_type::MintPartyOrderType,
+            types::order_type::OrderDirection,
+            types::response::MintPartyResponse,
+            types::response::MintPartyBalance,
+            types::response::MintPartyDepositList,
+            types::response::MintPartyInfo,
+            
+            db::postgres::model::Account,
+            db::postgres::model::Token,
+            db::postgres::model::Thread,
+            db::postgres::model::Token,
+            db::postgres::model::Chart,
     )),
     tags(
         (name="Auth",description = "Authentication endpoints"),
@@ -97,7 +118,11 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Token",description="Token management endpoints"),
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
-        (name="Chart",description="Chart endpoints")
+        (name="Chart",description="Chart endpoints"),
+        (name="MintParty", description ="Mint Party management endpoints")
+    ),
+    security(
+        ("session_cookie" = [])
     )
 )]
 pub struct ApiDoc;
@@ -140,6 +165,7 @@ async fn main() -> Result<()> {
         .merge(search::router())
         .merge(chart::router())
         .merge(profile::router())
+        .merge(mint_party::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()

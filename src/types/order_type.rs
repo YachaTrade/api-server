@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MintPartyOrderType {
     CreationTime,
@@ -19,7 +20,7 @@ impl Default for MintPartyOrderType {
         Self::CreationTime // 기본값으로 생성시간 정렬 사용
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum OrderDirection {
     Asc,
