@@ -136,7 +136,7 @@ pub struct ApiDoc;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Port number for the server (default: 3000, can be overridden by HTTP_PORT env var)
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "8000")]
     port: Option<u16>,
 }
 
