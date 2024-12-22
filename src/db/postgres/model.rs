@@ -62,8 +62,6 @@ pub struct Token {
     pub pair: Option<String>,
     pub created_at: i64,
     pub create_transaction_hash: String,
-    #[serde(skip_serializing)]
-    pub is_updated: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Chart {

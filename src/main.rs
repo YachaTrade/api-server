@@ -50,7 +50,6 @@ use clap::Parser;
         router::thread::handler::like_thread,
         router::thread::handler::unlike_thread,
         router::thread::handler::get_thread_like_by_account,
-        router::token::handler::update_token,
         router::token::handler::get_token,
         router::chart::handler::get_chart,
         router::mint_party::handler::update_mint_party,
@@ -86,7 +85,6 @@ use clap::Parser;
             router::thread::handler::ThreadRequest,
             router::thread::handler::ThreadResponse,
             router::thread::handler::ThreadLikeResponse,
-            router::token::handler::UpdateTokenRequest,
             router::token::handler::TokenResponse,
             router::chart::handler::ChartResponse,
             router::chart::handler::ChartQuery,
@@ -179,10 +177,10 @@ async fn main() -> Result<()> {
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
-        .merge(token::router(app_state.clone()).layer(ServiceBuilder::new()))
         .merge(thread::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
+        .merge(token::router())
         .merge(balance::router())
         .merge(search::router())
         .merge(chart::router())
