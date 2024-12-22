@@ -121,6 +121,7 @@ pub async fn auth_session(
         .map_err(|_| AppError::BadRequest("Invalid signature".to_string()))?
         .to_string();
     info!("Recovered address = {:?}", address);
+
     let redis = state.redis.clone();
 
     let session_nonce = redis
@@ -131,16 +132,19 @@ pub async fn auth_session(
     if nonce != session_nonce {
         AppError::Unauthorized("Invalid nonce".to_string());
     }
+
     redis
         .del_nonce(&address)
         .await
         .map_err(|err| AppError::RedisError(err.to_string()))?;
     let session_id = generate_session_id(address.as_str(), nonce.as_str());
+
     redis
         .set_session(&session_id, &address, *EXPIRATION_SESSION_KEY)
         .await
         .map_err(|err| AppError::RedisError(err.to_string()))?;
     //session key는 postgres에 어떻게 저장할거냐?
+
     let postgres = state.postgres.clone();
 
     // 여기선 account 가 없을수가 없음
@@ -159,7 +163,7 @@ pub async fn auth_session(
         .map_err(|err| AppError::InternalError(err.to_string()))?;
 
     //추후 프론트 배포시 samesite = strict 로 변경
-    let mut cookie = Cookie::new("session", session_id);
+    let mut cookie = Cookie::new("api-session", session_id);
     cookie.set_http_only(true);
     // // cookie.set_domain("nad.fun"); // 변경
     cookie.set_secure(true);

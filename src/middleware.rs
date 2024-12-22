@@ -60,7 +60,7 @@ pub async fn authenticate_user(
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
-    let session_key = match cookies.get("session") {
+    let session_key = match cookies.get("api-session") {
         Some(cookie) => cookie.value().to_string(),
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),
     };
