@@ -40,7 +40,7 @@ impl AccountController {
         )
         .fetch_one(self.db.get_write_pool())
         .await
-        .map_err(|err| anyhow!("Fail upsert account Reason :{err} address: {}", err))?;
+        .map_err(|err| anyhow!("Fail upsert account Reason :{:?}", err))?;
         Ok(account)
     }
     pub async fn update_account(

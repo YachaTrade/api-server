@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use std::sync::Arc;
 
@@ -36,7 +36,8 @@ impl BalanceController {
             account_id
         )
         .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|err| anyhow!("Fail get balances Reason :{:?}", err))?;
         Ok(balances)
     }
 }

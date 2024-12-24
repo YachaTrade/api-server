@@ -1,8 +1,6 @@
 pub mod handler;
 pub mod path;
 
-use std::sync::Arc;
-
 use axum::{
     middleware,
     routing::{delete, post},

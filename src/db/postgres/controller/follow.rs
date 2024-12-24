@@ -84,10 +84,8 @@ impl FollowController {
             following
         )
         .fetch_one(tx.as_mut())
-        .await?;
-
-        // let follower_account = self.update_follower_count(&mut tx, &follower, -1).await?;
-        // let following_account = self.update_following_count(&mut tx, &following, -1).await?;
+        .await
+        .map_err(|err| anyhow!("Failed to remove follow\n Reason :{err}"))?;
 
         tx.commit().await?;
         Ok((follower, follwing))
@@ -155,7 +153,8 @@ impl FollowController {
             offset
         )
         .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|err| anyhow!("Failed to get followers\n Reason :{err}"))?;
 
         Ok(followers)
     }
@@ -181,7 +180,7 @@ impl FollowController {
             offset
         )
         .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await.map_err(|err| anyhow!("Failed to get following\n Reason :{err}"))?;
 
         Ok(following)
     }

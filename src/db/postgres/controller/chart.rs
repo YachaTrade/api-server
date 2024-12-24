@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use crate::db::postgres::{
-    model::{Account, Chart, ChartInterval},
+    model::{Chart, ChartInterval},
     PostgresDatabase,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use tracing::info;
 
 pub struct ChartController {
@@ -54,7 +54,7 @@ impl ChartController {
         .fetch_all(self.db.get_read_pool())
         .await
         .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
-        info!("Chart = {:?}", charts);
+
         Ok(charts)
     }
 }

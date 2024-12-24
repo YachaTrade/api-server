@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use tracing::info;
 
@@ -32,15 +32,14 @@ impl ProfileController {
                 .fetch_one(self.db.get_read_pool())
                 .await?
             }
-            Identifier::Address(address) => {
-                sqlx::query_as!(
-                    Account,
-                    "SELECT * FROM account WHERE account_id = $1",
-                    address
-                )
-                .fetch_one(self.db.get_read_pool())
-                .await?
-            }
+            Identifier::Address(address) => sqlx::query_as!(
+                Account,
+                "SELECT * FROM account WHERE account_id = $1",
+                address
+            )
+            .fetch_one(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?,
         };
 
         Ok(account)
@@ -50,10 +49,9 @@ impl ProfileController {
         identifier: &Identifier,
     ) -> Result<Vec<CreateTokenResponse>> {
         let tokens = match identifier {
-            Identifier::Nickname(nickname) => {
-                sqlx::query_as!(
-                    CreateTokenResponse,
-                    r#"
+            Identifier::Nickname(nickname) => sqlx::query_as!(
+                CreateTokenResponse,
+                r#"
                     SELECT 
                         t.token_id as "token_id!",
                         t.name as "name!",
@@ -72,15 +70,14 @@ impl ProfileController {
                     ORDER BY t.created_at DESC
                     LIMIT 50
                     "#,
-                    nickname
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
-            Identifier::Address(address) => {
-                sqlx::query_as!(
-                    CreateTokenResponse,
-                    r#"
+                nickname
+            )
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Fail get created tokens Reason :{err} address: {}", err))?,
+            Identifier::Address(address) => sqlx::query_as!(
+                CreateTokenResponse,
+                r#"
                     SELECT 
                         t.token_id as "token_id!",
                         t.name as "name!",
@@ -98,11 +95,11 @@ impl ProfileController {
                     ORDER BY t.created_at DESC
                     LIMIT 50
                     "#,
-                    address
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
+                address
+            )
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Fail get created tokens Reason :{err} address: {}", err))?,
         };
 
         Ok(tokens)
@@ -187,10 +184,9 @@ impl ProfileController {
 
     pub async fn get_replies(&self, identifier: &Identifier) -> Result<Vec<Thread>> {
         let replies = match identifier {
-            Identifier::Nickname(nickname) => {
-                sqlx::query_as!(
-                    Thread,
-                    r#"
+            Identifier::Nickname(nickname) => sqlx::query_as!(
+                Thread,
+                r#"
                     SELECT t.*
                     FROM thread t
                     JOIN account a ON t.account_id = a.account_id
@@ -198,26 +194,25 @@ impl ProfileController {
                     ORDER BY t.created_at DESC
                     LIMIT 50
                     "#,
-                    nickname
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
-            Identifier::Address(address) => {
-                sqlx::query_as!(
-                    Thread,
-                    r#"
+                nickname
+            )
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Fail get replies Reason :{err} address: {}", err))?,
+            Identifier::Address(address) => sqlx::query_as!(
+                Thread,
+                r#"
                     SELECT *
                     FROM thread
                     WHERE account_id = $1
                     ORDER BY created_at DESC
                     LIMIT 50
                     "#,
-                    address
-                )
-                .fetch_all(self.db.get_read_pool())
-                .await?
-            }
+                address
+            )
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Fail get replies Reason :{err} address: {}", err))?,
         };
 
         Ok(replies)
@@ -239,7 +234,8 @@ impl ProfileController {
                     nickname
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await?
+                .await
+                 .map_err(|err| anyhow!("Fail get followers Reason :{err} address: {}", err))?
             },
             Identifier::Address(address) => {
                 sqlx::query_as!(
@@ -254,7 +250,7 @@ impl ProfileController {
                     address
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await?
+                .await.map_err(|err|anyhow!("Fail get followers Reason :{err} address: {}", err))?
             }
         };
 
@@ -277,7 +273,7 @@ impl ProfileController {
                     nickname
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await?
+                .await.map_err(|err|anyhow!("Fail get following Reason :{err} address: {}", err)    )?
             },
             Identifier::Address(address) => {
                 sqlx::query_as!(
@@ -292,7 +288,7 @@ impl ProfileController {
                     address
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await?
+                .await.map_err(|err|anyhow!("Fail get following Reason :{err} address: {}", err))?
             }
         };
 

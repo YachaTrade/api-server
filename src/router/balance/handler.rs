@@ -37,10 +37,7 @@ pub async fn get_balance(
     let balances = balance_controller
         .get_balances(&account_id)
         .await
-        .map_err(|err| {
-            info!("Get Balance Error {:?}", err);
-            AppError::BadRequest(err.to_string())
-        })?;
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
 
     Ok(Json(balances))
 }

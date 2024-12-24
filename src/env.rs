@@ -1,5 +1,4 @@
 pub fn get_env(key: &str) -> String {
-    // println!("{:?}", key);
     std::env::var(key).unwrap()
 }
 
@@ -11,7 +10,7 @@ pub struct DBEnv {
     pub primary_db_name: String,
     pub primary_db_host: String,
     pub primary_db_port: String,
-    
+
     // Replica DB
     pub replica_db_user: String,
     pub replica_db_password: String,
@@ -29,7 +28,7 @@ impl DBEnv {
             primary_db_host: get_env("PRIMARY_DB_HOST"),
             primary_db_port: get_env("PRIMARY_DB_PORT"),
             primary_db_name: get_env("PRIMARY_DB_NAME"),
-            
+
             // Replica DB
             replica_db_user: get_env("REPLICA_DB_USER"),
             replica_db_password: get_env("REPLICA_DB_PASSWORD"),

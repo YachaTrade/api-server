@@ -1,11 +1,10 @@
 use crate::{
     db::postgres::{model::MintParty, PostgresDatabase},
-    router::mint_party,
     types::{
         order_type::{MintPartyOrderType, OrderDirection},
         response::{
-            AccountInfo, MintPartyBalance, MintPartyBalanceRaw, MintPartyClaimStatus,
-            MintPartyDepositList, MintPartyDepositListRaw, MintPartyRaw, MintPartyResponse,
+            MintPartyBalance, MintPartyBalanceRaw, MintPartyClaimStatus, MintPartyDepositList,
+            MintPartyDepositListRaw, MintPartyRaw, MintPartyResponse,
         },
     },
 };
@@ -250,7 +249,7 @@ impl MintPartyController {
         .fetch_all(&self.db.read_pool)
         .await
         .map_err(|e| anyhow!("Failed to fetch mint party deposits: {}", e))?;
-        info!("Mint party deposit list: {:#?}", raw_list);
+
         Ok(raw_list.into_iter().map(Into::into).collect())
     }
 }

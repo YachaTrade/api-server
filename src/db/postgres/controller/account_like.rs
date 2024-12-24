@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::db::postgres::{model::Account, PostgresDatabase};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 
 use tracing::debug;
 
@@ -28,7 +28,7 @@ impl AccountLikeController {
         )
         .execute(&mut *tx)
         .await
-        .context("Fail insert Account like")?;
+        .map_err(|err| anyhow!("Fail insert Account like Reason :{:?}", err))?;
 
         sqlx::query!(
             r#"
@@ -40,7 +40,7 @@ impl AccountLikeController {
         )
         .execute(&mut *tx)
         .await
-        .context("Fail update Account like")?;
+        .map_err(|err| anyhow!("Fail update Account like Reason :{:?}", err))?;
 
         tx.commit().await?;
 
@@ -55,7 +55,7 @@ impl AccountLikeController {
         )
         .fetch_one(self.db.get_read_pool())
         .await
-        .context("Fail get Account")?;
+        .map_err(|err| anyhow!("Fail Update like Account Reason :{:?}", err))?;
 
         Ok(liker_account)
     }
@@ -73,7 +73,7 @@ impl AccountLikeController {
         )
         .execute(&mut *tx)
         .await
-        .context("Fail delete Account like")?;
+        .map_err(|err| anyhow!("Fail delete Account like Reason :{:?}", err))?;
 
         sqlx::query!(
             r#"
@@ -85,7 +85,7 @@ impl AccountLikeController {
         )
         .execute(&mut *tx)
         .await
-        .context("Fail update Account like")?;
+        .map_err(|err| anyhow!("Fail update Account like Reason :{:?}", err))?;
 
         tx.commit().await?;
 
@@ -100,7 +100,7 @@ impl AccountLikeController {
         )
         .fetch_one(self.db.get_read_pool())
         .await
-        .context("Fail get Account")?;
+        .map_err(|err| anyhow!("Fail get Account Reason :{:?}", err))?;
 
         Ok(liker_account)
     }
