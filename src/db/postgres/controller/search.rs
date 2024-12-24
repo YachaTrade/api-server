@@ -14,6 +14,9 @@ use tracing::info;
 pub enum TokenSortBy {
     MarketCap,    // price * reserve_token
     CreationTime, // created_at
+    LatestTrade,  //
+    ReplyCount,
+    LatestReply,
 }
 pub struct SearchController {
     pub db: Arc<PostgresDatabase>,
@@ -35,6 +38,9 @@ impl SearchController {
         let order_by = match sort_by {
             TokenSortBy::MarketCap => "c.price DESC NULLS LAST",
             TokenSortBy::CreationTime => "t.created_at DESC",
+            TokenSortBy::LatestTrade => "c.price DESC NULLS LAST", //unused default marketcap
+            TokenSortBy::ReplyCount => "c.price DESC NULLS LAST",  //unused default marketcap
+            TokenSortBy::LatestReply => "c.price DESC NULLS LAST", //unused default marketcap
         };
 
         let query = format!(
