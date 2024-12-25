@@ -213,7 +213,7 @@ pub async fn auth_delete_session(
         .map_err(|err| AppError::RedisError(err.to_string()))?;
 
     // Remove session cookie by setting its expiry to a past date
-    let mut cookie = Cookie::new("session", "");
+    let mut cookie = Cookie::new("api-session", "");
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");

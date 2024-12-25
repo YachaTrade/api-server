@@ -4,11 +4,12 @@ use crate::{
     db::postgres::PostgresDatabase,
     types::response::{AccountInfo, SearchTokenInfo, SearchTokenRaw, SearchTokenResponse},
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use serde::Deserialize;
 use tracing::info;
+
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum TokenSortBy {
@@ -18,6 +19,7 @@ pub enum TokenSortBy {
     ReplyCount,
     LatestReply,
 }
+
 pub struct SearchController {
     pub db: Arc<PostgresDatabase>,
 }
