@@ -141,7 +141,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    info!("Axum server started");
+    info!("API server started");
     dotenv::dotenv().ok();
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
