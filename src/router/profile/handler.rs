@@ -176,58 +176,58 @@ pub async fn get_replies(
     Ok(Json(RepliesResponse { replies }))
 }
 
-// Get user's followers
-// #[utoipa::path(
-//     get,
-//     path = ProfilePath::Followers.docs_str(),
-//     params(
-//         ("user" = String, Path, description = "User's nickname or Ethereum address")
-//     ),
-//     responses(
-//         (status = 200, description = "User's followers retrieved successfully", body = FollowersResponse),
-//         (status = 404, description = "User not found"),
-//         (status = 500, description = "Internal server error")
-//     ),
-//     tag = "Profile"
-// )]
-// pub async fn get_followers(
-//     Path(user): Path<String>,
-//     State(state): State<AppState>,
-// ) -> AppJsonResult<FollowersResponse> {
-//     let profile_controller = ProfileController::new(state.postgres.clone());
-//     let identifier = if is_address(&user) {
-//         Identifier::Address(user)
-//     } else {
-//         Identifier::Nickname(user)
-//     };
-//     let followers = profile_controller.get_followers(&identifier).await?;
-//     Ok(Json(FollowersResponse { followers }))
-// }
+/// Get user's followers
+#[utoipa::path(
+    get,
+    path = ProfilePath::Followers.docs_str(),
+    params(
+        ("user" = String, Path, description = "User's nickname or Ethereum address")
+    ),
+    responses(
+        (status = 200, description = "User's followers retrieved successfully", body = FollowersResponse),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+pub async fn get_followers(
+    Path(user): Path<String>,
+    State(state): State<AppState>,
+) -> AppJsonResult<FollowersResponse> {
+    let profile_controller = ProfileController::new(state.postgres.clone());
+    let identifier = if is_address(&user) {
+        Identifier::Address(user)
+    } else {
+        Identifier::Nickname(user)
+    };
+    let followers = profile_controller.get_followers(&identifier).await?;
+    Ok(Json(FollowersResponse { followers }))
+}
 
-// /// Get accounts followed by user
-// #[utoipa::path(
-//     get,
-//     path = ProfilePath::Following.docs_str(),
-//     params(
-//         ("user" = String, Path, description = "User's nickname or Ethereum address")
-//     ),
-//     responses(
-//         (status = 200, description = "Followed accounts retrieved successfully", body = FollowingResponse),
-//         (status = 404, description = "User not found"),
-//         (status = 500, description = "Internal server error")
-//     ),
-//     tag = "Profile"
-// )]
-// pub async fn get_following(
-//     Path(user): Path<String>,
-//     State(state): State<AppState>,
-// ) -> AppJsonResult<FollowingResponse> {
-//     let profile_controller = ProfileController::new(state.postgres.clone());
-//     let identifier = if is_address(&user) {
-//         Identifier::Address(user)
-//     } else {
-//         Identifier::Nickname(user)
-//     };
-//     let following = profile_controller.get_following(&identifier).await?;
-//     Ok(Json(FollowingResponse { following }))
-// }
+/// Get accounts followed by user
+#[utoipa::path(
+    get,
+    path = ProfilePath::Following.docs_str(),
+    params(
+        ("user" = String, Path, description = "User's nickname or Ethereum address")
+    ),
+    responses(
+        (status = 200, description = "Followed accounts retrieved successfully", body = FollowingResponse),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+pub async fn get_following(
+    Path(user): Path<String>,
+    State(state): State<AppState>,
+) -> AppJsonResult<FollowingResponse> {
+    let profile_controller = ProfileController::new(state.postgres.clone());
+    let identifier = if is_address(&user) {
+        Identifier::Address(user)
+    } else {
+        Identifier::Nickname(user)
+    };
+    let following = profile_controller.get_following(&identifier).await?;
+    Ok(Json(FollowingResponse { following }))
+}

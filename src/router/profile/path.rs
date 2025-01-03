@@ -4,8 +4,8 @@ pub enum ProfilePath {
     TokenHeld,
     Replies,
     TokenCreated,
-    // Followers,
-    // Following,
+    Followers,
+    Following,
 }
 
 impl ProfilePath {
@@ -15,8 +15,8 @@ impl ProfilePath {
             Self::TokenHeld => "/profile/tokens-held/:user",
             Self::Replies => "/profile/replies/:user",
             Self::TokenCreated => "/profile/tokens-created/:user",
-            // Self::Followers => "/profile/followers/:user",
-            // Self::Following => "/profile/following/:user",
+            Self::Followers => "/profile/followers/:user",
+            Self::Following => "/profile/following/:user",
         }
     }
 
@@ -26,8 +26,8 @@ impl ProfilePath {
             Self::TokenHeld => "/profile/tokens-held/{user}",
             Self::Replies => "/profile/replies/{user}",
             Self::TokenCreated => "/profile/tokens-created/{user}",
-            // Self::Followers => "/profile/followers/{user}",
-            // Self::Following => "/profile/following/{user}",
+            Self::Followers => "/profile/followers/{user}",
+            Self::Following => "/profile/following/{user}",
         }
     }
 }

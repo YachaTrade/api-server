@@ -1,5 +1,5 @@
 pub mod auth;
-// pub mod follow;
+pub mod follow;
 pub mod profile;
 
 pub mod account;
