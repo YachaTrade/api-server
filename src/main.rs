@@ -105,7 +105,7 @@ use clap::Parser;
             types::response::TokenInfoResponse,
             types::response::SearchTokenResponse,
             types::response::SearchTokenInfo,
-       
+            types::response::CreateTokenResponse,
             db::postgres::model::Account,
             db::postgres::model::Token,
             db::postgres::model::Thread,

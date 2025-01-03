@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 
+use serde::Deserialize;
 use tracing::info;
+use utoipa::ToSchema;
 
 use std::sync::Arc;
 
@@ -14,6 +16,22 @@ use crate::{
 
 pub struct ProfileController {
     pub db: Arc<PostgresDatabase>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PaginationParams {
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+}
+
+fn default_page() -> i64 {
+    1
+}
+
+fn default_limit() -> i64 {
+    10
 }
 
 impl ProfileController {
@@ -47,7 +65,9 @@ impl ProfileController {
     pub async fn get_created_tokens(
         &self,
         identifier: &Identifier,
+        pagination: PaginationParams,
     ) -> Result<Vec<CreateTokenResponse>> {
+        let offset = (pagination.page - 1) * pagination.limit;
         let tokens = match identifier {
             Identifier::Nickname(nickname) => sqlx::query_as!(
                 CreateTokenResponse,
@@ -68,9 +88,12 @@ impl ProfileController {
                     JOIN curve c ON t.token_id = c.token_id
                     WHERE a.nickname = $1
                     ORDER BY t.created_at DESC
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                nickname
+                nickname,
+                pagination.limit,
+                offset
             )
             .fetch_all(self.db.get_read_pool())
             .await
@@ -93,9 +116,12 @@ impl ProfileController {
                     JOIN curve c ON t.token_id = c.token_id
                     WHERE t.creator = $1
                     ORDER BY t.created_at DESC
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                address
+                address,
+                pagination.limit,
+                offset
             )
             .fetch_all(self.db.get_read_pool())
             .await
@@ -107,7 +133,9 @@ impl ProfileController {
     pub async fn get_holding_token(
         &self,
         identifier: &Identifier,
+        pagination: PaginationParams,
     ) -> Result<Vec<HoldTokenResponse>> {
+        let offset = (pagination.page - 1) * pagination.limit;
         let holdings = match identifier {
             Identifier::Nickname(nickname) => sqlx::query!(
                 r#"
@@ -129,9 +157,12 @@ impl ProfileController {
                         a.nickname = $1
                     ORDER BY 
                         b.current_amount DESC
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                nickname
+                nickname,
+                pagination.limit,
+                offset
             )
             .fetch_all(self.db.get_read_pool())
             .await?
@@ -162,9 +193,12 @@ impl ProfileController {
                         b.account_id = $1
                     ORDER BY 
                         b.current_amount DESC
-                    LIMIT 50
+                      LIMIT $2
+                      OFFSET $3
                     "#,
-                address
+                address,
+                pagination.limit,
+                offset
             )
             .fetch_all(self.db.get_read_pool())
             .await?
@@ -234,8 +268,7 @@ impl ProfileController {
                     nickname
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await
-                 .map_err(|err| anyhow!("Fail get followers Reason :{err} address: {}", err))?
+                .await?
             },
             Identifier::Address(address) => {
                 sqlx::query_as!(
@@ -250,7 +283,7 @@ impl ProfileController {
                     address
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await.map_err(|err|anyhow!("Fail get followers Reason :{err} address: {}", err))?
+                .await?
             }
         };
 
@@ -273,7 +306,7 @@ impl ProfileController {
                     nickname
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await.map_err(|err|anyhow!("Fail get following Reason :{err} address: {}", err)    )?
+                .await?
             },
             Identifier::Address(address) => {
                 sqlx::query_as!(
@@ -288,7 +321,7 @@ impl ProfileController {
                     address
                 )
                 .fetch_all(self.db.get_read_pool())
-                .await.map_err(|err|anyhow!("Fail get following Reason :{err} address: {}", err))?
+                .await?
             }
         };
 

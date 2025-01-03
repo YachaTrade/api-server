@@ -22,13 +22,12 @@ pub struct ChartResponse {
     pub data: Vec<Chart>,
     pub token_id: String,
     pub interval: String,
-    pub pagenation: i16,
+    pub pagenation: i64,
 }
-
 #[derive(Deserialize, ToSchema)]
 pub struct ChartQuery {
     interval: String,
-    pagination: Option<i16>,
+    pagination: Option<i64>,
 }
 
 ///Get Chart data

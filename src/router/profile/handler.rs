@@ -1,6 +1,6 @@
 use crate::{
     db::postgres::{
-        controller::profile::ProfileController,
+        controller::profile::{PaginationParams, ProfileController},
         model::{Account, Thread},
     },
     result::AppJsonResult,
@@ -9,7 +9,7 @@ use crate::{
 };
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 
@@ -26,20 +26,20 @@ pub struct ProfileResponse {
 }
 #[derive(ToSchema, Serialize)]
 pub struct HeldTokensResponse {
-    tokens: Vec<HoldTokenResponse>,
+    pub tokens: Vec<HoldTokenResponse>,
 }
 #[derive(ToSchema, Serialize)]
 pub struct RepliesResponse {
-    replies: Vec<Thread>,
+    pub replies: Vec<Thread>,
 }
 #[derive(ToSchema, Serialize)]
 pub struct CreatedTokensResponse {
-    tokens: Vec<CreateTokenResponse>,
+    pub tokens: Vec<CreateTokenResponse>,
 }
 
 #[derive(ToSchema, Serialize)]
 pub struct FollowersResponse {
-    followers: Vec<Account>,
+    pub followers: Vec<Account>,
 }
 
 #[derive(ToSchema, Serialize)]
@@ -86,7 +86,9 @@ pub async fn get_profile(
     get,
     path = ProfilePath::TokenHeld.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address")
+        ("user" = String, Path, description = "User's nickname or Ethereum address"),
+        ("page" = i16, Path, description = "Page number"),
+        ("limit" = i16, Path, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "User's held tokens retrieved successfully", body = HeldTokensResponse),
@@ -98,6 +100,7 @@ pub async fn get_profile(
 pub async fn get_tokens_held(
     Path(user): Path<String>,
     State(state): State<AppState>,
+    Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<HeldTokensResponse> {
     let profile_controller = ProfileController::new(state.postgres.clone());
     let identifier = if is_address(&user) {
@@ -105,8 +108,43 @@ pub async fn get_tokens_held(
     } else {
         Identifier::Nickname(user)
     };
-    let tokens = profile_controller.get_holding_token(&identifier).await?;
+    let tokens = profile_controller
+        .get_holding_token(&identifier, query)
+        .await?;
     Ok(Json(HeldTokensResponse { tokens }))
+}
+
+/// Get tokens created by user
+#[utoipa::path(
+    get,
+    path = ProfilePath::TokenCreated.docs_str(),
+    params(
+        ("user" = String, Path, description = "User's nickname or Ethereum address"),
+        ("page" = i64, Path, description = "Page number"),
+        ("limit" = i64, Path, description = "Number of items per page")
+    ),
+    responses(
+        (status = 200, description = "Created tokens retrieved successfully", body = CreatedTokensResponse),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+pub async fn get_created_tokens(
+    Path(user): Path<String>,
+    State(state): State<AppState>,
+    Query(query): Query<PaginationParams>,
+) -> AppJsonResult<CreatedTokensResponse> {
+    let profile_controller = ProfileController::new(state.postgres.clone());
+    let identifier = if is_address(&user) {
+        Identifier::Address(user)
+    } else {
+        Identifier::Nickname(user)
+    };
+    let tokens = profile_controller
+        .get_created_tokens(&identifier, query)
+        .await?;
+    Ok(Json(CreatedTokensResponse { tokens }))
 }
 
 /// Get user's replies
@@ -136,34 +174,6 @@ pub async fn get_replies(
     };
     let replies = profile_controller.get_replies(&identifier).await?;
     Ok(Json(RepliesResponse { replies }))
-}
-
-/// Get tokens created by user
-#[utoipa::path(
-    get,
-    path = ProfilePath::TokenCreated.docs_str(),
-    params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address")
-    ),
-    responses(
-        (status = 200, description = "Created tokens retrieved successfully", body = CreatedTokensResponse),
-        (status = 404, description = "User not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Profile"
-)]
-pub async fn get_created_tokens(
-    Path(user): Path<String>,
-    State(state): State<AppState>,
-) -> AppJsonResult<CreatedTokensResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let tokens = profile_controller.get_created_tokens(&identifier).await?;
-    Ok(Json(CreatedTokensResponse { tokens }))
 }
 
 // Get user's followers

@@ -6,6 +6,7 @@ use crate::db::postgres::{
 };
 
 use anyhow::{anyhow, Result};
+
 use tracing::info;
 
 pub struct ChartController {
@@ -20,11 +21,11 @@ impl ChartController {
         &self,
         token_id: &str,
         interval: ChartInterval,
-        pagination: i16,
+        pagination: i64,
     ) -> Result<Vec<Chart>> {
         let chart_interval: i16 = interval.into();
         let pagination = if pagination <= 0 { 1 } else { pagination };
-        let offset = ((pagination - 1) as i64) * 300;
+        let offset = (pagination - 1) * 300;
         info!(
             "Chart request for token: {}, interval: {:?}, pagination: {}",
             token_id, chart_interval, pagination
