@@ -3,8 +3,7 @@ use std::sync::Arc;
 use crate::db::postgres::{model::Account, PostgresDatabase};
 
 use anyhow::{anyhow, Result};
-use sqlx::{Postgres, QueryBuilder};
-use tracing::info;
+use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
 
 pub struct AccountController {
     pub db: Arc<PostgresDatabase>,
@@ -86,35 +85,32 @@ impl AccountController {
             query_builder.push_bind(field_value);
         }
 
-        // 6. WHERE 구문 추가
-        query_builder.push(" WHERE account_id = ");
-        query_builder.push_bind(address);
-
         // 7. 쿼리 실행
-        let query = query_builder.build();
-        query.execute(self.db.get_write_pool()).await?;
+        query_builder
+        .push(" WHERE account_id = ")
+        .push_bind(address)
+        // UPDATE 한 뒤 해당 컬럼들을 바로 반환
+        .push(" RETURNING account_id, image_uri, nickname, bio, follower_count, following_count, like_count");
 
-        // 8. 업데이트된 계정 조회 후 반환
-        let updated_account = sqlx::query_as!(
-            Account,
-            r#"
-                SELECT 
-                    account_id,
-                    image_uri, 
-                    nickname,
-                    bio,
-                    follower_count,
-                    following_count,
-                    like_count
-                FROM account
-                WHERE LOWER(account_id) = LOWER($1)
-            "#,
-            address
-        )
-        .fetch_one(self.db.get_write_pool())
-        .await
-        .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", err))?;
-        info!("Updated account: {:#?}", updated_account);
+        // 한 번에 쿼리 실행 & 바로 레코드 받아오기
+        let query = query_builder.build();
+        let updated_account = query
+            .try_map(|row: PgRow| {
+                // 여기서 row에서 컬럼을 뽑아 Account 구조체로 매핑
+                Ok(Account {
+                    account_id: row.try_get("account_id")?,
+                    image_uri: row.try_get("image_uri")?,
+                    nickname: row.try_get("nickname")?,
+                    bio: row.try_get("bio")?,
+                    follower_count: row.try_get("follower_count")?,
+                    following_count: row.try_get("following_count")?,
+                    like_count: row.try_get("like_count")?,
+                })
+            })
+            .fetch_one(self.db.get_write_pool()) // 풀에서 커넥션 얻기
+            .await
+            .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
+
         Ok(updated_account)
     }
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {

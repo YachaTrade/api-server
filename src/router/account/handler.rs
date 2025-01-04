@@ -17,7 +17,7 @@ use super::path::Path;
 #[derive(Debug, Deserialize, ToSchema)]
 
 pub struct UpdateAccountRequest {
-    #[schema(example = json!("Your Nickname" ), nullable)]
+    #[schema(example = json!("Your nickname" ), nullable)]
     pub nickname: Option<String>,
 
     #[schema(example = json!("Your bio" ), nullable)]
@@ -42,7 +42,7 @@ pub struct UpdateAccountFormData {
 pub struct AccountResponse {
     #[schema(example = json!({
         "address": "address",
-        "nickName": "nickname",
+        "nickname": "nickname",
         "bio":"bio",
         "image": "image",
         "like_count": 0,
@@ -62,7 +62,7 @@ pub struct AccountResponse {
         description = "Account update nickname and image",
         example = json!({ 
             "data": {
-                "nickName": "Your Nickname"
+                "nickname": "Your Nickname"
             },
             "image": "[binary]"
         })
