@@ -28,7 +28,7 @@ pub struct UpdateAccountRequest {
 #[derive(ToSchema)]
 pub struct UpdateAccountFormData {
     #[schema(example = json!({
-        "nick_name": "user nickname",
+        "nickname": "user nickname",
     }))]
     pub data: UpdateAccountRequest, // JSON string
 
