@@ -252,7 +252,12 @@ impl ProfileController {
         Ok(replies)
     }
 
-    pub async fn get_followers(&self, identifier: &Identifier) -> Result<Vec<Account>> {
+    pub async fn get_followers(
+        &self,
+        identifier: &Identifier,
+        pagination: PaginationParams,
+    ) -> Result<Vec<Account>> {
+        let offset = (pagination.page - 1) * pagination.limit;
         let followers = match identifier {
             Identifier::Nickname(nickname) => {
                 sqlx::query_as!(
@@ -263,9 +268,12 @@ impl ProfileController {
                     JOIN account a1 ON f.following_id = a1.account_id
                     JOIN account a2 ON f.follower_id = a2.account_id
                     WHERE a1.nickname = $1
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                    nickname
+                    nickname,
+                    pagination.limit,
+                    offset
                 )
                 .fetch_all(self.db.get_read_pool())
                 .await?
@@ -278,9 +286,12 @@ impl ProfileController {
                     FROM follow f
                     JOIN account a ON f.follower_id = a.account_id
                     WHERE f.following_id = $1
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                    address
+                    address,
+                    pagination.limit,
+                    offset
                 )
                 .fetch_all(self.db.get_read_pool())
                 .await?
@@ -290,7 +301,12 @@ impl ProfileController {
         Ok(followers)
     }
 
-    pub async fn get_following(&self, identifier: &Identifier) -> Result<Vec<Account>> {
+    pub async fn get_following(
+        &self,
+        identifier: &Identifier,
+        pagination: PaginationParams,
+    ) -> Result<Vec<Account>> {
+        let offset = (pagination.page - 1) * pagination.limit;
         let followings = match identifier {
             Identifier::Nickname(nickname) => {
                 sqlx::query_as!(
@@ -301,9 +317,12 @@ impl ProfileController {
                     JOIN account a1 ON f.follower_id = a1.account_id
                     JOIN account a2 ON f.following_id = a2.account_id
                     WHERE a1.nickname = $1
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                    nickname
+                    nickname,
+                    pagination.limit,
+                    offset
                 )
                 .fetch_all(self.db.get_read_pool())
                 .await?
@@ -316,9 +335,12 @@ impl ProfileController {
                     FROM follow f
                     JOIN account a ON f.following_id = a.account_id
                     WHERE f.follower_id = $1
-                    LIMIT 50
+                    LIMIT $2
+                    OFFSET $3
                     "#,
-                    address
+                    address,
+                    pagination.limit,
+                    offset
                 )
                 .fetch_all(self.db.get_read_pool())
                 .await?

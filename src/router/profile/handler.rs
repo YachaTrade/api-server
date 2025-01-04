@@ -87,7 +87,7 @@ pub async fn get_profile(
     path = ProfilePath::TokenHeld.docs_str(),
     params(
         ("user" = String, Path, description = "User's nickname or Ethereum address"),
-        ("page" = i16, Path, description = "Page number"),
+        ("page" = i16, Path, description = "Page number start 1"),
         ("limit" = i16, Path, description = "Number of items per page")
     ),
     responses(
@@ -120,8 +120,8 @@ pub async fn get_tokens_held(
     path = ProfilePath::TokenCreated.docs_str(),
     params(
         ("user" = String, Path, description = "User's nickname or Ethereum address"),
-        ("page" = i64, Path, description = "Page number"),
-        ("limit" = i64, Path, description = "Number of items per page")
+        ("page" = i16, Path, description = "Page number start 1"),
+        ("limit" = i16, Path, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Created tokens retrieved successfully", body = CreatedTokensResponse),
@@ -181,7 +181,9 @@ pub async fn get_replies(
     get,
     path = ProfilePath::Followers.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address")
+        ("user" = String, Path, description = "User's nickname or Ethereum address"),
+        ("page" = i16, Path, description = "Page number start 1"),
+        ("limit" = i16, Path, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "User's followers retrieved successfully", body = FollowersResponse),
@@ -193,6 +195,7 @@ pub async fn get_replies(
 pub async fn get_followers(
     Path(user): Path<String>,
     State(state): State<AppState>,
+    Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<FollowersResponse> {
     let profile_controller = ProfileController::new(state.postgres.clone());
     let identifier = if is_address(&user) {
@@ -200,7 +203,7 @@ pub async fn get_followers(
     } else {
         Identifier::Nickname(user)
     };
-    let followers = profile_controller.get_followers(&identifier).await?;
+    let followers = profile_controller.get_followers(&identifier, query).await?;
     Ok(Json(FollowersResponse { followers }))
 }
 
@@ -209,7 +212,9 @@ pub async fn get_followers(
     get,
     path = ProfilePath::Following.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address")
+        ("user" = String, Path, description = "User's nickname or Ethereum address"),
+        ("page" = i16, Path, description = "Page number start 1"),
+        ("limit" = i16, Path, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Followed accounts retrieved successfully", body = FollowingResponse),
@@ -221,6 +226,7 @@ pub async fn get_followers(
 pub async fn get_following(
     Path(user): Path<String>,
     State(state): State<AppState>,
+    Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<FollowingResponse> {
     let profile_controller = ProfileController::new(state.postgres.clone());
     let identifier = if is_address(&user) {
@@ -228,6 +234,6 @@ pub async fn get_following(
     } else {
         Identifier::Nickname(user)
     };
-    let following = profile_controller.get_following(&identifier).await?;
+    let following = profile_controller.get_following(&identifier, query).await?;
     Ok(Json(FollowingResponse { following }))
 }
