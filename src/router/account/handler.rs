@@ -18,9 +18,9 @@ use super::path::Path;
 
 pub struct UpdateAccountRequest {
     #[schema(example = json!("Your Nickname" ), nullable)]
-    #[serde(rename = "nickName")]
-    pub nick_name: Option<String>,
-    #[serde(rename = "bio")]
+    pub nickname: Option<String>,
+
+    #[schema(example = json!("Your bio" ), nullable)]
     pub bio:Option<String>
 }
 
@@ -42,7 +42,7 @@ pub struct UpdateAccountFormData {
 pub struct AccountResponse {
     #[schema(example = json!({
         "address": "address",
-        "nickName": "Nickname",
+        "nickName": "nickname",
         "bio":"bio",
         "image": "image",
         "like_count": 0,
@@ -136,7 +136,7 @@ pub async fn update_account(
 
     // 요청 데이터 검증
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing account data".into()))?;
-    if form_data.nick_name.is_none() && form_data.bio.is_none() && image_info.is_none() {
+    if form_data.nickname.is_none() && form_data.bio.is_none() && image_info.is_none() {
         return Err(AppError::BadRequest("At least one of nickName, bio, or image must be provided".into()));
     }
 
@@ -162,7 +162,7 @@ pub async fn update_account(
         .update_account(
             &session_address,
             image_uri,
-            clean_text(form_data.nick_name),
+            clean_text(form_data.nickname),
             clean_text(form_data.bio)
         )
         .await

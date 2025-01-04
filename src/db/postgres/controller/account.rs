@@ -4,6 +4,7 @@ use crate::db::postgres::{model::Account, PostgresDatabase};
 
 use anyhow::{anyhow, Result};
 use sqlx::{Postgres, QueryBuilder};
+use tracing::info;
 
 pub struct AccountController {
     pub db: Arc<PostgresDatabase>,
@@ -50,66 +51,70 @@ impl AccountController {
         nickname: Option<String>,
         bio: Option<String>,
     ) -> Result<Account> {
+        // 1. UPDATE 구문 시작
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new("UPDATE account SET ");
-        let mut changed = false;
 
+        // 2. 업데이트할 필드를 동적으로 저장할 벡터
+        let mut fields = vec![];
+
+        // 3. 각 필드가 Some 값이면 fields에 (필드명, 값)을 push
         if let Some(image_uri) = image_uri {
-            if !changed {
-                query_builder.push(" image_uri = ");
-            } else {
-                query_builder.push(" , image_uri = ");
-            }
-            query_builder.push_bind(image_uri);
-            changed = true;
+            fields.push(("image_uri", image_uri));
         }
 
         if let Some(nickname) = nickname {
-            if !changed {
-                query_builder.push(" nickname = ");
-            } else {
-                query_builder.push(" , nickname = ");
-            }
-            query_builder.push_bind(nickname);
-            changed = true;
+            fields.push(("nickname", nickname));
         }
 
         if let Some(bio) = bio {
-            if !changed {
-                query_builder.push(" bio = ");
-            } else {
-                query_builder.push(" , bio = ");
-            }
-            query_builder.push_bind(bio);
-            changed = true;
+            fields.push(("bio", bio));
         }
 
+        // 4. 업데이트할 필드가 하나도 없다면 에러 처리 (또는 skip 로직 가능)
+        if fields.is_empty() {
+            return Err(anyhow!("No fields provided to update"));
+        }
+
+        // 5. 쿼리 빌드
+        for (i, (field_name, field_value)) in fields.into_iter().enumerate() {
+            if i > 0 {
+                // 첫 필드가 아니라면 ,(콤마) 추가
+                query_builder.push(", ");
+            }
+            // 예: field_name = $1
+            query_builder.push(format!("{} = ", field_name));
+            query_builder.push_bind(field_value);
+        }
+
+        // 6. WHERE 구문 추가
         query_builder.push(" WHERE account_id = ");
         query_builder.push_bind(address);
 
+        // 7. 쿼리 실행
         let query = query_builder.build();
         query.execute(self.db.get_write_pool()).await?;
 
-        // Get updated account
+        // 8. 업데이트된 계정 조회 후 반환
         let updated_account = sqlx::query_as!(
             Account,
             r#"
-            SELECT 
-                account_id,
-                image_uri, 
-                nickname,
-                bio,
-                follower_count,
-                following_count,
-                like_count
-            FROM account
-            WHERE LOWER(account_id) = LOWER($1)
+                SELECT 
+                    account_id,
+                    image_uri, 
+                    nickname,
+                    bio,
+                    follower_count,
+                    following_count,
+                    like_count
+                FROM account
+                WHERE LOWER(account_id) = LOWER($1)
             "#,
             address
         )
-        .fetch_one(self.db.get_read_pool())
+        .fetch_one(self.db.get_write_pool())
         .await
-        .map_err(|err| anyhow!("Fail update account Reason :{err} address: {}", err))?;
-
+        .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", err))?;
+        info!("Updated account: {:#?}", updated_account);
         Ok(updated_account)
     }
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
