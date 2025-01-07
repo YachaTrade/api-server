@@ -38,11 +38,11 @@ impl SearchController {
         info!("Search pattern: {}", search_pattern);
 
         let order_by = match sort_by {
-            TokenSortBy::MarketCap => "c.price DESC NULLS LAST",
+            TokenSortBy::MarketCap => "m.price DESC NULLS LAST",
             TokenSortBy::CreationTime => "t.created_at DESC",
-            TokenSortBy::LatestTrade => "c.price DESC NULLS LAST", //unused default marketcap
-            TokenSortBy::ReplyCount => "c.price DESC NULLS LAST",  //unused default marketcap
-            TokenSortBy::LatestReply => "c.price DESC NULLS LAST", //unused default marketcap
+            TokenSortBy::LatestTrade => "m.price DESC NULLS LAST", //unused default marketcap
+            TokenSortBy::ReplyCount => "m.price DESC NULLS LAST",  //unused default marketcap
+            TokenSortBy::LatestReply => "m.price DESC NULLS LAST", //unused default marketcap
         };
 
         let query = format!(
