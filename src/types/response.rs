@@ -17,7 +17,6 @@ pub struct CreateTokenResponse {
     pub image_uri: String,
     pub description: Option<String>,
     pub created_at: i64,
-    pub pair: Option<String>,
     pub price: String,
     // pub total_supply: String,
     pub is_listing: bool,
@@ -64,7 +63,7 @@ pub struct SearchTokenInfo {
     pub image_uri: String,
     pub description: String,
     pub reply_count: String,
-    pub price: String, //curve.price
+    pub price: String, //market.price
     pub reserve_token: String,
     pub created_at: i64,
     pub is_king: bool,

@@ -79,13 +79,12 @@ impl ProfileController {
                         t.image_uri as "image_uri!",
                         t.description as description,
                         t.created_at as "created_at!",
-                        t.pair as pair,
                         t.is_listing as "is_listing!",
                         t.create_transaction_hash as transaction_hash,
-                        c.price::text as "price!"
+                        m.price::text as "price!"
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    JOIN curve c ON t.token_id = c.token_id
+                    JOIN market m ON t.token_id = m.token_id
                     WHERE a.nickname = $1
                     ORDER BY t.created_at DESC
                     LIMIT $2
@@ -108,12 +107,11 @@ impl ProfileController {
                         t.image_uri as "image_uri!",
                         t.description as description,
                         t.created_at as "created_at!",
-                        t.pair as pair,
                         t.is_listing as "is_listing!",
                         t.create_transaction_hash as transaction_hash,
-                        c.price::text as "price!"
+                        m.price::text as "price!"
                     FROM token t
-                    JOIN curve c ON t.token_id = c.token_id
+                    JOIN market m ON t.token_id = m.token_id
                     WHERE t.creator = $1
                     ORDER BY t.created_at DESC
                     LIMIT $2
@@ -142,7 +140,7 @@ impl ProfileController {
                     SELECT 
                         b.token_id as "token_id!: String",
                         t.symbol as "symbol!: String",
-                        c.price::text as "price!: String",
+                        m.price::text as "price!: String",
                         b.current_amount::text as "amount!: String",
                         t.image_uri as "image_uri!: String"
                     FROM 
@@ -152,7 +150,7 @@ impl ProfileController {
                     JOIN 
                         token t ON b.token_id = t.token_id
                     JOIN
-                        curve c ON b.token_id = c.token_id
+                        market m ON b.token_id = m.token_id
                     WHERE 
                         a.nickname = $1
                     ORDER BY 
@@ -180,7 +178,7 @@ impl ProfileController {
                     SELECT 
                         b.token_id as "token_id!: String",
                         t.symbol as "symbol!: String",
-                        c.price::text as "price!: String",
+                        m.price::text as "price!: String",
                         b.current_amount::text as "amount!: String",
                         t.image_uri as "image_uri!: String"
                     FROM 
@@ -188,7 +186,7 @@ impl ProfileController {
                     JOIN 
                         token t ON b.token_id = t.token_id
                     JOIN
-                        curve c ON b.token_id = c.token_id
+                        market m ON b.token_id = m.token_id
                     WHERE 
                         b.account_id = $1
                     ORDER BY 

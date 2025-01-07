@@ -59,7 +59,7 @@ pub struct Token {
     pub website: Option<String>,
     pub image_uri: String,
     pub is_listing: bool,
-    pub pair: Option<String>,
+    pub total_supply: BigDecimal,
     pub created_at: i64,
     pub create_transaction_hash: String,
 }

@@ -57,15 +57,15 @@ impl SearchController {
                 t.image_uri as token_image_uri,
                 t.description,
                 COALESCE(trc.reply_count::TEXT, '0') as reply_count,
-                COALESCE(c.price::TEXT, '0') as price,
-                COALESCE(c.reserve_token::TEXT, '0') as reserve_token,
+                COALESCE(m.price::TEXT, '0') as price,
+                COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
                 COALESCE(k.token_id IS NOT NULL, false) as is_king,
                 t.created_at,
                 COALESCE(trc.reply_count::FLOAT8, 0) as score
             FROM token t
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
-            LEFT JOIN curve c ON t.token_id = c.token_id
+            LEFT JOIN market m ON t.token_id = m.token_id
             LEFT JOIN king k ON t.token_id = k.token_id
             WHERE 
                 LOWER(t.token_id) LIKE $1

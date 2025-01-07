@@ -51,15 +51,15 @@ impl MintPartyController {
         let mint_party = sqlx::query_as!(
             MintParty,
             r#"
-            UPDATE mint_party 
+            UPDATE mint_party
             SET description = $1,
                 twitter = $2,
                 telegram = $3,
                 website = $4,
                 is_updated = true
-            WHERE transaction_hash = $5 
+            WHERE transaction_hash = $5
                 AND account_id = $6
-                AND is_updated = false 
+                AND is_updated = false
             RETURNING *
             "#,
             description,
@@ -83,7 +83,7 @@ impl MintPartyController {
         let rows = sqlx::query_as!(
             MintPartyRaw,
             r#"
-            SELECT 
+            SELECT
                 a.account_id,
                 a.nickname,
                 a.image_uri as account_image_uri,
@@ -98,9 +98,9 @@ impl MintPartyController {
                 m.total_deposit_amount
             FROM mint_party m
             JOIN account a ON m.account_id = a.account_id
-            WHERE m.is_closed = false 
+            WHERE m.is_closed = false
               AND m.is_finished = false
-            ORDER BY 
+            ORDER BY
                 m.total_deposit_amount DESC,
                 (m.allow_white_list_count - m.current_white_list_count) ASC
             LIMIT $1
@@ -128,7 +128,7 @@ impl MintPartyController {
         };
 
         let base_query = r#"
-            SELECT 
+            SELECT
                 a.account_id,
                 a.nickname,
                 a.image_uri as account_image_uri,
@@ -143,7 +143,7 @@ impl MintPartyController {
                 m.total_deposit_amount
             FROM mint_party m
             JOIN account a ON m.account_id = a.account_id
-            WHERE m.is_closed = false 
+            WHERE m.is_closed = false
               AND m.is_finished = false
         "#;
 
@@ -180,8 +180,8 @@ impl MintPartyController {
         let raw_balances = sqlx::query_as!(
             MintPartyBalanceRaw,
             r#"
-            SELECT 
-                
+            SELECT
+
                 a.account_id,
                 a.nickname as account_nickname,
                 a.image_uri as account_image_uri,
@@ -219,13 +219,13 @@ impl MintPartyController {
             MintPartyDepositListRaw,
             r#"
             WITH active_mint_parties AS (
-                SELECT mint_party_id 
-                FROM mint_party 
-                WHERE account_id = $1 
-                AND is_closed = false 
-                
+                SELECT mint_party_id
+                FROM mint_party
+                WHERE account_id = $1
+                AND is_closed = false
+
             )
-            SELECT 
+            SELECT
                 a.account_id,
                 a.nickname as account_nickname,
                 a.image_uri as account_image_uri,

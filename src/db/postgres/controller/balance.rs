@@ -20,14 +20,14 @@ impl BalanceController {
                 b.token_id as "token_id!: String",
                 b.current_amount::text as "amount!: String",
                 t.symbol as "symbol!: String",
-                c.price::text as "price!: String",
+                m.price::text as "price!: String",
                 t.image_uri as "image_uri!: String"
             FROM 
                 balance b
             JOIN 
                 token t ON b.token_id = t.token_id
             JOIN
-                curve c ON b.token_id = c.token_id
+                market m ON b.token_id = m.token_id
             WHERE 
                 b.account_id = $1
             ORDER BY 
