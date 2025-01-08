@@ -73,7 +73,7 @@ pub struct Chart {
     pub close_price: BigDecimal,
     pub high_price: BigDecimal,
     pub low_price: BigDecimal,
-    pub volume: i64,
+    pub volume: BigDecimal,
     pub time_stamp: i64,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
