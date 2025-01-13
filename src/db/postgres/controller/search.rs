@@ -34,8 +34,8 @@ impl SearchController {
         query: &str,
         sort_by: TokenSortBy,
     ) -> Result<Vec<SearchTokenResponse>> {
-        // let search_pattern = format!("%{}%", query.to_lowercase());
-        // info!("Search pattern: {}", search_pattern);
+        let search_pattern = format!("%{}%", query.to_lowercase());
+        info!("Search pattern: {}", search_pattern);
 
         let order_by = match sort_by {
             TokenSortBy::MarketCap => "m.price DESC NULLS LAST",
