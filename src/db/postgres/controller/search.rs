@@ -34,8 +34,8 @@ impl SearchController {
         query: &str,
         sort_by: TokenSortBy,
     ) -> Result<Vec<SearchTokenResponse>> {
-        let search_pattern = format!("%{}%", query.to_lowercase());
-        info!("Search pattern: {}", search_pattern);
+        // let search_pattern = format!("%{}%", query.to_lowercase());
+        // info!("Search pattern: {}", search_pattern);
 
         let order_by = match sort_by {
             TokenSortBy::MarketCap => "m.price DESC NULLS LAST",
@@ -60,6 +60,7 @@ impl SearchController {
                 COALESCE(m.price::TEXT, '0') as price,
                 COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
                 COALESCE(k.token_id IS NOT NULL, false) as is_king,
+                m.market_type,
                 t.created_at,
                 COALESCE(trc.reply_count::FLOAT8, 0) as score
             FROM token t
@@ -100,6 +101,7 @@ impl SearchController {
                     price: row.price,
                     reserve_token: row.reserve_token,
                     created_at: row.created_at,
+                    market_type: row.market_type,
                     is_king: row.is_king,
                     score: row.score,
                 },

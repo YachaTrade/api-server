@@ -26,6 +26,7 @@ use crate::types::response::SearchTokenResponse;
             "price": "1250000",
             "reserve_token": "1000000",
             "created_at": 1703400000,
+            "market_type": "DEX",
             "is_king": true,
             "score": 128.0
         },

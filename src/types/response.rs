@@ -66,7 +66,9 @@ pub struct SearchTokenInfo {
     pub price: String, //market.price
     pub reserve_token: String,
     pub created_at: i64,
+    pub market_type: String,
     pub is_king: bool,
+
     pub score: f64,
 }
 
@@ -84,6 +86,7 @@ pub struct SearchTokenRaw {
     pub price: String,
     pub reserve_token: String,
     pub is_king: bool,
+    pub market_type: String,
     pub created_at: i64,
     pub score: f64,
 }
@@ -101,6 +104,7 @@ impl From<SearchTokenRaw> for SearchTokenResponse {
                 price: row.price,
                 reserve_token: row.reserve_token,
                 created_at: row.created_at,
+                market_type: row.market_type,
                 is_king: row.is_king,
                 score: row.score,
             },
