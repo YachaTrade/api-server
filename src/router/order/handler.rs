@@ -7,8 +7,8 @@ use tracing::{instrument, warn};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::controller::order::OrderController,
-    result::AppJsonResult,
+    db::postgres::controller::{king::KingOfTheHillController, order::OrderController},
+    result::{AppError, AppJsonResult},
     state::AppState,
     types::{order::TokenOrderType, pagination::PaginationParams, response::OrderToken},
 };
@@ -28,7 +28,7 @@ pub struct OrderMessage {
     path = OrderPath::Creationtime.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by creation time", body = OrderMessage),
@@ -54,11 +54,14 @@ pub async fn get_creation_time_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::CreationTime, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::CreationTime,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -83,7 +86,7 @@ pub async fn get_creation_time_order(
     path = OrderPath::MarketCap.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by market cap", body = OrderMessage),
@@ -108,12 +111,18 @@ pub async fn get_market_cap_order(
     let order_controller = OrderController::new(state.postgres.clone());
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::MarketCap, query)
-        .await?;
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
 
     let response = OrderMessage {
         order_type: TokenOrderType::MarketCap,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -138,7 +147,7 @@ pub async fn get_market_cap_order(
     path = OrderPath::LatestTrade.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by latest trade", body = OrderMessage),
@@ -164,11 +173,14 @@ pub async fn get_latest_trade_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::LatestTrade, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestTrade,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -193,7 +205,7 @@ pub async fn get_latest_trade_order(
     path = OrderPath::ReplyCount.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by reply count", body = OrderMessage),
@@ -219,11 +231,14 @@ pub async fn get_reply_count_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::ReplyCount, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::ReplyCount,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -248,7 +263,7 @@ pub async fn get_reply_count_order(
     path = OrderPath::LatestReply.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by latest reply", body = OrderMessage),
@@ -274,11 +289,14 @@ pub async fn get_latest_reply_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::LatestReply, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestReply,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장

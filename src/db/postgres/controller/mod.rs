@@ -12,3 +12,4 @@ pub mod balance;
 pub mod order;
 
 pub mod chart;
+pub mod king;
