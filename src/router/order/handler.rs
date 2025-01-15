@@ -7,8 +7,8 @@ use tracing::{instrument, warn};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::controller::order::OrderController,
-    result::AppJsonResult,
+    db::postgres::controller::{king::KingOfTheHillController, order::OrderController},
+    result::{AppError, AppJsonResult},
     state::AppState,
     types::{order::TokenOrderType, pagination::PaginationParams, response::OrderToken},
 };
@@ -54,11 +54,14 @@ pub async fn get_creation_time_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::CreationTime, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::CreationTime,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -108,12 +111,18 @@ pub async fn get_market_cap_order(
     let order_controller = OrderController::new(state.postgres.clone());
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::MarketCap, query)
-        .await?;
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
 
     let response = OrderMessage {
         order_type: TokenOrderType::MarketCap,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -164,11 +173,14 @@ pub async fn get_latest_trade_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::LatestTrade, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestTrade,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -219,11 +231,14 @@ pub async fn get_reply_count_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::ReplyCount, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::ReplyCount,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
@@ -274,11 +289,14 @@ pub async fn get_latest_reply_order(
     let order_tokens = order_controller
         .get_order_tokens(TokenOrderType::LatestReply, query)
         .await?;
-
+    let king_of_the_hill = KingOfTheHillController::new(state.postgres.clone())
+        .get_latest_king_of_the_hill()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestReply,
         order_token: Some(order_tokens),
-        king_of_the_hill: None,
+        king_of_the_hill,
     };
 
     // 결과를 캐시에 저장
