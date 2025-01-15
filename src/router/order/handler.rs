@@ -28,7 +28,7 @@ pub struct OrderMessage {
     path = OrderPath::Creationtime.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by creation time", body = OrderMessage),
@@ -83,7 +83,7 @@ pub async fn get_creation_time_order(
     path = OrderPath::MarketCap.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by market cap", body = OrderMessage),
@@ -138,7 +138,7 @@ pub async fn get_market_cap_order(
     path = OrderPath::LatestTrade.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by latest trade", body = OrderMessage),
@@ -193,7 +193,7 @@ pub async fn get_latest_trade_order(
     path = OrderPath::ReplyCount.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by reply count", body = OrderMessage),
@@ -248,7 +248,7 @@ pub async fn get_reply_count_order(
     path = OrderPath::LatestReply.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("size" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by latest reply", body = OrderMessage),
