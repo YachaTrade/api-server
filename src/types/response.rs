@@ -113,7 +113,7 @@ impl From<OrderTokenRaw> for OrderToken {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchResponse {
     pub tokens: Vec<OrderToken>,
 }

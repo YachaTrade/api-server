@@ -1,9 +1,15 @@
-use redis::{Client, Commands};
+use std::env;
+
+use redis::{AsyncCommands, Client, Commands};
 use tracing::debug;
 
 use anyhow::Result;
 
-use crate::{constant::NONCE_EXPIRATION, env};
+use crate::{
+    config::{NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION},
+    router::order::handler::OrderMessage,
+    types::{order::TokenOrderType, response::SearchResponse},
+};
 
 pub struct RedisDatabase {
     pub client: Client,
@@ -11,8 +17,8 @@ pub struct RedisDatabase {
 impl RedisDatabase {
     pub async fn new() -> Self {
         let client = {
-            let host = env::get_env("REDIS_HOST");
-            let port = env::get_env("REDIS_PORT");
+            let host = env::var("REDIS_HOST").expect("REDIS_HOST must be set");
+            let port = env::var("REDIS_PORT").expect("REDIS_PORT must be set");
             let connection_string = format!("redis://{}:{}", host, port);
             debug!("Connecting to standalone Redis at: {}", connection_string);
             let client = Client::open(connection_string).unwrap();
@@ -21,21 +27,25 @@ impl RedisDatabase {
 
         RedisDatabase { client }
     }
+}
 
+//session
+impl RedisDatabase {
     //nonce -> address -> nonce
     pub async fn set_nonce(&self, address: &str, nonce: &str) -> Result<()> {
-        let mut con = self.client.get_connection()?;
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("session:{}:nonce", address);
 
-        con.set_ex::<String, String, ()>(key, nonce.to_string(), *NONCE_EXPIRATION)?;
+        conn.set_ex::<String, String, ()>(key, nonce.to_string(), *NONCE_EXPIRATION)
+            .await?;
         debug!("Nonce set for address {}: {}", address, nonce);
         Ok(())
     }
 
     pub async fn get_nonce(&self, address: &str) -> Result<String> {
-        let mut con = self.client.get_connection()?;
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("session:{}:nonce", address);
-        let nonce: Option<String> = con.get(key)?;
+        let nonce: Option<String> = conn.get(key).await?;
         debug!("Nonce for address {}: {:?}", address, nonce);
         match nonce {
             Some(nonce) => Ok(nonce),
@@ -43,9 +53,9 @@ impl RedisDatabase {
         }
     }
     pub async fn del_nonce(&self, address: &str) -> Result<()> {
-        let mut con = self.client.get_connection()?;
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("session:{}:nonce", address);
-        con.del::<_, ()>(key)?;
+        conn.del::<_, ()>(key).await?;
         debug!("Nonce deleted for address: {}", address);
         Ok(())
     }
@@ -56,9 +66,9 @@ impl RedisDatabase {
         address: &str,
         expiration: u64,
     ) -> Result<()> {
-        let mut con = self.client.get_connection()?;
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("session:{}:id", session_id);
-        con.set_ex::<_, _, ()>(key, address, expiration)?;
+        conn.set_ex::<_, _, ()>(key, address, expiration).await?;
         debug!(
             "Session set: {} -> {} (expires in {}s)",
             session_id, address, expiration
@@ -67,18 +77,74 @@ impl RedisDatabase {
     }
 
     pub async fn get_address_by_session(&self, session_id: &str) -> Result<String> {
-        let mut con = self.client.get_connection()?;
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("session:{}:id", session_id);
-        let address = con.get::<_, String>(key)?;
+        let address = conn.get::<_, String>(key).await?;
         debug!("Address for session {}: {:?}", session_id, address);
         Ok(address)
     }
 
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
-        let mut con = self.client.get_connection()?;
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("session:{}:id", session_id);
-        con.del::<_, ()>(key)?;
+        conn.del::<_, ()>(key).await?;
         debug!("Session deleted: {}", session_id);
         Ok(())
+    }
+}
+
+//search response
+impl RedisDatabase {
+    pub async fn set_search_response(&self, query: &str, response: &SearchResponse) -> Result<()> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!("search:{}:response", query);
+
+        // SearchResponse를 JSON 문자열로 직렬화
+        let response_json = serde_json::to_string(response)?;
+
+        conn.set_ex::<_, _, ()>(key, response_json, *QUERY_EXPIRATION)
+            .await?;
+        debug!("Search response set for query {}", query);
+        Ok(())
+    }
+
+    pub async fn get_search_response(&self, query: &str) -> Result<SearchResponse> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!("search:{}:response", query);
+
+        // Redis에서 JSON 문자열 가져오기
+        let response_json: String = conn.get(key).await?;
+
+        // JSON 문자열을 SearchResponse로 역직렬화
+        let response: SearchResponse = serde_json::from_str(&response_json)?;
+
+        debug!("Search response retrieved for query {}", query);
+        Ok(response)
+    }
+}
+
+//Order response
+impl RedisDatabase {
+    pub async fn set_order_response(
+        &self,
+        order_type: &TokenOrderType,
+        response: &OrderMessage,
+    ) -> Result<()> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!("order:{}:response", order_type.as_str());
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *ORDER_EXPIRATION)
+            .await?;
+        debug!("Order response set for order type {:?}", order_type);
+        Ok(())
+    }
+    pub async fn get_order_response(&self, order_type: &TokenOrderType) -> Result<OrderMessage> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!("order:{}:response", order_type.as_str());
+        let response_json: String = conn.get(key).await?;
+        let response: OrderMessage = serde_json::from_str(&response_json)?;
+        debug!("Order response retrieved for order type {:?}", order_type);
+        Ok(response)
     }
 }
