@@ -1,11 +1,14 @@
 use crate::{
     db::postgres::{
-        controller::profile::{PaginationParams, ProfileController},
+        controller::profile::ProfileController,
         model::{Account, Thread},
     },
     result::AppJsonResult,
     state::AppState,
-    types::response::{CreateTokenResponse, HoldTokenResponse, Identifier},
+    types::{
+        pagination::PaginationParams,
+        response::{CreateTokenResponse, HoldTokenResponse, Identifier},
+    },
 };
 
 use axum::{
