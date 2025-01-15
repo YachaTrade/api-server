@@ -11,27 +11,14 @@ use crate::{
         model::{Account, Thread},
         PostgresDatabase,
     },
-    types::response::{CreateTokenResponse, HoldTokenResponse, Identifier},
+    types::{
+        pagination::PaginationParams,
+        response::{CreateTokenResponse, HoldTokenResponse, Identifier},
+    },
 };
 
 pub struct ProfileController {
     pub db: Arc<PostgresDatabase>,
-}
-
-#[derive(Deserialize, ToSchema)]
-pub struct PaginationParams {
-    #[serde(default = "default_page")]
-    pub page: i64,
-    #[serde(default = "default_limit")]
-    pub limit: i64,
-}
-
-fn default_page() -> i64 {
-    1
-}
-
-fn default_limit() -> i64 {
-    10
 }
 
 impl ProfileController {

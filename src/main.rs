@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     db, env,
     middleware::authenticate_user,
-    router::{self, account, auth, balance, chart, profile, search, thread, token},
+    router::{self, account, auth, balance, chart, order, profile, search, thread, token},
     state::AppState,
     types,
 };
@@ -52,6 +52,12 @@ use clap::Parser;
         router::thread::handler::get_thread_like_by_account,
         router::token::handler::get_token,
         router::chart::handler::get_chart,
+        router::order::handler::get_creation_time_order,
+        router::order::handler::get_market_cap_order,
+        router::order::handler::get_latest_trade_order,
+        router::order::handler::get_reply_count_order,
+        router::order::handler::get_latest_reply_order,
+        // router::mint_party::handler::create_mint_party,
         // router::mint_party::handler::update_mint_party,
         // router::mint_party::handler::get_last_join_mint_party,
         // router::mint_party::handler::get_mint_party_list,
@@ -77,7 +83,7 @@ use clap::Parser;
             router::profile::handler::CreatedTokensResponse,
             router::profile::handler::FollowersResponse,
             router::profile::handler::FollowingResponse,
-            router::search::handler::SearchResponse,
+            
             router::thread::handler::CreateThreadRequest,
             router::thread::handler::CreateThreadFormData,
             router::thread::handler::ThreadRequest,
@@ -86,7 +92,7 @@ use clap::Parser;
             router::token::handler::TokenResponse,
             router::chart::handler::ChartResponse,
             router::chart::handler::ChartQuery,
-            router::search::handler::SearchResponse,
+            router::order::handler::OrderMessage,
             // router::mint_party::handler::UpdateMintPartyRequest,
             // router::mint_party::handler::UpdateMintPartyResponse,
             // router::mint_party::handler::MintPartyListResponse,
@@ -94,15 +100,15 @@ use clap::Parser;
             // router::mint_party::handler::MintPartyDepositListResopnse,
             // router::mint_party::handler::MintPartyQuery,
             // types::order_type::MintPartyOrderType,
-            types::order_type::OrderDirection,
+            
             // types::response::MintPartyResponse,
             // types::response::MintPartyBalance,
             // types::response::MintPartyDepositList,
             // types::response::MintPartyInfo,
             types::response::AccountInfo,
             types::response::TokenInfoResponse,
-            types::response::SearchTokenResponse,
-            types::response::SearchTokenInfo,
+            types::response::SearchResponse,
+            types::response::TokenInfo,
             types::response::CreateTokenResponse,
             db::postgres::model::Account,
             db::postgres::model::Token,
@@ -121,6 +127,7 @@ use clap::Parser;
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
         (name="Chart",description="Chart endpoints"),
+        (name="Order",description="Order endpoints"),
         // (name="MintParty", description ="Mint Party management endpoints")
     ),
     security(
@@ -183,6 +190,7 @@ async fn main() -> Result<()> {
         .merge(search::router())
         .merge(chart::router())
         .merge(profile::router())
+        .merge(order::router())
         // .merge(mint_party::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
