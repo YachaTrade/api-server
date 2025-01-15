@@ -19,7 +19,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    constant::EXPIRATION_SESSION_KEY,
+    config::EXPIRATION_SESSION_KEY,
     db::postgres::{
         controller::{account::AccountController, session::SessionController},
         model::Account,

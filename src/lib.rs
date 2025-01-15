@@ -1,4 +1,4 @@
-pub mod constant;
+pub mod config;
 pub mod cors;
 pub mod db;
 pub mod env;

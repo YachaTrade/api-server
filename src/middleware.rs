@@ -1,6 +1,6 @@
 use crate::db::postgres::controller::session::SessionController;
 
-use super::{constant::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
+use super::{config::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
 
 use axum::{
     body::Body,
