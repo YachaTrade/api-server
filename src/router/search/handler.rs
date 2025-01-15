@@ -1,18 +1,17 @@
 use axum::extract::{Path, Query};
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tracing::instrument;
 use utoipa::ToSchema;
 
-use super::path::Path as SearchPath;
-
-use crate::db::postgres::controller::search::{SearchController, TokenSortBy};
+use crate::db::postgres::controller::order::OrderController;
+use crate::db::postgres::controller::token::TokenController;
 use crate::result::{AppError, AppJsonResult};
-
 use crate::state::AppState;
-use crate::types::response::SearchTokenResponse;
+use crate::types::order::TokenOrderType;
+use crate::types::response::SearchResponse;
 
+use super::path::SearchPath;
 #[derive(Debug, Serialize, ToSchema)]
 #[schema(example = json!({
     "tokens": [{
@@ -37,15 +36,12 @@ use crate::types::response::SearchTokenResponse;
         }
     }]
 }))]
-pub struct SearchResponse {
-    tokens: Vec<SearchTokenResponse>,
+#[derive(Deserialize)]
+pub struct SearchTokenQuery {
+    #[schema(example = "market_cap")]
+    pub sort_by: Option<TokenOrderType>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SearchTokenQuery {
-    pub sort_by: Option<TokenSortBy>,
-}
-/// Search token by name, symbol, or token address
 /// Search token by name, symbol, or token address
 #[utoipa::path(
     get,
@@ -61,15 +57,15 @@ pub struct SearchTokenQuery {
     ),
     tag = "Search Token"
 )]
-#[instrument(skip(token, state))]
+#[instrument(skip(state))]
 pub async fn search_token(
     Path(token): Path<String>,
     State(state): State<AppState>,
     Query(query): Query<SearchTokenQuery>,
 ) -> AppJsonResult<SearchResponse> {
-    let search_contoller = SearchController::new(state.postgres.clone());
-    let sort_by = query.sort_by.unwrap_or(TokenSortBy::MarketCap);
-    let tokens = search_contoller
+    let order_controller = OrderController::new(state.postgres.clone());
+    let sort_by = query.sort_by.unwrap_or(TokenOrderType::MarketCap);
+    let tokens = order_controller
         .search_order_tokens(&token, sort_by)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
