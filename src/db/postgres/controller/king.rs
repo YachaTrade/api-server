@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
 use crate::{
-    db::postgres::{model::Account, PostgresDatabase},
+    db::postgres::PostgresDatabase,
     types::response::{OrderToken, OrderTokenRaw},
 };
 
 use anyhow::{anyhow, Result};
-
-use tracing::debug;
 
 pub struct KingOfTheHillController {
     pub db: Arc<PostgresDatabase>,

@@ -3,8 +3,6 @@ use axum::{
     Json,
 };
 
-use tracing::info;
-
 use crate::{
     db::postgres::controller::balance::BalanceController,
     result::{AppError, AppJsonResult},

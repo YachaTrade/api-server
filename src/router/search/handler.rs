@@ -5,7 +5,7 @@ use tracing::{instrument, warn};
 use utoipa::ToSchema;
 
 use crate::db::postgres::controller::order::OrderController;
-use crate::db::postgres::controller::token::TokenController;
+
 use crate::result::{AppError, AppJsonResult};
 use crate::state::AppState;
 use crate::types::order::TokenOrderType;

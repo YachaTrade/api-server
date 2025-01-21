@@ -3,7 +3,7 @@ use std::env;
 use anyhow::{anyhow, Result};
 use aws_config::Region;
 use aws_sdk_cloudfront::Client as CloudFrontClient;
-use aws_sdk_s3::Config;
+
 use aws_sdk_s3::{config::Credentials, primitives::ByteStream, Client};
 use bytes::Bytes;
 use chrono;
@@ -14,7 +14,6 @@ pub struct S3Client {
     client: Client,
     cloudfront_client: CloudFrontClient,
     bucket_name: String,
-    region: String,
     distribution_id: String,
 }
 
@@ -45,7 +44,6 @@ impl S3Client {
             client,
             cloudfront_client,
             bucket_name: bucket_name.to_string(),
-            region: region.to_string(),
             distribution_id: distribution_id.to_string(),
         }
     }
