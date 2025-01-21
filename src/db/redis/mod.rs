@@ -1,6 +1,6 @@
 use std::env;
 
-use redis::{AsyncCommands, Client, Commands};
+use redis::{AsyncCommands, Client};
 use tracing::debug;
 
 use anyhow::Result;
@@ -17,11 +17,9 @@ pub struct RedisDatabase {
 impl RedisDatabase {
     pub async fn new() -> Self {
         let client = {
-            let host = env::var("REDIS_HOST").expect("REDIS_HOST must be set");
-            let port = env::var("REDIS_PORT").expect("REDIS_PORT must be set");
-            let connection_string = format!("redis://{}:{}", host, port);
-            debug!("Connecting to standalone Redis at: {}", connection_string);
-            let client = Client::open(connection_string).unwrap();
+            let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
+            debug!("Connecting to standalone Redis at: {}", redis_url);
+            let client = Client::open(redis_url).unwrap();
             client
         };
 

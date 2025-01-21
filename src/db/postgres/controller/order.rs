@@ -11,7 +11,6 @@ use crate::{
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use serde::Deserialize;
 use tracing::info;
 
 pub struct OrderController {
