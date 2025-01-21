@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO thread_likes (thread_id, account_id,token_id) VALUES ($1, $2,$3) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "850a6aa3f5961fccdb8bf8dc951a5f3491b79c28de50426ad4e49295f722795f"
+}

@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT \n                        t.token_id as \"token_id!\",\n                        t.name as \"name!\",\n                        t.symbol as \"symbol!\",\n                        t.image_uri as \"image_uri!\",\n                        t.description as description,\n                        t.created_at as \"created_at!\",\n                        t.is_listing as \"is_listing!\",\n                        t.create_transaction_hash as transaction_hash,\n                        m.price::text as \"price!\"\n                    FROM token t\n                    JOIN market m ON t.token_id = m.token_id\n                    WHERE t.creator = $1\n                    ORDER BY t.created_at DESC\n                    LIMIT $2\n                    OFFSET $3\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "symbol!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "image_uri!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_listing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "transaction_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "price!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "e958728b71910d2079dd2866bec9f8aad37897483543e69654654abf1f7e3234"
+}
