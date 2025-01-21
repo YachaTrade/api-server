@@ -1,7 +1,8 @@
-use crate::env;
+use std::env;
+
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -34,7 +35,7 @@ impl Account {
         //random_number 는 1~5까지의 숫자가 나와야함.
         let random_number = rand::thread_rng().gen_range(1..=5);
         let image_key = format!("DEFAULT_IMAGE_{}", random_number);
-        let image_uri = env::get_env(&image_key);
+        let image_uri = env::var(&image_key).expect("DEFAULT_IMAGE must be set");
         Self {
             account_id: account_id.clone(),
             image_uri,

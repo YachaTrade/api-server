@@ -1,4 +1,4 @@
-use crate::env;
+use std::env;
 
 use anyhow::{anyhow, Result};
 use aws_config::Region;
@@ -22,11 +22,13 @@ const CDN_DOMAIN: &str = "d1469zz8b08zl.cloudfront.net";
 
 impl S3Client {
     pub async fn new() -> Self {
-        let bucket_name = env::get_env("AWS_BUCKET_NAME");
+        let bucket_name = env::var("AWS_BUCKET_NAME").expect("AWS_BUCKET_NAME must be set");
         info!("S3 bucket name from env: {}", bucket_name);
-        let access_key = env::get_env("AWS_ACCESS_KEY");
-        let secret_access_key = env::get_env("AWS_SECRET_ACCESS_KEY");
-        let distribution_id = env::get_env("AWS_CLOUDFRONT_DISTRIBUTION_ID");
+        let access_key = env::var("AWS_ACCESS_KEY").expect("AWS_ACCESS_KEY must be set");
+        let secret_access_key =
+            env::var("AWS_SECRET_ACCESS_KEY").expect("AWS_SECRET_ACCESS_KEY must be set");
+        let distribution_id = env::var("AWS_CLOUDFRONT_DISTRIBUTION_ID")
+            .expect("AWS_CLOUDFRONT_DISTRIBUTION_ID must be set");
         let credentials = Credentials::new(access_key, secret_access_key, None, None, "aws-s3");
         let region = Region::new("ap-northeast-1");
 

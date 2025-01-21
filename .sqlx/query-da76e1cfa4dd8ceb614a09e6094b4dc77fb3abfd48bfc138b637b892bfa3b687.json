@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE thread\n                SET reply_count = reply_count + 1\n                WHERE thread_id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da76e1cfa4dd8ceb614a09e6094b4dc77fb3abfd48bfc138b637b892bfa3b687"
+}

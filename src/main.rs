@@ -1,6 +1,6 @@
 use api_server::{
     cors::get_cors,
-    db, env,
+    db,
     middleware::authenticate_user,
     router::{self, account, auth, balance, chart, order, profile, search, thread, token},
     state::AppState,
@@ -8,20 +8,17 @@ use api_server::{
 };
 
 use std::{
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
+    env, net::{IpAddr, SocketAddr}, str::FromStr, sync::Arc, time::Duration
 };
 
 use anyhow::Result;
 use axum::{
-    error_handling::HandleErrorLayer, http::{Method, StatusCode, Uri}, middleware as axum_middleware, response::IntoResponse, routing::get, BoxError, Extension, Router
+    error_handling::HandleErrorLayer, http::{Method, StatusCode, Uri}, middleware as axum_middleware, response::IntoResponse, routing::get, BoxError, Router
 };
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 use tower_governor::{
-    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, 
 };
 use tracing::info;
 use utoipa::OpenApi;
@@ -154,7 +151,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     
-    let ip = env::get_env("IP");
+    let ip = env::var("IP").unwrap_or_else(|_| "127.0.0.1".to_string());
     // 우선순위: 1. 커맨드 라인 인자 2. 환경변수 3. 기본값(8000)
     let port = args.port
         .map(|p| p.to_string())
