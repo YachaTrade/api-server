@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE account\n            SET like_count = like_count + 1\n            WHERE account_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "acbeb6305b6fe211417cc2bdc7a1dc6d6d3fc4c5b1708d2fbb4c828a4009c397"
+}

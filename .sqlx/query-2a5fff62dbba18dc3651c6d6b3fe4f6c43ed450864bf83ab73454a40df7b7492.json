@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO thread (token_id, account_id, content,root_id,image_uri)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING *\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "root_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "likes_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "reply_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Int4",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "2a5fff62dbba18dc3651c6d6b3fe4f6c43ed450864bf83ab73454a40df7b7492"
+}
