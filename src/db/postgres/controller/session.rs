@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::db::postgres::{
-    controller::account::AccountController, model::Account, PostgresDatabase,
-};
+use crate::db::postgres::PostgresDatabase;
 
 use anyhow::Result;
 

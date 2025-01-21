@@ -66,7 +66,7 @@ pub async fn auth_nonce(
 ) -> AppJsonResult<AuthNonceResponse> {
     let nonce = Uuid::new_v4().to_string();
     Address::from_str(&payload.address)
-        .map_err(|e| AppError::BadRequest("Invalid address".to_string()))?;
+        .map_err(|_e| AppError::BadRequest("Invalid address".to_string()))?;
     let redis = state.redis.clone();
     redis
         .set_nonce(&payload.address, &nonce)
