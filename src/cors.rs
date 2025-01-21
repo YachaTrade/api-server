@@ -3,11 +3,10 @@ use axum::http::{
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     HeaderValue,
 };
-use std::time::Duration;
+use std::{env, time::Duration};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::info;
 
-use crate::env;
 pub fn get_cors() -> CorsLayer {
     // Allow CORS
     // From: https://github.com/MystenLabs/sui/blob/13df03f2fad0e80714b596f55b04e0b7cea37449/crates/sui-faucet/src/main.rs#L85
@@ -15,14 +14,17 @@ pub fn get_cors() -> CorsLayer {
     let mut origins = vec!["https://nad.fun".parse::<HeaderValue>().unwrap()];
     // Get the `ENVIROMENT` variable and if it is `development` then add `http://localhost:3000`
     // to the `origins` array.
-    let environment = env::get_env("ENVIRONMENT");
+    let environment = env::var("ENVIRONMENT").expect("ENVIRONMENT must be set");
     {
         if environment == "development" {
-            let allow_cors_port = env::get_env("ALLOW_CORS_PORT");
+            let allow_cors_port = env::var("ALLOW_CORS_PORT").expect("ALLOW_CORS_PORT must be set");
             if let Ok(localhost_origin) = format!("http://localhost:{}", allow_cors_port).parse() {
                 origins.push(localhost_origin);
             }
-            if let Ok(test_client) = env::get_env("CORS_ALLOWED_ORIGINS").parse() {
+            if let Ok(test_client) = env::var("CORS_ALLOWED_ORIGINS")
+                .expect("CORS_ALLOWED_ORIGINS must be set")
+                .parse()
+            {
                 info!("CORS_ALLOWED_ORIGINS: {:?}", test_client);
                 origins.push(test_client);
             }

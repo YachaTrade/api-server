@@ -1,7 +1,7 @@
 pub mod config;
 pub mod cors;
 pub mod db;
-pub mod env;
+
 pub mod middleware;
 pub mod result;
 pub mod router;

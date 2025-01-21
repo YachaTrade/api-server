@@ -1,8 +1,7 @@
 pub mod controller;
 pub mod model;
-use std::time::Duration;
+use std::{env, time::Duration};
 
-use crate::env::DBEnv;
 #[derive(Debug)]
 pub struct PostgresDatabase {
     pub write_pool: sqlx::Pool<sqlx::Postgres>,
@@ -10,44 +9,26 @@ pub struct PostgresDatabase {
 }
 
 async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
-    let env = DBEnv::new();
-    let url = format!(
-        "postgres://{}:{}@{}:{}/{}",
-        env.primary_db_user,
-        env.primary_db_password,
-        env.primary_db_host,
-        env.primary_db_port,
-        env.primary_db_name
-    );
-
     use sqlx::postgres::PgPoolOptions;
-
+    let primary_db_url =
+        env::var("PRIMARY_DATABASE_URL").expect("PRIMARY_DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(50)
         .max_lifetime(Duration::from_secs(60 * 60 * 24))
-        .connect(url.as_str())
+        .connect(primary_db_url.as_str())
         .await
         .expect("Failed to connect to primary database");
     pool
 }
 
 async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
-    let env = DBEnv::new();
-    let url = format!(
-        "postgres://{}:{}@{}:{}/{}",
-        env.replica_db_user,
-        env.replica_db_password,
-        env.replica_db_host,
-        env.replica_db_port,
-        env.replica_db_name
-    );
-
     use sqlx::postgres::PgPoolOptions;
-
+    let replica_db_url =
+        env::var("REPLICA_DATABASE_URL").expect("REPLICA_DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
         .max_connections(50)
         .max_lifetime(Duration::from_secs(60 * 60 * 24))
-        .connect(url.as_str())
+        .connect(replica_db_url.as_str())
         .await
         .expect("Failed to connect to replica database");
     pool
