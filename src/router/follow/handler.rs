@@ -1,30 +1,26 @@
-use axum::{extract::State, Extension, Json};
-use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
-use utoipa::ToSchema;
-
-use crate::{
-    db::postgres::{controller::follow::FollowController, model::Account},
-    result::{AppError, AppJsonResult},
-    state::AppState,
+use axum::{
+    extract::{Path, Query, State},
+    Extension, Json,
 };
 
-use super::path::Path;
+use tracing::{info, instrument};
 
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct FollowRequest {
-    #[schema(example = "follower targer address")]
-    follower: String,
-}
-#[derive(Debug, Serialize, ToSchema)]
-pub struct FollowResponse {
-    follower: Account,
-    following: Account,
-}
+use crate::{
+    result::{AppError, AppJsonResult},
+    state::AppState,
+    types::{
+        common::pagination::PaginationParams,
+        social::follow::{
+            FollowController, FollowsResponse, UpdateFollowRequest, UpdateFollowResponse,
+        },
+    },
+};
+
+use super::path::FollowPath;
 
 #[utoipa::path(
     put,
-    path = Path::AddFollow.as_str(),
+    path = FollowPath::AddFollow.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),
@@ -44,10 +40,10 @@ pub struct FollowResponse {
 pub async fn add_follow(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<FollowRequest>,
-) -> AppJsonResult<FollowResponse> {
+    Json(payload): Json<UpdateFollowRequest>,
+) -> AppJsonResult<UpdateFollowResponse> {
     // 페이로드의 주소와 세션 주소가 일치하는지 확인
-    let FollowRequest { follower } = payload;
+    let UpdateFollowRequest { follower } = payload;
     let following = session_address;
     if following == follower {
         return Err(AppError::BadRequest(
@@ -65,7 +61,7 @@ pub async fn add_follow(
             AppError::BadRequest(err.to_string())
         })?;
 
-    Ok(Json(FollowResponse {
+    Ok(Json(UpdateFollowResponse {
         follower: follower_account,
         following: following_account,
     }))
@@ -73,7 +69,7 @@ pub async fn add_follow(
 
 #[utoipa::path(
     put,
-    path = "/follow/remove",
+    path = FollowPath::RemoveFollow.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),
@@ -92,9 +88,9 @@ pub async fn add_follow(
 pub async fn remove_follow(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<FollowRequest>,
-) -> AppJsonResult<FollowResponse> {
-    let FollowRequest { follower } = payload;
+    Json(payload): Json<UpdateFollowRequest>,
+) -> AppJsonResult<UpdateFollowResponse> {
+    let UpdateFollowRequest { follower } = payload;
     let following = session_address;
 
     if following == follower {
@@ -111,8 +107,62 @@ pub async fn remove_follow(
             AppError::BadRequest(err.to_string())
         })?;
 
-    Ok(Json(FollowResponse {
+    Ok(Json(UpdateFollowResponse {
         follower: follower_account,
         following: following_account,
     }))
+}
+
+/// Get followers with pagination
+#[utoipa::path(
+    get,
+    path = FollowPath::GetFollowers.docs_str(),
+    params(
+        ("account_id" = String, Path, description = "Account ID to get followers for"),
+        ("page" = i32, Query, description = "Page number (starts from 1)"),
+        ("limit" = i32, Query, description = "Number of items per page")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved followers", body = FollowsResponse),
+        (status = 400, description = "Invalid request parameters"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+pub async fn get_followers(
+    Path(account_id): Path<String>,
+    Query(pagination): Query<PaginationParams>,
+    State(state): State<AppState>,
+) -> AppJsonResult<FollowsResponse> {
+    let follows = FollowController::new(state.postgres.clone())
+        .get_follows(&account_id, false, pagination)
+        .await?;
+    Ok(Json(FollowsResponse { accounts: follows }))
+}
+
+/// Get following accounts with pagination
+#[utoipa::path(
+    get,
+    path = FollowPath::GetFollowings.docs_str(),
+    params(
+        ("account_id" = String, Path, description = "Account ID to get following accounts for"),
+        ("page" = i32, Query, description = "Page number (starts from 1)"),
+        ("limit" = i32, Query, description = "Number of items per page")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved following accounts", body = FollowsResponse),
+        (status = 400, description = "Invalid request parameters"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+pub async fn get_followings(
+    Path(account_id): Path<String>,
+    Query(pagination): Query<PaginationParams>,
+    State(state): State<AppState>,
+) -> AppJsonResult<FollowsResponse> {
+    let follows = FollowController::new(state.postgres.clone())
+        .get_follows(&account_id, true, pagination)
+        .await?;
+    Ok(Json(FollowsResponse { accounts: follows }))
 }

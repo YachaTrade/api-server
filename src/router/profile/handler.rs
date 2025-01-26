@@ -1,13 +1,15 @@
 use crate::{
-    db::postgres::{
-        controller::profile::ProfileController,
-        model::{Account, Thread},
-    },
     result::AppJsonResult,
     state::AppState,
     types::{
-        pagination::PaginationParams,
-        response::{CreateTokenResponse, HoldTokenResponse, Identifier},
+        account::{AccountController, AccountParams, AccountResponse},
+        common::{identifier::Identifier, pagination::PaginationParams},
+        token::create_token::{TokenCreatedController, TokenCreatedResponse},
+        trading::{
+            pnl::{PNLController, PNLResponse},
+            position::{PositionController, PositionResponse},
+            swap_history::{SwapController, SwapResponse},
+        },
     },
 };
 
@@ -16,227 +18,141 @@ use axum::{
     Json,
 };
 
-use serde::Serialize;
-
-use tracing::instrument;
-use utoipa::ToSchema;
-
 use super::path::ProfilePath;
-
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ProfileResponse {
-    account: Account,
-}
-#[derive(ToSchema, Serialize)]
-pub struct HeldTokensResponse {
-    pub tokens: Vec<HoldTokenResponse>,
-}
-#[derive(ToSchema, Serialize)]
-pub struct RepliesResponse {
-    pub replies: Vec<Thread>,
-}
-#[derive(ToSchema, Serialize)]
-pub struct CreatedTokensResponse {
-    pub tokens: Vec<CreateTokenResponse>,
-}
-
-#[derive(ToSchema, Serialize)]
-pub struct FollowersResponse {
-    pub followers: Vec<Account>,
-}
-
-#[derive(ToSchema, Serialize)]
-pub struct FollowingResponse {
-    following: Vec<Account>,
-}
-
-fn is_address(user: &str) -> bool {
-    // 주소 형식 검증 로직 (예: 0x로 시작하고 적절한 길이인지 확인)
-    user.starts_with("0x") && user.len() == 42
-}
 
 /// Get user profile
 #[utoipa::path(
     get,
-    path = ProfilePath::Profile.docs_str(),
-
+    path = ProfilePath::GetProfile.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address")
+        ("target" = String, Path, description = "User's nickname or Ethereum address"),
+        ("request_account_id" = Option<String>, Query, description = "Viewer's account ID to calculate mutual friends")
     ),
     responses(
-        (status = 200, description = "User profile retrieved successfully", body = ProfileResponse),
+        (status = 200, description = "User profile retrieved successfully", body = AccountResponse),
         (status = 404, description = "User not found"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
 pub async fn get_profile(
-    Path(user): Path<String>,
+    Query(params): Query<AccountParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<ProfileResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let account = profile_controller.get_profile(&identifier).await?;
-    Ok(Json(ProfileResponse { account }))
-}
+) -> AppJsonResult<AccountResponse> {
+    let AccountParams {
+        target,
+        request_account_id,
+    } = params;
 
-/// Get user's held tokens
-#[utoipa::path(
-    get,
-    path = ProfilePath::TokenHeld.docs_str(),
-    params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address"),
-        ("page" = i16, Path, description = "Page number start 1"),
-        ("limit" = i16, Path, description = "Number of items per page")
-    ),
-    responses(
-        (status = 200, description = "User's held tokens retrieved successfully", body = HeldTokensResponse),
-        (status = 404, description = "User not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Profile"
-)]
-pub async fn get_tokens_held(
-    Path(user): Path<String>,
-    State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
-) -> AppJsonResult<HeldTokensResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let tokens = profile_controller
-        .get_holding_token(&identifier, query)
+    let identifier: Identifier = target.into();
+    let account = AccountController::new(state.postgres.clone())
+        .get_account_with_mutual(&identifier, request_account_id)
         .await?;
-    Ok(Json(HeldTokensResponse { tokens }))
+    Ok(Json(AccountResponse { account }))
 }
 
-/// Get tokens created by user
+/// Get profile PNL information
 #[utoipa::path(
     get,
-    path = ProfilePath::TokenCreated.docs_str(),
+    path = ProfilePath::GetPnl.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address"),
-        ("page" = i16, Path, description = "Page number start 1"),
-        ("limit" = i16, Path, description = "Number of items per page")
+        ("account_id" = String, Path, description = "Account ID to get PNL information for")
     ),
     responses(
-        (status = 200, description = "Created tokens retrieved successfully", body = CreatedTokensResponse),
-        (status = 404, description = "User not found"),
+        (status = 200, description = "Successfully retrieved PNL information", body = PNLResponse),
+        (status = 404, description = "Account not found"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
-pub async fn get_created_tokens(
-    Path(user): Path<String>,
+pub async fn get_pnl(
+    Path(account_id): Path<String>,
     State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
-) -> AppJsonResult<CreatedTokensResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let tokens = profile_controller
-        .get_created_tokens(&identifier, query)
+) -> AppJsonResult<PNLResponse> {
+    let pnl = PNLController::new(state.postgres.clone())
+        .get_pnl(&account_id)
         .await?;
-    Ok(Json(CreatedTokensResponse { tokens }))
+    Ok(Json(pnl))
 }
 
-/// Get user's replies
+/// Get profile positions with pagination
 #[utoipa::path(
     get,
-    path = ProfilePath::Replies.docs_str(),
+    path = ProfilePath::GetPosition.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address")
+        ("account_id" = String, Path, description = "Account ID to get positions for"),
+        ("page" = i32, Query, description = "Page number (starts from 1)"),
+        ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "User's replies retrieved successfully", body = RepliesResponse),
-        (status = 404, description = "User not found"),
+        (status = 200, description = "Successfully retrieved positions", body = PositionResponse),
+        (status = 404, description = "Account not found"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
-#[instrument(skip(user, state))]
-pub async fn get_replies(
-    Path(user): Path<String>,
+pub async fn get_position(
+    Path(account_id): Path<String>,
+    Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<RepliesResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let replies = profile_controller.get_replies(&identifier).await?;
-    Ok(Json(RepliesResponse { replies }))
+) -> AppJsonResult<PositionResponse> {
+    let position_controller = PositionController::new(state.postgres.clone());
+    let positions = position_controller
+        .get_positions(&account_id, pagination)
+        .await?;
+    Ok(Json(PositionResponse { positions }))
 }
 
-/// Get user's followers
+/// Get tokens created by profile with pagination
 #[utoipa::path(
     get,
-    path = ProfilePath::Followers.docs_str(),
+    path = ProfilePath::GetTokenCreated.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address"),
-        ("page" = i16, Path, description = "Page number start 1"),
-        ("limit" = i16, Path, description = "Number of items per page")
+        ("account_id" = String, Path, description = "Account ID to get created tokens for"),
+        ("page" = i32, Query, description = "Page number (starts from 1)"),
+        ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "User's followers retrieved successfully", body = FollowersResponse),
-        (status = 404, description = "User not found"),
+        (status = 200, description = "Successfully retrieved created tokens", body = TokenCreatedResponse),
+        (status = 404, description = "Account not found"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
-pub async fn get_followers(
-    Path(user): Path<String>,
+pub async fn get_token_created(
+    Path(account_id): Path<String>,
+    Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
-) -> AppJsonResult<FollowersResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let followers = profile_controller.get_followers(&identifier, query).await?;
-    Ok(Json(FollowersResponse { followers }))
+) -> AppJsonResult<TokenCreatedResponse> {
+    let tokens = TokenCreatedController::new(state.postgres.clone())
+        .get_tokens_created(&account_id, pagination)
+        .await?;
+    Ok(Json(TokenCreatedResponse { tokens }))
 }
 
-/// Get accounts followed by user
+/// Get trade history with pagination
 #[utoipa::path(
     get,
-    path = ProfilePath::Following.docs_str(),
+    path = ProfilePath::GetSwapHistory.docs_str(),
     params(
-        ("user" = String, Path, description = "User's nickname or Ethereum address"),
-        ("page" = i16, Path, description = "Page number start 1"),
-        ("limit" = i16, Path, description = "Number of items per page")
+        ("account_id" = String, Path, description = "Account ID to get trade history for"),
+        ("page" = i32, Query, description = "Page number (starts from 1)"),
+        ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "Followed accounts retrieved successfully", body = FollowingResponse),
-        (status = 404, description = "User not found"),
+        (status = 200, description = "Successfully retrieved trade history", body = SwapResponse),
+        (status = 400, description = "Invalid request parameters"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
-pub async fn get_following(
-    Path(user): Path<String>,
+pub async fn get_swap_history(
+    Path(account_id): Path<String>,
+    Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
-) -> AppJsonResult<FollowingResponse> {
-    let profile_controller = ProfileController::new(state.postgres.clone());
-    let identifier = if is_address(&user) {
-        Identifier::Address(user)
-    } else {
-        Identifier::Nickname(user)
-    };
-    let following = profile_controller.get_following(&identifier, query).await?;
-    Ok(Json(FollowingResponse { following }))
+) -> AppJsonResult<SwapResponse> {
+    let swaps = SwapController::new(state.postgres.clone())
+        .get_swaps(&account_id, pagination)
+        .await?;
+    Ok(Json(SwapResponse { swaps }))
 }

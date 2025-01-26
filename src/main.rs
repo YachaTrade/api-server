@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     db,
     middleware::authenticate_user,
-    router::{self, account, auth, balance, chart, order, profile, search, thread, token},
+    router::{self, account, auth,  chart, order, profile, search, thread, token},
     state::AppState,
     types,
 };
@@ -31,17 +31,15 @@ use clap::Parser;
         router::auth::handler::auth_nonce,
         router::auth::handler::auth_session,
         router::auth::handler::auth_delete_session,
-        router::balance::handler::get_balance,
+        
         router::account::handler::update_account,
-        router::account::handler::add_account_like,
-        router::account::handler::remove_account_like,
+
         router::account::handler::get_account,
         router::profile::handler::get_profile,
-        router::profile::handler::get_created_tokens,
-        router::profile::handler::get_tokens_held,
-        router::profile::handler::get_replies,
-        router::profile::handler::get_followers,
-        router::profile::handler::get_following,
+        router::profile::handler::get_pnl,
+        router::profile::handler::get_position,
+        router::profile::handler::get_token_created,
+        router::profile::handler::get_swap_history,
         router::search::handler::search_token,
         router::thread::handler::create_thread,
         router::thread::handler::like_thread,
@@ -54,69 +52,71 @@ use clap::Parser;
         router::order::handler::get_latest_trade_order,
         router::order::handler::get_reply_count_order,
         router::order::handler::get_latest_reply_order,
-        // router::mint_party::handler::create_mint_party,
-        // router::mint_party::handler::update_mint_party,
-        // router::mint_party::handler::get_last_join_mint_party,
-        // router::mint_party::handler::get_mint_party_list,
-        // router::mint_party::handler::get_mint_party_deposit_list,
-        // router::mint_party::handler::get_mint_party_balance,
+        
+        
     ),
     components(
         schemas(
-            router::auth::handler::AuthNonceRequest,
-            router::auth::handler::AuthNonceResponse,
-            router::auth::handler::AuthSessionRequest,
-            router::auth::handler::AuthSessionResponse,
-            types::response::HoldTokenResponse,
-            router::account::handler::UpdateAccountRequest,
-            router::account::handler::UpdateAccountFormData,
-            router::account::handler::AccountResponse,
-   
-            router::account::handler::AddLikeRequest,
-            router::account::handler::RemoveLikeRequest,
-            router::profile::handler::ProfileResponse,
-            router::profile::handler::HeldTokensResponse,
-            router::profile::handler::RepliesResponse,
-            router::profile::handler::CreatedTokensResponse,
-            router::profile::handler::FollowersResponse,
-            router::profile::handler::FollowingResponse,
+            // Common
+            types::common::info::TokenInfo,
+            types::common::info::AccountInfo,
+            types::common::pagination::PaginationParams,
+            types::common::identifier::Identifier,
+            // Auth
+            types::auth::AuthNonceRequest,
+            types::auth::AuthNonceResponse,
+            types::auth::AuthSessionRequest,
+            types::auth::AuthSessionResponse,
             
-            router::thread::handler::CreateThreadRequest,
-            router::thread::handler::CreateThreadFormData,
-            router::thread::handler::ThreadRequest,
-            router::thread::handler::ThreadResponse,
-            router::thread::handler::ThreadLikeResponse,
-            router::token::handler::TokenResponse,
-            router::chart::handler::ChartResponse,
-            router::chart::handler::ChartQuery,
-            router::order::handler::OrderMessage,
-            // router::mint_party::handler::UpdateMintPartyRequest,
-            // router::mint_party::handler::UpdateMintPartyResponse,
-            // router::mint_party::handler::MintPartyListResponse,
-            // router::mint_party::handler::MintPartyBalanceResponse,
-            // router::mint_party::handler::MintPartyDepositListResopnse,
-            // router::mint_party::handler::MintPartyQuery,
-            // types::order_type::MintPartyOrderType,
+            // Account
+            types::account::Account,
+            types::account::AccountResponse,
+            types::account::UpdateAccountRequest,
+            types::account::UpdateAccountFormData,
+            types::account::Mutual,
+            types::account::MutualFriend,
             
-            // types::response::MintPartyResponse,
-            // types::response::MintPartyBalance,
-            // types::response::MintPartyDepositList,
-            // types::response::MintPartyInfo,
-            types::response::AccountInfo,
-            types::response::TokenInfoResponse,
-            types::response::SearchResponse,
-            types::response::TokenInfo,
-            types::response::CreateTokenResponse,
-            db::postgres::model::Account,
-            db::postgres::model::Token,
-            db::postgres::model::Thread,
-            db::postgres::model::Token,
-            db::postgres::model::Chart,
-            // db::postgres::model::MintParty
-    )),
+            // Token
+            types::token::Token,
+            types::token::TokenResponse,
+            types::token::create_token::TokenCreated,
+            types::token::create_token::TokenCreatedResponse,
+            types::token::order::TokenOrderType,
+            types::token::order::OrderTokenInfo,
+            types::token::order::OrderToken,
+            types::token::order::OrderMessage,
+            types::token::order::SearchResponse,
+
+            //Trading
+            types::trading::chart::Chart,
+            types::trading::chart::ChartResponse,
+            types::trading::pnl::PNLResponse,
+            types::trading::pnl::PeriodPnL,
+            types::trading::pnl::BestTrade,
+            types::trading::position::Position,
+            types::trading::position::PositionResponse,
+            types::trading::swap_history::Swap,
+            types::trading::swap_history::SwapResponse,
+
+            // Social
+            types::social::follow::Follow,
+            types::social::follow::FollowResponse,
+            types::social::follow::UpdateFollowRequest,
+            types::social::follow::UpdateFollowResponse,
+            types::social::follow::FollowsResponse,
+            types::social::follow::FollowResponse,
+            types::social::thread::Thread,
+            types::social::thread::ThreadLike,
+            types::social::thread::CreateThreadRequest,
+            types::social::thread::CreateThreadFormData,
+            types::social::thread::ThreadRequest,
+            types::social::thread::ThreadResponse,
+     
+        )
+    ),
     tags(
         (name="Auth",description = "Authentication endpoints"),
-        (name="Balance",description="Balance management endpoints"),
+        
         (name="Account",description="Account management endpoints"),
         (name="Follow",description="Follow management endpoints"),
         (name="Thread",description="Thread management endpoints"),
@@ -125,7 +125,7 @@ use clap::Parser;
         (name="Search",description="Search endpoints"),
         (name="Chart",description="Chart endpoints"),
         (name="Order",description="Order endpoints"),
-        // (name="MintParty", description ="Mint Party management endpoints")
+        
     ),
     security(
         ("session_cookie" = [])
@@ -183,7 +183,6 @@ async fn main() -> Result<()> {
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
         .merge(token::router())
-        .merge(balance::router())
         .merge(search::router())
         .merge(chart::router())
         .merge(profile::router())

@@ -1,10 +1,91 @@
 use std::sync::Arc;
 
-use crate::db::postgres::{model::Thread, PostgresDatabase};
 use anyhow::{anyhow, Context, Result};
 
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use tracing::info;
+use utoipa::ToSchema;
 
+use crate::db::postgres::PostgresDatabase;
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+pub struct Thread {
+    pub thread_id: i32,
+    pub token_id: String,
+    pub account_id: String,
+    pub content: String,
+    pub created_at: i64,
+    pub root_id: Option<i32>,
+    pub likes_count: i32,
+    pub reply_count: i32,
+    pub image_uri: Option<String>,
+}
+
+impl Thread {
+    pub fn new(
+        token_id: String,
+        account_id: String,
+        content: String,
+        root_id: Option<i32>,
+    ) -> Self {
+        let timestamp = chrono::Utc::now().timestamp();
+        Self {
+            thread_id: 0,
+            token_id,
+            account_id,
+            content,
+            created_at: timestamp,
+            root_id,
+            likes_count: 0,
+            reply_count: 0,
+            image_uri: None,
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+pub struct ThreadLike {
+    #[serde(skip_serializing)]
+    pub thread_like_id: i32,
+    pub thread_id: i32,
+    #[serde(skip_serializing)]
+    pub token_id: String,
+    #[serde(skip_serializing)]
+    pub account_id: String,
+    #[serde(skip_serializing)]
+    pub created_at: i64,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateThreadRequest {
+    pub token_id: String,
+    pub content: String,
+    pub parent_id: Option<i32>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ThreadResponse {
+    pub thread: Thread,
+}
+#[derive(ToSchema)]
+pub struct CreateThreadFormData {
+    #[schema(example = json!({
+        "token_id": "token_address",
+        "content": "Your Content",
+        "root_id": "Null or root Thread ID"
+    }))]
+    pub data: String, // JSON string
+
+    #[schema(format = "binary")]
+    pub image: Option<Bytes>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ThreadRequest {
+    #[schema(example = 1)]
+    pub thread_id: i32,
+    pub token_id: String,
+}
 pub struct ThreadController {
     db: Arc<PostgresDatabase>,
 }

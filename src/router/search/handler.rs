@@ -4,12 +4,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{instrument, warn};
 use utoipa::ToSchema;
 
-use crate::db::postgres::controller::order::OrderController;
-
 use crate::result::{AppError, AppJsonResult};
 use crate::state::AppState;
-use crate::types::order::TokenOrderType;
-use crate::types::response::SearchResponse;
+use crate::types::token::order::{OrderController, SearchResponse, TokenOrderType};
 
 use super::path::SearchPath;
 #[derive(Debug, Serialize, ToSchema)]
@@ -32,7 +29,9 @@ use super::path::SearchPath;
         "account_info": {
             "account_id": "0xaasdfasdfasdfas",
             "nickname": "master",
-            "image_uri": "https://storage.googleapis.com/nads-profiles/user_01.png"
+            "image_uri": "https://storage.googleapis.com/nads-profiles/user_01.png",
+            "follower_count": 100,
+            "following_count": 100
         }
     }]
 }))]
@@ -55,7 +54,7 @@ pub struct SearchTokenQuery {
         (status = 400, description = "Bad request - Invalid sort_by parameter"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Search Token"
+    tag = "Search"
 )]
 #[instrument(skip(state))]
 pub async fn search_token(

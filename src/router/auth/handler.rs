@@ -12,41 +12,24 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use tower_cookies::cookie::time::Duration;
 use tower_cookies::Cookie;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::types::account::{Account, AccountController};
+use crate::types::auth::{
+    AuthNonceRequest, AuthNonceResponse, AuthSessionRequest, AuthSessionResponse, SessionController,
+};
 use crate::{
     config::EXPIRATION_SESSION_KEY,
-    db::postgres::{
-        controller::{account::AccountController, session::SessionController},
-        model::Account,
-    },
     result::{AppError, AppJsonResult, AppResult},
     state::AppState,
 };
 
 use super::path::Path;
 
-#[derive(Debug, Deserialize, ToSchema)]
-#[schema(example = json!({
-    "address": "Your address"
-}))]
-pub struct AuthNonceRequest {
-    #[schema(example = "Your address")]
-    address: String,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-#[schema(example = json!({
-    "nonce": "abced-abced-abced"
-}))]
-pub struct AuthNonceResponse {
-    #[schema(example = "abced-abced-abced")]
-    nonce: String,
-}
 /// Generate authentication nonce
 #[utoipa::path(
     post,
@@ -76,22 +59,6 @@ pub async fn auth_nonce(
     Ok(Json(AuthNonceResponse { nonce }))
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-#[schema(example = json!({
-    "signature": "Signature with nonce signed with private key",
-    "nonce": "Get nonce from /auth/nonce"
-}))]
-pub struct AuthSessionRequest {
-    #[schema(example = "0x1234567890abcdef...")]
-    signature: String,
-    #[schema(example = "abcdef-abcedef-abcedf")]
-    nonce: String,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct AuthSessionResponse {
-    account: Account,
-}
 /// Generate authentication session
 #[utoipa::path(
     post,

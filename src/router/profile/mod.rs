@@ -8,16 +8,18 @@ use path::ProfilePath;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route(ProfilePath::Profile.as_str(), get(handler::get_profile))
+        .route(ProfilePath::GetProfile.as_str(), get(handler::get_profile))
+        .route(ProfilePath::GetPnl.as_str(), get(handler::get_pnl))
         .route(
-            ProfilePath::TokenCreated.as_str(),
-            get(handler::get_created_tokens),
+            ProfilePath::GetPosition.as_str(),
+            get(handler::get_position),
         )
         .route(
-            ProfilePath::TokenHeld.as_str(),
-            get(handler::get_tokens_held),
+            ProfilePath::GetTokenCreated.as_str(),
+            get(handler::get_token_created),
         )
-        .route(ProfilePath::Replies.as_str(), get(handler::get_replies))
-        .route(ProfilePath::Followers.as_str(), get(handler::get_followers))
-        .route(ProfilePath::Following.as_str(), get(handler::get_following))
+        .route(
+            ProfilePath::GetSwapHistory.as_str(),
+            get(handler::get_swap_history),
+        )
 }

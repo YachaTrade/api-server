@@ -7,8 +7,7 @@ use anyhow::Result;
 
 use crate::{
     config::{NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION},
-    router::order::handler::OrderMessage,
-    types::{order::TokenOrderType, response::SearchResponse},
+    types::token::order::{OrderMessage, SearchResponse, TokenOrderType},
 };
 
 pub struct RedisDatabase {

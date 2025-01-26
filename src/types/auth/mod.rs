@@ -1,10 +1,45 @@
 use std::sync::Arc;
 
 use crate::db::postgres::PostgresDatabase;
-
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-use tracing::debug;
+use super::account::Account;
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "address": "Your address"
+}))]
+pub struct AuthNonceRequest {
+    #[schema(example = "Your address")]
+    pub address: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[schema(example = json!({
+    "nonce": "abced-abced-abced"
+}))]
+pub struct AuthNonceResponse {
+    #[schema(example = "abced-abced-abced")]
+    pub nonce: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "signature": "Signature with nonce signed with private key",
+    "nonce": "Get nonce from /auth/nonce"
+}))]
+pub struct AuthSessionRequest {
+    #[schema(example = "0x1234567890abcdef...")]
+    pub signature: String,
+    #[schema(example = "abcdef-abcedef-abcedf")]
+    pub nonce: String,
+}
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AuthSessionResponse {
+    pub account: Account,
+}
 
 pub struct SessionController {
     pub db: Arc<PostgresDatabase>,
@@ -16,10 +51,6 @@ impl SessionController {
     }
 
     pub async fn set_session(&self, session_id: &str, address: &str) -> Result<()> {
-        debug!("Setting session: {} -> {}", session_id, address);
-
-        let mut tx = self.db.get_write_pool().begin().await?;
-
         // 기존 세션 삭제 및 새 세션 삽입
         sqlx::query!(
             r#"
@@ -31,10 +62,8 @@ impl SessionController {
             session_id,
             address
         )
-        .execute(tx.as_mut())
+        .execute(self.db.get_write_pool())
         .await?;
-
-        tx.commit().await?;
 
         Ok(())
     }
@@ -52,7 +81,7 @@ impl SessionController {
     }
 
     pub async fn delete_session_by_address(&self, address: &str) -> Result<()> {
-        let result = sqlx::query!(
+        sqlx::query!(
             r#"
             DELETE FROM account_session WHERE account_id = $1
             "#,
@@ -61,18 +90,11 @@ impl SessionController {
         .execute(self.db.get_write_pool())
         .await?;
 
-        let rows_affected = result.rows_affected();
-
-        if rows_affected == 0 {
-            debug!("Attempted to delete non-existent session: {}", address);
-        } else {
-            debug!("Successfully deleted session: {}", address);
-        }
         Ok(())
     }
 
     pub async fn delete_session_by_id(&self, session_id: &str) -> Result<()> {
-        let result = sqlx::query!(
+        sqlx::query!(
             r#"
             DELETE FROM account_session WHERE id = $1
             "#,
@@ -81,13 +103,6 @@ impl SessionController {
         .execute(self.db.get_write_pool())
         .await?;
 
-        let rows_affected = result.rows_affected();
-
-        if rows_affected == 0 {
-            debug!("Attempted to delete non-existent session: {}", session_id);
-        } else {
-            debug!("Successfully deleted session: {}", session_id);
-        }
         Ok(())
     }
 }

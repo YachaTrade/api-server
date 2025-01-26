@@ -8,36 +8,12 @@ use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::{controller::thread::ThreadController, model::Thread},
     result::{AppError, AppJsonResult},
     state::AppState,
+    types::social::thread::{CreateThreadRequest, ThreadController, ThreadRequest, ThreadResponse},
 };
 
 use super::path::Path as ThreadPath;
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct CreateThreadRequest {
-    token_id: String,
-    content: String,
-    parent_id: Option<i32>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ThreadResponse {
-    thread: Thread,
-}
-#[derive(ToSchema)]
-pub struct CreateThreadFormData {
-    #[schema(example = json!({
-        "token_id": "token_address",
-        "content": "Your Content",
-        "root_id": "Null or root Thread ID"
-    }))]
-    pub data: String, // JSON string
-
-    #[schema(format = "binary")]
-    pub image: Option<Bytes>,
-}
 
 /// Create thread
 #[utoipa::path(
@@ -171,13 +147,6 @@ pub async fn create_thread(
         .map_err(|err| AppError::InternalError(err.to_string()))?;
 
     Ok(Json(ThreadResponse { thread }))
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct ThreadRequest {
-    #[schema(example = 1)]
-    thread_id: i32,
-    token_id: String,
 }
 
 /// Like thread

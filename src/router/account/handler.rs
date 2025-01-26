@@ -8,54 +8,18 @@ use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::{controller::{account::AccountController, account_like::AccountLikeController}, model::Account}, result::{AppError, AppJsonResult}, state::AppState
+     result::{AppError, AppJsonResult}, state::AppState, types::account::{Account, AccountController, AccountResponse, UpdateAccountRequest}
 
 };
 
-use super::path::Path;
-
-#[derive(Debug, Deserialize, ToSchema)]
-
-pub struct UpdateAccountRequest {
-    #[schema(example = json!("Your nickname" ), nullable)]
-    pub nickname: Option<String>,
-
-    #[schema(example = json!("Your bio" ), nullable)]
-    pub bio:Option<String>
-}
+use super::path::AccountPath;
 
 
-#[derive(ToSchema)]
-pub struct UpdateAccountFormData {
-    #[schema(example = json!({
-        "nickname": "user nickname",
-    }))]
-    pub data: UpdateAccountRequest, // JSON string
-
-    #[schema(format = "binary")]
-    pub image: Option<Bytes>,
-}
-
-
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct AccountResponse {
-    #[schema(example = json!({
-        "address": "address",
-        "nickname": "nickname",
-        "bio":"bio",
-        "image": "image",
-        "like_count": 0,
-        "follower_count": 0,
-        "following_count": 0,
-    }))]
-    account: Account,
-}
 
 /// Update account profile
 #[utoipa::path(
     patch,
-    path = Path::UpdateAccount.as_str(),
+    path = AccountPath::UpdateAccount.docs_str(),
     request_body(
         content = UpdateAccountFormData,
         content_type = "multipart/form-data",
@@ -174,109 +138,11 @@ pub async fn update_account(
 
 
 
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct AddLikeRequest {
-    #[schema(example = "target_address")]
-    pub target_address: String,
-}
-/// Add account like
-#[utoipa::path(
-    patch,
-    path = Path::AddAccountLike.as_str(),
-    request_body = AddLikeRequest,
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    responses(
-        (status = 200, description = "Account like successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
-    ),
-    security(
-        ("session_token" = [])
-    ),
-    tag="Account"
-)]
-#[instrument(skip(state, session_address, payload))]
-pub async fn add_account_like( 
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-    Json(payload): Json<AddLikeRequest>
-) -> AppJsonResult<AccountResponse> {
-    info!("Adding like for user: {}", session_address);
-
-    let target_address = payload.target_address;
-
-    let account_like_controller = AccountLikeController::new(state.postgres.clone());
-
-    let updated_account = account_like_controller
-        .add_account_like(&session_address, &target_address)
-        .await
-        .map_err(|err| {
-            info!("Add like Error {:?}", err);
-            AppError::BadRequest(err.to_string())
-        })?;
-    
-    Ok(Json(AccountResponse {
-        account: updated_account,
-    }))
-}
-
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct RemoveLikeRequest{
-    #[schema(example = "target_address")]
-    pub target_address: String,
-}
-
-/// Remove account like
-#[utoipa::path(
-    patch,
-    path = Path::RemoveAccountLike.as_str(),
-    request_body = RemoveLikeRequest,
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    responses(
-        (status = 200, description = "Account like successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
-    ),
-    security(
-        ("session_token" = [])
-    ),
-    tag="Account"
-)]
-
-#[instrument(skip(state, session_address, payload))]
-pub async fn remove_account_like(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-    Json(payload): Json<RemoveLikeRequest>
-)->AppJsonResult<AccountResponse> {
-    let target_address = payload.target_address;
-
-    let account_like_controller = AccountLikeController::new(state.postgres.clone());
-
-    let updated_account = account_like_controller
-        .remove_account_like(&session_address, &target_address)
-        .await
-        .map_err(|err| {
-            info!("remove like Error {:?}", err);
-            AppError::BadRequest(err.to_string())
-        })?;
-
-    Ok(Json(AccountResponse{
-        account: updated_account,
-    }))
-}
 
 /// Get account session check
 #[utoipa::path(
     get,
-    path = Path::GetAccount.as_str(),
+    path = AccountPath::GetAccount.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),

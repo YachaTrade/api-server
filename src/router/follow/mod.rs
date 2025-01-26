@@ -1,6 +1,9 @@
-use axum::{routing::put, Router};
-use handler::{add_follow, remove_follow};
-use path::Path;
+use axum::{
+    routing::{get, put},
+    Router,
+};
+
+use path::FollowPath;
 
 use crate::state::AppState;
 
@@ -9,6 +12,17 @@ pub mod path;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route(Path::AddFollow.as_str(), put(add_follow))
-        .route(Path::RemoveFollow.as_str(), put(remove_follow))
+        .route(FollowPath::AddFollow.as_str(), put(handler::add_follow))
+        .route(
+            FollowPath::RemoveFollow.as_str(),
+            put(handler::remove_follow),
+        )
+        .route(
+            FollowPath::GetFollowers.as_str(),
+            get(handler::get_followers),
+        )
+        .route(
+            FollowPath::GetFollowings.as_str(),
+            get(handler::get_followings),
+        )
 }

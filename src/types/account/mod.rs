@@ -1,0 +1,330 @@
+use std::{env, sync::Arc};
+
+use anyhow::{anyhow, Result};
+use bytes::Bytes;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
+use utoipa::ToSchema;
+
+use crate::db::postgres::PostgresDatabase;
+
+use super::common::identifier::Identifier;
+
+#[derive(Debug, Deserialize, ToSchema)]
+
+pub struct UpdateAccountRequest {
+    #[schema(example = json!("Your nickname" ), nullable)]
+    pub nickname: Option<String>,
+
+    #[schema(example = json!("Your bio" ), nullable)]
+    pub bio: Option<String>,
+}
+
+#[derive(ToSchema)]
+pub struct UpdateAccountFormData {
+    #[schema(example = json!({
+        "nickname": "user nickname",
+    }))]
+    pub data: UpdateAccountRequest, // JSON string
+
+    #[schema(format = "binary")]
+    pub image: Option<Bytes>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct AccountResponse {
+    pub account: Account,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct AccountParams {
+    pub target: String,
+    pub request_account_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct MutualFriend {
+    pub account_id: String,
+    pub nickname: String,
+    pub image_uri: String,
+    pub follower_count: i32,
+    pub following_count: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct Mutual {
+    pub mutual_friends: Option<Vec<MutualFriend>>,
+    pub mutual_friends_count: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct Account {
+    pub account_id: String,
+    pub nickname: String,
+    pub image_uri: String,
+    pub bio: String,
+    pub follower_count: i32,
+    pub following_count: i32,
+    pub mutual: Option<Mutual>,
+}
+
+impl Account {
+    pub fn new(account_id: String) -> Self {
+        //random_number 는 1~5까지의 숫자가 나와야함.
+        let random_number = rand::thread_rng().gen_range(1..=5);
+        let image_key = format!("DEFAULT_IMAGE_{}", random_number);
+        let image_uri = env::var(&image_key).expect("DEFAULT_IMAGE must be set");
+        Self {
+            account_id: account_id.clone(),
+            image_uri,
+            nickname: account_id,
+            bio: "".to_string(),
+            follower_count: 0,
+            following_count: 0,
+            mutual: None,
+        }
+    }
+}
+
+pub struct AccountController {
+    pub db: Arc<PostgresDatabase>,
+}
+
+impl AccountController {
+    pub fn new(db: Arc<PostgresDatabase>) -> Self {
+        AccountController { db }
+    }
+
+    pub async fn upsert_account(&self, account: Account) -> Result<Account> {
+        let record = sqlx::query!(
+            r#"
+            INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (account_id) 
+            DO UPDATE SET
+                image_uri = $2,
+                nickname = $3,
+                bio = $4,
+                follower_count = $5,
+                following_count = $6
+            RETURNING *
+            "#,
+            account.account_id,
+            account.image_uri,
+            account.nickname,
+            account.bio,
+            account.follower_count,
+            account.following_count,
+        )
+        .fetch_one(self.db.get_write_pool())
+        .await
+        .map_err(|err| anyhow!("Fail upsert account Reason :{:?}", err))?;
+
+        Ok(Account {
+            account_id: record.account_id,
+            nickname: record.nickname,
+            image_uri: record.image_uri,
+            bio: record.bio,
+            follower_count: record.follower_count,
+            following_count: record.following_count,
+            mutual: None,
+        })
+    }
+
+    pub async fn update_account(
+        &self,
+        address: &str,
+        image_uri: Option<String>,
+        nickname: Option<String>,
+        bio: Option<String>,
+    ) -> Result<Account> {
+        // 1. UPDATE 구문 시작
+        let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new("UPDATE account SET ");
+
+        // 2. 업데이트할 필드를 동적으로 저장할 벡터
+        let mut fields = vec![];
+
+        // 3. 각 필드가 Some 값이면 fields에 (필드명, 값)을 push
+        if let Some(image_uri) = image_uri {
+            fields.push(("image_uri", image_uri));
+        }
+
+        if let Some(nickname) = nickname {
+            fields.push(("nickname", nickname));
+        }
+
+        if let Some(bio) = bio {
+            fields.push(("bio", bio));
+        }
+
+        // 4. 업데이트할 필드가 하나도 없다면 에러 처리 (또는 skip 로직 가능)
+        if fields.is_empty() {
+            return Err(anyhow!("No fields provided to update"));
+        }
+
+        // 5. 쿼리 빌드
+        for (i, (field_name, field_value)) in fields.into_iter().enumerate() {
+            if i > 0 {
+                // 첫 필드가 아니라면 ,(콤마) 추가
+                query_builder.push(", ");
+            }
+            // 예: field_name = $1
+            query_builder.push(format!("{} = ", field_name));
+            query_builder.push_bind(field_value);
+        }
+
+        // 7. 쿼리 실행
+        query_builder
+            .push(" WHERE account_id = ")
+            .push_bind(address)
+            // UPDATE 한 뒤 해당 컬럼들을 바로 반환
+            .push(" RETURNING *");
+
+        // 한 번에 쿼리 실행 & 바로 레코드 받아오기
+        let query = query_builder.build();
+        let updated_account = query
+            .try_map(|row: PgRow| {
+                // 여기서 row에서 컬럼을 뽑아 Account 구조체로 매핑
+                Ok(Account {
+                    account_id: row.try_get("account_id")?,
+                    image_uri: row.try_get("image_uri")?,
+                    nickname: row.try_get("nickname")?,
+                    bio: row.try_get("bio")?,
+                    follower_count: row.try_get("follower_count")?,
+                    following_count: row.try_get("following_count")?,
+                    mutual: None,
+                })
+            })
+            .fetch_one(self.db.get_write_pool()) // 풀에서 커넥션 얻기
+            .await
+            .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
+
+        Ok(updated_account)
+    }
+
+    pub async fn get_account(&self, account_id: &str) -> Result<Account> {
+        let record = sqlx::query!(
+            r#"
+            SELECT *
+            FROM account
+            WHERE LOWER(account_id) = LOWER($1)
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
+
+        Ok(Account {
+            account_id: record.account_id,
+            nickname: record.nickname,
+            image_uri: record.image_uri,
+            bio: record.bio,
+            follower_count: record.follower_count,
+            following_count: record.following_count,
+            mutual: None,
+        })
+    }
+
+    pub async fn get_account_with_mutual(
+        &self,
+        identifier: &Identifier,
+        request_account_id: Option<String>,
+    ) -> Result<Account> {
+        let result = sqlx::query!(
+            r#"
+            WITH target_account AS (
+                SELECT 
+                    account_id,
+                    nickname,
+                    image_uri,
+                    bio,
+                    follower_count,
+                    following_count
+                FROM account
+                WHERE CASE 
+                    WHEN $1 = 'account_id' THEN account_id = $2
+                    ELSE nickname = $2
+                END
+            ),
+            mutual_friends AS (
+                SELECT 
+                    a.account_id,
+                    a.nickname,
+                    a.image_uri,
+                    a.follower_count,
+                    a.following_count,
+                    COUNT(*) OVER() as total_count
+                FROM follow f
+                JOIN follow f_other ON f.following_id = f_other.following_id
+                JOIN account a ON f.following_id = a.account_id
+                WHERE f.follower_id = $2 
+                AND f_other.follower_id = $3
+                LIMIT 3
+            )
+            SELECT 
+                ta.account_id,
+                ta.nickname,
+                ta.image_uri,
+                ta.bio,
+                ta.follower_count,
+                ta.following_count,
+                COALESCE(
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'account_id', mf.account_id,
+                            'nickname', mf.nickname,
+                            'image_uri', mf.image_uri,
+                            'follower_count', mf.follower_count,
+                            'following_count', mf.following_count
+                        )
+                    ) FILTER (WHERE mf.account_id IS NOT NULL),
+                    NULL
+                ) as mutual_friends,
+                COALESCE(MAX(mf.total_count), 0) as mutual_friends_count
+            FROM target_account ta
+            LEFT JOIN mutual_friends mf ON true
+            GROUP BY 
+                ta.account_id,
+                ta.nickname,
+                ta.image_uri,
+                ta.bio,
+                ta.follower_count,
+                ta.following_count
+            "#,
+            match identifier {
+                Identifier::Address(_) => "account_id",
+                Identifier::Nickname(_) => "nickname",
+            },
+            match identifier {
+                Identifier::Address(addr) => addr,
+                Identifier::Nickname(nick) => nick,
+            },
+            request_account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?;
+
+        let mutual = if request_account_id.is_some() {
+            Some(Mutual {
+                mutual_friends: result
+                    .mutual_friends
+                    .map(|friends| serde_json::from_value(friends).unwrap_or_else(|_| vec![])),
+                mutual_friends_count: result.mutual_friends_count.unwrap_or(0) as i32,
+            })
+        } else {
+            None
+        };
+
+        Ok(Account {
+            account_id: result.account_id,
+            nickname: result.nickname,
+            image_uri: result.image_uri,
+            bio: result.bio,
+            follower_count: result.follower_count,
+            following_count: result.following_count,
+            mutual,
+        })
+    }
+}

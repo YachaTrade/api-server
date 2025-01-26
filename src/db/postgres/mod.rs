@@ -1,5 +1,3 @@
-pub mod controller;
-pub mod model;
 use std::{env, time::Duration};
 
 #[derive(Debug)]
@@ -54,7 +52,3 @@ impl PostgresDatabase {
         &self.write_pool
     }
 }
-/*  sqlx::query: 구조체로 매핑할 필요 없이 쿼리를 실행할 때 사용
-•	sqlx::query_as!: 쿼리 결과를 구조체로 매핑할 때 사용
-•	sqlx::query!: 결과를 튜플로 가져오거나, 단순히 쿼리를 실행할 때 사용
-*/
