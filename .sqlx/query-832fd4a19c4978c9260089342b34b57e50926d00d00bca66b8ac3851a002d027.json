@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT account_id,image_uri,nickname,bio,follower_count,following_count,like_count\n            FROM account\n            WHERE account_id = $1\n            ",
+  "query": "\n            UPDATE account\n            SET following_count = GREATEST(following_count - 1, 0)\n            WHERE account_id = $1\n            RETURNING account_id, nickname, image_uri, follower_count, following_count\n            ",
   "describe": {
     "columns": [
       {
@@ -10,32 +10,22 @@
       },
       {
         "ordinal": 1,
-        "name": "image_uri",
-        "type_info": "Varchar"
-      },
-      {
-        "ordinal": 2,
         "name": "nickname",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 3,
-        "name": "bio",
+        "ordinal": 2,
+        "name": "image_uri",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "follower_count",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "following_count",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 6,
-        "name": "like_count",
         "type_info": "Int4"
       }
     ],
@@ -49,10 +39,8 @@
       false,
       false,
       false,
-      false,
-      false,
       false
     ]
   },
-  "hash": "f7ac240dee26992ea0aee74c1c3bb40fd46edc5903f8e89c02bb1bab2b7208ce"
+  "hash": "832fd4a19c4978c9260089342b34b57e50926d00d00bca66b8ac3851a002d027"
 }

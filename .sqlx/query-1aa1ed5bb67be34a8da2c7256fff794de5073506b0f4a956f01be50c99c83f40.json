@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH position_data AS (\n                SELECT \n                    p.position_id,\n                    p.token_id,\n                    p.total_bought_native,\n                    p.total_bought_token,\n                    p.current_token_amount,\n                    p.realized_pnl,\n                    p.created_at,\n                    p.last_traded_at,\n                    t.symbol as token_symbol,\n                    t.image_uri as token_image,\n                    COALESCE(m.price, 0) as token_price,\n                    -- Calculate unrealized_pnl\n                    COALESCE(\n                        CASE \n                            WHEN p.current_token_amount = 0 THEN 0\n                            ELSE (COALESCE(m.price, 0) * p.current_token_amount) - \n                                (p.total_bought_native * p.current_token_amount / p.total_bought_token)\n                        END\n                    , 0) as unrealized_pnl\n                FROM position p\n                JOIN token t ON p.token_id = t.token_id\n                LEFT JOIN market m ON p.token_id = m.token_id\n                WHERE p.account_id = $1\n                AND p.current_token_amount > 0\n            )\n            SELECT \n                position_id,\n                token_id,\n                token_symbol,\n                token_price as \"token_price!\",\n                token_image,\n                total_bought_native,\n                total_bought_token,\n                current_token_amount,\n                COALESCE((token_price * current_token_amount), 0) as \"current_value!\",\n                realized_pnl,\n                unrealized_pnl as \"unrealized_pnl!\",\n                (realized_pnl + unrealized_pnl) as \"total_pnl!\",\n                created_at,\n                last_traded_at\n            FROM position_data\n            ORDER BY (realized_pnl + unrealized_pnl) DESC\n            LIMIT $2\n            OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_price!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "token_image",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_bought_native",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_bought_token",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "current_token_amount",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "current_value!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "realized_pnl",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "unrealized_pnl!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "total_pnl!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_traded_at",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "1aa1ed5bb67be34a8da2c7256fff794de5073506b0f4a956f01be50c99c83f40"
+}
