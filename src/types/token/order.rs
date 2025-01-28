@@ -166,14 +166,21 @@ impl OrderController {
             TokenOrderType::LatestTrade => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
-                    WITH latest_swaps AS (
-                        SELECT token_id, MAX(created_at) as created_at
+                    WITH ranked_swaps AS (
+                        SELECT 
+                            token_id,
+                            created_at,
+                            ROW_NUMBER() OVER (PARTITION BY token_id ORDER BY created_at DESC) as rn
                         FROM swap
-                        GROUP BY token_id
-                        ORDER BY MAX(created_at) DESC
-                        LIMIT $1  
+                    ),
+                    latest_swaps AS (
+                        SELECT token_id, created_at
+                        FROM ranked_swaps
+                        WHERE rn = 1
+                        ORDER BY created_at DESC
+                        LIMIT $1
                         OFFSET $2
-                    )   
+                    )
                     SELECT 
                         t.token_id as token_id,
                         a.account_id as account_id,
@@ -190,21 +197,13 @@ impl OrderController {
                         m.market_type,
                         t.created_at as created_at,
                         ls.created_at::FLOAT8 as score
-
-                    FROM (
-                        SELECT DISTINCT ON (token_id) *
-                        FROM latest_swaps
-                        ORDER BY token_id, created_at DESC
-                        LIMIT 50
-                    ) ls
+                    FROM latest_swaps ls
                     JOIN token t ON ls.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY ls.created_at DESC
-                    LIMIT $1
-                    OFFSET $2
                     "#,
                 )
                 .bind(pagination.limit)
