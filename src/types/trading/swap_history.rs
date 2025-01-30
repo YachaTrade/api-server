@@ -26,6 +26,7 @@ pub struct Swap {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SwapResponse {
     pub swaps: Vec<Swap>,
+    pub total_count: i64,
 }
 
 pub struct SwapController {
@@ -37,11 +38,27 @@ impl SwapController {
         SwapController { db }
     }
 
+    pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
+        let count = sqlx::query!(
+            r#"
+            SELECT COALESCE(COUNT(*)::bigint, 0) as count
+            FROM swap s
+            WHERE s.sender = $1
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?
+        .count
+        .unwrap_or(0);
+
+        Ok(count)
+    }
     pub async fn get_swaps(
         &self,
         account_id: &str,
         pagination: PaginationParams,
-    ) -> Result<Vec<Swap>> {
+    ) -> Result<SwapResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         let swaps = sqlx::query!(
@@ -71,6 +88,12 @@ impl SwapController {
         .fetch_all(self.db.get_read_pool())
         .await?;
 
+        let total_count = if swaps.is_empty() {
+            0
+        } else {
+            self.get_total_count(account_id).await?
+        };
+
         let swaps = swaps
             .into_iter()
             .map(|row| Swap {
@@ -89,6 +112,6 @@ impl SwapController {
             })
             .collect();
 
-        Ok(swaps)
+        Ok(SwapResponse { swaps, total_count })
     }
 }

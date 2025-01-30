@@ -1,5 +1,5 @@
 use crate::{
-    result::AppJsonResult,
+    result::{AppError, AppJsonResult},
     state::AppState,
     types::{
         account::{AccountController, AccountParams, AccountResponse},
@@ -35,6 +35,7 @@ use super::path::ProfilePath;
     ),
     tag = "Profile"
 )]
+
 pub async fn get_profile(
     Query(params): Query<AccountParams>,
     State(state): State<AppState>,
@@ -43,11 +44,15 @@ pub async fn get_profile(
         target,
         request_account_id,
     } = params;
+    if !valid_account_id(&target) {
+        return Err(AppError::BadRequest("Invalid account ID".to_string()));
+    }
 
     let identifier: Identifier = target.into();
     let account = AccountController::new(state.postgres.clone())
         .get_account_with_mutual(&identifier, request_account_id)
-        .await?;
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     Ok(Json(AccountResponse { account }))
 }
 
@@ -60,7 +65,7 @@ pub async fn get_profile(
     ),
     responses(
         (status = 200, description = "Successfully retrieved PNL information", body = PNLResponse),
-        (status = 404, description = "Account not found"),
+        (status = 404, description = "Account invalid"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
@@ -69,9 +74,13 @@ pub async fn get_pnl(
     Path(account_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<PNLResponse> {
+    if !valid_account_id(&account_id) {
+        return Err(AppError::BadRequest("Invalid account ID".to_string()));
+    }
     let pnl = PNLController::new(state.postgres.clone())
         .get_pnl(&account_id)
-        .await?;
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     Ok(Json(pnl))
 }
 
@@ -86,7 +95,7 @@ pub async fn get_pnl(
     ),
     responses(
         (status = 200, description = "Successfully retrieved positions", body = PositionResponse),
-        (status = 404, description = "Account not found"),
+        (status = 404, description = "Account invalid"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
@@ -96,11 +105,15 @@ pub async fn get_position(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<PositionResponse> {
+    if !valid_account_id(&account_id) {
+        return Err(AppError::BadRequest("Invalid account ID".to_string()));
+    }
     let position_controller = PositionController::new(state.postgres.clone());
-    let positions = position_controller
+    let response = position_controller
         .get_positions(&account_id, pagination)
-        .await?;
-    Ok(Json(PositionResponse { positions }))
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    Ok(Json(response))
 }
 
 /// Get tokens created by profile with pagination
@@ -114,20 +127,24 @@ pub async fn get_position(
     ),
     responses(
         (status = 200, description = "Successfully retrieved created tokens", body = TokenCreatedResponse),
-        (status = 404, description = "Account not found"),
+        (status = 404, description = "Account invalid"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
+
 pub async fn get_token_created(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenCreatedResponse> {
-    let tokens = TokenCreatedController::new(state.postgres.clone())
+    if !valid_account_id(&account_id) {
+        return Err(AppError::BadRequest("Invalid account ID".to_string()));
+    }
+    let response = TokenCreatedController::new(state.postgres.clone())
         .get_tokens_created(&account_id, pagination)
         .await?;
-    Ok(Json(TokenCreatedResponse { tokens }))
+    Ok(Json(response))
 }
 
 /// Get trade history with pagination
@@ -151,8 +168,19 @@ pub async fn get_swap_history(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<SwapResponse> {
-    let swaps = SwapController::new(state.postgres.clone())
+    if !valid_account_id(&account_id) {
+        return Err(AppError::BadRequest("Invalid account ID".to_string()));
+    }
+    let swap_controller = SwapController::new(state.postgres.clone());
+    let response = swap_controller
         .get_swaps(&account_id, pagination)
-        .await?;
-    Ok(Json(SwapResponse { swaps }))
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    Ok(Json(response))
+}
+
+fn valid_account_id(account_id: &str) -> bool {
+    account_id.starts_with("0x")
+        && account_id.len() == 42
+        && account_id[2..].chars().all(|c| c.is_ascii_hexdigit())
 }

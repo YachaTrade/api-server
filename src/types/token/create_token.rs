@@ -1,17 +1,18 @@
 use std::sync::Arc;
 
-use bigdecimal::BigDecimal;
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-
 use crate::{
     db::postgres::PostgresDatabase,
     types::common::{info::TokenInfo, pagination::PaginationParams},
 };
+use anyhow::Result;
+use bigdecimal::BigDecimal;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TokenCreatedResponse {
     pub tokens: Vec<TokenCreated>,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -34,11 +35,28 @@ impl TokenCreatedController {
         TokenCreatedController { db }
     }
 
+    pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
+        let count = sqlx::query!(
+            r#"
+            SELECT COALESCE(COUNT(*)::bigint, 0) as count
+            FROM token t
+            WHERE t.creator = $1
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?
+        .count
+        .unwrap_or(0);
+
+        Ok(count)
+    }
+
     pub async fn get_tokens_created(
         &self,
         account_id: &str,
         pagination: PaginationParams,
-    ) -> Result<Vec<TokenCreated>, anyhow::Error> {
+    ) -> Result<TokenCreatedResponse> {
         // Query tokens created by the account with their market and position information
         let offset = (pagination.page - 1) * pagination.limit;
         let tokens = sqlx::query!(
@@ -83,7 +101,7 @@ impl TokenCreatedController {
         .await?;
 
         // Convert query results to TokenCreated structs
-        let tokens = tokens
+        let tokens: Vec<TokenCreated> = tokens
             .into_iter()
             .map(|row| TokenCreated {
                 token: TokenInfo {
@@ -100,6 +118,11 @@ impl TokenCreatedController {
             })
             .collect();
 
-        Ok(tokens)
+        let total_count = self.get_total_count(account_id).await?;
+
+        Ok(TokenCreatedResponse {
+            tokens,
+            total_count,
+        })
     }
 }

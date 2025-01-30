@@ -21,6 +21,7 @@ pub struct Chart {
     pub volume: BigDecimal,
     pub time_stamp: i64,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ChartInterval {
     Minute1 = 1,
@@ -60,6 +61,7 @@ impl ChartInterval {
             Self::Week1 => "1w",
         }
     }
+
     pub fn from_i16(value: i16) -> Result<Self> {
         match value {
             1 => Ok(Self::Minute1),
@@ -85,13 +87,16 @@ impl From<ChartInterval> for i16 {
         interval as i16
     }
 }
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ChartResponse {
     pub data: Vec<Chart>,
     pub token_id: String,
     pub interval: String,
-    pub pagenation: i64,
+    pub pagination: i64,
+    pub total_count: i64,
 }
+
 #[derive(Deserialize, ToSchema)]
 pub struct ChartQuery {
     pub interval: String,
@@ -106,16 +111,36 @@ impl ChartController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         ChartController { db }
     }
+    pub async fn get_total_count(&self, token_id: &str, interval: ChartInterval) -> Result<i64> {
+        let chart_interval: i16 = interval.into();
+        let count = sqlx::query!(
+            r#"
+            SELECT 
+                COUNT(*)
+            FROM chart
+            WHERE token_id = $1
+                AND interval_type = $2
+            "#,
+            token_id,
+            chart_interval
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?
+        .count
+        .unwrap_or(0);
+
+        Ok(count)
+    }
+
     pub async fn get_chart(
         &self,
         token_id: &str,
         interval: ChartInterval,
         pagination: i64,
-    ) -> Result<Vec<Chart>> {
+    ) -> Result<ChartResponse> {
         let chart_interval: i16 = interval.into();
         let pagination = if pagination <= 0 { 1 } else { pagination };
         let offset = (pagination - 1) * 300;
-
         let charts = sqlx::query_as::<_, Chart>(
             r#"
             SELECT 
@@ -142,6 +167,20 @@ impl ChartController {
         .await
         .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
 
-        Ok(charts)
+        let total_count = if charts.is_empty() {
+            0
+        } else {
+            self.get_total_count(token_id, interval).await?
+        };
+
+        let chart_data = charts.into_iter().map(Chart::from).collect();
+
+        Ok(ChartResponse {
+            data: chart_data,
+            token_id: token_id.to_string(),
+            interval: ChartInterval::i16_to_string(chart_interval)?,
+            pagination,
+            total_count,
+        })
     }
 }

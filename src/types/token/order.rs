@@ -106,11 +106,13 @@ pub struct OrderMessage {
     pub order_type: TokenOrderType,
     pub order_token: Option<Vec<OrderToken>>,
     pub king_of_the_hill: Option<OrderToken>,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchResponse {
     pub tokens: Vec<OrderToken>,
+    pub total_count: i64,
 }
 
 pub struct OrderController {
@@ -323,9 +325,11 @@ impl OrderController {
         &self,
         query: &str,
         order_by: TokenOrderType,
-    ) -> Result<Vec<OrderToken>> {
+        pagination: PaginationParams,
+    ) -> Result<SearchResponse> {
         let search_pattern = format!("%{}%", query.to_lowercase());
         info!("Search pattern: {}", search_pattern);
+        let offset = (pagination.page - 1) * pagination.limit;
 
         let order_by = match order_by {
             TokenOrderType::MarketCap => "m.price DESC NULLS LAST",
@@ -334,6 +338,24 @@ impl OrderController {
             TokenOrderType::ReplyCount => "m.price DESC NULLS LAST",  //unused default marketcap
             TokenOrderType::LatestReply => "m.price DESC NULLS LAST", //unused default marketcap
         };
+
+        // Get total count first
+        let total_count = sqlx::query!(
+            r#"
+            SELECT COALESCE(COUNT(*), 0)::bigint as count
+            FROM token t
+            WHERE 
+                LOWER(t.token_id) LIKE $1
+                OR LOWER(t.name) LIKE $1 
+                OR LOWER(t.symbol) LIKE $1
+            "#,
+            search_pattern
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .map_err(|e| anyhow!("Failed to get search total count: {}", e))?
+        .count
+        .unwrap_or(0);
 
         let query = format!(
             r#"
@@ -365,12 +387,15 @@ impl OrderController {
                 OR LOWER(t.name) LIKE $1 
                 OR LOWER(t.symbol) LIKE $1
             ORDER BY {order_by}
-            LIMIT 50
+            LIMIT $2
+            OFFSET $3
             "#
         );
 
         let rows = sqlx::query_as::<_, OrderTokenRaw>(&query)
             .bind(search_pattern)
+            .bind(pagination.limit)
+            .bind(offset)
             .fetch_all(&*self.db.get_read_pool())
             .await
             .map_err(|err| anyhow!("Failed to search tokens: {}", err))?;
@@ -402,7 +427,10 @@ impl OrderController {
             })
             .collect();
 
-        Ok(tokens)
+        Ok(SearchResponse {
+            tokens,
+            total_count,
+        })
     }
 
     pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
@@ -442,5 +470,19 @@ impl OrderController {
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
 
         Ok(row.map(OrderToken::from))
+    }
+
+    pub async fn get_total_count(&self) -> Result<i64> {
+        let row = sqlx::query!(
+            r#"
+            SELECT count
+            FROM token_count
+            "#,
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .map_err(|e| anyhow!("Failed to get token count: {}", e))?;
+
+        Ok(row.count)
     }
 }

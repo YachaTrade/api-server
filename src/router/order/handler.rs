@@ -2,16 +2,15 @@ use axum::{
     extract::{Query, State},
     Json,
 };
-use serde::{Deserialize, Serialize};
+
 use tracing::{instrument, warn};
-use utoipa::ToSchema;
 
 use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::{
         common::pagination::PaginationParams,
-        token::order::{OrderController, OrderMessage, OrderToken, TokenOrderType},
+        token::order::{OrderController, OrderMessage, TokenOrderType},
     },
 };
 
@@ -54,10 +53,16 @@ pub async fn get_creation_time_order(
         .get_latest_king_of_the_hill()
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+    let total_count = OrderController::new(state.postgres.clone())
+        .get_total_count()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::CreationTime,
         order_token: Some(order_tokens),
         king_of_the_hill,
+        total_count,
     };
 
     // 결과를 캐시에 저장
@@ -115,11 +120,15 @@ pub async fn get_market_cap_order(
         .get_latest_king_of_the_hill()
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
-
+    let total_count = OrderController::new(state.postgres.clone())
+        .get_total_count()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::MarketCap,
         order_token: Some(order_tokens),
         king_of_the_hill,
+        total_count,
     };
 
     // 결과를 캐시에 저장
@@ -175,10 +184,15 @@ pub async fn get_latest_trade_order(
         .get_latest_king_of_the_hill()
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let total_count = OrderController::new(state.postgres.clone())
+        .get_total_count()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestTrade,
         order_token: Some(order_tokens),
         king_of_the_hill,
+        total_count,
     };
 
     // 결과를 캐시에 저장
@@ -234,10 +248,15 @@ pub async fn get_reply_count_order(
         .get_latest_king_of_the_hill()
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let total_count = OrderController::new(state.postgres.clone())
+        .get_total_count()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::ReplyCount,
         order_token: Some(order_tokens),
         king_of_the_hill,
+        total_count,
     };
 
     // 결과를 캐시에 저장
@@ -293,10 +312,15 @@ pub async fn get_latest_reply_order(
         .get_latest_king_of_the_hill()
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let total_count = OrderController::new(state.postgres.clone())
+        .get_total_count()
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestReply,
         order_token: Some(order_tokens),
         king_of_the_hill,
+        total_count,
     };
 
     // 결과를 캐시에 저장

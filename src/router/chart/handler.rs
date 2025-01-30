@@ -42,15 +42,10 @@ pub async fn get_chart(
 
     let chart_controller = ChartController::new(state.postgres.clone());
 
-    let chart = chart_controller
+    let chart_response = chart_controller
         .get_chart(&token, chart_interval, pagenation)
         .await
         .map_err(|err| AppError::InternalError(format!("Failed to get chart: {}", err)))?;
-    let chart_response = ChartResponse {
-        data: chart,
-        token_id: token,
-        interval: chart_interval.to_str().to_string(),
-        pagenation,
-    };
+
     Ok(Json(chart_response))
 }

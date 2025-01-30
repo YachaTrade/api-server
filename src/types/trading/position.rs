@@ -38,9 +38,11 @@ pub struct Position {
     /// Last trade timestamp
     pub last_traded_at: i64,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PositionResponse {
     pub positions: Vec<Position>,
+    pub total_count: i64,
 }
 
 pub struct PositionController {
@@ -51,14 +53,30 @@ impl PositionController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         PositionController { db }
     }
+    pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
+        let count = sqlx::query!(
+            r#"
+            SELECT COALESCE(COUNT(*)::bigint, 0) as count
+            FROM position p
+            WHERE p.account_id = $1
+            AND p.current_token_amount > 0
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?
+        .count
+        .unwrap_or(0);
 
+        Ok(count)
+    }
     pub async fn get_positions(
         &self,
         account_id: &str,
         pagination: PaginationParams,
-    ) -> Result<Vec<Position>> {
-        // Query positions with token information and current market prices
+    ) -> Result<PositionResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
+
         let positions = sqlx::query!(
             r#"
             WITH position_data AS (
@@ -74,6 +92,7 @@ impl PositionController {
                     t.symbol as token_symbol,
                     t.image_uri as token_image,
                     COALESCE(m.price, 0) as token_price,
+                    
                     -- Calculate unrealized_pnl
                     COALESCE(
                         CASE 
@@ -115,7 +134,12 @@ impl PositionController {
         .fetch_all(self.db.get_read_pool())
         .await?;
 
-        // Convert raw query results to Position structs
+        let total_count = if positions.is_empty() {
+            0
+        } else {
+            self.get_total_count(account_id).await?
+        };
+
         let positions = positions
             .into_iter()
             .map(|row| Position {
@@ -138,6 +162,9 @@ impl PositionController {
             })
             .collect();
 
-        Ok(positions)
+        Ok(PositionResponse {
+            positions,
+            total_count,
+        })
     }
 }

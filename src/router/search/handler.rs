@@ -1,44 +1,31 @@
 use axum::extract::{Path, Query};
 use axum::{extract::State, Json};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
 use tracing::{instrument, warn};
-use utoipa::ToSchema;
+
+use utoipa::{schema, ToSchema};
 
 use crate::result::{AppError, AppJsonResult};
 use crate::state::AppState;
+use crate::types::common::pagination::PaginationParams;
 use crate::types::token::order::{OrderController, SearchResponse, TokenOrderType};
 
 use super::path::SearchPath;
-#[derive(Debug, Serialize, ToSchema)]
+
+#[derive(Debug, Deserialize, ToSchema)]
 #[schema(example = json!({
-    "tokens": [{
-        "token_info": {
-            "token_id": "PUMP_TOKEN_001",
-            "name": "NAD Fun Token",
-            "symbol": "PUMP",
-            "image_uri": "token_image_uri",
-            "description": "this is a description.",
-            "reply_count": "128",
-            "price": "1250000",
-            "reserve_token": "1000000",
-            "created_at": 1703400000,
-            "market_type": "DEX",
-            "is_king": true,
-            "score": 128.0
-        },
-        "account_info": {
-            "account_id": "0xaasdfasdfasdfas",
-            "nickname": "master",
-            "image_uri": "https://storage.googleapis.com/nads-profiles/user_01.png",
-            "follower_count": 100,
-            "following_count": 100
-        }
-    }]
+    "sort_by": "market_cap",
+    "page": 1,
+    "limit": 10
 }))]
-#[derive(Deserialize)]
 pub struct SearchTokenQuery {
     #[schema(example = "market_cap")]
     pub sort_by: Option<TokenOrderType>,
+    #[schema(example = 1)]
+    pub page: i64,
+    #[schema(example = 10)]
+    pub limit: i64,
 }
 
 /// Search token by name, symbol, or token address
@@ -62,6 +49,11 @@ pub async fn search_token(
     State(state): State<AppState>,
     Query(query): Query<SearchTokenQuery>,
 ) -> AppJsonResult<SearchResponse> {
+    if token.is_empty() {
+        warn!("Empty token search query");
+        return Err(AppError::BadRequest("Empty token search query".to_string()));
+    }
+
     // 캐시된 결과 확인
     if let Ok(cached_response) = state.redis.get_search_response(&token).await {
         return Ok(Json(cached_response));
@@ -69,12 +61,14 @@ pub async fn search_token(
 
     let order_controller = OrderController::new(state.postgres.clone());
     let sort_by = query.sort_by.unwrap_or(TokenOrderType::MarketCap);
-    let tokens = order_controller
-        .search_order_tokens(&token, sort_by)
+    let pagination = PaginationParams {
+        page: query.page,
+        limit: query.limit,
+    };
+    let response = order_controller
+        .search_order_tokens(&token, sort_by, pagination)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
-
-    let response = SearchResponse { tokens };
 
     // 결과를 캐시에 저장
     if let Err(err) = state.redis.set_search_response(&token, &response).await {
