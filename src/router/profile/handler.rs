@@ -25,7 +25,7 @@ use super::path::ProfilePath;
     get,
     path = ProfilePath::GetProfile.docs_str(),
     params(
-        ("target" = String, Path, description = "User's nickname or Ethereum address"),
+        ("account_id" = String, Path, description = "User's nickname or Ethereum address"),
         ("request_account_id" = Option<String>, Query, description = "Viewer's account ID to calculate mutual friends")
     ),
     responses(
@@ -37,18 +37,15 @@ use super::path::ProfilePath;
 )]
 
 pub async fn get_profile(
-    Query(params): Query<AccountParams>,
+    Path(account_id): Path<String>,
+    Query(request_account_id): Query<Option<String>>,
     State(state): State<AppState>,
 ) -> AppJsonResult<AccountResponse> {
-    let AccountParams {
-        target,
-        request_account_id,
-    } = params;
-    if !valid_account_id(&target) {
+    if !valid_account_id(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
 
-    let identifier: Identifier = target.into();
+    let identifier: Identifier = account_id.into();
     let account = AccountController::new(state.postgres.clone())
         .get_account_with_mutual(&identifier, request_account_id)
         .await

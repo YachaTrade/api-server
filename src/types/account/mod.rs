@@ -39,7 +39,7 @@ pub struct AccountResponse {
 
 #[derive(Deserialize, ToSchema)]
 pub struct AccountParams {
-    pub target: String,
+    pub account_id: String,
     pub request_account_id: Option<String>,
 }
 
