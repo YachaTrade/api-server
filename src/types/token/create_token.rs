@@ -66,6 +66,7 @@ impl TokenCreatedController {
                     t.token_id,
                     t.symbol,
                     t.image_uri,
+                    t.name,
                     t.total_supply,
                     t.created_at,
                     t.creator,
@@ -82,6 +83,7 @@ impl TokenCreatedController {
                 token_id,
                 symbol,
                 image_uri,
+                name,
                 is_listing as "is_listing!",
                 created_at,
                 COALESCE(price, 0) as "price!",
@@ -106,6 +108,7 @@ impl TokenCreatedController {
             .map(|row| TokenCreated {
                 token: TokenInfo {
                     token_id: row.token_id,
+                    name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                 },

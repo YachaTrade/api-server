@@ -129,6 +129,7 @@ impl PNLController {
                     p.token_id,
                     t.symbol as token_symbol,
                     t.image_uri as token_image,
+                    t.name as token_name,
                     p.total_bought_native as total_cost,
                     p.realized_pnl,
                     CASE 
@@ -145,6 +146,7 @@ impl PNLController {
                 token_id,
                 token_symbol,
                 token_image,
+                token_name,
                 total_cost::numeric as "total_cost!: BigDecimal",
                 realized_pnl::numeric as "realized_pnl!: BigDecimal",
                 unrealized_pnl::numeric as "unrealized_pnl!: BigDecimal"
@@ -172,6 +174,7 @@ impl PNLController {
                     token_id: pos.token_id,
                     symbol: pos.token_symbol,
                     image_uri: pos.token_image,
+                    name: pos.token_name,
                 },
                 total_profit,
                 roi_percentage,

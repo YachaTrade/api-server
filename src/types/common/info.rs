@@ -5,6 +5,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TokenInfo {
     pub token_id: String,
+    pub name: String,
     pub symbol: String,
     pub image_uri: String,
 }

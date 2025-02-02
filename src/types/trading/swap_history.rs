@@ -69,6 +69,7 @@ impl SwapController {
                 s.token_id,
                 t.symbol as token_symbol,
                 t.image_uri as token_image,
+                t.name as token_name,
                 s.is_buy,
                 s.native_amount,
                 s.token_amount,
@@ -100,6 +101,7 @@ impl SwapController {
                 token: TokenInfo {
                     token_id: row.token_id,
                     symbol: row.token_symbol,
+                    name: row.token_name,
                     image_uri: row.token_image,
                 },
                 swap_id: row.swap_id,

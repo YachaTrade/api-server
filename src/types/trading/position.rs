@@ -90,6 +90,7 @@ impl PositionController {
                     p.created_at,
                     p.last_traded_at,
                     t.symbol as token_symbol,
+                    t.name as token_name,
                     t.image_uri as token_image,
                     COALESCE(m.price, 0) as token_price,
                     
@@ -113,6 +114,7 @@ impl PositionController {
                 token_symbol,
                 token_price as "token_price!",
                 token_image,
+                token_name,
                 total_bought_native,
                 total_bought_token,
                 current_token_amount,
@@ -146,6 +148,7 @@ impl PositionController {
                 token: TokenInfo {
                     token_id: row.token_id,
                     symbol: row.token_symbol,
+                    name: row.token_name,
                     image_uri: row.token_image,
                 },
                 token_price: row.token_price,
