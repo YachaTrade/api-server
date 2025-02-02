@@ -24,6 +24,7 @@ pub struct TokenCreated {
     pub total_supply: BigDecimal,   // token table total_supply
     pub price: BigDecimal,          // market table price
     pub current_amount: BigDecimal, //position table current_token_amount
+    pub description: String,
 }
 
 pub struct TokenCreatedController {
@@ -68,6 +69,7 @@ impl TokenCreatedController {
                     t.image_uri,
                     t.name,
                     t.total_supply,
+                    t.description,
                     t.created_at,
                     t.creator,
                     t.is_listing,
@@ -89,7 +91,8 @@ impl TokenCreatedController {
                 COALESCE(price, 0) as "price!",
                 total_supply as "total_supply!",
                 COALESCE(price * total_supply, 0) as "market_cap!",
-                COALESCE(current_amount, 0) as "current_amount!"
+                COALESCE(current_amount, 0) as "current_amount!",
+                description as "description!"
             FROM created_tokens
             ORDER BY current_value DESC
             LIMIT $2
@@ -118,6 +121,7 @@ impl TokenCreatedController {
                 total_supply: row.total_supply,
                 price: row.price,
                 current_amount: row.current_amount,
+                description: row.description,
             })
             .collect();
 
