@@ -21,7 +21,7 @@ use super::path::SearchPath;
 }))]
 pub struct SearchTokenQuery {
     #[schema(example = "latest_trade")]
-    pub order_type: Option<String>,
+    pub order_type: Option<TokenOrderType>,
     #[schema(example = 10)]
     pub limit: Option<i64>,
     #[schema(example = 0)]
@@ -34,7 +34,7 @@ pub struct SearchTokenQuery {
     path = SearchPath::Search.docs_str(),
     params(
         ("token" = String, Path, description = "Token name, symbol, or address to search for", example = "PUMP"),
-        ("order_type" = Option<String>, Query, description = "Order type for results (latest_trade, latest_reply, latest_create)", example = "latest_trade"),
+        ("order_type" = Option<TokenOrderType>, Query, description = "Order type for results (market_cap, creation_time, latest_trade)", example = "market_cap"),
         ("limit" = Option<i64>, Query, description = "Number of results to return", example = 10),
         ("offset" = Option<i64>, Query, description = "Number of results to skip", example = 0)
     ),
@@ -62,13 +62,13 @@ pub async fn search_token(
     }
 
     let order_controller = OrderController::new(state.postgres.clone());
-    let order_type = query.order_type.unwrap_or("latest_trade".to_string());
+    let sort_by = query.order_type.unwrap_or(TokenOrderType::MarketCap);
     let pagination = PaginationParams {
         page: query.offset.unwrap_or(1),
         limit: query.limit.unwrap_or(10),
     };
     let response = order_controller
-        .search_order_tokens(&token, order_type, pagination)
+        .search_order_tokens(&token, sort_by, pagination)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 
