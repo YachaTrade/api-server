@@ -16,16 +16,16 @@ use super::path::SearchPath;
 #[derive(Debug, Deserialize, ToSchema)]
 #[schema(example = json!({
     "order_type": "latest_trade",
-    "limit": 10,
-    "offset": 0
+    "page": 1,
+    "limit": 10
 }))]
 pub struct SearchTokenQuery {
     #[schema(example = "latest_trade")]
     pub order_type: Option<TokenOrderType>,
+    #[schema(example = 1)]
+    pub page: Option<i64>,
     #[schema(example = 10)]
     pub limit: Option<i64>,
-    #[schema(example = 0)]
-    pub offset: Option<i64>,
 }
 
 /// Search token by name, symbol, or token address
@@ -35,8 +35,8 @@ pub struct SearchTokenQuery {
     params(
         ("token" = String, Path, description = "Token name, symbol, or address to search for", example = "PUMP"),
         ("order_type" = Option<TokenOrderType>, Query, description = "Order type for results (market_cap, creation_time, latest_trade)", example = "market_cap"),
-        ("limit" = Option<i64>, Query, description = "Number of results to return", example = 10),
-        ("offset" = Option<i64>, Query, description = "Number of results to skip", example = 0)
+        ("page" = Option<i64>, Query, description = "Number of results to return", example = 1),
+        ("limit" = Option<i64>, Query, description = "Number of results to skip", example = 10)
     ),
     responses(
         (status = 200, description = "Search tokens successfully", body = SearchResponse),
@@ -64,7 +64,7 @@ pub async fn search_token(
     let order_controller = OrderController::new(state.postgres.clone());
     let sort_by = query.order_type.unwrap_or(TokenOrderType::MarketCap);
     let pagination = PaginationParams {
-        page: query.offset.unwrap_or(1),
+        page: query.page.unwrap_or(1),
         limit: query.limit.unwrap_or(10),
     };
     let response = order_controller
