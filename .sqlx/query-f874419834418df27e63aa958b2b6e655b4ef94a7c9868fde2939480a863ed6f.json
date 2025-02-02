@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH created_tokens AS (\n                SELECT \n                    t.token_id,\n                    t.symbol,\n                    t.image_uri,\n                    t.name,\n                    t.total_supply,\n                    t.description,\n                    t.created_at,\n                    t.creator,\n                    t.is_listing,\n                    COALESCE(m.price, 0) as price,\n                    COALESCE(p.current_token_amount, 0) as current_amount,\n                    COALESCE(m.price * p.current_token_amount, 0) as current_value\n                FROM token t\n                LEFT JOIN market m ON t.token_id = m.token_id\n                LEFT JOIN position p ON t.token_id = p.token_id AND p.account_id = $1\n                WHERE t.creator = $1\n            )\n            SELECT \n                token_id,\n                symbol,\n                image_uri,\n                name,\n                is_listing as \"is_listing!\",\n                created_at,\n                COALESCE(price, 0) as \"price!\",\n                total_supply as \"total_supply!\",\n                COALESCE(price * total_supply, 0) as \"market_cap!\",\n                COALESCE(current_amount, 0) as \"current_amount!\",\n                description as \"description!\"\n            FROM created_tokens\n            ORDER BY current_value DESC\n            LIMIT $2\n            OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_listing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "price!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_supply!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "market_cap!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "current_amount!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "description!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "f874419834418df27e63aa958b2b6e655b4ef94a7c9868fde2939480a863ed6f"
+}
