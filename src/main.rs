@@ -1,8 +1,7 @@
 use api_server::{
     cors::get_cors,
-    db,
     middleware::authenticate_user,
-    router::{self, account, auth,  chart, order, profile, search, thread, token},
+    router::{self, account, auth,  chart, order, profile, search, thread, token,follow},
     state::AppState,
     types,
 };
@@ -31,9 +30,7 @@ use clap::Parser;
         router::auth::handler::auth_nonce,
         router::auth::handler::auth_session,
         router::auth::handler::auth_delete_session,
-        
         router::account::handler::update_account,
-
         router::account::handler::get_account,
         router::profile::handler::get_profile,
         router::profile::handler::get_pnl,
@@ -52,7 +49,10 @@ use clap::Parser;
         router::order::handler::get_latest_trade_order,
         router::order::handler::get_reply_count_order,
         router::order::handler::get_latest_reply_order,
-        
+        router::follow::handler::add_follow,
+        router::follow::handler::remove_follow,
+        router::follow::handler::get_followers,
+        router::follow::handler::get_followings,
         
     ),
     components(
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
         .merge(chart::router())
         .merge(profile::router())
         .merge(order::router())
-        // .merge(mint_party::router(app_state.clone()))
+        .merge(follow::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()
