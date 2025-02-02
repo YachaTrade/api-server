@@ -34,6 +34,11 @@ pub struct Follow {
     pub account: AccountInfo,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CheckFollowResponse {
+    pub is_following: bool,
+}
+
 pub struct FollowController {
     db: Arc<PostgresDatabase>,
 }
@@ -177,6 +182,23 @@ impl FollowController {
 
         tx.commit().await?;
         Ok((follower, following))
+    }
+
+    pub async fn check_follow(&self, follower: String, following: String) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM follow 
+                WHERE follower_id = $1 AND following_id = $2
+            ) as exists
+            "#,
+            follower,
+            following
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?;
+
+        Ok(result.exists.unwrap_or(false))
     }
 
     async fn insert_follow(

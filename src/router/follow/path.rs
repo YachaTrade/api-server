@@ -1,6 +1,7 @@
 pub enum FollowPath {
     AddFollow,
     RemoveFollow,
+    CheckFollow,
     GetFollowers,
     GetFollowings,
 }
@@ -10,8 +11,9 @@ impl FollowPath {
         match self {
             FollowPath::AddFollow => "/follow/add",
             FollowPath::RemoveFollow => "/follow/remove",
-            FollowPath::GetFollowers => "/follow/:account_id/followers",
-            FollowPath::GetFollowings => "/follow/:account_id/followings",
+            FollowPath::CheckFollow => "/follow/check/:account_id",
+            FollowPath::GetFollowers => "/follow/followers/:account_id",
+            FollowPath::GetFollowings => "/follow/followings/:account_id",
         }
     }
 
@@ -19,8 +21,9 @@ impl FollowPath {
         match self {
             FollowPath::AddFollow => "/follow/add",
             FollowPath::RemoveFollow => "/follow/remove",
-            FollowPath::GetFollowers => "/follow/{account_id}/followers",
-            FollowPath::GetFollowings => "/follow/{account_id}/followings",
+            FollowPath::CheckFollow => "/follow/check/{account_id}",
+            FollowPath::GetFollowers => "/follow/followers/{account_id}",
+            FollowPath::GetFollowings => "/follow/followings/{account_id}",
         }
     }
 }

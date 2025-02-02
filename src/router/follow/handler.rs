@@ -12,6 +12,7 @@ use crate::{
         common::pagination::PaginationParams,
         social::follow::{
             FollowController, FollowsResponse, UpdateFollowRequest, UpdateFollowResponse,
+            CheckFollowResponse,
         },
     },
 };
@@ -24,9 +25,9 @@ use super::path::FollowPath;
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),
-    request_body = FollowRequest,
+    request_body = UpdateFollowRequest,
     responses(
-        (status = 200, description = "Follow added successfully", body = FollowResponse),
+        (status = 200, description = "Follow added successfully", body = UpdateFollowResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
@@ -73,9 +74,9 @@ pub async fn add_follow(
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),
-    request_body = RemoveFollowRequest,
+    request_body = UpdateFollowRequest,
     responses(
-        (status = 200, description = "Follow removed successfully", body = FollowResponse),
+        (status = 200, description = "Follow removed successfully", body = UpdateFollowResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
@@ -111,6 +112,40 @@ pub async fn remove_follow(
         follower: follower_account,
         following: following_account,
     }))
+}
+
+#[utoipa::path(
+    get,
+    path = FollowPath::CheckFollow.docs_str(),
+    params(
+        ("account_id" = String, Path, description = "Account ID to check follow status for"),
+        ("session" = String, Cookie, description = "Session token for authentication")
+    ),
+    responses(
+        (status = 200, description = "Follow status checked successfully", body = CheckFollowResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("session_token" = [])
+    ),
+    tag = "Follow"
+)]
+#[instrument(skip(state))]
+pub async fn check_follow(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Path(account_id): Path<String>,
+) -> AppJsonResult<CheckFollowResponse> {
+    let follow_controller = FollowController::new(state.postgres.clone());
+    
+    let is_following = follow_controller
+        .check_follow(session_address, account_id)
+        .await
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+
+    Ok(Json(CheckFollowResponse { is_following }))
 }
 
 /// Get followers with pagination
