@@ -2,7 +2,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::{
-        account::{AccountController, AccountParams, AccountResponse},
+        account::{AccountController, AccountResponse, RequestAccountIdParam},
         common::{identifier::Identifier, pagination::PaginationParams},
         token::create_token::{TokenCreatedController, TokenCreatedResponse},
         trading::{
@@ -38,7 +38,7 @@ use super::path::ProfilePath;
 
 pub async fn get_profile(
     Path(account_id): Path<String>,
-    Query(request_account_id): Query<Option<String>>,
+    Query(params): Query<RequestAccountIdParam>,
     State(state): State<AppState>,
 ) -> AppJsonResult<AccountResponse> {
     if !valid_account_id(&account_id) {
@@ -47,7 +47,7 @@ pub async fn get_profile(
 
     let identifier: Identifier = account_id.into();
     let account = AccountController::new(state.postgres.clone())
-        .get_account_with_mutual(&identifier, request_account_id)
+        .get_account_with_mutual(&identifier, params.request_account_id)
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
     Ok(Json(AccountResponse { account }))

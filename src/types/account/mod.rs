@@ -43,6 +43,11 @@ pub struct AccountParams {
     pub request_account_id: Option<String>,
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct RequestAccountIdParam {
+    pub request_account_id: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MutualFriend {
     pub account_id: String,
