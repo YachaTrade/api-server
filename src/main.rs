@@ -51,6 +51,7 @@ use clap::Parser;
         router::order::handler::get_latest_reply_order,
         router::follow::handler::add_follow,
         router::follow::handler::remove_follow,
+        router::follow::handler::check_follow,
         router::follow::handler::get_followers,
         router::follow::handler::get_followings,
         
@@ -111,12 +112,11 @@ use clap::Parser;
             types::social::thread::CreateThreadFormData,
             types::social::thread::ThreadRequest,
             types::social::thread::ThreadResponse,
-     
+            
         )
     ),
     tags(
         (name="Auth",description = "Authentication endpoints"),
-        
         (name="Account",description="Account management endpoints"),
         (name="Follow",description="Follow management endpoints"),
         (name="Thread",description="Thread management endpoints"),
