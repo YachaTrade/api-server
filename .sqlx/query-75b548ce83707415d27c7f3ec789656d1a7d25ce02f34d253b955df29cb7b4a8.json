@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                s.swap_id,\n                s.sender,\n                s.token_id,\n                t.symbol as token_symbol,\n                t.image_uri as token_image,\n                s.is_buy,\n                s.native_amount,\n                s.token_amount,\n                s.created_at,\n                s.transaction_hash\n            FROM swap s\n            JOIN token t ON s.token_id = t.token_id\n            WHERE s.sender = $1\n            ORDER BY s.created_at DESC\n            LIMIT $2\n            OFFSET $3\n            ",
+  "query": "\n            SELECT \n                s.swap_id,\n                s.sender,\n                s.token_id,\n                t.symbol as token_symbol,\n                t.image_uri as token_image,\n                t.name as token_name,\n                s.is_buy,\n                s.native_amount,\n                s.token_amount,\n                s.created_at,\n                s.transaction_hash\n            FROM swap s\n            JOIN token t ON s.token_id = t.token_id\n            WHERE s.sender = $1\n            ORDER BY s.created_at DESC\n            LIMIT $2\n            OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -30,26 +30,31 @@
       },
       {
         "ordinal": 5,
+        "name": "token_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
         "name": "is_buy",
         "type_info": "Bool"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "native_amount",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "token_amount",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Int8"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "transaction_hash",
         "type_info": "Varchar"
       }
@@ -71,8 +76,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "c57c499aeccf5e5093ee7e10835d591e3c3307a6a9b2a26dd02ee0f0a3a81329"
+  "hash": "75b548ce83707415d27c7f3ec789656d1a7d25ce02f34d253b955df29cb7b4a8"
 }
