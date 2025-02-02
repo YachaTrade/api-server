@@ -15,17 +15,17 @@ use super::path::SearchPath;
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[schema(example = json!({
-    "sort_by": "market_cap",
-    "page": 1,
-    "limit": 10
+    "order_type": "latest_trade",
+    "limit": 10,
+    "offset": 0
 }))]
 pub struct SearchTokenQuery {
-    #[schema(example = "market_cap")]
-    pub sort_by: Option<TokenOrderType>,
-    #[schema(example = 1)]
-    pub page: i64,
+    #[schema(example = "latest_trade")]
+    pub order_type: Option<String>,
     #[schema(example = 10)]
-    pub limit: i64,
+    pub limit: Option<i64>,
+    #[schema(example = 0)]
+    pub offset: Option<i64>,
 }
 
 /// Search token by name, symbol, or token address
@@ -34,11 +34,13 @@ pub struct SearchTokenQuery {
     path = SearchPath::Search.docs_str(),
     params(
         ("token" = String, Path, description = "Token name, symbol, or address to search for", example = "PUMP"),
-        ("sort_by" = Option<String>, Query, description = "Sort order for results (market_cap or creation_time)", example = "market_cap")
+        ("order_type" = Option<String>, Query, description = "Order type for results (latest_trade, latest_reply, latest_create)", example = "latest_trade"),
+        ("limit" = Option<i64>, Query, description = "Number of results to return", example = 10),
+        ("offset" = Option<i64>, Query, description = "Number of results to skip", example = 0)
     ),
     responses(
         (status = 200, description = "Search tokens successfully", body = SearchResponse),
-        (status = 400, description = "Bad request - Invalid sort_by parameter"),
+        (status = 400, description = "Bad request - Invalid parameters"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Search"
@@ -60,13 +62,13 @@ pub async fn search_token(
     }
 
     let order_controller = OrderController::new(state.postgres.clone());
-    let sort_by = query.sort_by.unwrap_or(TokenOrderType::MarketCap);
+    let order_type = query.order_type.unwrap_or("latest_trade".to_string());
     let pagination = PaginationParams {
-        page: query.page,
-        limit: query.limit,
+        page: query.offset.unwrap_or(1),
+        limit: query.limit.unwrap_or(10),
     };
     let response = order_controller
-        .search_order_tokens(&token, sort_by, pagination)
+        .search_order_tokens(&token, order_type, pagination)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 
