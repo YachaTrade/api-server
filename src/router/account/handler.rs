@@ -3,12 +3,12 @@ use axum::{
     Extension, Json, 
 };
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+
 use tracing::{info, instrument};
-use utoipa::ToSchema;
+
 
 use crate::{
-     result::{AppError, AppJsonResult}, state::AppState, types::account::{Account, AccountController, AccountResponse, UpdateAccountRequest}
+     result::{AppError, AppJsonResult}, state::AppState, types::account::{AccountController, AccountResponse, UpdateAccountRequest}
 
 };
 
@@ -134,9 +134,6 @@ pub async fn update_account(
 
     Ok(Json(AccountResponse { account: updated_account }))
 }
-
-
-
 
 
 /// Get account session check

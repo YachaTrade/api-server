@@ -12,10 +12,8 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use tower_cookies::cookie::time::Duration;
 use tower_cookies::Cookie;
 
-use serde::Deserialize;
-
 use tracing::{info, instrument};
-use utoipa::ToSchema;
+
 use uuid::Uuid;
 
 use crate::types::account::{Account, AccountController};
@@ -87,7 +85,6 @@ pub async fn auth_session(
         .recover_address_from_msg(nonce.clone())
         .map_err(|_| AppError::BadRequest("Invalid signature".to_string()))?
         .to_string();
-    info!("Recovered address = {:?}", address);
 
     let redis = state.redis.clone();
 
@@ -95,7 +92,7 @@ pub async fn auth_session(
         .get_nonce(&address)
         .await
         .map_err(|err| AppError::RedisError(err.to_string()))?;
-    info!("Session_nonce = {:?}", session_nonce);
+
     if nonce != session_nonce {
         AppError::Unauthorized("Invalid nonce".to_string());
     }
