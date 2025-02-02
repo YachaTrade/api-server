@@ -291,6 +291,21 @@ impl OrderController {
             TokenOrderType::LatestReply => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
+                    WITH ranked_threads AS (
+                        SELECT 
+                            token_id,
+                            created_at,
+                            ROW_NUMBER() OVER (PARTITION BY token_id ORDER BY created_at DESC) as rn
+                        FROM thread
+                    ),
+                    latest_threads AS (
+                        SELECT token_id, created_at
+                        FROM ranked_threads
+                        WHERE rn = 1
+                        ORDER BY created_at DESC
+                        LIMIT $1
+                        OFFSET $2
+                    )
                     SELECT 
                         t.token_id as token_id,
                         a.account_id as account_id,
@@ -308,16 +323,14 @@ impl OrderController {
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
-                        th.created_at::FLOAT8 as score
-                    FROM token t
+                        lt.created_at::FLOAT8 as score
+                    FROM latest_threads lt
+                    JOIN token t ON lt.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
-                    JOIN thread th ON t.token_id = th.token_id  
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY score DESC
-                    LIMIT $1
-                    OFFSET $2
+                    ORDER BY lt.created_at DESC
                     "#,
                 )
                 .bind(pagination.limit)
