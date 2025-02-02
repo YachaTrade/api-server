@@ -106,6 +106,9 @@ use clap::Parser;
             types::social::follow::UpdateFollowResponse,
             types::social::follow::FollowsResponse,
             types::social::follow::FollowResponse,
+            types::social::follow::CheckFollowResponse,
+        
+            // Thread
             types::social::thread::Thread,
             types::social::thread::ThreadLike,
             types::social::thread::CreateThreadRequest,
