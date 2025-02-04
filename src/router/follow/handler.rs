@@ -69,7 +69,7 @@ pub async fn add_follow(
 }
 
 #[utoipa::path(
-    put,
+    delete,
     path = FollowPath::RemoveFollow.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
