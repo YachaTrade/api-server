@@ -11,8 +11,8 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         social::follow::{
-            FollowController, FollowsResponse, UpdateFollowRequest, UpdateFollowResponse,
-            CheckFollowResponse,
+            CheckFollowResponse, FollowController, FollowsResponse, UpdateFollowRequest,
+            UpdateFollowResponse,
         },
     },
 };
@@ -139,9 +139,9 @@ pub async fn check_follow(
     Path(account_id): Path<String>,
 ) -> AppJsonResult<CheckFollowResponse> {
     let follow_controller = FollowController::new(state.postgres.clone());
-    
+
     let is_following = follow_controller
-        .check_follow(session_address, account_id)
+        .check_follow(account_id, session_address)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
 

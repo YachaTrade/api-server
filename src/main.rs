@@ -190,7 +190,7 @@ async fn main() -> Result<()> {
         .merge(chart::router())
         .merge(profile::router())
         .merge(order::router())
-        .merge(follow::router())
+        .merge(follow::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()
