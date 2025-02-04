@@ -32,11 +32,6 @@
         "ordinal": 5,
         "name": "following_count",
         "type_info": "Int4"
-      },
-      {
-        "ordinal": 6,
-        "name": "x_handle",
-        "type_info": "Varchar"
       }
     ],
     "parameters": {
@@ -50,7 +45,6 @@
       ]
     },
     "nullable": [
-      false,
       false,
       false,
       false,
