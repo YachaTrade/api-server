@@ -1,6 +1,8 @@
 pub enum AccountPath {
     UpdateAccount,
     GetAccount,
+    ConnectX,
+    DisconnectX,
 }
 
 impl AccountPath {
@@ -8,12 +10,16 @@ impl AccountPath {
         match self {
             AccountPath::UpdateAccount => "/account/update",
             AccountPath::GetAccount => "/account/get_account",
+            AccountPath::ConnectX => "/account/connect_x",
+            AccountPath::DisconnectX => "/account/disconnect_x",
         }
     }
     pub fn docs_str(&self) -> &'static str {
         match self {
             AccountPath::UpdateAccount => "/account/update",
             AccountPath::GetAccount => "/account/get_account",
+            AccountPath::ConnectX => "/account/connect_x",
+            AccountPath::DisconnectX => "/account/disconnect_x",
         }
     }
 }

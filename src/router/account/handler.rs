@@ -4,11 +4,11 @@ use axum::{
 };
 use bytes::Bytes;
 
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 
 use crate::{
-     result::{AppError, AppJsonResult}, state::AppState, types::account::{AccountController, AccountResponse, UpdateAccountRequest}
+     result::{AppError, AppJsonResult}, state::AppState, types::account::{x::{AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest, DisconnectedXAccountResponse}, AccountController, AccountResponse, UpdateAccountRequest}
 
 };
 
@@ -52,8 +52,6 @@ pub async fn update_account(
     Extension(session_address): Extension<String>,
     mut multipart: Multipart,
 ) -> AppJsonResult<AccountResponse> {
-    info!("Updating account for user: {}", session_address);
-
     // 필드 파싱을 위한 헬퍼 함수
     async fn parse_field(field: axum::extract::multipart::Field<'_>) -> Result<(String, Option<String>, Option<(Bytes, String)>), AppError> {
         let name = field.name().unwrap_or("").to_string();
@@ -89,7 +87,8 @@ pub async fn update_account(
             "data" if text_data.is_some() => {
                 form_data = Some(serde_json::from_str::<UpdateAccountRequest>(
                     &text_data.unwrap()
-                ).map_err(|e| AppError::BadRequest(e.to_string()))?);
+                ).map_err(|e| 
+                    AppError::BadRequest(e.to_string()))?);
             },
             "image" if file_data.is_some() => {
                 image_info = file_data;
@@ -101,6 +100,7 @@ pub async fn update_account(
     // 요청 데이터 검증
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing account data".into()))?;
     if form_data.nickname.is_none() && form_data.bio.is_none() && image_info.is_none() {
+        warn!("update account Error: At least one of nickName, bio, or image must be provided");
         return Err(AppError::BadRequest("At least one of nickName, bio, or image must be provided".into()));
     }
 
@@ -115,7 +115,10 @@ pub async fn update_account(
         Some(state.s3_client
             .upload_profile_image_file(&session_address, image_data, content_type)
             .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?)
+            .map_err(|e| {
+                warn!("upload profile image Error {:?}", e);
+                AppError::InternalError(e.to_string())
+            })?)
     } else {
         None
     };
@@ -130,7 +133,10 @@ pub async fn update_account(
             clean_text(form_data.bio)
         )
         .await
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+        .map_err(|e| {
+            warn!("update account Error {:?}", e);
+            AppError::BadRequest(e.to_string())
+        })?;
 
     Ok(Json(AccountResponse { account: updated_account }))
 }
@@ -157,19 +163,88 @@ pub async fn update_account(
 #[instrument(skip(state, session_address))]
 pub async fn get_account(
     State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
+    Extension(session_address): Extension<String>
 ) -> AppJsonResult<AccountResponse> {
-    info!("Get account for account: {}", session_address);
     let account_controller = AccountController::new(state.postgres.clone());
     let account = account_controller
         .get_account(&session_address)
         .await
         .map_err(|err| {
-            info!("get account Error {:?}", err);
+            warn!("get account Error {:?}", err);
             AppError::BadRequest(err.to_string())
         })?;
 
     Ok(Json(AccountResponse {
         account,
     }))
+}
+
+
+
+// Account Connect X
+#[utoipa::path(
+    put,
+    path = AccountPath::ConnectX.docs_str(),
+    request_body = ConnectXRequest,
+    responses(
+        (status = 200, description = "Get account successfully", body = AccountResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("session_token" = [])
+    ),
+    tag="Account"
+)]
+pub async fn connect_x(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Json(payload): Json<ConnectXRequest>
+)->AppJsonResult<ConnectedXAccountResponse>{
+
+  
+    payload.validate()?;
+    let account_x_controller = AccountXController::new(state.postgres.clone());
+    let response = account_x_controller
+        .connect_x(&session_address, payload)
+        .await
+        .map_err(|err| {
+            warn!("connect x account Error {:?}", err);
+            AppError::BadRequest(err.to_string())
+        })?;
+    Ok(Json(response))
+}
+
+// Account Disconnect X
+#[utoipa::path(
+    delete,
+    path = AccountPath::DisconnectX.docs_str(),
+    request_body = DisconnectXRequest,
+    responses(
+        (status = 200, description = "Get account successfully", body = AccountResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("session_token" = [])
+    ),
+    tag="Account"
+)]
+pub async fn disconnect_x(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Json(payload): Json<DisconnectXRequest>
+)->AppJsonResult<DisconnectedXAccountResponse>{
+    let DisconnectXRequest{x_handle} = payload;
+    let account_x_controller = AccountXController::new(state.postgres.clone());
+    let response = account_x_controller
+        .disconnect_x(session_address, x_handle)
+        .await
+        .map_err(|err| {
+            warn!("disconnect x account Error {:?}", err);
+            AppError::BadRequest(err.to_string())
+        })?;
+    Ok(Json(response))
 }

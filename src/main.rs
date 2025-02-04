@@ -32,6 +32,8 @@ use clap::Parser;
         router::auth::handler::auth_delete_session,
         router::account::handler::update_account,
         router::account::handler::get_account,
+        router::account::handler::connect_x,
+        router::account::handler::disconnect_x,
         router::profile::handler::get_profile,
         router::profile::handler::get_pnl,
         router::profile::handler::get_position,
@@ -53,8 +55,7 @@ use clap::Parser;
         router::follow::handler::remove_follow,
         router::follow::handler::check_follow,
         router::follow::handler::get_followers,
-        router::follow::handler::get_followings,
-        
+        router::follow::handler::get_followings,  
     ),
     components(
         schemas(
@@ -76,7 +77,11 @@ use clap::Parser;
             types::account::UpdateAccountFormData,
             types::account::Mutual,
             types::account::MutualFriend,
-            
+            types::account::x::ConnectXRequest,
+            types::account::x::ConnectedXAccountResponse,
+            types::account::x::DisconnectXRequest,
+            types::account::x::DisconnectedXAccountResponse,
+
             // Token
             types::token::Token,
             types::token::TokenResponse,
