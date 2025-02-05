@@ -62,6 +62,9 @@ use clap::Parser;
             // Common
             types::common::info::TokenInfo,
             types::common::info::AccountInfo,
+            types::common::info::MarketInfo,
+            types::common::info::PositionInfo,
+            types::common::info::PositionTokenInfo,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
             // Auth
