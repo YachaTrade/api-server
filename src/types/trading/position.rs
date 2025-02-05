@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     db::postgres::PostgresDatabase,
-    types::common::{info::TokenInfo, pagination::PaginationParams},
+    types::common::{
+        info::{MarketInfo, PositionInfo, PositionTokenInfo, TokenInfo},
+        pagination::PaginationParams,
+    },
 };
 use anyhow::Result;
 use bigdecimal::BigDecimal;
@@ -14,29 +17,12 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Position {
     /// Token information
-    pub token: TokenInfo,
-    /// Current token price
-    pub token_price: BigDecimal,
+    pub token: PositionTokenInfo,
+
     /// Unique position identifier
-    pub position_id: i64,
-    /// Total amount spent in native currency for buying
-    pub total_bought_native: BigDecimal,
-    /// Total amount of tokens bought
-    pub total_bought_token: BigDecimal,
-    /// Current token amount held
-    pub current_token_amount: BigDecimal,
-    /// Current value in native currency (price * current_token_amount)
-    pub current_value: BigDecimal,
-    /// Realized profit/loss
-    pub realized_pnl: BigDecimal,
-    /// Unrealized profit/loss
-    pub unrealized_pnl: BigDecimal,
-    /// Total profit/loss (realized + unrealized)
-    pub total_pnl: BigDecimal,
-    /// Position creation timestamp
-    pub created_at: i64,
-    /// Last trade timestamp
-    pub last_traded_at: i64,
+    pub position: PositionInfo,
+
+    pub market: MarketInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -92,6 +78,14 @@ impl PositionController {
                     t.symbol as token_symbol,
                     t.name as token_name,
                     t.image_uri as token_image,
+                    t.created_at as token_created_at,
+                    t.total_supply as token_total_supply,
+                    m.market_id as token_market_id,
+                    m.market_type as token_market_type,
+                    m.virtual_token as token_virtual_token,
+                    m.virtual_native as token_virtual_native,
+                    m.reserve_token as token_reserve_token,
+                    m.reserve_native as token_reserve_native,
                     COALESCE(m.price, 0) as token_price,
                     
                     -- Calculate unrealized_pnl
@@ -104,7 +98,7 @@ impl PositionController {
                     , 0) as unrealized_pnl
                 FROM position p
                 JOIN token t ON p.token_id = t.token_id
-                LEFT JOIN market m ON p.token_id = m.token_id
+                JOIN market m ON p.token_id = m.token_id
                 WHERE p.account_id = $1
                 AND p.current_token_amount > 0
             )
@@ -113,7 +107,7 @@ impl PositionController {
                 token_id,
                 token_symbol,
                 token_price as "token_price!",
-                token_image,
+                token_image, 
                 token_name,
                 total_bought_native,
                 total_bought_token,
@@ -123,7 +117,15 @@ impl PositionController {
                 unrealized_pnl as "unrealized_pnl!",
                 (realized_pnl + unrealized_pnl) as "total_pnl!",
                 created_at,
-                last_traded_at
+                last_traded_at,
+                token_created_at,
+                token_total_supply,
+                token_market_id,
+                token_market_type,
+                token_virtual_token as "token_virtual_token!",
+                token_virtual_native as "token_virtual_native!",
+                token_reserve_token as "token_reserve_token!",
+                token_reserve_native as "token_reserve_native!"
             FROM position_data
             ORDER BY (realized_pnl + unrealized_pnl) DESC
             LIMIT $2
@@ -145,23 +147,35 @@ impl PositionController {
         let positions = positions
             .into_iter()
             .map(|row| Position {
-                token: TokenInfo {
+                token: PositionTokenInfo {
                     token_id: row.token_id,
                     symbol: row.token_symbol,
                     name: row.token_name,
                     image_uri: row.token_image,
+                    created_at: row.token_created_at,
+                    total_supply: row.token_total_supply,
                 },
-                token_price: row.token_price,
-                position_id: row.position_id,
-                total_bought_native: row.total_bought_native,
-                total_bought_token: row.total_bought_token,
-                current_token_amount: row.current_token_amount,
-                current_value: row.current_value,
-                realized_pnl: row.realized_pnl,
-                unrealized_pnl: row.unrealized_pnl,
-                total_pnl: row.total_pnl,
-                created_at: row.created_at,
-                last_traded_at: row.last_traded_at,
+                position: PositionInfo {
+                    position_id: row.position_id,
+                    total_bought_native: row.total_bought_native,
+                    total_bought_token: row.total_bought_token,
+                    current_token_amount: row.current_token_amount,
+                    current_value: row.current_value,
+                    realized_pnl: row.realized_pnl,
+                    unrealized_pnl: row.unrealized_pnl,
+                    total_pnl: row.total_pnl,
+                    created_at: row.created_at,
+                    last_traded_at: row.last_traded_at,
+                },
+                market: MarketInfo {
+                    market_id: row.token_market_id,
+                    market_type: row.token_market_type,
+                    virtual_token: row.token_virtual_token,
+                    virtual_native: row.token_virtual_native,
+                    reserve_token: row.token_reserve_token,
+                    reserve_native: row.token_reserve_native,
+                    price: row.token_price,
+                },
             })
             .collect();
 
