@@ -1,45 +1,31 @@
 use axum::extract::{Path, Query};
 use axum::{extract::State, Json};
-use serde::{Deserialize, Serialize};
-use tracing::{instrument, warn};
-use utoipa::ToSchema;
+use serde::Deserialize;
 
-use crate::db::postgres::controller::order::OrderController;
+use tracing::{instrument, warn};
+
+use utoipa::{schema, ToSchema};
 
 use crate::result::{AppError, AppJsonResult};
 use crate::state::AppState;
-use crate::types::order::TokenOrderType;
-use crate::types::response::SearchResponse;
+use crate::types::common::pagination::PaginationParams;
+use crate::types::token::order::{OrderController, SearchResponse, TokenOrderType};
 
 use super::path::SearchPath;
-#[derive(Debug, Serialize, ToSchema)]
+
+#[derive(Debug, Deserialize, ToSchema)]
 #[schema(example = json!({
-    "tokens": [{
-        "token_info": {
-            "token_id": "PUMP_TOKEN_001",
-            "name": "NAD Fun Token",
-            "symbol": "PUMP",
-            "image_uri": "token_image_uri",
-            "description": "this is a description.",
-            "reply_count": "128",
-            "price": "1250000",
-            "reserve_token": "1000000",
-            "created_at": 1703400000,
-            "market_type": "DEX",
-            "is_king": true,
-            "score": 128.0
-        },
-        "account_info": {
-            "account_id": "0xaasdfasdfasdfas",
-            "nickname": "master",
-            "image_uri": "https://storage.googleapis.com/nads-profiles/user_01.png"
-        }
-    }]
+    "order_type": "latest_trade",
+    "page": 1,
+    "limit": 10
 }))]
-#[derive(Deserialize)]
 pub struct SearchTokenQuery {
-    #[schema(example = "market_cap")]
-    pub sort_by: Option<TokenOrderType>,
+    #[schema(example = "latest_trade")]
+    pub order_type: Option<TokenOrderType>,
+    #[schema(example = 1)]
+    pub page: Option<i64>,
+    #[schema(example = 10)]
+    pub limit: Option<i64>,
 }
 
 /// Search token by name, symbol, or token address
@@ -48,14 +34,16 @@ pub struct SearchTokenQuery {
     path = SearchPath::Search.docs_str(),
     params(
         ("token" = String, Path, description = "Token name, symbol, or address to search for", example = "PUMP"),
-        ("sort_by" = Option<String>, Query, description = "Sort order for results (market_cap or creation_time)", example = "market_cap")
+        ("order_type" = Option<TokenOrderType>, Query, description = "Order type for results (market_cap, creation_time, latest_trade)", example = "market_cap"),
+        ("page" = Option<i64>, Query, description = "Number of results to return", example = 1),
+        ("limit" = Option<i64>, Query, description = "Number of results to skip", example = 10)
     ),
     responses(
         (status = 200, description = "Search tokens successfully", body = SearchResponse),
-        (status = 400, description = "Bad request - Invalid sort_by parameter"),
+        (status = 400, description = "Bad request - Invalid parameters"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Search Token"
+    tag = "Search"
 )]
 #[instrument(skip(state))]
 pub async fn search_token(
@@ -63,19 +51,26 @@ pub async fn search_token(
     State(state): State<AppState>,
     Query(query): Query<SearchTokenQuery>,
 ) -> AppJsonResult<SearchResponse> {
+    if token.is_empty() {
+        warn!("Empty token search query");
+        return Err(AppError::BadRequest("Empty token search query".to_string()));
+    }
+
     // 캐시된 결과 확인
     if let Ok(cached_response) = state.redis.get_search_response(&token).await {
         return Ok(Json(cached_response));
     }
 
     let order_controller = OrderController::new(state.postgres.clone());
-    let sort_by = query.sort_by.unwrap_or(TokenOrderType::MarketCap);
-    let tokens = order_controller
-        .search_order_tokens(&token, sort_by)
+    let sort_by = query.order_type.unwrap_or(TokenOrderType::MarketCap);
+    let pagination = PaginationParams {
+        page: query.page.unwrap_or(1),
+        limit: query.limit.unwrap_or(10),
+    };
+    let response = order_controller
+        .search_order_tokens(&token, sort_by, pagination)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
-
-    let response = SearchResponse { tokens };
 
     // 결과를 캐시에 저장
     if let Err(err) = state.redis.set_search_response(&token, &response).await {

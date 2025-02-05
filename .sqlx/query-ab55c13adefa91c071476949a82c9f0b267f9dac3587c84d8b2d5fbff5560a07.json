@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE account\n            SET following_count = following_count + 1\n            WHERE account_id = $1\n            RETURNING account_id, nickname, image_uri, follower_count, following_count\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "nickname",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "follower_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "following_count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ab55c13adefa91c071476949a82c9f0b267f9dac3587c84d8b2d5fbff5560a07"
+}

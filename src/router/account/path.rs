@@ -1,17 +1,25 @@
-pub enum Path {
+pub enum AccountPath {
     UpdateAccount,
-    AddAccountLike,
-    RemoveAccountLike,
     GetAccount,
+    ConnectX,
+    DisconnectX,
 }
 
-impl Path {
+impl AccountPath {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Path::UpdateAccount => "/account/update",
-            Path::AddAccountLike => "/account/like",
-            Path::RemoveAccountLike => "/account/unlike",
-            Path::GetAccount => "/account/get_account",
+            AccountPath::UpdateAccount => "/account/update",
+            AccountPath::GetAccount => "/account/get_account",
+            AccountPath::ConnectX => "/account/connect_x",
+            AccountPath::DisconnectX => "/account/disconnect_x",
+        }
+    }
+    pub fn docs_str(&self) -> &'static str {
+        match self {
+            AccountPath::UpdateAccount => "/account/update",
+            AccountPath::GetAccount => "/account/get_account",
+            AccountPath::ConnectX => "/account/connect_x",
+            AccountPath::DisconnectX => "/account/disconnect_x",
         }
     }
 }

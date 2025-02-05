@@ -2,22 +2,16 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use serde::Serialize;
 
 use tracing::info;
-use utoipa::ToSchema;
 
 use super::path::TokenPath;
 use crate::{
-    db::postgres::{controller::token::TokenController, model::Token},
     result::{AppError, AppJsonResult},
     state::AppState,
+    types::token::{TokenController, TokenResponse},
 };
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct TokenResponse {
-    token: Token,
-}
 /// Get token metadata
 #[utoipa::path(
     get,
