@@ -1,5 +1,3 @@
-pub mod controller;
-pub mod model;
 use std::{env, time::Duration};
 
 #[derive(Debug)]

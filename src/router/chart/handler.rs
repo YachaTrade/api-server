@@ -1,34 +1,17 @@
 use crate::{
-    db::postgres::{
-        controller::chart::ChartController,
-        model::{Chart, ChartInterval},
-    },
     result::{AppError, AppJsonResult},
     state::AppState,
+    types::trading::chart::{ChartController, ChartInterval, ChartQuery, ChartResponse},
 };
 
 use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
-use utoipa::ToSchema;
+
+use tracing::instrument;
 
 use super::path::ChartPath;
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ChartResponse {
-    pub data: Vec<Chart>,
-    pub token_id: String,
-    pub interval: String,
-    pub pagenation: i64,
-}
-#[derive(Deserialize, ToSchema)]
-pub struct ChartQuery {
-    interval: String,
-    pagination: Option<i64>,
-}
 
 ///Get Chart data
 #[utoipa::path(
@@ -52,7 +35,6 @@ pub async fn get_chart(
     Path(token): Path<String>,
     Query(query): Query<ChartQuery>,
 ) -> AppJsonResult<ChartResponse> {
-    info!("Chart request for token: {}", token);
     let chart_interval = ChartInterval::from_str(&query.interval)
         .map_err(|err| AppError::BadRequest(format!("Invalid chart interval: {}", err)))?;
 
@@ -60,15 +42,10 @@ pub async fn get_chart(
 
     let chart_controller = ChartController::new(state.postgres.clone());
 
-    let chart = chart_controller
+    let chart_response = chart_controller
         .get_chart(&token, chart_interval, pagenation)
         .await
         .map_err(|err| AppError::InternalError(format!("Failed to get chart: {}", err)))?;
-    let chart_response = ChartResponse {
-        data: chart,
-        token_id: token,
-        interval: chart_interval.to_str().to_string(),
-        pagenation,
-    };
+
     Ok(Json(chart_response))
 }

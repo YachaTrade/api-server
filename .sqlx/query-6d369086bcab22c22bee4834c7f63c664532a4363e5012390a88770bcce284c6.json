@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(COUNT(*), 0)::bigint as count\n            FROM token t\n            WHERE \n                LOWER(t.token_id) LIKE $1\n                OR LOWER(t.name) LIKE $1 \n                OR LOWER(t.symbol) LIKE $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6d369086bcab22c22bee4834c7f63c664532a4363e5012390a88770bcce284c6"
+}
