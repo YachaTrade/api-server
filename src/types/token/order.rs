@@ -5,6 +5,7 @@ use crate::{
     types::common::{info::AccountInfo, pagination::PaginationParams},
 };
 use anyhow::{anyhow, Result};
+use bigdecimal::BigDecimal;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -42,7 +43,7 @@ pub struct OrderTokenInfo {
     pub description: String,
     pub reply_count: String,
     pub price: String, //market.price
-    pub reserve_token: String,
+    pub reserve_token: BigDecimal,
     pub created_at: i64,
     pub market_type: String,
     pub is_king: bool,
@@ -62,7 +63,7 @@ pub struct OrderTokenRaw {
     pub description: Option<String>,
     pub reply_count: String,
     pub price: String,
-    pub reserve_token: String,
+    pub reserve_token: BigDecimal,
     pub is_king: bool,
     pub market_type: String,
     pub created_at: i64,
@@ -146,7 +147,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -197,7 +198,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -232,7 +233,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -268,7 +269,7 @@ impl OrderController {
                     t.description,
                     COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                     COALESCE(m.price::TEXT, '0') as price,
-                    COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                    COALESCE(m.reserve_token, '0') as reserve_token,
                     COALESCE(k.token_id IS NOT NULL, false) as is_king,
                     m.market_type,
                     t.created_at as created_at,
@@ -319,7 +320,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -394,7 +395,7 @@ impl OrderController {
                 t.description,
                 COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                 COALESCE(m.price::TEXT, '0') as price,
-                COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                COALESCE(m.reserve_token, '0') as reserve_token,
                 COALESCE(k.token_id IS NOT NULL, false) as is_king,
                 m.market_type,
                 t.created_at,
