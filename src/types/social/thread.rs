@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{db::postgres::PostgresDatabase, types::common::pagination::PaginationParams};
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Thread {
     pub thread_id: i32,
     pub token_id: String,
@@ -22,27 +22,33 @@ pub struct Thread {
     pub image_uri: Option<String>,
 }
 
-impl Thread {
-    pub fn new(
-        token_id: String,
-        account_id: String,
-        content: String,
-        root_id: Option<i32>,
-    ) -> Self {
-        let timestamp = chrono::Utc::now().timestamp();
-        Self {
-            thread_id: 0,
-            token_id,
-            account_id,
-            content,
-            created_at: timestamp,
-            root_id,
-            likes_count: 0,
-            reply_count: 0,
-            image_uri: None,
-        }
-    }
+// impl Thread {
+//     pub fn new(
+//         token_id: String,
+//         account_id: String,
+//         content: String,
+//         root_id: Option<i32>,
+//     ) -> Self {
+//         let timestamp = chrono::Utc::now().timestamp();
+//         Self {
+//             thread_id: 0,
+//             token_id,
+//             account_id,
+//             content,
+//             created_at: timestamp,
+//             root_id,
+//             likes_count: 0,
+//             reply_count: 0,
+//             image_uri: None,
+//         }
+//     }
+// }
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ThreadsResponse {
+    pub threads: Vec<Thread>,
+    pub total_count: i64,
 }
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
 pub struct ThreadLike {
     #[serde(skip_serializing)]
@@ -174,16 +180,65 @@ impl ThreadController {
         Ok(result.last_id.unwrap_or(0))
     }
 
-    pub async fn get_thread(&self, thread_id: i32) -> Result<Thread> {
-        sqlx::query_as!(
+    pub async fn get_threads_by_token(
+        &self,
+        token_id: &str,
+        pagination: PaginationParams,
+    ) -> Result<ThreadsResponse> {
+        let offset = (pagination.page - 1) * pagination.limit;
+        let threads = sqlx::query_as!(
             Thread,
-            "SELECT * FROM thread WHERE thread_id = $1",
-            thread_id
+            r#"
+                SELECT *
+                FROM thread
+                WHERE token_id = $1
+                ORDER BY created_at DESC
+                LIMIT $2
+                OFFSET $3
+            "#,
+            token_id,
+            pagination.limit,
+            offset
+        )
+        .fetch_all(self.db.get_read_pool())
+        .await
+        .context("Failed to fetch threads")?;
+
+        let total_count = self.get_threads_count(token_id).await?;
+
+        Ok(ThreadsResponse {
+            threads,
+            total_count,
+        })
+    }
+
+    pub async fn get_threads_count(&self, token_id: &str) -> Result<i64> {
+        let result = sqlx::query!(
+            r#"
+            SELECT COALESCE(COUNT(*)::bigint, 0) as count
+            FROM thread
+            WHERE token_id = $1
+            "#,
+            token_id
         )
         .fetch_one(self.db.get_read_pool())
         .await
-        .map_err(|e| anyhow!("Failed to fetch thread: {}", e))
+        .context("Failed to fetch threads count")?
+        .count
+        .unwrap_or(0);
+        Ok(result)
     }
+
+    // pub async fn get_thread(&self, thread_id: i32) -> Result<Thread> {
+    //     sqlx::query_as!(
+    //         Thread,
+    //         "SELECT * FROM thread WHERE thread_id = $1",
+    //         thread_id
+    //     )
+    //     .fetch_one(self.db.get_read_pool())
+    //     .await
+    //     .map_err(|e| anyhow!("Failed to fetch thread: {}", e))
+    // }
 
     pub async fn like_thread(
         &self,
