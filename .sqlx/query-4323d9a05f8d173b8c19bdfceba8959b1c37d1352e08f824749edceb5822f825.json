@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                s.swap_id,\n                s.token_id,\n                s.is_buy,\n                s.native_amount,\n                s.token_amount,\n                s.created_at,\n                s.transaction_hash,\n                a.account_id,\n                a.nickname as account_nickname,\n                a.image_uri as account_image,\n                a.follower_count,\n                a.following_count\n            FROM swap s\n            JOIN account a ON s.sender = a.account_id\n            WHERE s.token_id = $1\n            ORDER BY s.created_at DESC\n            LIMIT $2\n            OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "swap_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_buy",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "native_amount",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "token_amount",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "transaction_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "account_nickname",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "account_image",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "follower_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "following_count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4323d9a05f8d173b8c19bdfceba8959b1c37d1352e08f824749edceb5822f825"
+}
