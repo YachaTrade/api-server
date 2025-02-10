@@ -53,8 +53,6 @@ use clap::Parser;
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
-        router::order::handler::get_reply_count_order,
-        router::order::handler::get_latest_reply_order,
         router::follow::handler::add_follow,
         router::follow::handler::remove_follow,
         router::follow::handler::check_follow,
