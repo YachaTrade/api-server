@@ -216,7 +216,7 @@ impl OrderController {
             TokenOrderType::MarketCap => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
-                    SELECT DISTINCT ON (m.token_id)
+                   SELECT 
                         t.token_id as token_id,
                         a.account_id as account_id,
                         a.nickname,
