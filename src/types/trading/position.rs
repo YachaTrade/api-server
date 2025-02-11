@@ -113,8 +113,8 @@ impl PositionController {
                 FROM position p
                 JOIN token t ON p.token_id = t.token_id
                 JOIN market m ON p.token_id = m.token_id
-                WHERE p.account_id = $1
-                AND p.current_token_amount > 0
+                WHERE p.account_id = $1 AND
+                p.is_active = true
             )
             SELECT 
                 position_id,
