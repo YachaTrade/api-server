@@ -111,7 +111,7 @@ impl PositionController {
                                   m.virtual_native 
                                   - (
                                       ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + p.current_token_amount) - 1
+                                        + (m.virtual_token + p.current_token_amount)
                                       )
                                       / (m.virtual_token + p.current_token_amount)
                                     )
@@ -142,7 +142,7 @@ impl PositionController {
                        ELSE token_virtual_native 
                             - (
                                 ((token_virtual_token * token_virtual_native) 
-                                 + (token_virtual_token + current_token_amount) - 1)
+                                 + (token_virtual_token + current_token_amount) )
                                 / (token_virtual_token + current_token_amount)
                               )
                     END,
