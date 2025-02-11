@@ -102,19 +102,28 @@ impl PositionController {
                     m.reserve_native as token_reserve_native,
                     COALESCE(m.price, 0) as token_price,
                     
-                    -- Calculate unrealized_pnl
+                    -- Calculate unrealized_pnl using AMM 공식
                     COALESCE(
                         CASE 
                             WHEN p.current_token_amount = 0 THEN 0
-                            ELSE (COALESCE(m.price, 0) * p.current_token_amount) - 
-                                (p.total_bought_native * p.current_token_amount / p.total_bought_token)
+                            ELSE 
+                                (
+                                  m.virtual_native 
+                                  - (
+                                      ((m.virtual_token * m.virtual_native) 
+                                        + (m.virtual_token + p.current_token_amount) - 1
+                                      )
+                                      / (m.virtual_token + p.current_token_amount)
+                                    )
+                                )
+                                - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
                         END
-                    , 0) as unrealized_pnl
+                    , 0) AS unrealized_pnl
                 FROM position p
                 JOIN token t ON p.token_id = t.token_id
                 JOIN market m ON p.token_id = m.token_id
-                WHERE p.account_id = $1 AND
-                p.is_active = true
+                WHERE p.account_id = $1 
+                  AND p.is_active = true
             )
             SELECT 
                 position_id,
@@ -126,7 +135,18 @@ impl PositionController {
                 total_bought_native,
                 total_bought_token,
                 current_token_amount,
-                COALESCE((token_price * current_token_amount), 0) as "current_value!",
+                -- 변경된 current_value 계산: AMM 공식을 적용하여 native 산출량 기준으로 평가
+                COALESCE(
+                    CASE 
+                       WHEN current_token_amount = 0 THEN 0
+                       ELSE token_virtual_native 
+                            - (
+                                ((token_virtual_token * token_virtual_native) 
+                                 + (token_virtual_token + current_token_amount) - 1)
+                                / (token_virtual_token + current_token_amount)
+                              )
+                    END,
+                0) AS "current_value!",
                 realized_pnl,
                 unrealized_pnl as "unrealized_pnl!",
                 (realized_pnl + unrealized_pnl) as "total_pnl!",
