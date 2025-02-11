@@ -385,7 +385,7 @@ impl OrderController {
                 t.description,
                 COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                 COALESCE(m.price::TEXT, '0') as price,
-                COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                COALESCE(m.reserve_token, '0') as reserve_token,
                 COALESCE(lk.token_id IS NOT NULL, false) as is_king,
                 lk.created_at as is_king_created_at,
                 m.market_type,
