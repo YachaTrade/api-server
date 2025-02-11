@@ -195,9 +195,7 @@ async fn main() -> Result<()> {
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
-        .merge(thread::router().layer(ServiceBuilder::new().layer(
-            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
-        )))
+        .merge(thread::router(app_state.clone()))
         .merge(token::router())
         .merge(search::router())
         .merge(trade::router())
