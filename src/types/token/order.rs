@@ -205,7 +205,7 @@ impl OrderController {
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY ls.created_at DESC
+                    ORDER BY score DESC
                     "#,
                 )
                 .bind(pagination.limit)
@@ -239,7 +239,7 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY m.token_id, score DESC
+                    ORDER BY score DESC
                     LIMIT $1
                     OFFSET $2
                     "#,
