@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.thread_id, t.token_id, \n                   jsonb_build_object(\n                       'account_id', a.account_id,\n                       'nickname', a.nickname,\n                       'image_uri', a.image_uri,\n                       'follower_count', 0,\n                       'following_count', 0\n                   )::jsonb as \"account_id!: AccountInfo\",\n                   t.content, t.created_at, t.root_id,\n                   COALESCE(COUNT(DISTINCT tl.thread_like_id), 0)::int as \"likes_count!\",\n                   COALESCE(COUNT(DISTINCT tr.thread_id), 0)::int as \"reply_count!\",\n                   t.image_uri\n            FROM thread t\n            LEFT JOIN account a ON t.account_id = a.account_id\n            LEFT JOIN thread_likes tl ON t.thread_id = tl.thread_id\n            LEFT JOIN thread tr ON t.thread_id = tr.root_id\n            WHERE t.thread_id = $1\n            GROUP BY t.thread_id, t.token_id, t.account_id, a.account_id, a.nickname, a.image_uri,\n                     t.content, t.created_at, t.root_id, t.image_uri\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "account_id!: AccountInfo",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "root_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "likes_count!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "reply_count!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      false,
+      true,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "1b88a5965b48da9abd91c3ea6919f583561ebd0ed2f20d41fcd46bc11733d68c"
+}
