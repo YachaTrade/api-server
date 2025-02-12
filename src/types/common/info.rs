@@ -11,14 +11,32 @@ pub struct TokenInfo {
     pub image_uri: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AccountInfo {
     pub account_id: String,
     pub nickname: String,
     pub image_uri: String,
+    #[serde(default)]
     pub follower_count: i32,
+    #[serde(default)]
     pub following_count: i32,
 }
+
+impl<'r> sqlx::decode::Decode<'r, sqlx::Postgres> for AccountInfo {
+    fn decode(
+        value: sqlx::postgres::PgValueRef<'r>,
+    ) -> Result<Self, Box<dyn std::error::Error + 'static + Send + Sync>> {
+        let value = <sqlx::types::Json<Self> as sqlx::decode::Decode<sqlx::Postgres>>::decode(value)?;
+        Ok(value.0)
+    }
+}
+
+impl sqlx::Type<sqlx::Postgres> for AccountInfo {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        sqlx::postgres::PgTypeInfo::with_name("JSONB")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct PositionTokenInfo {
     pub token_id: String,
@@ -39,6 +57,7 @@ pub struct MarketInfo {
     pub reserve_native: BigDecimal,
     pub price: BigDecimal,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct PositionInfo {
     pub position_id: i64,
