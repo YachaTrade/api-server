@@ -104,21 +104,30 @@ impl PositionController {
                     
                     -- Calculate unrealized_pnl using AMM 공식
                     COALESCE(
-                        CASE 
-                            WHEN p.current_token_amount = 0 THEN 0
-                            ELSE 
-                                (
-                                  m.virtual_native 
-                                  - (
-                                      ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + p.current_token_amount)
-                                      )
-                                      / (m.virtual_token + p.current_token_amount)
-                                    )
+                    CASE 
+                        WHEN p.current_token_amount = 0 THEN 0
+                        WHEN m.market_type = 'CURVE' THEN
+                            (
+                            m.virtual_native 
+                            - (
+                                ((m.virtual_token * m.virtual_native) 
+                                + (m.virtual_token + p.current_token_amount))
+                                / (m.virtual_token + p.current_token_amount)
                                 )
-                                - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
-                        END
-                    , 0) AS unrealized_pnl
+                            )
+                            - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
+                        WHEN m.market_type = 'DEX' THEN
+                            (
+                            m.reserve_native 
+                            - (
+                                (m.reserve_token * m.reserve_native)
+                                / (m.reserve_token + p.current_token_amount)
+                                )
+                            )
+                            - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
+                        ELSE 0
+                    END,
+                0) AS unrealized_pnl
                 FROM position p
                 JOIN token t ON p.token_id = t.token_id
                 JOIN market m ON p.token_id = m.token_id
@@ -136,15 +145,23 @@ impl PositionController {
                 total_bought_token,
                 current_token_amount,
                 -- 변경된 current_value 계산: AMM 공식을 적용하여 native 산출량 기준으로 평가
-                COALESCE(
+               COALESCE(
                     CASE 
-                       WHEN current_token_amount = 0 THEN 0
-                       ELSE token_virtual_native 
-                            - (
-                                ((token_virtual_token * token_virtual_native) 
-                                 + (token_virtual_token + current_token_amount) )
-                                / (token_virtual_token + current_token_amount)
-                              )
+                    WHEN current_token_amount = 0 THEN 0
+                    WHEN token_market_type = 'CURVE' THEN
+                        token_virtual_native 
+                        - (
+                            ((token_virtual_token * token_virtual_native) 
+                                + (token_virtual_token + current_token_amount) - 1)
+                            / (token_virtual_token + current_token_amount)
+                            )
+                    WHEN token_market_type = 'DEX' THEN
+                        token_reserve_native 
+                        - (
+                            (token_reserve_token * token_reserve_native)
+                            / (token_reserve_token + current_token_amount)
+                            )
+                    ELSE 0
                     END,
                 0) AS "current_value!",
                 realized_pnl,
