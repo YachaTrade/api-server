@@ -155,32 +155,26 @@ impl PNLController {
                     t.name as token_name,
                     p.total_bought_native as total_cost,
                     p.realized_pnl,
-                    COALESCE(
-                            CASE 
-                                WHEN p.current_token_amount = 0 THEN 0
-                                WHEN m.market_type = 'CURVE' THEN
-                                    (
-                                        m.virtual_native 
-                                        - (
-                                            ((m.virtual_token * m.virtual_native) 
-                                            + (m.virtual_token + p.current_token_amount))
-                                            / (m.virtual_token + p.current_token_amount)
-                                        )
-                                    )
-                                    - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
-                                WHEN m.market_type = 'DEX' THEN
-                                    (
-                                        m.reserve_native 
-                                        - (
-                                            (m.reserve_token * m.reserve_native)
-                                            + (m.reserve_token + p.current_token_amount)
-                                            / (m.reserve_token + p.current_token_amount)
-                                        )
-                                    )
-                                    - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
-                                ELSE 0
-                            END,
-                        0) AS unrealized_pnl
+                     COALESCE(
+                    CASE 
+                        WHEN p.current_token_amount = 0 THEN 0
+                        WHEN m.market_type = 'CURVE' THEN
+                            m.virtual_native 
+                            - (
+                                ((m.virtual_token * m.virtual_native) 
+                                + (m.virtual_token + p.current_token_amount) - 1)
+                                / (m.virtual_token + p.current_token_amount)
+                            )
+                        WHEN m.market_type = 'DEX' THEN
+                            m.reserve_native 
+                            - (
+                                ((m.reserve_token * m.reserve_native)
+                                + (m.reserve_token + p.current_token_amount) - 1)
+                                / (m.reserve_token + p.current_token_amount)
+                            )
+                        ELSE 0
+                    END,
+                    0) AS unrealized_pnl
                 FROM position p
                 JOIN token t ON p.token_id = t.token_id
                 JOIN market m ON p.token_id = m.token_id
