@@ -102,6 +102,7 @@ impl PositionController {
         //         ELSE 0
         //     END,
         // 0) AS unrealized_pnl
+
         let record = sqlx::query!(
             r#"
             WITH position_data AS (
@@ -139,12 +140,11 @@ impl PositionController {
                                 / (m.virtual_token + p.current_token_amount)
                             )
                         WHEN m.market_type = 'DEX' THEN
-                            m.reserve_native 
-                            - (
-                                ((m.reserve_token * m.reserve_native)
-                                + (m.reserve_token + p.current_token_amount) - 1)
-                                / (m.reserve_token + p.current_token_amount)
-                            )
+                          m.reserve_native 
+- (
+    (m.reserve_token * m.reserve_native)
+    / (m.reserve_token + p.current_token_amount)
+)
                         ELSE 0
                     END,
                     0) AS unrealized_pnl
