@@ -1,0 +1,156 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH position_data AS (\n                SELECT \n                    p.position_id,\n                    p.token_id,\n                    p.total_bought_native,\n                    p.total_bought_token,\n                    p.current_token_amount,\n                    p.realized_pnl,\n                    p.created_at,\n                    p.last_traded_at,\n                    t.symbol as token_symbol,\n                    t.name as token_name,\n                    t.image_uri as token_image,\n                    t.created_at as token_created_at,\n                    t.total_supply as token_total_supply,\n                    m.market_id as token_market_id,\n                    m.market_type as token_market_type,\n                    m.virtual_token as token_virtual_token,\n                    m.virtual_native as token_virtual_native,\n                    m.reserve_token as token_reserve_token,\n                    m.reserve_native as token_reserve_native,\n                    COALESCE(m.price, 0) as token_price,\n                    \n                    -- Calculate unrealized_pnl using AMM 공식\n                    COALESCE(\n                    CASE \n                        WHEN p.current_token_amount = 0 THEN 0\n                        WHEN m.market_type = 'CURVE' THEN\n                            (\n                            m.virtual_native \n                            - (\n                                ((m.virtual_token * m.virtual_native) \n                                + (m.virtual_token + p.current_token_amount))\n                                / (m.virtual_token + p.current_token_amount)\n                                )\n                            )\n                            - (p.total_bought_native * p.current_token_amount / p.total_bought_token)\n                        WHEN m.market_type = 'DEX' THEN\n                            (\n                            m.reserve_native \n                            - (\n                                    ((m.reserve_token * m.reserve_native)\n                                    + (m.reserve_token + p.current_token_amount))\n                                        / (m.reserve_token + p.current_token_amount)\n                                    )\n                            )\n                            - (p.total_bought_native * p.current_token_amount / p.total_bought_token)\n                        ELSE 0\n                    END,\n                0) AS unrealized_pnl\n                FROM position p\n                JOIN token t ON p.token_id = t.token_id\n                JOIN market m ON p.token_id = m.token_id\n                WHERE p.account_id = $1 \n                  AND p.is_active = true\n            )\n            SELECT \n                position_id,\n                token_id,\n                token_symbol,\n                token_price as \"token_price!\",\n                token_image, \n                token_name,\n                total_bought_native,\n                total_bought_token,\n                current_token_amount,\n                -- 변경된 current_value 계산: AMM 공식을 적용하여 native 산출량 기준으로 평가\n               COALESCE(\n                    CASE \n                    WHEN current_token_amount = 0 THEN 0\n                    WHEN token_market_type = 'CURVE' THEN\n                        token_virtual_native \n                        - (\n                            ((token_virtual_token * token_virtual_native) \n                                + (token_virtual_token + current_token_amount) - 1)\n                            / (token_virtual_token + current_token_amount)\n                            )\n                    WHEN token_market_type = 'DEX' THEN\n                        token_reserve_native \n                        - (\n                            ((token_reserve_token * token_reserve_native)\n                            + (token_reserve_token + current_token_amount))\n                            / (token_reserve_token + current_token_amount)\n                            )\n                    ELSE 0\n                    END,\n                0) AS \"current_value!\",\n                realized_pnl,\n                unrealized_pnl as \"unrealized_pnl!\",\n                (realized_pnl + unrealized_pnl) as \"total_pnl!\",\n                created_at,\n                last_traded_at,\n                token_created_at,\n                token_total_supply,\n                token_market_id,\n                token_market_type,\n                token_virtual_token as \"token_virtual_token!\",\n                token_virtual_native as \"token_virtual_native!\",\n                token_reserve_token as \"token_reserve_token!\",\n                token_reserve_native as \"token_reserve_native!\"\n            FROM position_data\n            ORDER BY (realized_pnl + unrealized_pnl) DESC\n            LIMIT $2\n            OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_price!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "token_image",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "token_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_bought_native",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_bought_token",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "current_token_amount",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "current_value!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "realized_pnl",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "unrealized_pnl!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "total_pnl!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 14,
+        "name": "last_traded_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "token_created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 16,
+        "name": "token_total_supply",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 17,
+        "name": "token_market_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 18,
+        "name": "token_market_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 19,
+        "name": "token_virtual_token!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 20,
+        "name": "token_virtual_native!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 21,
+        "name": "token_reserve_token!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 22,
+        "name": "token_reserve_native!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "036170e54dc485ac705f35f5eaec0680a1f8bcfc635a7256e842297949b3a3cd"
+}
