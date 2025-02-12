@@ -120,9 +120,10 @@ impl PositionController {
                             (
                             m.reserve_native 
                             - (
-                                (m.reserve_token * m.reserve_native)
-                                / (m.reserve_token + p.current_token_amount)
-                                )
+                                    ((m.reserve_token * m.reserve_native)
+                                    + (m.reserve_token + p.current_token_amount))
+                                        / (m.reserve_token + p.current_token_amount)
+                                    )
                             )
                             - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
                         ELSE 0
@@ -158,7 +159,8 @@ impl PositionController {
                     WHEN token_market_type = 'DEX' THEN
                         token_reserve_native 
                         - (
-                            (token_reserve_token * token_reserve_native)
+                            ((token_reserve_token * token_reserve_native)
+                            + (token_reserve_token + current_token_amount))
                             / (token_reserve_token + current_token_amount)
                             )
                     ELSE 0

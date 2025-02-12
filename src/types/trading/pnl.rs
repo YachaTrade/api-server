@@ -96,7 +96,8 @@ impl PNLController {
                                     (
                                         m.reserve_native 
                                         - (
-                                            (m.reserve_token * m.reserve_native)
+                                            ((m.reserve_token * m.reserve_native)
+                                            + (m.reserve_token + p.current_token_amount))
                                             / (m.reserve_token + p.current_token_amount)
                                         )
                                     )
@@ -172,6 +173,7 @@ impl PNLController {
                                         m.reserve_native 
                                         - (
                                             (m.reserve_token * m.reserve_native)
+                                            + (m.reserve_token + p.current_token_amount)
                                             / (m.reserve_token + p.current_token_amount)
                                         )
                                     )
