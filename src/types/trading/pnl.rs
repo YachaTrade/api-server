@@ -90,12 +90,7 @@ impl PNLController {
                                         / (m.virtual_token + p.current_token_amount)
                                     )
                                 WHEN m.market_type = 'DEX' THEN
-                                    m.reserve_native 
-                                    - (
-                                        ((m.reserve_token * m.reserve_native)
-                                        + (m.reserve_token + p.current_token_amount) - 1)
-                                        / (m.reserve_token + p.current_token_amount)
-                                    )
+                                    m.price * p.current_token_amount
                                 ELSE 0
                             END,
                             0) 
@@ -159,13 +154,8 @@ impl PNLController {
                                 + (m.virtual_token + p.current_token_amount) - 1)
                                 / (m.virtual_token + p.current_token_amount)
                             )
-                        WHEN m.market_type = 'DEX' THEN
-                            m.reserve_native 
-                            - (
-                                ((m.reserve_token * m.reserve_native)
-                                + (m.reserve_token + p.current_token_amount) - 1)
-                                / (m.reserve_token + p.current_token_amount)
-                            )
+                         WHEN m.market_type = 'DEX' THEN
+                            m.price * p.current_token_amount
                         ELSE 0
                     END,
                     0) AS unrealized_pnl
