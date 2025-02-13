@@ -16,7 +16,7 @@ use crate::{
 pub struct Thread {
     pub thread_id: i32,
     pub token_id: String,
-    pub account_id: AccountInfo,
+    pub account_info: AccountInfo,
     pub content: String,
     pub created_at: i64,
     pub root_id: Option<i32>,
@@ -27,7 +27,7 @@ pub struct Thread {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ThreadsResponse {
-    pub threads: Vec<Thread>,
+    pub thread: Vec<Thread>,
     pub total_count: i64,
 }
 
@@ -111,7 +111,7 @@ impl ThreadController {
                        'image_uri', a.image_uri,
                        'follower_count', 0,
                        'following_count', 0
-                   )::jsonb as "account_id!: AccountInfo",
+                   )::jsonb as "account_info!: AccountInfo",
                    t.content, t.created_at, t.root_id,
                    t.likes_count as "likes_count!",
                    t.reply_count as "reply_count!",
@@ -153,7 +153,7 @@ impl ThreadController {
         pagination: PaginationParams,
     ) -> Result<ThreadsResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        let threads = sqlx::query_as!(
+        let thread = sqlx::query_as!(
             Thread,
             r#"
             SELECT t.thread_id, t.token_id, 
@@ -163,7 +163,7 @@ impl ThreadController {
                        'image_uri', a.image_uri,
                        'follower_count', 0,
                        'following_count', 0
-                   )::jsonb as "account_id!: AccountInfo",
+                   )::jsonb as "account_info!: AccountInfo",
                    t.content, t.created_at, t.root_id,
                    0 as "likes_count!",
                    COALESCE(COUNT(tr.thread_id)::int, 0) as "reply_count!",
@@ -188,7 +188,7 @@ impl ThreadController {
         let total_count = self.get_threads_count(token_id).await?;
 
         Ok(ThreadsResponse {
-            threads,
+            thread,
             total_count,
         })
     }
@@ -206,7 +206,7 @@ impl ThreadController {
         .await
         .context("Failed to fetch threads count")?
         .count
-        .expect("Count should always be present due to COALESCE");
+        .unwrap_or(0);
         Ok(result)
     }
 
@@ -247,7 +247,7 @@ impl ThreadController {
                        'image_uri', a.image_uri,
                        'follower_count', 0,
                        'following_count', 0
-                   )::jsonb as "account_id!: AccountInfo",
+                   )::jsonb as "account_info!: AccountInfo",
                    t.content, t.created_at, t.root_id,
                    COALESCE(COUNT(DISTINCT tl.thread_like_id), 0)::int as "likes_count!",
                    COALESCE(COUNT(DISTINCT tr.thread_id), 0)::int as "reply_count!",
@@ -307,7 +307,7 @@ impl ThreadController {
                        'image_uri', a.image_uri,
                        'follower_count', 0,
                        'following_count', 0
-                   )::jsonb as "account_id!: AccountInfo",
+                   )::jsonb as "account_info!: AccountInfo",
                    t.content, t.created_at, t.root_id,
                    COALESCE(COUNT(DISTINCT tl.thread_like_id), 0)::int as "likes_count!",
                    COALESCE(COUNT(DISTINCT tr.thread_id), 0)::int as "reply_count!",
