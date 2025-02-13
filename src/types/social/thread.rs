@@ -194,22 +194,22 @@ impl ThreadController {
     }
 
     pub async fn get_threads_count(&self, token_id: &str) -> Result<i64> {
-        let result = sqlx::query!(
+        let result = sqlx::query_scalar!(
             r#"
-            SELECT COALESCE(count, 0) as count
+            SELECT COALESCE(count, 0)::bigint
             FROM thread_count
             WHERE token_id = $1
             "#,
             token_id
         )
         .fetch_one(self.db.get_read_pool())
-        .await
-        .context("Failed to fetch threads count")?
-        .count
-        .unwrap_or(0);
-        Ok(result)
-    }
+        .await;
 
+        Ok(match result {
+            Ok(count) => count.unwrap_or(0),
+            Err(_) => 0,
+        })
+    }
     pub async fn like_thread(
         &self,
         thread_id: i32,
