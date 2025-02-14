@@ -45,14 +45,13 @@ pub struct TokenHolderResponse {
     pub total_count: i64,
 }
 
-#[derive(Debug, Deserialize)]
-
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "UPPERCASE")] // 또는 "UPPERCASE"
 pub enum PositionType {
     All,
     Open,
     Close,
 }
-
 impl Default for PositionType {
     fn default() -> Self {
         Self::All
@@ -65,19 +64,6 @@ impl ToString for PositionType {
             Self::All => "ALL".to_string(),
             Self::Open => "OPEN".to_string(),
             Self::Close => "CLOSE".to_string(),
-        }
-    }
-}
-
-impl TryFrom<String> for PositionType {
-    type Error = String;
-
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        match s.to_uppercase().as_str() {
-            "OPEN" => Ok(Self::Open),
-            "CLOSE" => Ok(Self::Close),
-            "ALL" => Ok(Self::All),
-            _ => Err(format!("Invalid position type: {}", s)),
         }
     }
 }

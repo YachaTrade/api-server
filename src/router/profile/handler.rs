@@ -90,7 +90,7 @@ pub async fn get_pnl(
         ("account_id" = String, Path, description = "Account ID to get positions for"),
         ("page" = i64, Query, description = "Page number (starts from 1)"),
         ("limit" = i64, Query, description = "Number of items per page"),
-        ("position_type" = String, Query, description = "Type of position to get (all, open, close)")
+        ("position_type" = String, Query, description = "Type of position to get (ALL, OPEN, CLOSE)")
     ),
     responses(
         (status = 200, description = "Successfully retrieved positions", body = PositionResponse),
@@ -102,14 +102,13 @@ pub async fn get_pnl(
 pub async fn get_position(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
-    Query(position_type): Query<String>,
+    Query(position_type): Query<PositionType>,
     State(state): State<AppState>,
 ) -> AppJsonResult<PositionResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-    let position_type =
-        PositionType::try_from(position_type).map_err(|e| AppError::BadRequest(e.to_string()))?;
+
     let position_controller = PositionController::new(state.postgres.clone());
     let response = position_controller
         .get_positions(&account_id, pagination, position_type)
