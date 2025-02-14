@@ -3,8 +3,9 @@
 scripts/
 logs/
 
-Cargo.lock
+
 
 migration/
 
 railway/
+migrations.*

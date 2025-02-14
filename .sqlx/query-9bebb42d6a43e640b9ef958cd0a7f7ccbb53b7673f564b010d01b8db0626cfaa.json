@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM thread_likes\n            WHERE thread_id = $1 AND account_id = $2 AND token_id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bebb42d6a43e640b9ef958cd0a7f7ccbb53b7673f564b010d01b8db0626cfaa"
+}

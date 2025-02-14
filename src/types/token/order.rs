@@ -5,6 +5,7 @@ use crate::{
     types::common::{info::AccountInfo, pagination::PaginationParams},
 };
 use anyhow::{anyhow, Result};
+use bigdecimal::BigDecimal;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -17,8 +18,6 @@ pub enum TokenOrderType {
     MarketCap,    // price * reserve_token
     CreationTime, // created_at
     LatestTrade,  //
-    ReplyCount,
-    LatestReply,
 }
 
 impl TokenOrderType {
@@ -27,8 +26,6 @@ impl TokenOrderType {
             TokenOrderType::MarketCap => "market_cap",
             TokenOrderType::CreationTime => "creation_time",
             TokenOrderType::LatestTrade => "latest_trade",
-            TokenOrderType::ReplyCount => "reply_count",
-            TokenOrderType::LatestReply => "latest_reply",
         }
     }
 }
@@ -42,7 +39,7 @@ pub struct OrderTokenInfo {
     pub description: String,
     pub reply_count: String,
     pub price: String, //market.price
-    pub reserve_token: String,
+    pub reserve_token: BigDecimal,
     pub created_at: i64,
     pub market_type: String,
     pub is_king: bool,
@@ -62,7 +59,7 @@ pub struct OrderTokenRaw {
     pub description: Option<String>,
     pub reply_count: String,
     pub price: String,
-    pub reserve_token: String,
+    pub reserve_token: BigDecimal,
     pub is_king: bool,
     pub market_type: String,
     pub created_at: i64,
@@ -146,7 +143,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -197,7 +194,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -208,7 +205,7 @@ impl OrderController {
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY ls.created_at DESC
+                    ORDER BY score DESC
                     "#,
                 )
                 .bind(pagination.limit)
@@ -219,7 +216,7 @@ impl OrderController {
             TokenOrderType::MarketCap => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
-                    SELECT DISTINCT ON (m.token_id)
+                   SELECT 
                         t.token_id as token_id,
                         a.account_id as account_id,
                         a.nickname,
@@ -232,7 +229,7 @@ impl OrderController {
                         t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         m.market_type,
                         t.created_at as created_at,
@@ -242,95 +239,9 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY m.token_id, score DESC
+                    ORDER BY score DESC
                     LIMIT $1
                     OFFSET $2
-                    "#,
-                )
-                .bind(pagination.limit)
-                .bind(offset)
-                .fetch_all(&*self.db.get_read_pool())
-                .await?
-            }
-            TokenOrderType::ReplyCount => {
-                sqlx::query_as::<_, OrderTokenRaw>(
-                    r#"
-                SELECT 
-                    t.token_id as token_id,
-                    a.account_id as account_id,
-                    a.nickname,
-                    a.image_uri as account_image_uri,
-                    a.follower_count as follower_count,
-                    a.following_count as following_count,
-                    t.name,
-                    t.symbol,
-                    t.image_uri as token_image_uri,
-                    t.description,
-                    COALESCE(trc.reply_count::TEXT, '0') as reply_count,
-                    COALESCE(m.price::TEXT, '0') as price,
-                    COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
-                    COALESCE(k.token_id IS NOT NULL, false) as is_king,
-                    m.market_type,
-                    t.created_at as created_at,
-                    COALESCE(trc.reply_count::FLOAT8, 0) as score
-                FROM token t
-                JOIN account a ON t.creator = a.account_id
-                LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
-                LEFT JOIN market m ON t.token_id = m.token_id
-                LEFT JOIN king k ON t.token_id = k.token_id
-                ORDER BY score DESC NULLS LAST
-                LIMIT $1
-                OFFSET $2
-                    "#,
-                )
-                .bind(pagination.limit)
-                .bind(offset)
-                .fetch_all(&*self.db.get_read_pool())
-                .await?
-            }
-            TokenOrderType::LatestReply => {
-                sqlx::query_as::<_, OrderTokenRaw>(
-                    r#"
-                    WITH ranked_threads AS (
-                        SELECT 
-                            token_id,
-                            created_at,
-                            ROW_NUMBER() OVER (PARTITION BY token_id ORDER BY created_at DESC) as rn
-                        FROM thread
-                    ),
-                    latest_threads AS (
-                        SELECT token_id, created_at
-                        FROM ranked_threads
-                        WHERE rn = 1
-                        ORDER BY created_at DESC
-                        LIMIT $1
-                        OFFSET $2
-                    )
-                    SELECT 
-                        t.token_id as token_id,
-                        a.account_id as account_id,
-                        a.nickname,
-                        a.image_uri as account_image_uri,
-                        a.follower_count as follower_count,
-                        a.following_count as following_count,
-                        t.name,
-                        t.symbol,
-                        t.image_uri as token_image_uri,
-                        t.description,
-                        COALESCE(trc.reply_count::TEXT, '0') as reply_count,
-                        COALESCE(m.price::TEXT, '0') as price,
-                        COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
-                        COALESCE(k.token_id IS NOT NULL, false) as is_king,
-                        m.market_type,
-                        t.created_at as created_at,
-                        lt.created_at::FLOAT8 as score
-                    FROM latest_threads lt
-                    JOIN token t ON lt.token_id = t.token_id
-                    JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
-                    LEFT JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY lt.created_at DESC
                     "#,
                 )
                 .bind(pagination.limit)
@@ -357,8 +268,6 @@ impl OrderController {
             TokenOrderType::MarketCap => "m.price DESC NULLS LAST",
             TokenOrderType::CreationTime => "t.created_at DESC",
             TokenOrderType::LatestTrade => "m.price DESC NULLS LAST", //unused default marketcap
-            TokenOrderType::ReplyCount => "m.price DESC NULLS LAST",  //unused default marketcap
-            TokenOrderType::LatestReply => "m.price DESC NULLS LAST", //unused default marketcap
         };
 
         // Get total count first
@@ -394,7 +303,7 @@ impl OrderController {
                 t.description,
                 COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                 COALESCE(m.price::TEXT, '0') as price,
-                COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                COALESCE(m.reserve_token, '0') as reserve_token,
                 COALESCE(k.token_id IS NOT NULL, false) as is_king,
                 m.market_type,
                 t.created_at,
@@ -476,7 +385,7 @@ impl OrderController {
                 t.description,
                 COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                 COALESCE(m.price::TEXT, '0') as price,
-                COALESCE(m.reserve_token::TEXT, '0') as reserve_token,
+                COALESCE(m.reserve_token, '0') as reserve_token,
                 COALESCE(lk.token_id IS NOT NULL, false) as is_king,
                 lk.created_at as is_king_created_at,
                 m.market_type,

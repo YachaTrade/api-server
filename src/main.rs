@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth,  chart, order, profile, search, thread, token,follow},
+    router::{self, account, auth, follow, order, profile, search, thread, token, trade},
     state::AppState,
     types,
 };
@@ -43,14 +43,16 @@ use clap::Parser;
         router::thread::handler::create_thread,
         router::thread::handler::like_thread,
         router::thread::handler::unlike_thread,
+        router::thread::handler::get_threads_by_token,
         router::thread::handler::get_thread_like_by_account,
         router::token::handler::get_token,
-        router::chart::handler::get_chart,
+        router::trade::handler::get_swap_history,
+        router::trade::handler::get_holder,
+        router::trade::handler::get_market,
+        router::trade::handler::get_chart,
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
-        router::order::handler::get_reply_count_order,
-        router::order::handler::get_latest_reply_order,
         router::follow::handler::add_follow,
         router::follow::handler::remove_follow,
         router::follow::handler::check_follow,
@@ -62,6 +64,9 @@ use clap::Parser;
             // Common
             types::common::info::TokenInfo,
             types::common::info::AccountInfo,
+            types::common::info::MarketInfo,
+            types::common::info::PositionInfo,
+            types::common::info::PositionTokenInfo,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
             // Auth
@@ -83,7 +88,7 @@ use clap::Parser;
             types::account::x::DisconnectedXAccountResponse,
 
             // Token
-            types::token::Token,
+            types::token::TokenWithAccountInfo,
             types::token::TokenResponse,
             types::token::create_token::TokenCreated,
             types::token::create_token::TokenCreatedResponse,
@@ -101,8 +106,13 @@ use clap::Parser;
             types::trading::pnl::BestTrade,
             types::trading::position::Position,
             types::trading::position::PositionResponse,
-            types::trading::swap_history::Swap,
-            types::trading::swap_history::SwapResponse,
+            types::trading::position::TokenHolder,
+            types::trading::position::TokenHolderResponse,
+            types::trading::swap_history::PositionSwap,
+            types::trading::swap_history::PositionSwapResponse,
+            types::trading::swap_history::TokenSwap,
+            types::trading::swap_history::TokenSwapResponse,
+            types::trading::market::Market,
 
             // Social
             types::social::follow::Follow,
@@ -120,7 +130,7 @@ use clap::Parser;
             types::social::thread::CreateThreadFormData,
             types::social::thread::ThreadRequest,
             types::social::thread::ThreadResponse,
-            
+            types::social::thread::ThreadsResponse,
         )
     ),
     tags(
@@ -131,9 +141,7 @@ use clap::Parser;
         (name="Token",description="Token management endpoints"),
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
-        (name="Chart",description="Chart endpoints"),
         (name="Order",description="Order endpoints"),
-        
     ),
     security(
         ("session_cookie" = [])
@@ -187,12 +195,10 @@ async fn main() -> Result<()> {
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
-        .merge(thread::router().layer(ServiceBuilder::new().layer(
-            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
-        )))
+        .merge(thread::router(app_state.clone()))
         .merge(token::router())
         .merge(search::router())
-        .merge(chart::router())
+        .merge(trade::router())
         .merge(profile::router())
         .merge(order::router())
         .merge(follow::router(app_state.clone()))

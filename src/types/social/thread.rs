@@ -7,13 +7,16 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{
+    db::postgres::PostgresDatabase,
+    types::common::{info::AccountInfo, pagination::PaginationParams},
+};
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Thread {
     pub thread_id: i32,
     pub token_id: String,
-    pub account_id: String,
+    pub account_info: AccountInfo,
     pub content: String,
     pub created_at: i64,
     pub root_id: Option<i32>,
@@ -22,27 +25,12 @@ pub struct Thread {
     pub image_uri: Option<String>,
 }
 
-impl Thread {
-    pub fn new(
-        token_id: String,
-        account_id: String,
-        content: String,
-        root_id: Option<i32>,
-    ) -> Self {
-        let timestamp = chrono::Utc::now().timestamp();
-        Self {
-            thread_id: 0,
-            token_id,
-            account_id,
-            content,
-            created_at: timestamp,
-            root_id,
-            likes_count: 0,
-            reply_count: 0,
-            image_uri: None,
-        }
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ThreadsResponse {
+    pub thread: Vec<Thread>,
+    pub total_count: i64,
 }
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow, ToSchema)]
 pub struct ThreadLike {
     #[serde(skip_serializing)]
@@ -103,60 +91,45 @@ impl ThreadController {
         root_id: Option<i32>,
         image_uri: Option<String>,
     ) -> Result<Thread> {
-        let mut tx = self
-            .db
-            .get_write_pool()
-            .begin()
-            .await
-            .context("Failed to begin transaction")?;
-
-        sqlx::query!(
-            r#"
-                INSERT INTO token_reply_count (token_id, reply_count)
-                VALUES ($1, 1)
-                ON CONFLICT (token_id)
-                DO UPDATE SET reply_count = token_reply_count.reply_count + 1
-                "#,
-            token_id
-        )
-        .execute(tx.as_mut())
-        .await
-        .context("Failed to update token_reply_count")?;
+        let timestamp = chrono::Utc::now().timestamp();
 
         let thread = sqlx::query_as!(
             Thread,
             r#"
-            INSERT INTO thread (token_id, account_id, content,root_id,image_uri)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *
+            WITH inserted_thread AS (
+                INSERT INTO thread (token_id, account_id, content, created_at, root_id, image_uri)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING thread_id, token_id, account_id, content, created_at, root_id, 
+                    0 as likes_count,
+                    COALESCE((SELECT COUNT(*)::int FROM thread WHERE root_id = thread_id), 0) as reply_count,
+                    image_uri
+            )
+            SELECT t.thread_id, t.token_id, 
+                   jsonb_build_object(
+                       'account_id', a.account_id,
+                       'nickname', a.nickname,
+                       'image_uri', a.image_uri,
+                       'follower_count', 0,
+                       'following_count', 0
+                   )::jsonb as "account_info!: AccountInfo",
+                   t.content, t.created_at, t.root_id,
+                   t.likes_count as "likes_count!",
+                   t.reply_count as "reply_count!",
+                   t.image_uri
+            FROM inserted_thread t
+            LEFT JOIN account a ON t.account_id = a.account_id
             "#,
             token_id,
             account_id,
             content,
+            timestamp,
             root_id,
-            image_uri,
+            image_uri
         )
-        .fetch_one(tx.as_mut())
+        .fetch_one(self.db.get_write_pool())
         .await
-        .map_err(|e| anyhow!("Failed to create thread: {}", e))?;
+        .context("Failed to create thread")?;
 
-        if let Some(root_id) = root_id {
-            sqlx::query!(
-                r#"
-                UPDATE thread
-                SET reply_count = reply_count + 1
-                WHERE thread_id = $1
-                "#,
-                root_id
-            )
-            .execute(tx.as_mut())
-            .await
-            .context("Failed to update root thread replies count")?;
-        }
-
-        tx.commit()
-            .await
-            .context("Failed to Create Thread commit transaction")?;
         Ok(thread)
     }
     pub async fn get_last_thread_id(&self) -> Result<i32> {
@@ -174,56 +147,128 @@ impl ThreadController {
         Ok(result.last_id.unwrap_or(0))
     }
 
-    pub async fn get_thread(&self, thread_id: i32) -> Result<Thread> {
-        sqlx::query_as!(
+    pub async fn get_threads_by_token(
+        &self,
+        token_id: &str,
+        pagination: PaginationParams,
+    ) -> Result<ThreadsResponse> {
+        let offset = (pagination.page - 1) * pagination.limit;
+        let thread = sqlx::query_as!(
             Thread,
-            "SELECT * FROM thread WHERE thread_id = $1",
-            thread_id
+            r#"
+            SELECT t.thread_id, t.token_id, 
+                   jsonb_build_object(
+                       'account_id', a.account_id,
+                       'nickname', a.nickname,
+                       'image_uri', a.image_uri,
+                       'follower_count', 0,
+                       'following_count', 0
+                   )::jsonb as "account_info!: AccountInfo",
+                   t.content, t.created_at, t.root_id,
+                   0 as "likes_count!",
+                   COALESCE(COUNT(tr.thread_id)::int, 0) as "reply_count!",
+                   t.image_uri
+            FROM thread t
+            LEFT JOIN account a ON t.account_id = a.account_id
+            LEFT JOIN thread tr ON t.thread_id = tr.root_id
+            WHERE t.token_id = $1 AND t.root_id IS NULL
+            GROUP BY t.thread_id, t.token_id, t.account_id, a.account_id, a.nickname, a.image_uri,
+                     t.content, t.created_at, t.root_id, t.image_uri
+            ORDER BY t.created_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+            token_id,
+            pagination.limit,
+            offset
         )
-        .fetch_one(self.db.get_read_pool())
+        .fetch_all(self.db.get_read_pool())
         .await
-        .map_err(|e| anyhow!("Failed to fetch thread: {}", e))
+        .context("Failed to get threads")?;
+
+        let total_count = self.get_threads_count(token_id).await?;
+
+        Ok(ThreadsResponse {
+            thread,
+            total_count,
+        })
     }
 
+    pub async fn get_threads_count(&self, token_id: &str) -> Result<i64> {
+        let result = sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(count, 0)::bigint
+            FROM thread_count
+            WHERE token_id = $1
+            "#,
+            token_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await;
+
+        Ok(match result {
+            Ok(count) => count.unwrap_or(0),
+            Err(_) => 0,
+        })
+    }
     pub async fn like_thread(
         &self,
         thread_id: i32,
         account_id: &str,
         token_id: &str,
     ) -> Result<Thread> {
-        let mut transaction = self.db.get_write_pool().begin().await?;
+        let mut tx = self
+            .db
+            .get_write_pool()
+            .begin()
+            .await
+            .context("Failed to begin transaction")?;
 
-        // Try to insert a new like
-        let insert_result = sqlx::query!(
-            "INSERT INTO thread_likes (thread_id, account_id,token_id) VALUES ($1, $2,$3) ON CONFLICT DO NOTHING",
+        sqlx::query!(
+            r#"
+            INSERT INTO thread_likes (thread_id, account_id, token_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
+            "#,
             thread_id,
             account_id,
             token_id
         )
-        .execute(&mut *transaction)
-        .await?;
-        let affected_rows = insert_result.rows_affected() as i32;
-        // Update and return the thread in one query
-        let updated_thread = sqlx::query_as!(
+        .execute(tx.as_mut())
+        .await
+        .context("Failed to like thread")?;
+
+        let thread = sqlx::query_as!(
             Thread,
             r#"
-            UPDATE thread 
-            SET likes_count = CASE 
-                WHEN $2 > 0 THEN likes_count + 1 
-                ELSE likes_count 
-            END 
-            WHERE thread_id = $1 
-            RETURNING *
+            SELECT t.thread_id, t.token_id, 
+                   jsonb_build_object(
+                       'account_id', a.account_id,
+                       'nickname', a.nickname,
+                       'image_uri', a.image_uri,
+                       'follower_count', 0,
+                       'following_count', 0
+                   )::jsonb as "account_info!: AccountInfo",
+                   t.content, t.created_at, t.root_id,
+                   COALESCE(COUNT(DISTINCT tl.thread_like_id), 0)::int as "likes_count!",
+                   COALESCE(COUNT(DISTINCT tr.thread_id), 0)::int as "reply_count!",
+                   t.image_uri
+            FROM thread t
+            LEFT JOIN account a ON t.account_id = a.account_id
+            LEFT JOIN thread_likes tl ON t.thread_id = tl.thread_id
+            LEFT JOIN thread tr ON t.thread_id = tr.root_id
+            WHERE t.thread_id = $1
+            GROUP BY t.thread_id, t.token_id, t.account_id, a.account_id, a.nickname, a.image_uri,
+                     t.content, t.created_at, t.root_id, t.image_uri
             "#,
-            thread_id,
-            affected_rows
+            thread_id
         )
-        .fetch_one(&mut *transaction)
-        .await?;
+        .fetch_one(tx.as_mut())
+        .await
+        .context("Failed to fetch updated thread")?;
 
-        transaction.commit().await?;
+        tx.commit().await.context("Failed to commit transaction")?;
 
-        Ok(updated_thread)
+        Ok(thread)
     }
 
     pub async fn unlike_thread(
@@ -232,45 +277,54 @@ impl ThreadController {
         account_id: &str,
         token_id: &str,
     ) -> Result<Thread> {
-        let mut tx = self.db.get_write_pool().begin().await?;
+        let mut tx = self
+            .db
+            .get_write_pool()
+            .begin()
+            .await
+            .context("Failed to begin transaction")?;
 
-        let updated_thread = sqlx::query_as!(
-            Thread,
+        sqlx::query!(
             r#"
-            WITH deleted_like AS (
-                DELETE FROM thread_likes
-                WHERE thread_id = $1 AND account_id = $2 AND token_id = $3
-                RETURNING thread_id
-            )
-            UPDATE thread t
-            SET likes_count = GREATEST(t.likes_count - 1, 0)
-            WHERE t.thread_id = $1
-              AND EXISTS (SELECT 1 FROM deleted_like)
-            RETURNING *
+            DELETE FROM thread_likes
+            WHERE thread_id = $1 AND account_id = $2 AND token_id = $3
             "#,
             thread_id,
             account_id,
             token_id
         )
-        .fetch_optional(tx.as_mut())
+        .execute(tx.as_mut())
         .await
         .context("Failed to unlike thread")?;
 
-        let thread = match updated_thread {
-            Some(thread) => thread,
-            None => {
-                // If no update occurred, fetch the original thread
-                sqlx::query_as!(
-                    Thread,
-                    "SELECT * FROM thread WHERE thread_id = $1",
-                    thread_id
-                )
-                .fetch_optional(tx.as_mut())
-                .await
-                .context("Failed to fetch thread")?
-                .ok_or_else(|| anyhow::anyhow!("Thread not found"))?
-            }
-        };
+        let thread = sqlx::query_as!(
+            Thread,
+            r#"
+            SELECT t.thread_id, t.token_id, 
+                   jsonb_build_object(
+                       'account_id', a.account_id,
+                       'nickname', a.nickname,
+                       'image_uri', a.image_uri,
+                       'follower_count', 0,
+                       'following_count', 0
+                   )::jsonb as "account_info!: AccountInfo",
+                   t.content, t.created_at, t.root_id,
+                   COALESCE(COUNT(DISTINCT tl.thread_like_id), 0)::int as "likes_count!",
+                   COALESCE(COUNT(DISTINCT tr.thread_id), 0)::int as "reply_count!",
+                   t.image_uri
+            FROM thread t
+            LEFT JOIN account a ON t.account_id = a.account_id
+            LEFT JOIN thread_likes tl ON t.thread_id = tl.thread_id
+            LEFT JOIN thread tr ON t.thread_id = tr.root_id
+            WHERE t.thread_id = $1
+            GROUP BY t.thread_id, t.token_id, t.account_id, a.account_id, a.nickname, a.image_uri,
+                     t.content, t.created_at, t.root_id, t.image_uri
+            "#,
+            thread_id
+        )
+        .fetch_one(tx.as_mut())
+        .await
+        .context("Failed to fetch updated thread")?;
 
         tx.commit().await.context("Failed to commit transaction")?;
 
@@ -291,38 +345,5 @@ impl ThreadController {
         .fetch_all(self.db.get_read_pool())
         .await
         .map_err(|e| anyhow!("Failed to fetch thread like: {}", e))
-    }
-
-    #[cfg(test)]
-    pub async fn get_thread_replies(&self, root_id: i32) -> Result<Vec<Thread>> {
-        sqlx::query_as!(Thread, "SELECT * FROM thread WHERE root_id = $1", root_id)
-            .fetch_all(self.db.get_read_pool())
-            .await
-            .map_err(|e| anyhow!("Failed to fetch thread replies: {}", e))
-    }
-    #[cfg(test)]
-    pub async fn get_token_reply_count(&self, token_id: &str) -> Result<i32> {
-        let result = sqlx::query!(
-            r#"
-            SELECT reply_count FROM token_reply_count WHERE token_id = $1
-            "#,
-            token_id
-        )
-        .fetch_one(self.db.get_read_pool())
-        .await;
-        match result {
-            Ok(row) => Ok(row.reply_count),
-            Err(e) => Err(anyhow!("Failed to fetch coin replies count: {}", e)),
-        }
-    }
-    #[cfg(test)]
-    pub async fn delete_token_reply_count(&self, token_id: &str) -> Result<()> {
-        sqlx::query!(
-            "DELETE FROM token_reply_count WHERE token_id = $1",
-            token_id
-        )
-        .execute(self.db.get_write_pool())
-        .await?;
-        Ok(())
     }
 }

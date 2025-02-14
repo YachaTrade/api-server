@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                t.creator as \"creator!\"\n            FROM token t\n            WHERE t.token_id = $1   \n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "creator!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c1679305a53916b93a23b4d7b9dc3891b2282efa9f2d22a3be3f318d59661bd7"
+}
