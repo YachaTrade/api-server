@@ -16,23 +16,29 @@ impl ActiveUserPath {
     }
 }
 
-pub enum ScorePath {
+pub enum PointPath {
     GetTop,
     GetAccountPoint,
+    CompleteMission,
+    GetCompletedMissions,
 }
 
-impl ScorePath {
+impl PointPath {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::GetTop => "/reward/top",
-            Self::GetAccountPoint => "/reward",
+            Self::GetAccountPoint => "/reward/account",
+            Self::CompleteMission => "/reward/complete",
+            Self::GetCompletedMissions => "/reward/completed",
         }
     }
 
     pub fn docs_str(&self) -> &'static str {
         match self {
             Self::GetTop => "/reward/top",
-            Self::GetAccountPoint => "/reward",
+            Self::GetAccountPoint => "/reward/account",
+            Self::CompleteMission => "/reward/complete",
+            Self::GetCompletedMissions => "/reward/completed",
         }
     }
 }

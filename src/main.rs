@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth,  follow, order, profile, search, thread, token, trade},
+    router::{self, account, auth, campaign, follow, order, profile, search, thread, token, trade},
     state::AppState,
     types,
 };
@@ -76,7 +76,9 @@ use clap::Parser;
         // ----------------Campaign----------------
         router::campaign::handler::check_active_user,
         router::campaign::handler::get_top_point,
-        router::campaign::handler::get_score_by_account_id,
+        router::campaign::handler::get_point_by_account_id,
+        router::campaign::handler::complete_mission,
+        router::campaign::handler::get_completed_missions
     ),
     components(
         schemas(
@@ -157,6 +159,9 @@ use clap::Parser;
             types::campaign::point::Point,
             types::campaign::point::TopPointResponse,
             types::campaign::point::AccountPointResponse,
+            types::campaign::point::MissionCompleteRequest,
+            types::campaign::point::MissionCompleteResponse,
+            types::campaign::point::MissionCompletedResponse,
            
         )
     ),
@@ -229,7 +234,7 @@ async fn main() -> Result<()> {
         .merge(profile::router())
         .merge(order::router())
         .merge(follow::router(app_state.clone()))
-        // .merge(campaign::router(app_state.clone()))
+        .merge(campaign::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()

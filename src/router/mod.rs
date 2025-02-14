@@ -11,3 +11,5 @@ pub mod search;
 pub mod thread;
 pub mod token;
 pub mod trade;
+
+pub mod referral;

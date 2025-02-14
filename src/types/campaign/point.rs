@@ -5,7 +5,8 @@ use crate::{
     types::common::{info::AccountInfo, pagination::PaginationParams},
 };
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -26,6 +27,8 @@ pub struct AccountPointResponse {
     pub rank: i64,
 }
 
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum MissionType {
     ConnectWallet,
     CreateCoin,
@@ -36,18 +39,6 @@ pub enum MissionType {
 }
 
 impl MissionType {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "CONNECT_WALLET" => Some(Self::ConnectWallet),
-            "CREATE_COIN" => Some(Self::CreateCoin),
-            "TRADE" => Some(Self::Trade),
-            "FOLLOW" => Some(Self::Follow),
-            "POSTING" => Some(Self::Posting),
-            "REFERRER_CREATE" => Some(Self::ReferrerCreate),
-            _ => None,
-        }
-    }
-
     pub fn to_i64(&self) -> i64 {
         match self {
             Self::ConnectWallet => 50,
@@ -58,6 +49,34 @@ impl MissionType {
             Self::ReferrerCreate => 1000,
         }
     }
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "CONNECT_WALLET" => Ok(Self::ConnectWallet),
+            "CREATE_COIN" => Ok(Self::CreateCoin),
+            "TRADE" => Ok(Self::Trade),
+            "FOLLOW" => Ok(Self::Follow),
+            "POSTING" => Ok(Self::Posting),
+            "REFERRER_CREATE" => Ok(Self::ReferrerCreate),
+            _ => Err(anyhow::anyhow!("Invalid mission type")),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MissionCompleteResponse {
+    pub account_id: String,
+    pub mission_type: MissionType,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MissionCompleteRequest {
+    pub mission_type: MissionType,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MissionCompletedResponse {
+    pub account_id: String,
+    pub mission_types: Vec<MissionType>,
 }
 
 pub struct PointController {
@@ -138,11 +157,40 @@ impl PointController {
         })
     }
 
+    pub async fn get_completed_missions(
+        &self,
+        account_id: String,
+    ) -> Result<MissionCompletedResponse> {
+        let mission_types = match sqlx::query!(
+            r#"
+            SELECT mission_type
+            FROM mission_record
+            WHERE account_id = $1
+            "#,
+            account_id
+        )
+        .fetch_all(self.db.get_read_pool())
+        .await
+        {
+            Ok(rows) => rows
+                .into_iter()
+                .filter_map(|row| MissionType::from_str(&row.mission_type).ok())
+                .collect(),
+            Err(_e) => {
+                vec![] // 쿼리 실패 시 빈 배열 반환
+            }
+        };
+
+        Ok(MissionCompletedResponse {
+            account_id,
+            mission_types,
+        })
+    }
     pub async fn add_point_by_mission(
         &self,
-        account_id: &str,
+        account_id: String,
         mission_type: MissionType,
-    ) -> Result<()> {
+    ) -> Result<MissionCompleteResponse> {
         let mut tx = self.db.write_pool.begin().await?;
 
         let mission_str = match mission_type {
@@ -155,17 +203,23 @@ impl PointController {
         };
 
         // ON CONFLICT DO NOTHING 제거 - 중복 시 에러 발생
-        sqlx::query!(
+        let row = sqlx::query!(
             r#"
             INSERT INTO mission_record(account_id, mission_type)
             VALUES ($1, $2)
+            RETURNING *
             "#,
             account_id,
             mission_str
         )
-        .execute(tx.as_mut())
-        .await?; // 실패하면 여기서 에러 반환
+        .fetch_one(tx.as_mut())
+        .await
+        .map_err(|err| anyhow::anyhow!("Already completed mission {err}"))?; // 실패하면 여기서 에러 반환
 
+        let response = MissionCompleteResponse {
+            account_id: row.account_id,
+            mission_type: MissionType::from_str(&row.mission_type).unwrap(),
+        };
         // mission_record 추가 성공한 경우에만 실행됨
         let points = mission_type.to_i64();
 
@@ -180,10 +234,11 @@ impl PointController {
             points
         )
         .execute(tx.as_mut())
-        .await?;
+        .await
+        .map_err(|err| anyhow::anyhow!("Failed to add point by mission {err}"))?;
 
         tx.commit().await?;
 
-        Ok(())
+        Ok(response)
     }
 }
