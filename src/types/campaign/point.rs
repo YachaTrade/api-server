@@ -31,7 +31,7 @@ pub struct AccountPointResponse {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum MissionType {
     ConnectWallet,
-    CreateCoin,
+    CreateToken,
     Trade,
     Follow,
     Posting,
@@ -42,7 +42,7 @@ impl MissionType {
     pub fn to_i64(&self) -> i64 {
         match self {
             Self::ConnectWallet => 50,
-            Self::CreateCoin => 100,
+            Self::CreateToken => 100,
             Self::Trade => 100,
             Self::Follow => 100,
             Self::Posting => 200,
@@ -52,7 +52,7 @@ impl MissionType {
     pub fn from_str(s: &str) -> Result<Self> {
         match s {
             "CONNECT_WALLET" => Ok(Self::ConnectWallet),
-            "CREATE_COIN" => Ok(Self::CreateCoin),
+            "CREATE_TOKEN" => Ok(Self::CreateToken),
             "TRADE" => Ok(Self::Trade),
             "FOLLOW" => Ok(Self::Follow),
             "POSTING" => Ok(Self::Posting),
@@ -70,12 +70,14 @@ pub struct MissionCompleteResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MissionCompleteRequest {
+    #[schema(example = "CONNECT_WALLET")]
     pub mission_type: MissionType,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MissionCompletedResponse {
     pub account_id: String,
+    #[schema(example = json!([ "CONNECT_WALLET", "CREATE_COIN", "TRADE" ]))]
     pub mission_types: Vec<MissionType>,
 }
 
@@ -195,7 +197,7 @@ impl PointController {
 
         let mission_str = match mission_type {
             MissionType::ConnectWallet => "CONNECT_WALLET",
-            MissionType::CreateCoin => "CREATE_COIN",
+            MissionType::CreateToken => "CREATE_COIN",
             MissionType::Trade => "TRADE",
             MissionType::Follow => "FOLLOW",
             MissionType::Posting => "POSTING",
