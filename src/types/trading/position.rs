@@ -45,6 +45,43 @@ pub struct TokenHolderResponse {
     pub total_count: i64,
 }
 
+#[derive(Debug, Deserialize)]
+
+pub enum PositionType {
+    All,
+    Open,
+    Close,
+}
+
+impl Default for PositionType {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
+impl ToString for PositionType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::All => "ALL".to_string(),
+            Self::Open => "OPEN".to_string(),
+            Self::Close => "CLOSE".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for PositionType {
+    type Error = String;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.to_uppercase().as_str() {
+            "OPEN" => Ok(Self::Open),
+            "CLOSE" => Ok(Self::Close),
+            "ALL" => Ok(Self::All),
+            _ => Err(format!("Invalid position type: {}", s)),
+        }
+    }
+}
+
 pub struct PositionController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -74,35 +111,11 @@ impl PositionController {
         &self,
         account_id: &str,
         pagination: PaginationParams,
+        position_type: PositionType,
     ) -> Result<PositionResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        // COALESCE(
-        //     CASE
-        //         WHEN p.current_token_amount = 0 THEN 0
-        //         WHEN m.market_type = 'CURVE' THEN
-        //             (
-        //             m.virtual_native
-        //             - (
-        //                 ((m.virtual_token * m.virtual_native)
-        //                  + (m.virtual_token + p.current_token_amount))
-        //                 / (m.virtual_token + p.current_token_amount)
-        //               )
-        //             )
-        //             - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
-        //         WHEN m.market_type = 'DEX' THEN
-        //             (
-        //             m.reserve_native
-        //             - (
-        //                 ((m.reserve_token * m.reserve_native)
-        //                  + (m.reserve_token + p.current_token_amount))
-        //                 / (m.reserve_token + p.current_token_amount)
-        //               )
-        //             )
-        //             - (p.total_bought_native * p.current_token_amount / p.total_bought_token)
-        //         ELSE 0
-        //     END,
-        // 0) AS unrealized_pnl
 
+        // PositionPaginationParams에 position_type 필드가 있다고 가정 ("all", "open", "close")
         let record = sqlx::query!(
             r#"
             WITH position_data AS (
@@ -130,25 +143,27 @@ impl PositionController {
                     
                     -- Calculate unrealized_pnl using AMM 공식
                     COALESCE(
-                    CASE 
-                        WHEN p.current_token_amount = 0 THEN 0
-                        WHEN m.market_type = 'CURVE' THEN
-                            m.virtual_native 
-                            - (
-                                ((m.virtual_token * m.virtual_native) 
-                                + (m.virtual_token + p.current_token_amount) - 1)
-                                / (m.virtual_token + p.current_token_amount)
-                            )
-                        WHEN m.market_type = 'DEX' THEN
-                            m.price * p.current_token_amount
-                        ELSE 0
-                    END,
+                        CASE 
+                            WHEN p.current_token_amount = 0 THEN 0
+                            WHEN m.market_type = 'CURVE' THEN
+                                m.virtual_native 
+                                - (
+                                    ((m.virtual_token * m.virtual_native) 
+                                    + (m.virtual_token + p.current_token_amount) - 1)
+                                    / (m.virtual_token + p.current_token_amount)
+                                )
+                            WHEN m.market_type = 'DEX' THEN
+                                m.price * p.current_token_amount
+                            ELSE 0
+                        END,
                     0) AS unrealized_pnl
                 FROM position p
                 JOIN token t ON p.token_id = t.token_id
                 JOIN market m ON p.token_id = m.token_id
                 WHERE p.account_id = $1 
-                  AND p.is_active = true
+                  AND ($4::text = 'ALL' 
+                       OR ($4::text = 'OPEN' AND p.is_active = true)
+                       OR ($4::text = 'CLOSE' AND p.is_active = false))
             )
             SELECT 
                 position_id,
@@ -160,7 +175,8 @@ impl PositionController {
                 total_bought_native,
                 total_bought_token,
                 current_token_amount,
-                -- 변경된 current_value 계산: AMM 공식을 적용하여 native 산출량 기준으로 평가
+                -- current_value 계산식: 여기서는 unrealized_pnl와 동일하게 계산하도록 함
+                unrealized_pnl as "current_value!",
                 realized_pnl,
                 unrealized_pnl as "unrealized_pnl!",
                 (realized_pnl + unrealized_pnl) as "total_pnl!",
@@ -181,7 +197,8 @@ impl PositionController {
             "#,
             account_id,
             pagination.limit as i64,
-            offset
+            offset,
+            position_type.to_string() // "all", "open", or "close"
         )
         .fetch_all(self.db.get_read_pool())
         .await?;
