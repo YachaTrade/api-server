@@ -7,7 +7,7 @@ use crate::{
         token::create_token::{TokenCreatedController, TokenCreatedResponse},
         trading::{
             pnl::{PNLController, PNLResponse},
-            position::{PositionController, PositionResponse, PositionType},
+            position::{PositionController, PositionQuery, PositionResponse, PositionType},
             swap_history::{PositionSwapResponse, SwapController},
         },
     },
@@ -101,17 +101,20 @@ pub async fn get_pnl(
 )]
 pub async fn get_position(
     Path(account_id): Path<String>,
-    Query(pagination): Query<PaginationParams>,
-    Query(position_type): Query<PositionType>,
+    Query(query): Query<PositionQuery>,
+
     State(state): State<AppState>,
 ) -> AppJsonResult<PositionResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-
+    let pagination = PaginationParams {
+        page: query.page,
+        limit: query.limit,
+    };
     let position_controller = PositionController::new(state.postgres.clone());
     let response = position_controller
-        .get_positions(&account_id, pagination, position_type)
+        .get_positions(&account_id, pagination, query.position_type)
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
     Ok(Json(response))

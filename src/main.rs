@@ -27,37 +27,56 @@ use clap::Parser;
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        // ----------------Auth----------------
         router::auth::handler::auth_nonce,
         router::auth::handler::auth_session,
         router::auth::handler::auth_delete_session,
+        // ----------------Account----------------
         router::account::handler::update_account,
         router::account::handler::get_account,
         router::account::handler::connect_x,
         router::account::handler::disconnect_x,
+        // ----------------Profile----------------
         router::profile::handler::get_profile,
         router::profile::handler::get_pnl,
         router::profile::handler::get_position,
         router::profile::handler::get_token_created,
         router::profile::handler::get_swap_history,
+
+        // ----------------Search----------------
         router::search::handler::search_token,
+// account search
+        // ----------------Thread----------------
         router::thread::handler::create_thread,
         router::thread::handler::like_thread,
         router::thread::handler::unlike_thread,
         router::thread::handler::get_threads_by_token,
         router::thread::handler::get_thread_like_by_account,
+
+        // ----------------Token----------------
         router::token::handler::get_token,
+
+        // ----------------Trade----------------
         router::trade::handler::get_swap_history,
         router::trade::handler::get_holder,
         router::trade::handler::get_market,
         router::trade::handler::get_chart,
+
+        // ----------------Order----------------
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
+
+        // ----------------Follow----------------
         router::follow::handler::add_follow,
         router::follow::handler::remove_follow,
         router::follow::handler::check_follow,
         router::follow::handler::get_followers,
         router::follow::handler::get_followings,  
+        // ----------------Campaign----------------
+        router::campaign::handler::check_active_user,
+        router::campaign::handler::get_top_point,
+        router::campaign::handler::get_score_by_account_id,
     ),
     components(
         schemas(
@@ -108,6 +127,7 @@ use clap::Parser;
             types::trading::position::PositionResponse,
             types::trading::position::TokenHolder,
             types::trading::position::TokenHolderResponse,
+            types::trading::position::PositionType,
             types::trading::swap_history::PositionSwap,
             types::trading::swap_history::PositionSwapResponse,
             types::trading::swap_history::TokenSwap,
@@ -131,6 +151,13 @@ use clap::Parser;
             types::social::thread::ThreadRequest,
             types::social::thread::ThreadResponse,
             types::social::thread::ThreadsResponse,
+
+            // Campaign
+            types::campaign::active::ActiveUserResponse,
+            types::campaign::point::Point,
+            types::campaign::point::TopPointResponse,
+            types::campaign::point::AccountPointResponse,
+           
         )
     ),
     tags(
