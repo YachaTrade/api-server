@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.thread_id, t.token_id, \n                   jsonb_build_object(\n                       'account_id', a.account_id,\n                       'nickname', a.nickname,\n                       'image_uri', a.image_uri,\n                       'follower_count', 0,\n                       'following_count', 0\n                   )::jsonb as \"account_info!: AccountInfo\",\n                   t.content, t.created_at, t.root_id,\n                   0 as \"likes_count!\",\n                   COALESCE(COUNT(tr.thread_id)::int, 0) as \"reply_count!\",\n                   t.image_uri\n            FROM thread t\n            LEFT JOIN account a ON t.account_id = a.account_id\n            LEFT JOIN thread tr ON t.thread_id = tr.root_id\n            WHERE t.token_id = $1 AND t.root_id IS NULL\n            GROUP BY t.thread_id, t.token_id, t.account_id, a.account_id, a.nickname, a.image_uri,\n                     t.content, t.created_at, t.root_id, t.image_uri\n            ORDER BY t.created_at DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "account_info!: AccountInfo",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "root_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "likes_count!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "reply_count!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      false,
+      true,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "d814b14a8624e71c6f568fa29ff08609e8fb0e44fedaeed0c003ddc94309f778"
+}

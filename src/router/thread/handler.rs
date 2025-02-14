@@ -1,16 +1,22 @@
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     Extension, Json,
 };
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
-    types::social::thread::{CreateThreadRequest, ThreadController, ThreadRequest, ThreadResponse},
+    types::{
+        common::pagination::PaginationParams,
+        social::thread::{
+            CreateThreadRequest, ThreadController, ThreadRequest, ThreadResponse, ThreadsResponse,
+        },
+    },
+    utils::valid_evm_address,
 };
 
 use super::path::Path as ThreadPath;
@@ -147,6 +153,37 @@ pub async fn create_thread(
         .map_err(|err| AppError::InternalError(err.to_string()))?;
 
     Ok(Json(ThreadResponse { thread }))
+}
+
+/// Get threads by token ID
+#[utoipa::path(
+    get,
+    path = ThreadPath::GetThread.docs_str(),
+    params(
+        ("token_id" = String, Path, description = "EVM compatible token address"),
+        ("page" = Option<i64>, Query, description = "Page number for pagination"),
+        ("limit" = Option<i64>, Query, description = "Number of items limit")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved threads", body = ThreadsResponse),
+        (status = 400, description = "Invalid token ID format"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Thread"
+)]
+pub async fn get_threads_by_token(
+    Path(token_id): Path<String>,
+    Query(params): Query<PaginationParams>,
+    State(state): State<AppState>,
+) -> AppJsonResult<ThreadsResponse> {
+    if !valid_evm_address(&token_id) {
+        return Err(AppError::BadRequest("Invalid token ID".to_string()));
+    }
+    let response = ThreadController::new(state.postgres.clone())
+        .get_threads_by_token(&token_id, params)
+        .await
+        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    Ok(Json(response))
 }
 
 /// Like thread

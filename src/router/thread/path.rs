@@ -3,6 +3,7 @@ pub enum Path {
     LikeThread,
     UnLikeThread,
     GetThreadLike,
+    GetThread,
 }
 
 impl Path {
@@ -12,6 +13,7 @@ impl Path {
             Path::LikeThread => "/thread/like",
             Path::UnLikeThread => "/thread/unlike",
             Path::GetThreadLike => "/thread/like/:token_id",
+            Path::GetThread => "/thread/:token_id",
         }
     }
 
@@ -21,6 +23,7 @@ impl Path {
             Path::LikeThread => "/thread/like",
             Path::UnLikeThread => "/thread/unlike",
             Path::GetThreadLike => "/thread/like/{token_id}",
+            Path::GetThread => "/thread/{token_id}",
         }
     }
 }

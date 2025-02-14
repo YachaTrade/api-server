@@ -22,9 +22,9 @@ pub struct TokenCreated {
     pub created_at: i64,
     pub market_cap: BigDecimal,     //market cap -> price * total_supply
     pub total_supply: BigDecimal,   // token table total_supply
-    pub price: BigDecimal,          // market table price
+    pub price: String,              // market table price
     pub current_amount: BigDecimal, //position table current_token_amount
-    pub description: String,
+    pub description: Option<String>,
 }
 
 pub struct TokenCreatedController {
@@ -88,11 +88,11 @@ impl TokenCreatedController {
                 name,
                 is_listing as "is_listing!",
                 created_at,
-                COALESCE(price, 0) as "price!",
+                COALESCE(price::TEXT, '0') as "price!",
                 total_supply as "total_supply!",
                 COALESCE(price * total_supply, 0) as "market_cap!",
                 COALESCE(current_amount, 0) as "current_amount!",
-                description as "description!"
+                description as "description?: String"
             FROM created_tokens
             ORDER BY current_value DESC
             LIMIT $2
