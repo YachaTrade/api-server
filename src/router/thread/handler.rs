@@ -53,7 +53,7 @@ use super::path::Path as ThreadPath;
     ),
     tag = "Thread"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn create_thread(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -181,7 +181,7 @@ pub async fn create_thread(
     ),
     tag = "Thread"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_threads_by_token(
     Path(token_id): Path<String>,
     Query(params): Query<PaginationParams>,
@@ -227,7 +227,7 @@ pub async fn get_threads_by_token(
     ),
     tag="Thread"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn like_thread(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -275,7 +275,7 @@ pub async fn like_thread(
     ),
     tag="Thread"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn unlike_thread(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -323,7 +323,7 @@ pub async fn unlike_thread(
     ),
     tag="Thread"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_thread_like_by_account(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,

@@ -28,7 +28,7 @@ use super::path::ReferralPath;
         ("session_token" = [])
     )
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn check_register_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -59,7 +59,7 @@ pub async fn check_register_referral_code(
         ("session_token" = [])
     )
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn register_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -102,7 +102,7 @@ pub async fn register_referral_code(
         ("session_token" = [])
     )
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn exists_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -132,7 +132,7 @@ pub async fn exists_referral_code(
         ("session_token" = [])
     )
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn make_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,

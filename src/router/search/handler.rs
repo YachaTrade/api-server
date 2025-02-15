@@ -45,7 +45,7 @@ pub struct SearchTokenQuery {
     ),
     tag = "Search"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn search_token(
     State(state): State<AppState>,
     Path(token): Path<String>,

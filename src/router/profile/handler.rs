@@ -37,7 +37,7 @@ use super::path::ProfilePath;
     ),
     tag = "Profile"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_profile(
     Path(account_id): Path<String>,
     Query(params): Query<RequestAccountIdParam>,
@@ -80,7 +80,7 @@ pub async fn get_profile(
     ),
     tag = "Profile"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_pnl(
     Path(account_id): Path<String>,
     State(state): State<AppState>,
@@ -117,7 +117,7 @@ pub async fn get_pnl(
     ),
     tag = "Profile"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_position(
     Path(account_id): Path<String>,
     Query(query): Query<PositionQuery>,
@@ -164,7 +164,7 @@ pub async fn get_position(
     ),
     tag = "Profile"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_token_created(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
@@ -207,7 +207,7 @@ pub async fn get_token_created(
     ),
     tag = "Profile"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_swap_history(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,

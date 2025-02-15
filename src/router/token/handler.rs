@@ -27,7 +27,7 @@ use crate::{
     ),
     tag = "Token"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_token(
     State(state): State<AppState>,
     Path(token_id): Path<String>,

@@ -37,7 +37,7 @@ use super::path::TradePath;
     ),
     tag = "Trade"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_swap_history(
     Path(token_id): Path<String>,
     Query(params): Query<PaginationParams>,
@@ -80,7 +80,7 @@ pub async fn get_swap_history(
     ),
     tag = "Trade"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_holder(
     Path(token_id): Path<String>,
     Query(params): Query<PaginationParams>,
@@ -121,7 +121,7 @@ pub async fn get_holder(
     ),
     tag = "Trade"
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_market(
     Path(token_id): Path<String>,
     State(state): State<AppState>,
@@ -164,7 +164,7 @@ pub async fn get_market(
     ),
     tag = "Trade",
 )]
-#[instrument(skip_all)]
+#[instrument(skip(state))]
 pub async fn get_chart(
     State(state): State<AppState>,
     Path(token): Path<String>,

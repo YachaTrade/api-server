@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     Extension, Json,
 };
+use tracing::instrument;
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -36,6 +37,7 @@ use super::path::{ActiveUserPath, PointPath};
     ),
     tag = "Campaign"
 )]
+#[instrument(skip(state))]
 pub async fn check_active_user(
     Path(wallet_address): Path<String>,
     State(state): State<AppState>,
@@ -66,6 +68,7 @@ pub async fn check_active_user(
     ),
     tag = "Campaign"
 )]
+#[instrument(skip(state))]
 pub async fn get_top_point(
     State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
@@ -91,6 +94,7 @@ pub async fn get_top_point(
         ("session_token" = [])
     )
 )]
+#[instrument(skip(state))]
 pub async fn get_point_by_account_id(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -117,6 +121,7 @@ pub async fn get_point_by_account_id(
         ("session_token" = [])
     )
 )]
+#[instrument(skip(state))]
 pub async fn complete_mission(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -145,6 +150,7 @@ pub async fn complete_mission(
         ("session_token" = [])
     )
 )]
+#[instrument(skip(state))]
 pub async fn get_completed_missions(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
