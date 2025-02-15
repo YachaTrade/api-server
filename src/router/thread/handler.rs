@@ -4,7 +4,7 @@ use axum::{
 };
 use bytes::Bytes;
 use serde::Serialize;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
@@ -13,7 +13,8 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         social::thread::{
-            CreateThreadRequest, ThreadController, ThreadRequest, ThreadResponse, ThreadsResponse,
+            CreateThreadRequest, ThreadController, ThreadLikeResponse, ThreadRequest,
+            ThreadResponse, ThreadsResponse,
         },
     },
     utils::valid_evm_address,
@@ -52,7 +53,7 @@ use super::path::Path as ThreadPath;
     ),
     tag = "Thread"
 )]
-#[instrument(skip(state, session_address, multipart))]
+#[instrument(skip_all)]
 pub async fn create_thread(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -144,14 +145,23 @@ pub async fn create_thread(
     let thread = thread_controller
         .create_thread(
             form_data.token_id,
-            session_address,
+            session_address.clone(),
             form_data.content,
             form_data.parent_id,
             image_uri,
         )
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-
+        .map_err(|err| {
+            error!(
+                "Failed to create thread: session_address: {}, error: {}",
+                session_address, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Create Thread: session_address: {}, response: {:?}",
+        session_address, thread
+    );
     Ok(Json(ThreadResponse { thread }))
 }
 
@@ -171,6 +181,7 @@ pub async fn create_thread(
     ),
     tag = "Thread"
 )]
+#[instrument(skip_all)]
 pub async fn get_threads_by_token(
     Path(token_id): Path<String>,
     Query(params): Query<PaginationParams>,
@@ -179,10 +190,21 @@ pub async fn get_threads_by_token(
     if !valid_evm_address(&token_id) {
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    let response = ThreadController::new(state.postgres.clone())
+    let thread_controller = ThreadController::new(state.postgres.clone());
+    let response = thread_controller
         .get_threads_by_token(&token_id, params)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to get threads by token: token_id: {}, error: {}",
+                token_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Threads By Token: token_id: {}, response: {:?}",
+        token_id, response
+    );
     Ok(Json(response))
 }
 
@@ -205,7 +227,7 @@ pub async fn get_threads_by_token(
     ),
     tag="Thread"
 )]
-#[instrument(skip(state, session_address, payload))]
+#[instrument(skip_all)]
 pub async fn like_thread(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -220,10 +242,20 @@ pub async fn like_thread(
     let thread = thread_controller
         .like_thread(thread_id, &session_address, &token_id)
         .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
-
+        .map_err(|err| {
+            error!(
+                "Failed to like thread: thread_id: {}, session_address: {}, error: {}",
+                thread_id, session_address, err
+            );
+            AppError::BadRequest(err.to_string())
+        })?;
+    info!(
+        "Like Thread: thread_id: {}, session_address: {}, response: {:?}",
+        thread_id, session_address, thread
+    );
     Ok(Json(ThreadResponse { thread }))
 }
+
 /// Unlike thread
 #[utoipa::path(
     delete,
@@ -243,7 +275,7 @@ pub async fn like_thread(
     ),
     tag="Thread"
 )]
-#[instrument(skip(state, session_address, payload))]
+#[instrument(skip_all)]
 pub async fn unlike_thread(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -258,14 +290,18 @@ pub async fn unlike_thread(
     let thread = thread_controller
         .unlike_thread(thread_id, &session_address, &token_id)
         .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
-
+        .map_err(|err| {
+            error!(
+                "Failed to unlike thread: thread_id: {}, session_address: {}, error: {}",
+                thread_id, session_address, err
+            );
+            AppError::BadRequest(err.to_string())
+        })?;
+    info!(
+        "Unlike Thread: thread_id: {}, session_address: {}, response: {:?}",
+        thread_id, session_address, thread
+    );
     Ok(Json(ThreadResponse { thread }))
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ThreadLikeResponse {
-    pub thread_ids: Vec<i32>,
 }
 
 /// Get thread likes by account and token
@@ -287,7 +323,7 @@ pub struct ThreadLikeResponse {
     ),
     tag="Thread"
 )]
-#[instrument(skip(state, session_address))]
+#[instrument(skip_all)]
 pub async fn get_thread_like_by_account(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -307,7 +343,13 @@ pub async fn get_thread_like_by_account(
     let thread_ids = thread_controller
         .get_thread_like_by_token_and_account(&session_address, &token_id)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-
+        .map_err(|err| {
+            error!("Failed to get thread likes by account: session_address: {}, token_id: {}, error: {}", session_address, token_id, err);
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Thread Likes By Account: session_address: {}, token_id: {}, response: {:?}",
+        session_address, token_id, thread_ids
+    );
     Ok(Json(ThreadLikeResponse { thread_ids }))
 }

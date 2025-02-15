@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use tracing::instrument;
+use tracing::{error, info, instrument};
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -37,21 +37,30 @@ use super::path::TradePath;
     ),
     tag = "Trade"
 )]
+#[instrument(skip_all)]
 pub async fn get_swap_history(
     Path(token_id): Path<String>,
     Query(params): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
-    // if !valid_token_id(&token_id) {
-    //     return Err(AppError::BadRequest("Invalid token ID".to_string()));
-    // }
     if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
     let response = SwapController::new(state.postgres.clone())
         .get_swaps_by_token(&token_id, params)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to get swap history: token_id: {}, error: {}",
+                token_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Swap History: token_id: {}, response: {:?}",
+        token_id, response
+    );
     Ok(Json(response))
 }
 
@@ -71,19 +80,30 @@ pub async fn get_swap_history(
     ),
     tag = "Trade"
 )]
+#[instrument(skip_all)]
 pub async fn get_holder(
     Path(token_id): Path<String>,
     Query(params): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenHolderResponse> {
     if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
     let response = PositionController::new(state.postgres.clone())
         .get_holders_by_token(&token_id, params)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-
+        .map_err(|err| {
+            error!(
+                "Failed to get token holders: token_id: {}, error: {}",
+                token_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Token Holders: token_id: {}, response: {:?}",
+        token_id, response
+    );
     Ok(Json(response))
 }
 
@@ -101,19 +121,30 @@ pub async fn get_holder(
     ),
     tag = "Trade"
 )]
+#[instrument(skip_all)]
 pub async fn get_market(
     Path(token_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<Market> {
     if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
     let response = MarketController::new(state.postgres.clone())
         .get_market_by_token(&token_id)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-
+        .map_err(|err| {
+            error!(
+                "Failed to get market information: token_id: {}, error: {}",
+                token_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Market Information: token_id: {}, response: {:?}",
+        token_id, response
+    );
     Ok(Json(response))
 }
 
@@ -133,14 +164,16 @@ pub async fn get_market(
     ),
     tag = "Trade",
 )]
-#[instrument(skip(state, token, query))]
+#[instrument(skip_all)]
 pub async fn get_chart(
     State(state): State<AppState>,
     Path(token): Path<String>,
     Query(query): Query<ChartQuery>,
 ) -> AppJsonResult<ChartResponse> {
-    let chart_interval = ChartInterval::from_str(&query.interval)
-        .map_err(|err| AppError::BadRequest(format!("Invalid chart interval: {}", err)))?;
+    let chart_interval = ChartInterval::from_str(&query.interval).map_err(|err| {
+        error!("Invalid chart interval: {}", err);
+        AppError::BadRequest(format!("Invalid chart interval: {}", err))
+    })?;
 
     let pagenation = query.pagination.unwrap_or(0);
 
@@ -149,7 +182,14 @@ pub async fn get_chart(
     let chart_response = chart_controller
         .get_chart(&token, chart_interval, pagenation)
         .await
-        .map_err(|err| AppError::InternalError(format!("Failed to get chart: {}", err)))?;
+        .map_err(|err| {
+            error!("Failed to get chart: token: {}, error: {}", token, err);
+            AppError::InternalError(format!("Failed to get chart: {}", err))
+        })?;
 
+    info!(
+        "Get Chart: token: {}, response: {:?}",
+        token, chart_response
+    );
     Ok(Json(chart_response))
 }

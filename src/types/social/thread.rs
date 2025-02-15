@@ -43,6 +43,10 @@ pub struct ThreadLike {
     #[serde(skip_serializing)]
     pub created_at: i64,
 }
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ThreadLikeResponse {
+    pub thread_ids: Vec<i32>,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateThreadRequest {

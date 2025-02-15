@@ -42,7 +42,7 @@ impl TokenController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         TokenController { db }
     }
-    pub async fn get_token(&self, token_id: String) -> Result<TokenWithAccountInfo> {
+    pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
         let record = sqlx::query!(
             r#"
                 SELECT 
@@ -99,7 +99,7 @@ impl TokenController {
             is_king_created_at: record.is_king_created_at,
             total_supply: record.total_supply,
         };
-
-        Ok(token)
+        let response = TokenResponse { token };
+        Ok(response)
     }
 }

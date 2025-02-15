@@ -1,4 +1,5 @@
 use axum::{extract::State, Extension, Json};
+use tracing::{error, info, instrument};
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -27,15 +28,19 @@ use super::path::ReferralPath;
         ("session_token" = [])
     )
 )]
+#[instrument(skip_all)]
 pub async fn check_register_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<CheckRegisterReferralResponse> {
     let referral_controller = ReferralController::new(state.postgres.clone());
     let response = referral_controller
-        .check_register_referral(session_address)
+        .check_register_referral(session_address.clone())
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to check referral registration: session_address: {}, error: {}", session_address, err);
+            AppError::InternalError(err.to_string())
+        })?;
     Ok(Json(response))
 }
 
@@ -54,6 +59,7 @@ pub async fn check_register_referral_code(
         ("session_token" = [])
     )
 )]
+#[instrument(skip_all)]
 pub async fn register_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -63,11 +69,20 @@ pub async fn register_referral_code(
     let parent_account_id = referral_controller
         .get_referral_account_id(&payload.parent_referral_code)
         .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to get referral account ID: session_address: {}, parent_referral_code: {}, error: {}", 
+                session_address, payload.parent_referral_code, err);
+            AppError::BadRequest(err.to_string())
+        })?;
     let response = referral_controller
-        .register_referral(parent_account_id, session_address)
+        .register_referral(&parent_account_id, &session_address)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to register referral: session_address: {}, parent_account_id: {}, error: {}", 
+                session_address, parent_account_id, err);
+            AppError::InternalError(err.to_string())
+        })?;
+    info!("Register Referral Code: session_address :{} response :{:?}", session_address, response);
     Ok(Json(response))
 }
 
@@ -87,6 +102,7 @@ pub async fn register_referral_code(
         ("session_token" = [])
     )
 )]
+#[instrument(skip_all)]
 pub async fn exists_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -95,7 +111,10 @@ pub async fn exists_referral_code(
     let response = referral_controller
         .existing_referral_code(&session_address)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to check existing referral code: session_address: {}, error: {}", session_address, err);
+            AppError::InternalError(err.to_string())
+        })?;
     Ok(Json(response))
 }
 
@@ -113,6 +132,7 @@ pub async fn exists_referral_code(
         ("session_token" = [])
     )
 )]
+#[instrument(skip_all)]
 pub async fn make_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -121,9 +141,13 @@ pub async fn make_referral_code(
     let is_exists = referral_controller
         .existing_referral_code(&session_address)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to check existing referral code: session_address: {}, error: {}", session_address, err);
+            AppError::InternalError(err.to_string())
+        })?;
 
     if is_exists.exists {
+        error!("Referral code already exists for session_address: {}", session_address);
         return Err(AppError::BadRequest(
             "Referral code already exists".to_string(),
         ));
@@ -132,6 +156,9 @@ pub async fn make_referral_code(
     let response = referral_controller
         .make_referral_code(&session_address)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to make referral code: session_address: {}, error: {}", session_address, err);
+            AppError::InternalError(err.to_string())
+        })?;
     Ok(Json(response))
 }

@@ -83,8 +83,8 @@ impl ReferralController {
     /// * `RegisterReferralResponse` containing the registered relationship details
     pub async fn register_referral(
         &self,
-        parent_account_id: String,
-        child_account_id: String,
+        parent_account_id: &str,
+        child_account_id: &str,
     ) -> Result<RegisterReferralResponse> {
         info!(
             "parent_account_id: {}, child_account_id: {}",
@@ -128,8 +128,8 @@ impl ReferralController {
             .map_err(|err| anyhow::anyhow!("Failed to commit transaction: {}", err))?;
 
         Ok(RegisterReferralResponse {
-            parent_account_id,
-            child_account_id,
+            parent_account_id: parent_account_id.to_string(),
+            child_account_id: child_account_id.to_string(),
         })
     }
 
