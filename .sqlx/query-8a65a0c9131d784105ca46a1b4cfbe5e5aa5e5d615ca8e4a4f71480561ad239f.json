@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE referral_code\n            SET invite_count = invite_count + 1\n            WHERE account_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a65a0c9131d784105ca46a1b4cfbe5e5aa5e5d615ca8e4a4f71480561ad239f"
+}
