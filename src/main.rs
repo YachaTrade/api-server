@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, campaign, follow, order, profile, search, thread, token, trade},
+    router::{self, account, auth, campaign, follow, order, profile, referral, search, thread, token, trade},
     state::AppState,
     types,
 };
@@ -78,7 +78,14 @@ use clap::Parser;
         router::campaign::handler::get_top_point,
         router::campaign::handler::get_point_by_account_id,
         router::campaign::handler::complete_mission,
-        router::campaign::handler::get_completed_missions
+        router::campaign::handler::get_completed_missions,
+
+        // ----------------Referral----------------
+        router::referral::handler::check_register_referral_code,
+        router::referral::handler::register_referral_code,
+        router::referral::handler::make_referral_code,
+        router::referral::handler::exists_referral_code
+
     ),
     components(
         schemas(
@@ -162,6 +169,14 @@ use clap::Parser;
             types::campaign::point::MissionCompleteRequest,
             types::campaign::point::MissionCompleteResponse,
             types::campaign::point::MissionCompletedResponse,
+
+            // Reward
+            types::referral::CheckRegisterReferralResponse,
+            types::referral::RegisterReferralRequest,
+            types::referral::RegisterReferralResponse,
+            types::referral::MakeReferralCodeResponse,
+            types::referral::ExistsReferralCodeResponse,
+            
            
         )
     ),
@@ -235,6 +250,9 @@ async fn main() -> Result<()> {
         .merge(order::router())
         .merge(follow::router(app_state.clone()))
         .merge(campaign::router(app_state.clone()))
+        .merge(referral::router().layer(ServiceBuilder::new().layer(
+            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
+        )))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()
