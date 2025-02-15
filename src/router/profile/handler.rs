@@ -21,7 +21,7 @@ use axum::{
 
 use super::path::ProfilePath;
 
-/// Get user profile
+/// Get account profile
 #[utoipa::path(
     get,
     path = ProfilePath::GetProfile.docs_str(),
@@ -102,7 +102,6 @@ pub async fn get_pnl(
 pub async fn get_position(
     Path(account_id): Path<String>,
     Query(query): Query<PositionQuery>,
-
     State(state): State<AppState>,
 ) -> AppJsonResult<PositionResponse> {
     if !valid_evm_address(&account_id) {
