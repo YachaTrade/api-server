@@ -189,6 +189,8 @@ use clap::Parser;
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
         (name="Order",description="Order endpoints"),
+        (name="Campaign",description="Campaign endpoints"),
+        (name="Referral",description="Referral endpoints"),
     ),
     security(
         ("session_cookie" = [])
