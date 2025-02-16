@@ -104,6 +104,16 @@ pub async fn update_account(
         return Err(AppError::BadRequest("At least one of nickName, bio, or image must be provided".into()));
     }
 
+    // @ = x handle 전용
+    if let Some(nickname) = &form_data.nickname {
+        if nickname.starts_with('@') {
+            warn!("update account Error: Nickname cannot start with @");
+            return Err(AppError::BadRequest("Nickname cannot start with @".into()));
+        }
+    }
+
+
+
     // 텍스트 필드 처리
     let clean_text = |text: Option<String>| {
         text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
