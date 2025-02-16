@@ -197,7 +197,7 @@ impl PointController {
 
         let mission_str = match mission_type {
             MissionType::ConnectWallet => "CONNECT_WALLET",
-            MissionType::CreateToken => "CREATE_COIN",
+            MissionType::CreateToken => "CREATE_TOKEN",
             MissionType::Trade => "TRADE",
             MissionType::Follow => "FOLLOW",
             MissionType::Posting => "POSTING",
