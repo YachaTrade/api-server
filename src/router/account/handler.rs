@@ -8,7 +8,7 @@ use tracing::{info, instrument, warn};
 
 
 use crate::{
-     result::{AppError, AppJsonResult}, state::AppState, types::account::{x::{AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest, DisconnectedXAccountResponse}, AccountController, AccountResponse, UpdateAccountRequest}
+     result::{AppError, AppJsonResult}, state::AppState, types::account::{x::{AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest, DisconnectedXAccountResponse, GetXHandleResponse}, AccountController, AccountResponse, UpdateAccountRequest}
 
 };
 
@@ -244,6 +244,37 @@ pub async fn disconnect_x(
         .await
         .map_err(|err| {
             warn!("disconnect x account Error {:?}", err);
+            AppError::BadRequest(err.to_string())
+        })?;
+    Ok(Json(response))
+}
+
+
+#[utoipa::path(
+    get,
+    path = AccountPath::GetX.docs_str(),
+    responses(
+        (status = 200, description = "Get x handle successfully", body = GetXHandleResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("session_token" = [])
+    ),
+    tag="Account"
+)]
+
+pub async fn get_x_handle(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+)->AppJsonResult<GetXHandleResponse>{
+    let account_x_controller = AccountXController::new(state.postgres.clone());
+    let response = account_x_controller
+        .get_x_handle(session_address)
+        .await
+        .map_err(|err| {
+            warn!("get x handle Error {:?}", err);
             AppError::BadRequest(err.to_string())
         })?;
     Ok(Json(response))

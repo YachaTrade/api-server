@@ -3,6 +3,7 @@ pub enum AccountPath {
     GetAccount,
     ConnectX,
     DisconnectX,
+    GetX,
 }
 
 impl AccountPath {
@@ -12,6 +13,7 @@ impl AccountPath {
             AccountPath::GetAccount => "/account/get_account",
             AccountPath::ConnectX => "/account/connect_x",
             AccountPath::DisconnectX => "/account/disconnect_x",
+            AccountPath::GetX => "/account/get_x",
         }
     }
     pub fn docs_str(&self) -> &'static str {
@@ -20,6 +22,7 @@ impl AccountPath {
             AccountPath::GetAccount => "/account/get_account",
             AccountPath::ConnectX => "/account/connect_x",
             AccountPath::DisconnectX => "/account/disconnect_x",
+            AccountPath::GetX => "/account/get_x",
         }
     }
 }

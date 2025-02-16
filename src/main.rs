@@ -36,6 +36,7 @@ use clap::Parser;
         router::account::handler::get_account,
         router::account::handler::connect_x,
         router::account::handler::disconnect_x,
+        router::account::handler::get_x_handle,
         // ----------------Profile----------------
         router::profile::handler::get_profile,
         router::profile::handler::get_pnl,
@@ -95,6 +96,7 @@ use clap::Parser;
             types::common::info::MarketInfo,
             types::common::info::PositionInfo,
             types::common::info::PositionTokenInfo,
+            types::common::info::XInfo,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
             // Auth
@@ -114,6 +116,8 @@ use clap::Parser;
             types::account::x::ConnectedXAccountResponse,
             types::account::x::DisconnectXRequest,
             types::account::x::DisconnectedXAccountResponse,
+            types::account::x::GetXHandleResponse,
+    
 
             // Token
             types::token::TokenWithAccountInfo,

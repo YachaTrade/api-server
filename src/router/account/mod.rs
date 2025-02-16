@@ -21,4 +21,5 @@ pub fn router() -> Router<AppState> {
             AccountPath::DisconnectX.as_str(),
             delete(handler::disconnect_x),
         )
+        .route(AccountPath::GetX.as_str(), get(handler::get_x_handle))
 }
