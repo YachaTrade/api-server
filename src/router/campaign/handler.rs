@@ -107,7 +107,7 @@ pub async fn get_point_by_account_id(
 
 ///Complete mission
 #[utoipa::path(
-    post,
+    get,
     path = PointPath::CompleteMission.docs_str(),
     request_body = MissionCompleteRequest,
     responses(
