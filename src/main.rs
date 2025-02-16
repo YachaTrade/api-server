@@ -37,6 +37,9 @@ use clap::Parser;
         router::account::handler::connect_x,
         router::account::handler::disconnect_x,
         router::account::handler::get_x_handle,
+        router::account::handler::register_wallet,
+        router::account::handler::get_wallet,
+        
         // ----------------Profile----------------
         router::profile::handler::get_profile,
         router::profile::handler::get_pnl,
@@ -117,7 +120,9 @@ use clap::Parser;
             types::account::x::DisconnectXRequest,
             types::account::x::DisconnectedXAccountResponse,
             types::account::x::GetXHandleResponse,
-    
+            types::account::wallet::RegisterWalletRequest,
+            types::account::wallet::AccountWalletResponse,
+            types::account::wallet::Wallet,
 
             // Token
             types::token::TokenWithAccountInfo,

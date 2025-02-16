@@ -1,3 +1,4 @@
+pub mod wallet;
 pub mod x;
 use std::{env, sync::Arc};
 

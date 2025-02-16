@@ -8,7 +8,7 @@ use tracing::{info, instrument, warn};
 
 
 use crate::{
-     result::{AppError, AppJsonResult}, state::AppState, types::account::{x::{AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest, DisconnectedXAccountResponse, GetXHandleResponse}, AccountController, AccountResponse, UpdateAccountRequest}
+     result::{AppError, AppJsonResult}, state::AppState, types::account::{wallet::{AccountWalletResponse, RegisterWalletRequest, WalletController}, x::{AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest, DisconnectedXAccountResponse, GetXHandleResponse}, AccountController, AccountResponse, UpdateAccountRequest}
 
 };
 
@@ -277,5 +277,61 @@ pub async fn get_x_handle(
             warn!("get x handle Error {:?}", err);
             AppError::BadRequest(err.to_string())
         })?;
+    Ok(Json(response))
+}
+
+
+#[utoipa::path(
+    patch,
+    path = AccountPath::RegisterWallet.docs_str(),
+    request_body = RegisterWalletRequest,
+    responses(
+        (status = 200, description = "Get account successfully", body = AccountResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("session_token" = [])
+    ),
+    tag="Account"
+)]
+pub async fn register_wallet(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Json(payload): Json<RegisterWalletRequest>
+)->AppJsonResult<AccountWalletResponse>{
+    let response = WalletController::new(state.postgres.clone())
+        .register_wallet(session_address, payload.wallet)
+        .await
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+    
+    Ok(Json(response))
+}
+
+
+#[utoipa::path(
+    get,
+    path = AccountPath::GetWallet.docs_str(),
+    responses(
+        (status = 200, description = "Get account successfully", body = AccountResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("session_token" = [])
+    ),
+    tag="Account"
+)]
+pub async fn get_wallet(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+)->AppJsonResult<AccountWalletResponse>{
+    let response = WalletController::new(state.postgres.clone())
+        .get_wallet(session_address)
+        .await
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+    
     Ok(Json(response))
 }

@@ -4,6 +4,8 @@ pub enum AccountPath {
     ConnectX,
     DisconnectX,
     GetX,
+    RegisterWallet,
+    GetWallet,
 }
 
 impl AccountPath {
@@ -14,6 +16,8 @@ impl AccountPath {
             AccountPath::ConnectX => "/account/connect_x",
             AccountPath::DisconnectX => "/account/disconnect_x",
             AccountPath::GetX => "/account/get_x",
+            AccountPath::RegisterWallet => "/account/register_wallet",
+            AccountPath::GetWallet => "/account/wallet",
         }
     }
     pub fn docs_str(&self) -> &'static str {
@@ -23,6 +27,8 @@ impl AccountPath {
             AccountPath::ConnectX => "/account/connect_x",
             AccountPath::DisconnectX => "/account/disconnect_x",
             AccountPath::GetX => "/account/get_x",
+            AccountPath::RegisterWallet => "/account/register_wallet",
+            AccountPath::GetWallet => "/account/wallet",
         }
     }
 }
