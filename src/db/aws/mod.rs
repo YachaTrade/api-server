@@ -9,17 +9,22 @@ use bytes::Bytes;
 use chrono;
 use tracing::{error, info};
 
+// S3Client struct for managing AWS S3 and CloudFront operations
+// Handles file uploads, downloads, and CDN cache invalidation
 #[derive(Debug)]
 pub struct S3Client {
-    client: Client,
-    cloudfront_client: CloudFrontClient,
-    bucket_name: String,
-    distribution_id: String,
+    client: Client,                    // AWS S3 client
+    cloudfront_client: CloudFrontClient, // AWS CloudFront client
+    bucket_name: String,               // Target S3 bucket name
+    distribution_id: String,           // CloudFront distribution ID
 }
 
+// CloudFront CDN domain constant
 const CDN_DOMAIN: &str = "d1469zz8b08zl.cloudfront.net";
 
 impl S3Client {
+    // Creates a new S3Client instance with AWS credentials from environment variables
+    // Initializes both S3 and CloudFront clients
     pub async fn new() -> Self {
         let bucket_name = env::var("AWS_BUCKET_NAME").expect("AWS_BUCKET_NAME must be set");
         info!("S3 bucket name from env: {}", bucket_name);
@@ -48,6 +53,8 @@ impl S3Client {
         }
     }
 
+    // Invalidates CloudFront CDN cache for a given key
+    // This ensures that updated content is immediately available through the CDN
     async fn invalidate_cdn_cache(&self, key: &str) -> Result<()> {
         let path = format!("/{}", key);
 
@@ -85,6 +92,12 @@ impl S3Client {
         }
     }
 
+    // Uploads a thread image file to S3 and returns the CDN URL
+    // Parameters:
+    // - account_id: User's account ID
+    // - thread_id: Thread identifier
+    // - body: Image file contents
+    // - content_type: MIME type of the image
     pub async fn upload_thread_image_file<'a>(
         &self,
         account_id: &str,
@@ -109,7 +122,7 @@ impl S3Client {
                     key, output
                 );
 
-                // Invalidate CDN cache
+                // Invalidate CDN cache after successful upload
                 if let Err(err) = self.invalidate_cdn_cache(&key).await {
                     error!(
                         "CDN cache invalidation failed but upload succeeded: {}",
@@ -131,6 +144,11 @@ impl S3Client {
         }
     }
 
+    // Uploads a profile image file to S3 and returns the CDN URL
+    // Parameters:
+    // - account_id: User's account ID
+    // - body: Image file contents
+    // - content_type: MIME type of the image
     pub async fn upload_profile_image_file(
         &self,
         account_id: &str,
@@ -160,7 +178,7 @@ impl S3Client {
                     key, output
                 );
 
-                // Invalidate CDN cache
+                // Invalidate CDN cache after successful upload
                 if let Err(err) = self.invalidate_cdn_cache(&key).await {
                     error!(
                         "CDN cache invalidation failed but upload succeeded: {}",
@@ -182,6 +200,8 @@ impl S3Client {
         }
     }
 
+    // Retrieves a file from S3 by its key
+    // Returns the file contents as Bytes
     pub async fn get_file(&self, key: &str) -> Result<Bytes> {
         let result = self
             .client
@@ -194,6 +214,7 @@ impl S3Client {
         Ok(result.body.collect().await?.into_bytes())
     }
 
+    // Deletes a file from S3 by its key
     pub async fn delete_file(&self, key: &str) -> Result<()> {
         self.client
             .delete_object()
@@ -205,6 +226,8 @@ impl S3Client {
         Ok(())
     }
 
+    // Generates a pre-signed URL for temporary access to a private S3 object
+    // The URL expires after 1 hour (3600 seconds)
     pub async fn get_presigned_url(&self, key: &str) -> Result<String> {
         let presigned_request = self
             .client

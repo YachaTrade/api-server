@@ -48,8 +48,8 @@ use clap::Parser;
         router::profile::handler::get_swap_history,
 
         // ----------------Search----------------
-        router::search::handler::search_token,
-// account search
+        router::search::handler::search,
+
         // ----------------Thread----------------
         router::thread::handler::create_thread,
         router::thread::handler::like_thread,
@@ -65,6 +65,9 @@ use clap::Parser;
         router::trade::handler::get_holder,
         router::trade::handler::get_market,
         router::trade::handler::get_chart,
+
+        // ----------------Search----------------
+        router::search::handler::search,
 
         // ----------------Order----------------
         router::order::handler::get_creation_time_order,
@@ -133,7 +136,7 @@ use clap::Parser;
             types::token::order::OrderTokenInfo,
             types::token::order::OrderToken,
             types::token::order::OrderMessage,
-            types::token::order::SearchResponse,
+            
 
             //Trading
             types::trading::chart::Chart,
@@ -152,6 +155,13 @@ use clap::Parser;
             types::trading::swap_history::TokenSwapResponse,
             types::trading::market::Market,
 
+
+            //Search
+            types::search::SearchToken,
+            types::search::SearchTokenResponse,
+            types::search::SearchAccount,
+            types::search::SearchAccountResponse,
+            types::search::SearchResponse,
             // Social
             types::social::follow::Follow,
             types::social::follow::FollowResponse,
