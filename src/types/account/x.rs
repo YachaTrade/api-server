@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{db::postgres::PostgresDatabase, types::common::info::XInfo};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -46,6 +46,12 @@ pub struct ConnectedXAccountResponse {
 pub struct DisconnectedXAccountResponse {
     pub account_id: String,
     pub x_handle: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct GetXHandleResponse {
+    pub account_id: String,
+    pub x_info: XInfo,
 }
 
 pub struct AccountXController {
@@ -103,5 +109,22 @@ impl AccountXController {
             account_id,
             x_handle,
         })
+    }
+
+    pub async fn get_x_handle(&self, account_id: String) -> Result<GetXHandleResponse> {
+        let x_info: XInfo = sqlx::query_as!(
+            XInfo,
+            r#"
+            SELECT x_handle, x_image_uri, is_blue_label
+            FROM account_x
+            WHERE account_id = $1
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
+
+        Ok(GetXHandleResponse { account_id, x_info })
     }
 }

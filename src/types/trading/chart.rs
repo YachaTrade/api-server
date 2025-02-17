@@ -97,7 +97,7 @@ pub struct ChartResponse {
     pub total_count: i64,
 }
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ChartQuery {
     pub interval: String,
     pub pagination: Option<i64>,

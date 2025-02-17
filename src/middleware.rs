@@ -9,7 +9,6 @@ use axum::{
     middleware::Next,
 };
 use tower_cookies::Cookies;
-use tracing::info;
 
 pub async fn authenticate_user(
     State(state): State<AppState>,
@@ -22,7 +21,6 @@ pub async fn authenticate_user(
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),
     };
 
-    info!("Session key: {}", session_key);
     let redis = state.redis.clone();
     let postgres = state.postgres.clone();
 
@@ -43,7 +41,7 @@ pub async fn authenticate_user(
             address
         }
     };
-    info!("Pass authentication {:?}", session_address);
+
     req.extensions_mut().insert(session_address);
 
     Ok(next.run(req).await)

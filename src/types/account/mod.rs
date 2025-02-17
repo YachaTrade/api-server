@@ -1,3 +1,4 @@
+pub mod wallet;
 pub mod x;
 use std::{env, sync::Arc};
 
@@ -44,7 +45,7 @@ pub struct AccountParams {
     pub request_account_id: Option<String>,
 }
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RequestAccountIdParam {
     pub request_account_id: Option<String>,
 }

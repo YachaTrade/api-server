@@ -2,7 +2,7 @@ use axum::extract::{Path, Query};
 use axum::{extract::State, Json};
 use serde::Deserialize;
 
-use tracing::{instrument, warn};
+use tracing::{error, info, instrument, warn};
 
 use utoipa::{schema, ToSchema};
 
@@ -47,8 +47,8 @@ pub struct SearchTokenQuery {
 )]
 #[instrument(skip(state))]
 pub async fn search_token(
-    Path(token): Path<String>,
     State(state): State<AppState>,
+    Path(token): Path<String>,
     Query(query): Query<SearchTokenQuery>,
 ) -> AppJsonResult<SearchResponse> {
     if token.is_empty() {
@@ -67,10 +67,15 @@ pub async fn search_token(
         page: query.page.unwrap_or(1),
         limit: query.limit.unwrap_or(10),
     };
+
     let response = order_controller
         .search_order_tokens(&token, sort_by, pagination)
         .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+        .map_err(|err| {
+            error!("Failed to search token: token: {}, error: {}", token, err);
+            AppError::InternalError(err.to_string())
+        })?;
+    info!("Search Token: token: {}, response: {:?}", token, response);
 
     // 결과를 캐시에 저장
     if let Err(err) = state.redis.set_search_response(&token, &response).await {

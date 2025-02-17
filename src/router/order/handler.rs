@@ -31,7 +31,7 @@ use super::path::OrderPath;
     ),
     tag = "Order"
 )]
-#[instrument(skip(state, query))]
+#[instrument(skip(state))]
 pub async fn get_creation_time_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
@@ -96,7 +96,7 @@ pub async fn get_creation_time_order(
     ),
     tag = "Order"
 )]
-#[instrument(skip(state, query))]
+#[instrument(skip(state))]
 pub async fn get_market_cap_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
@@ -162,7 +162,7 @@ pub async fn get_market_cap_order(
     ),
     tag = "Order"
 )]
-#[instrument(skip(state, query))]
+#[instrument(skip(state))]
 pub async fn get_latest_trade_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,

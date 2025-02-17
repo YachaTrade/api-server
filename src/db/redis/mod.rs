@@ -1,7 +1,7 @@
 use std::env;
 
 use redis::{AsyncCommands, Client};
-use tracing::debug;
+use tracing::{debug, info};
 
 use anyhow::Result;
 
@@ -13,6 +13,7 @@ use crate::{
 pub struct RedisDatabase {
     pub client: Client,
 }
+
 impl RedisDatabase {
     pub async fn new() -> Self {
         let client = {
@@ -24,38 +25,42 @@ impl RedisDatabase {
 
         RedisDatabase { client }
     }
-}
 
-//session
-impl RedisDatabase {
+    //session
+
     //nonce -> address -> nonce
     pub async fn set_nonce(&self, address: &str, nonce: &str) -> Result<()> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
+
         let key = format!("session:{}:nonce", address);
 
         conn.set_ex::<String, String, ()>(key, nonce.to_string(), *NONCE_EXPIRATION)
             .await?;
-        debug!("Nonce set for address {}: {}", address, nonce);
+
         Ok(())
     }
 
     pub async fn get_nonce(&self, address: &str) -> Result<String> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
+
         let key = format!("session:{}:nonce", address);
         let nonce: Option<String> = conn.get(key).await?;
-        debug!("Nonce for address {}: {:?}", address, nonce);
+        info!("Nonce for address {}: {:?}", address, nonce);
         match nonce {
             Some(nonce) => Ok(nonce),
             None => Err(anyhow::anyhow!("Nonce not found")),
         }
     }
+
     pub async fn del_nonce(&self, address: &str) -> Result<()> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
+
         let key = format!("session:{}:nonce", address);
         conn.del::<_, ()>(key).await?;
         debug!("Nonce deleted for address: {}", address);
         Ok(())
     }
+
     //expire time = 10000
     pub async fn set_session(
         &self,
@@ -64,6 +69,7 @@ impl RedisDatabase {
         expiration: u64,
     ) -> Result<()> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
+
         let key = format!("session:{}:id", session_id);
         conn.set_ex::<_, _, ()>(key, address, expiration).await?;
         debug!(
@@ -136,6 +142,7 @@ impl RedisDatabase {
         debug!("Order response set for order type {:?}", order_type);
         Ok(())
     }
+
     pub async fn get_order_response(&self, order_type: &TokenOrderType) -> Result<OrderMessage> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
         let key = format!("order:{}:response", order_type.as_str());

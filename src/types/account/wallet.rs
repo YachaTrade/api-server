@@ -1,0 +1,99 @@
+use crate::db::postgres::PostgresDatabase;
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use utoipa::ToSchema;
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Wallet {
+    METAMASK,
+    KEPLR,
+    BACKPACK,
+    HAHA,
+    OTHER,
+}
+
+impl Wallet {
+    pub fn to_string(&self) -> String {
+        match self {
+            Wallet::METAMASK => "METAMASK".to_string(),
+            Wallet::KEPLR => "KEPLR".to_string(),
+            Wallet::BACKPACK => "BACKPACK".to_string(),
+            Wallet::HAHA => "HAHA".to_string(),
+            Wallet::OTHER => "OTHER".to_string(),
+        }
+    }
+}
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RegisterWalletRequest {
+    pub wallet: Wallet,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AccountWalletResponse {
+    pub account_id: String,
+    pub wallet: Wallet,
+}
+
+pub struct WalletController {
+    db: Arc<PostgresDatabase>,
+}
+
+impl WalletController {
+    pub fn new(db: Arc<PostgresDatabase>) -> Self {
+        Self { db }
+    }
+
+    pub async fn register_wallet(
+        &self,
+        account_id: String,
+        wallet: Wallet,
+    ) -> Result<AccountWalletResponse> {
+        sqlx::query!(
+            r#"
+            INSERT INTO account_wallet (account_id, wallet)
+            VALUES ($1, $2)
+            ON CONFLICT (account_id) DO UPDATE
+            SET wallet = EXCLUDED.wallet
+            RETURNING account_id, wallet
+            "#,
+            account_id,
+            wallet.to_string()
+        )
+        .fetch_one(self.db.get_write_pool())
+        .await
+        .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
+
+        Ok(AccountWalletResponse { account_id, wallet })
+    }
+
+    pub async fn get_wallet(&self, account_id: String) -> Result<AccountWalletResponse> {
+        let record = sqlx::query!(
+            r#"
+            SELECT account_id, wallet
+            FROM account_wallet
+            WHERE account_id = $1
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow!("Failed to get wallet: {}", err))?;
+
+        let wallet = match record.wallet.as_str() {
+            "METAMASK" => Wallet::METAMASK,
+            "KEPLR" => Wallet::KEPLR,
+            "BACKPACK" => Wallet::BACKPACK,
+            "HAHA" => Wallet::HAHA,
+            _ => Wallet::OTHER,
+        };
+
+        let response = AccountWalletResponse {
+            account_id: record.account_id,
+            wallet,
+        };
+
+        Ok(response)
+    }
+}

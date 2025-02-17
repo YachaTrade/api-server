@@ -1,15 +1,16 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 
-use tracing::info;
+use tracing::{error, info, instrument};
 
 use super::path::TokenPath;
 use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::token::{TokenController, TokenResponse},
+    utils::valid_evm_address,
 };
 
 /// Get token metadata
@@ -26,15 +27,28 @@ use crate::{
     ),
     tag = "Token"
 )]
+#[instrument(skip(state))]
 pub async fn get_token(
     State(state): State<AppState>,
-    Path(token): Path<String>,
+    Path(token_id): Path<String>,
 ) -> AppJsonResult<TokenResponse> {
-    info!("Get token Request for token: {}", token);
+    if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
+        return Err(AppError::BadRequest("Invalid token ID".to_string()));
+    }
+
+    info!("Get token Request for token: {}", token_id);
     let token_controller = TokenController::new(state.postgres.clone());
-    let token = token_controller
-        .get_token(token)
-        .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
-    Ok(Json(TokenResponse { token }))
+    let response = token_controller.get_token(&token_id).await.map_err(|err| {
+        error!(
+            "Failed to get token: token_id: {}, error: {}",
+            token_id, err
+        );
+        AppError::InternalError(err.to_string())
+    })?;
+    info!(
+        "Get Token: token_id: {}, response: {:?}",
+        token_id, response
+    );
+    Ok(Json(response))
 }
