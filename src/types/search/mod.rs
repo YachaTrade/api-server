@@ -112,30 +112,29 @@ impl SearchController {
                 a.follower_count,
                 a.following_count,
                 COALESCE(ps.total_cost, 0)::numeric AS "total_cost!: BigDecimal",
-                (COALESCE(ps.realized_pnl, 0) + COALESCE(ps.unrealized_pnl, 0))::numeric AS "total_profit!: BigDecimal"
+                COALESCE(ps.total_profit, 0)::numeric AS "total_profit!: BigDecimal"
             FROM account a
             LEFT JOIN (
                     SELECT 
                         p.account_id,
                         SUM(p.total_bought_native) AS total_cost,
-                        SUM(p.realized_pnl) AS realized_pnl,
-                        SUM(
-                            COALESCE(
-                                CASE 
-                                    WHEN p.current_token_amount = 0 THEN 0
-                                    WHEN m.market_type = 'CURVE' THEN
-                                        m.virtual_native 
-                                        - (
-                                            ((m.virtual_token * m.virtual_native) 
-                                            + (m.virtual_token + p.current_token_amount) - 1)
-                                            / (m.virtual_token + p.current_token_amount)
-                                        )
-                                    WHEN m.market_type = 'DEX' THEN
-                                        m.price * p.current_token_amount
-                                    ELSE 0
-                                END,
-                            0)
-                        ) AS unrealized_pnl
+                      (SUM(p.realized_pnl) + SUM(
+                        COALESCE(
+                            CASE 
+                                WHEN p.current_token_amount = 0 THEN 0
+                                WHEN m.market_type = 'CURVE' THEN
+                                    m.virtual_native 
+                                    - (
+                                        ((m.virtual_token * m.virtual_native) 
+                                        + (m.virtual_token + p.current_token_amount) - 1)
+                                        / (m.virtual_token + p.current_token_amount)
+                                    )
+                                WHEN m.market_type = 'DEX' THEN
+                                    m.price * p.current_token_amount
+                                ELSE 0
+                            END,
+                        0)
+                    )) AS total_profit
                     FROM position p            
                     JOIN market m ON p.token_id = m.token_id
                     WHERE p.created_at >= $2
@@ -145,7 +144,7 @@ impl SearchController {
                 OR LOWER(a.nickname) LIKE $1
                 ORDER BY 
                     (
-                    (COALESCE(ps.realized_pnl, 0) + COALESCE(ps.unrealized_pnl, 0))
+                   COALESCE(ps.total_profit, 0)
                     / NULLIF(COALESCE(ps.total_cost, 0), 0)
                     ) DESC
             "#,
