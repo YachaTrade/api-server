@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, follow, order, profile, search, thread, token, trade},
+    router::{self, account, auth, campaign, follow, order, profile, referral, search, thread, token, trade},
     state::AppState,
     types,
 };
@@ -27,37 +27,69 @@ use clap::Parser;
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        // ----------------Auth----------------
         router::auth::handler::auth_nonce,
         router::auth::handler::auth_session,
         router::auth::handler::auth_delete_session,
+        // ----------------Account----------------
         router::account::handler::update_account,
         router::account::handler::get_account,
         router::account::handler::connect_x,
         router::account::handler::disconnect_x,
+        router::account::handler::get_x_handle,
+        router::account::handler::register_wallet,
+        router::account::handler::get_wallet,
+        
+        // ----------------Profile----------------
         router::profile::handler::get_profile,
         router::profile::handler::get_pnl,
         router::profile::handler::get_position,
         router::profile::handler::get_token_created,
         router::profile::handler::get_swap_history,
+
+        // ----------------Search----------------
         router::search::handler::search_token,
+// account search
+        // ----------------Thread----------------
         router::thread::handler::create_thread,
         router::thread::handler::like_thread,
         router::thread::handler::unlike_thread,
         router::thread::handler::get_threads_by_token,
         router::thread::handler::get_thread_like_by_account,
+
+        // ----------------Token----------------
         router::token::handler::get_token,
+
+        // ----------------Trade----------------
         router::trade::handler::get_swap_history,
         router::trade::handler::get_holder,
         router::trade::handler::get_market,
         router::trade::handler::get_chart,
+
+        // ----------------Order----------------
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
+
+        // ----------------Follow----------------
         router::follow::handler::add_follow,
         router::follow::handler::remove_follow,
         router::follow::handler::check_follow,
         router::follow::handler::get_followers,
         router::follow::handler::get_followings,  
+        // ----------------Campaign----------------
+        router::campaign::handler::check_active_user,
+        router::campaign::handler::get_top_point,
+        router::campaign::handler::get_point_by_account_id,
+        router::campaign::handler::complete_mission,
+        router::campaign::handler::get_completed_missions,
+
+        // ----------------Referral----------------
+        router::referral::handler::check_register_referral_code,
+        router::referral::handler::register_referral_code,
+        router::referral::handler::make_referral_code,
+        router::referral::handler::exists_referral_code
+
     ),
     components(
         schemas(
@@ -67,6 +99,7 @@ use clap::Parser;
             types::common::info::MarketInfo,
             types::common::info::PositionInfo,
             types::common::info::PositionTokenInfo,
+            types::common::info::XInfo,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
             // Auth
@@ -86,6 +119,10 @@ use clap::Parser;
             types::account::x::ConnectedXAccountResponse,
             types::account::x::DisconnectXRequest,
             types::account::x::DisconnectedXAccountResponse,
+            types::account::x::GetXHandleResponse,
+            types::account::wallet::RegisterWalletRequest,
+            types::account::wallet::AccountWalletResponse,
+            types::account::wallet::Wallet,
 
             // Token
             types::token::TokenWithAccountInfo,
@@ -108,6 +145,7 @@ use clap::Parser;
             types::trading::position::PositionResponse,
             types::trading::position::TokenHolder,
             types::trading::position::TokenHolderResponse,
+            types::trading::position::PositionType,
             types::trading::swap_history::PositionSwap,
             types::trading::swap_history::PositionSwapResponse,
             types::trading::swap_history::TokenSwap,
@@ -131,6 +169,24 @@ use clap::Parser;
             types::social::thread::ThreadRequest,
             types::social::thread::ThreadResponse,
             types::social::thread::ThreadsResponse,
+
+            // Campaign
+            types::campaign::active::ActiveUserResponse,
+            types::campaign::point::Point,
+            types::campaign::point::TopPointResponse,
+            types::campaign::point::AccountPointResponse,
+            types::campaign::point::MissionCompleteRequest,
+            types::campaign::point::MissionCompleteResponse,
+            types::campaign::point::MissionCompletedResponse,
+
+            // Reward
+            types::referral::CheckRegisterReferralResponse,
+            types::referral::RegisterReferralRequest,
+            types::referral::RegisterReferralResponse,
+            types::referral::MakeReferralCodeResponse,
+            types::referral::ExistsReferralCodeResponse,
+            
+           
         )
     ),
     tags(
@@ -142,6 +198,8 @@ use clap::Parser;
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
         (name="Order",description="Order endpoints"),
+        (name="Campaign",description="Campaign endpoints"),
+        (name="Referral",description="Referral endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -202,6 +260,10 @@ async fn main() -> Result<()> {
         .merge(profile::router())
         .merge(order::router())
         .merge(follow::router(app_state.clone()))
+        .merge(campaign::router(app_state.clone()))
+        .merge(referral::router().layer(ServiceBuilder::new().layer(
+            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
+        )))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()

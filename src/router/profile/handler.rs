@@ -7,7 +7,7 @@ use crate::{
         token::create_token::{TokenCreatedController, TokenCreatedResponse},
         trading::{
             pnl::{PNLController, PNLResponse},
-            position::{PositionController, PositionResponse},
+            position::{PositionController, PositionQuery, PositionResponse, PositionType},
             swap_history::{PositionSwapResponse, SwapController},
         },
     },
@@ -18,10 +18,11 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use tracing::{error, info, instrument};
 
 use super::path::ProfilePath;
 
-/// Get user profile
+/// Get account profile
 #[utoipa::path(
     get,
     path = ProfilePath::GetProfile.docs_str(),
@@ -36,7 +37,7 @@ use super::path::ProfilePath;
     ),
     tag = "Profile"
 )]
-
+#[instrument(skip(state))]
 pub async fn get_profile(
     Path(account_id): Path<String>,
     Query(params): Query<RequestAccountIdParam>,
@@ -46,11 +47,22 @@ pub async fn get_profile(
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
 
-    let identifier: Identifier = account_id.into();
-    let account = AccountController::new(state.postgres.clone())
+    let identifier: Identifier = account_id.clone().into();
+    let account_controller = AccountController::new(state.postgres.clone());
+    let account = account_controller
         .get_account_with_mutual(&identifier, params.request_account_id)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to get profile: account_id: {}, error: {}",
+                account_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Profile: account_id :{} response :{:?}",
+        account_id, account
+    );
     Ok(Json(AccountResponse { account }))
 }
 
@@ -68,6 +80,7 @@ pub async fn get_profile(
     ),
     tag = "Profile"
 )]
+#[instrument(skip(state))]
 pub async fn get_pnl(
     Path(account_id): Path<String>,
     State(state): State<AppState>,
@@ -75,10 +88,15 @@ pub async fn get_pnl(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-    let pnl = PNLController::new(state.postgres.clone())
-        .get_pnl(&account_id)
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let pnl_controller = PNLController::new(state.postgres.clone());
+    let pnl = pnl_controller.get_pnl(&account_id).await.map_err(|err| {
+        error!(
+            "Failed to get PNL: account_id: {}, error: {}",
+            account_id, err
+        );
+        AppError::InternalError(err.to_string())
+    })?;
+    info!("Get PNL: account_id :{} pnl :{:?}", account_id, pnl);
     Ok(Json(pnl))
 }
 
@@ -88,8 +106,9 @@ pub async fn get_pnl(
     path = ProfilePath::GetPosition.docs_str(),
     params(
         ("account_id" = String, Path, description = "Account ID to get positions for"),
-        ("page" = i32, Query, description = "Page number (starts from 1)"),
-        ("limit" = i32, Query, description = "Number of items per page")
+        ("page" = i64, Query, description = "Page number (starts from 1)"),
+        ("limit" = i64, Query, description = "Number of items per page"),
+        ("position_type" = String, Query, description = "Type of position to get (ALL, OPEN, CLOSE)")
     ),
     responses(
         (status = 200, description = "Successfully retrieved positions", body = PositionResponse),
@@ -98,19 +117,34 @@ pub async fn get_pnl(
     ),
     tag = "Profile"
 )]
+#[instrument(skip(state))]
 pub async fn get_position(
     Path(account_id): Path<String>,
-    Query(pagination): Query<PaginationParams>,
+    Query(query): Query<PositionQuery>,
     State(state): State<AppState>,
 ) -> AppJsonResult<PositionResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
+    let pagination = PaginationParams {
+        page: query.page,
+        limit: query.limit,
+    };
     let position_controller = PositionController::new(state.postgres.clone());
     let response = position_controller
-        .get_positions(&account_id, pagination)
+        .get_positions(&account_id, pagination, query.position_type)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to get position: account_id: {}, error: {}",
+                account_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Position: account_id :{} response :{:?}",
+        account_id, response
+    );
     Ok(Json(response))
 }
 
@@ -130,7 +164,7 @@ pub async fn get_position(
     ),
     tag = "Profile"
 )]
-
+#[instrument(skip(state))]
 pub async fn get_token_created(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
@@ -139,9 +173,21 @@ pub async fn get_token_created(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-    let response = TokenCreatedController::new(state.postgres.clone())
+    let token_created_controller = TokenCreatedController::new(state.postgres.clone());
+    let response = token_created_controller
         .get_tokens_created(&account_id, pagination)
-        .await?;
+        .await
+        .map_err(|err| {
+            error!(
+                "Failed to get token created: account_id: {}, error: {}",
+                account_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Token Created: account_id :{} response :{:?}",
+        account_id, response
+    );
     Ok(Json(response))
 }
 
@@ -155,12 +201,13 @@ pub async fn get_token_created(
         ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved trade history", body = SwapResponse),
+        (status = 200, description = "Successfully retrieved trade history", body = PositionSwapResponse),
         (status = 400, description = "Invalid request parameters"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
+#[instrument(skip(state))]
 pub async fn get_swap_history(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
@@ -173,6 +220,16 @@ pub async fn get_swap_history(
     let response = swap_controller
         .get_swaps_by_account(&account_id, pagination)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to get swap history: account_id: {}, error: {}",
+                account_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
+    info!(
+        "Get Swap History: account_id :{} response :{:?}",
+        account_id, response
+    );
     Ok(Json(response))
 }

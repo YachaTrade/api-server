@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO account_wallet (account_id, wallet)\n            VALUES ($1, $2)\n            ON CONFLICT (account_id) DO UPDATE\n            SET wallet = EXCLUDED.wallet\n            RETURNING account_id, wallet\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "wallet",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ead523061c3742ad3efb297d839edc72565b0b7dbad66c6ae9557238e253f4c7"
+}

@@ -12,7 +12,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use tower_cookies::cookie::time::Duration;
 use tower_cookies::Cookie;
 
-use tracing::{info, instrument};
+use tracing::instrument;
 
 use uuid::Uuid;
 
@@ -135,7 +135,6 @@ pub async fn auth_session(
     cookie.set_same_site(tower_cookies::cookie::SameSite::None);
     cookie.set_max_age(Duration::days(7));
 
-    info!("cookie = {:?}", cookie);
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
         .header(
@@ -147,6 +146,7 @@ pub async fn auth_session(
 
     Ok(response)
 }
+
 /// Delete authentication session
 #[utoipa::path(
     delete,

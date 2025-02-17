@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT x_handle, x_image_uri, is_blue_label\n            FROM account_x\n            WHERE account_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "x_handle",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "x_image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_blue_label",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d3e7be3dd2b32681b222e66115163254b235917a100373280b6916648482be47"
+}

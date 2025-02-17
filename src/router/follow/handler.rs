@@ -86,6 +86,7 @@ pub async fn add_follow(
     ),
      tag = "Follow"
 )]
+#[instrument(skip(state))]
 pub async fn remove_follow(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
@@ -164,6 +165,7 @@ pub async fn check_follow(
     ),
     tag = "Profile"
 )]
+#[instrument(skip(state))]
 pub async fn get_followers(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
@@ -191,6 +193,7 @@ pub async fn get_followers(
     ),
     tag = "Profile"
 )]
+#[instrument(skip(state))]
 pub async fn get_followings(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,

@@ -26,7 +26,8 @@ impl<'r> sqlx::decode::Decode<'r, sqlx::Postgres> for AccountInfo {
     fn decode(
         value: sqlx::postgres::PgValueRef<'r>,
     ) -> Result<Self, Box<dyn std::error::Error + 'static + Send + Sync>> {
-        let value = <sqlx::types::Json<Self> as sqlx::decode::Decode<sqlx::Postgres>>::decode(value)?;
+        let value =
+            <sqlx::types::Json<Self> as sqlx::decode::Decode<sqlx::Postgres>>::decode(value)?;
         Ok(value.0)
     }
 }
@@ -70,4 +71,11 @@ pub struct PositionInfo {
     pub total_pnl: BigDecimal,
     pub created_at: i64,
     pub last_traded_at: i64,
+}
+
+#[derive(Serialize, Deserialize, FromRow, ToSchema)]
+pub struct XInfo {
+    pub x_handle: String,
+    pub x_image_uri: String,
+    pub is_blue_label: bool,
 }
