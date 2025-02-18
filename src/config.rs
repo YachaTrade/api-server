@@ -5,4 +5,5 @@ lazy_static! {
     pub static ref NONCE_EXPIRATION:u64 = 300; //5 minutes
     pub static ref QUERY_EXPIRATION:u64 = 5;
     pub static ref ORDER_EXPIRATION:u64 = 500; //miliseconds
+    pub static ref SEARCH_EXPIRATION:u64 = 15;
 }
