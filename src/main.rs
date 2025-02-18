@@ -91,7 +91,7 @@ use clap::Parser;
         router::referral::handler::check_register_referral_code,
         router::referral::handler::register_referral_code,
         router::referral::handler::make_referral_code,
-        router::referral::handler::exists_referral_code
+        router::referral::handler::get_referral_code
 
     ),
     components(
@@ -195,7 +195,7 @@ use clap::Parser;
             types::referral::RegisterReferralResponse,
             types::referral::MakeReferralCodeResponse,
             types::referral::ExistsReferralCodeResponse,
-            
+            types::referral::GetReferralCodeResponse
            
         )
     ),

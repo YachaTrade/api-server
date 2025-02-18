@@ -5,8 +5,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::referral::{
-        CheckRegisterReferralResponse, ExistsReferralCodeResponse, MakeReferralCodeResponse,
-        ReferralController, RegisterReferralRequest, RegisterReferralResponse,
+        CheckRegisterReferralResponse, ExistsReferralCodeResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
     },
 };
 
@@ -91,9 +90,9 @@ pub async fn register_referral_code(
 /// Check if a referral code exists for the account
 #[utoipa::path(
     get,
-    path = ReferralPath::ExistsReferralCode.docs_str(),
+    path = ReferralPath::GetReferralCode.docs_str(),
     responses(
-        (status = 200, description = "Successfully checked referral code existence", body = ExistsReferralCodeResponse),
+        (status = 200, description = "Successfully checked referral code existence", body = GetReferralCodeResponse),
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
@@ -103,13 +102,13 @@ pub async fn register_referral_code(
     )
 )]
 #[instrument(skip(state))]
-pub async fn exists_referral_code(
+pub async fn get_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-) -> AppJsonResult<ExistsReferralCodeResponse> {
+) -> AppJsonResult<GetReferralCodeResponse> {
     let referral_controller = ReferralController::new(state.postgres.clone());
     let response = referral_controller
-        .existing_referral_code(&session_address)
+        .get_referral_code(&session_address)
         .await
         .map_err(|err| {
             error!("Failed to check existing referral code: session_address: {}, error: {}", session_address, err);

@@ -6,10 +6,10 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
+
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]

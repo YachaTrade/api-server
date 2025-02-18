@@ -24,7 +24,7 @@ pub fn router() -> Router<AppState> {
             post(handler::make_referral_code),
         )
         .route(
-            ReferralPath::ExistsReferralCode.as_str(),
-            get(handler::exists_referral_code),
+            ReferralPath::GetReferralCode.as_str(),
+            get(handler::get_referral_code),
         )
 }
