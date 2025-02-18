@@ -33,6 +33,11 @@ pub struct MakeReferralCodeResponse {
     pub account_id: String,
     pub referral_code: String,
 }
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetReferralCodeResponse {
+    pub account_id: String,
+    pub referral_code: String,
+}
 
 pub struct ReferralController {
     pub db: Arc<PostgresDatabase>,
@@ -161,6 +166,24 @@ impl ReferralController {
         }
     }
 
+    pub async fn get_referral_code(&self, account_id: &str) -> Result<GetReferralCodeResponse> {
+        let record = sqlx::query!(
+            r#"
+            SELECT referral_code
+            FROM referral_code
+            WHERE account_id = $1
+            "#,
+            account_id
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow::anyhow!("Fail get referral code Reason :{err}"))?;
+
+        Ok(GetReferralCodeResponse {
+            account_id: account_id.to_string(),
+            referral_code: record.referral_code,
+        })
+    }
     /// Checks if the given account has already generated a referral code
     ///
     /// # Arguments

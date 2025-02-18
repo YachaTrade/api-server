@@ -1,13 +1,17 @@
 use std::env;
 
-use redis::{AsyncCommands, Client};
+use redis::{pipe, AsyncCommands, Client};
 use tracing::{debug, info};
 
 use anyhow::Result;
 
 use crate::{
-    config::{NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION},
-    types::token::order::{OrderMessage, SearchResponse, TokenOrderType},
+    config::{NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION, SEARCH_EXPIRATION},
+    types::{
+        common::pagination::PaginationParams,
+        search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
+        token::order::{OrderMessage, TokenOrderType},
+    },
 };
 
 pub struct RedisDatabase {
@@ -100,29 +104,91 @@ impl RedisDatabase {
 impl RedisDatabase {
     pub async fn set_search_response(&self, query: &str, response: &SearchResponse) -> Result<()> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
-        let key = format!("search:{}:response", query);
+        let token_key = format!("search:{}:tokens", query);
+        let account_key = format!("search:{}:accounts", query);
 
-        // SearchResponse를 JSON 문자열로 직렬화
-        let response_json = serde_json::to_string(response)?;
+        // Serialize token and account responses separately
+        let token_json = serde_json::to_string(&response.tokens)?;
+        let account_json = serde_json::to_string(&response.accounts)?;
 
-        conn.set_ex::<_, _, ()>(key, response_json, *QUERY_EXPIRATION)
-            .await?;
+        // Use pipeline to set both values atomically
+        let mut pipe = redis::pipe();
+        pipe.set_ex::<_, _>(token_key, token_json, *SEARCH_EXPIRATION)
+            .set_ex::<_, _>(account_key, account_json, *SEARCH_EXPIRATION);
+
+        let _: ((), ()) = pipe.query_async(&mut conn).await?;
         debug!("Search response set for query {}", query);
         Ok(())
     }
 
-    pub async fn get_search_response(&self, query: &str) -> Result<SearchResponse> {
+    pub async fn get_search_response(
+        &self,
+        query: &str,
+        pagination: PaginationParams,
+    ) -> Result<Option<SearchResponse>> {
         let mut conn = self.client.get_multiplexed_async_connection().await?;
-        let key = format!("search:{}:response", query);
+        let token_key = format!("search:{}:tokens", query);
+        let account_key = format!("search:{}:accounts", query);
 
-        // Redis에서 JSON 문자열 가져오기
-        let response_json: String = conn.get(key).await?;
+        // Get both token and account responses
+        let (token_json, account_json): (Option<String>, Option<String>) = redis::pipe()
+            .atomic()
+            .get(&token_key)
+            .get(&account_key)
+            .query_async(&mut conn)
+            .await?;
 
-        // JSON 문자열을 SearchResponse로 역직렬화
-        let response: SearchResponse = serde_json::from_str(&response_json)?;
+        // If either cache is missing, return None
+        if token_json.is_none() || account_json.is_none() {
+            return Ok(None);
+        }
+
+        let token_response: SearchTokenResponse = {
+            let full_response: SearchTokenResponse = serde_json::from_str(&token_json.unwrap())?;
+            let start_idx = (pagination.page - 1) * pagination.limit;
+
+            // If no tokens in cache, return None
+            if full_response.tokens.is_empty() {
+                return Ok(None);
+            }
+
+            SearchTokenResponse {
+                total_count: full_response.total_count,
+                tokens: full_response
+                    .tokens
+                    .into_iter()
+                    .skip(start_idx as usize)
+                    .take(pagination.limit as usize)
+                    .collect(),
+            }
+        };
+
+        let account_response: SearchAccountResponse = {
+            let full_response: SearchAccountResponse =
+                serde_json::from_str(&account_json.unwrap())?;
+            let start_idx = (pagination.page - 1) * pagination.limit;
+
+            // If no accounts in cache, return None
+            if full_response.accounts.is_empty() {
+                return Ok(None);
+            }
+
+            SearchAccountResponse {
+                total_count: full_response.total_count,
+                accounts: full_response
+                    .accounts
+                    .into_iter()
+                    .skip(start_idx as usize)
+                    .take(pagination.limit as usize)
+                    .collect(),
+            }
+        };
 
         debug!("Search response retrieved for query {}", query);
-        Ok(response)
+        Ok(Some(SearchResponse {
+            tokens: token_response,
+            accounts: account_response,
+        }))
     }
 }
 
