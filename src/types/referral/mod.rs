@@ -39,6 +39,15 @@ pub struct GetReferralCodeResponse {
     pub referral_code: String,
 }
 
+/// Response for getting referral child count
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetReferralChildCountResponse {
+    /// The account ID for which the child count was retrieved
+    pub account_id: String,
+    /// The number of referral children for this account
+    pub child_count: i64,
+}
+
 pub struct ReferralController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -107,7 +116,7 @@ impl ReferralController {
             r#"
             INSERT INTO referral (child_account_id, parent_account_id)
             VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (child_account_id) DO NOTHING
             "#,
             child_account_id,
             parent_account_id
@@ -184,6 +193,7 @@ impl ReferralController {
             referral_code: record.referral_code,
         })
     }
+
     /// Checks if the given account has already generated a referral code
     ///
     /// # Arguments
@@ -261,6 +271,33 @@ impl ReferralController {
             "Failed to generate unique referral code after {} attempts",
             MAX_ATTEMPTS
         ))
+    }
+
+    pub async fn get_referral_child_count(
+        &self,
+        account_id: &str,
+    ) -> Result<GetReferralChildCountResponse> {
+        let record = sqlx::query!(
+            r#"
+            SELECT COUNT(*) AS count
+            FROM referral
+            WHERE parent_account_id = $1
+            "#,
+            account_id
+        )
+        .fetch_optional(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow::anyhow!("Fail get referral child count Reason :{err}"))?;
+        match record {
+            Some(record) => Ok(GetReferralChildCountResponse {
+                account_id: account_id.to_string(),
+                child_count: record.count.unwrap_or(0),
+            }),
+            None => Ok(GetReferralChildCountResponse {
+                account_id: account_id.to_string(),
+                child_count: 0,
+            }),
+        }
     }
 
     /// Generates a random alphanumeric code of specified length

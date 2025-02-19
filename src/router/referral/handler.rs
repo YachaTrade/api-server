@@ -5,7 +5,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::referral::{
-        CheckRegisterReferralResponse, ExistsReferralCodeResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
+        CheckRegisterReferralResponse, ExistsReferralCodeResponse, GetReferralChildCountResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
     },
 };
 
@@ -157,6 +157,34 @@ pub async fn make_referral_code(
         .await
         .map_err(|err| {
             error!("Failed to make referral code: session_address: {}, error: {}", session_address, err);
+            AppError::InternalError(err.to_string())
+        })?;
+    Ok(Json(response))
+}
+
+/// Get the count of referral children for the current user
+#[utoipa::path(
+    get,
+    path = ReferralPath::GetReferralChildCount.docs_str(),
+    tag = "Referral",
+    responses(
+        (status = 200, description = "Successfully retrieved referral child count", body = GetReferralChildCountResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("session_token" = [])
+    )
+)]
+pub async fn get_referral_child_count( 
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+)->AppJsonResult<GetReferralChildCountResponse> {
+    let referral_controller = ReferralController::new(state.postgres.clone());
+    let response = referral_controller
+        .get_referral_child_count(&session_address)
+        .await
+        .map_err(|err| {
+            error!("Failed to get referral child count: session_address: {}, error: {}", session_address, err);
             AppError::InternalError(err.to_string())
         })?;
     Ok(Json(response))

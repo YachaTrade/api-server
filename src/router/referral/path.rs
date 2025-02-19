@@ -4,6 +4,7 @@ pub enum ReferralPath {
     MakeReferralCode,      //레퍼럴 코드 생성
     ExistsReferralCode,    //레퍼럴 코드 잇는지 확인
     GetReferralCode,       //레퍼럴 코드 조회
+    GetReferralChildCount, //레퍼럴 초대 회원 수 확인
 }
 
 impl ReferralPath {
@@ -14,6 +15,7 @@ impl ReferralPath {
             Self::MakeReferralCode => "/referral/code/make",
             Self::ExistsReferralCode => "/referral/code/exists",
             Self::GetReferralCode => "/referral/code",
+            Self::GetReferralChildCount => "/referral/child_count",
         }
     }
 
@@ -24,6 +26,7 @@ impl ReferralPath {
             Self::MakeReferralCode => "/referral/code/make",
             Self::ExistsReferralCode => "/referral/code/exists",
             Self::GetReferralCode => "/referral/code",
+            Self::GetReferralChildCount => "/referral/child_count",
         }
     }
 }
