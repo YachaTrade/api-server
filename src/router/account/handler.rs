@@ -324,7 +324,7 @@ pub async fn register_wallet(
     get,
     path = AccountPath::GetWallet.docs_str(),
     responses(
-        (status = 200, description = "Get account successfully", body = AccountResponse),
+        (status = 200, description = "Get account successfully", body = AccountWalletResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
