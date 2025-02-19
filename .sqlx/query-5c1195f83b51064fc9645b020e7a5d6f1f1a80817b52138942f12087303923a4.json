@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO referral (child_account_id, parent_account_id)\n            VALUES ($1, $2)\n            ON CONFLICT (child_account_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c1195f83b51064fc9645b020e7a5d6f1f1a80817b52138942f12087303923a4"
+}
