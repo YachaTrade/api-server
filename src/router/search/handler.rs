@@ -37,6 +37,13 @@ pub async fn search(
         return Err(AppError::BadRequest("Empty name search query".to_string()));
     }
 
+    if name == "0x" {
+        warn!("Invalid name search query");
+        return Err(AppError::BadRequest(
+            "0x is invalid search path".to_string(),
+        ));
+    }
+
     // 캐시된 결과에서 페이지네이션
     if let Ok(Some(cached_response)) = state.redis.get_search_response(&name, pagination).await {
         debug!("Cache hit for search query: {}", name);

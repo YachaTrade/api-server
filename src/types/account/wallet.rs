@@ -11,6 +11,8 @@ pub enum Wallet {
     KEPLR,
     BACKPACK,
     HAHA,
+    PHANTOM,
+    RABBY,
     OTHER,
 }
 
@@ -21,6 +23,8 @@ impl Wallet {
             Wallet::KEPLR => "KEPLR".to_string(),
             Wallet::BACKPACK => "BACKPACK".to_string(),
             Wallet::HAHA => "HAHA".to_string(),
+            Wallet::PHANTOM => "PHANTOM".to_string(),
+            Wallet::RABBY => "RABBY".to_string(),
             Wallet::OTHER => "OTHER".to_string(),
         }
     }
