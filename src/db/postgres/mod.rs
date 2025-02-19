@@ -11,7 +11,7 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
     let primary_db_url =
         env::var("PRIMARY_DATABASE_URL").expect("PRIMARY_DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
-        .max_connections(50)
+        .max_connections(100)
         .max_lifetime(Duration::from_secs(60 * 60 * 24))
         .connect(primary_db_url.as_str())
         .await
@@ -24,7 +24,7 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
     let replica_db_url =
         env::var("REPLICA_DATABASE_URL").expect("REPLICA_DATABASE_URL must be set");
     let pool = PgPoolOptions::new()
-        .max_connections(50)
+        .max_connections(100)
         .max_lifetime(Duration::from_secs(60 * 60 * 24))
         .connect(replica_db_url.as_str())
         .await
