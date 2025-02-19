@@ -5,7 +5,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::referral::{
-        CheckRegisterReferralResponse, ExistsReferralCodeResponse, GetReferralChildCountResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
+        CheckRegisterReferralResponse, ExistsReferralCodeResponse, GetInvitedCreateResponse, GetReferralChildCountResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
     },
 };
 
@@ -166,11 +166,12 @@ pub async fn make_referral_code(
 #[utoipa::path(
     get,
     path = ReferralPath::GetReferralChildCount.docs_str(),
-    tag = "Referral",
     responses(
         (status = 200, description = "Successfully retrieved referral child count", body = GetReferralChildCountResponse),
-        (status = 500, description = "Internal server error", body = ErrorResponse)
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
     ),
+    tag = "Referral",
     security(
         ("session_token" = [])
     )
@@ -185,6 +186,36 @@ pub async fn get_referral_child_count(
         .await
         .map_err(|err| {
             error!("Failed to get referral child count: session_address: {}, error: {}", session_address, err);
+            AppError::InternalError(err.to_string())
+        })?;
+    Ok(Json(response))
+}
+
+
+#[utoipa::path(
+    get,
+    path = ReferralPath::GetInvitedCreate.docs_str(),
+
+    responses(
+        (status = 200, description = "Successfully retrieved invited create", body = GetInvitedCreateResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Referral",
+    security(
+        ("session_token" = [])
+    )
+)]
+pub async fn get_invited_create(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+) -> AppJsonResult<GetInvitedCreateResponse> {
+    let referral_controller = ReferralController::new(state.postgres.clone());
+    let response = referral_controller
+        .get_invited_create(&session_address)
+        .await
+        .map_err(|err| {
+            error!("Failed to get referral target create: session_address: {}, error: {}", session_address, err);
             AppError::InternalError(err.to_string())
         })?;
     Ok(Json(response))

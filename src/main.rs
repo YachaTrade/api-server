@@ -93,6 +93,7 @@ use clap::Parser;
         router::referral::handler::make_referral_code,
         router::referral::handler::get_referral_code,
         router::referral::handler::get_referral_child_count,
+        router::referral::handler::get_invited_create,
 
     ),
     components(
@@ -197,7 +198,8 @@ use clap::Parser;
             types::referral::MakeReferralCodeResponse,
             types::referral::ExistsReferralCodeResponse,
             types::referral::GetReferralCodeResponse,
-            types::referral::GetReferralChildCountResponse
+            types::referral::GetReferralChildCountResponse,
+            types::referral::GetInvitedCreateResponse
            
         )
     ),

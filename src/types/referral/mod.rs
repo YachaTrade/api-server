@@ -48,6 +48,12 @@ pub struct GetReferralChildCountResponse {
     pub child_count: i64,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetInvitedCreateResponse {
+    pub account_id: String,
+    pub invited_by_create_count: i32,
+}
+
 pub struct ReferralController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -296,6 +302,30 @@ impl ReferralController {
             None => Ok(GetReferralChildCountResponse {
                 account_id: account_id.to_string(),
                 child_count: 0,
+            }),
+        }
+    }
+
+    pub async fn get_invited_create(&self, account_id: &str) -> Result<GetInvitedCreateResponse> {
+        let record = sqlx::query!(
+            r#"
+            SELECT account_id,invited_by_create_count
+            FROM invited_create
+            WHERE account_id = $1
+            "#,
+            account_id
+        )
+        .fetch_optional(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow::anyhow!("Fail get referral child count Reason :{err}"))?;
+        match record {
+            Some(record) => Ok(GetInvitedCreateResponse {
+                account_id: account_id.to_string(),
+                invited_by_create_count: record.invited_by_create_count,
+            }),
+            None => Ok(GetInvitedCreateResponse {
+                account_id: account_id.to_string(),
+                invited_by_create_count: 0,
             }),
         }
     }

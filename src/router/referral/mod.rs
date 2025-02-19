@@ -31,4 +31,8 @@ pub fn router() -> Router<AppState> {
             ReferralPath::GetReferralChildCount.as_str(),
             get(handler::get_referral_child_count),
         )
+        .route(
+            ReferralPath::GetInvitedCreate.as_str(),
+            post(handler::get_invited_create),
+        )
 }
