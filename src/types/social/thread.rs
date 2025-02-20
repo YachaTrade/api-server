@@ -187,7 +187,7 @@ impl ThreadController {
         )
         .fetch_all(self.db.get_read_pool())
         .await
-        .context("Failed to get threads")?;
+        .map_err(|e| anyhow!("Failed to get threads: {}", e))?;
 
         let total_count = self.get_threads_count(token_id).await?;
 
