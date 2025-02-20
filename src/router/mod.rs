@@ -13,3 +13,4 @@ pub mod token;
 pub mod trade;
 
 pub mod referral;
+pub mod admin;
