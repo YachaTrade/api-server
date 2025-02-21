@@ -1,3 +1,4 @@
+use std::env;
 use std::str::FromStr;
 
 use alloy::{primitives::Address, signers::Signature};
@@ -75,6 +76,16 @@ pub async fn auth_session(
     State(state): State<AppState>,
     Json(payload): Json<AuthSessionRequest>,
 ) -> AppResult<impl IntoResponse> {
+    let chain_id = payload.chain_id;
+    let env_chain_id = env::var("CHAIN_ID")
+        .expect("CHAIN_ID must be set")
+        .parse::<u64>()
+        .unwrap();
+
+    if chain_id != env_chain_id {
+        return Err(AppError::BadRequest("Invalid chain id".to_string()).into());
+    }
+
     // 1. 주소와 서명 파싱
     let nonce = payload.nonce;
     let signature = Signature::from_str(&payload.signature)

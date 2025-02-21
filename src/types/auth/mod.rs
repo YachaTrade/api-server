@@ -35,6 +35,7 @@ pub struct AuthSessionRequest {
     pub signature: String,
     #[schema(example = "abcdef-abcedef-abcedf")]
     pub nonce: String,
+    pub chain_id: u64,
 }
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthSessionResponse {
