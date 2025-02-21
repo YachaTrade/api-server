@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT account_id\n            FROM account\n            WHERE LOWER(account_id) LIKE $1\n            OR LOWER(nickname) LIKE $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "469a122e28e6b3a14dbf66e00baa5535e8ef1e8ca3c79214cd7644cb4fe1d953"
+}
