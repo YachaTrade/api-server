@@ -177,7 +177,11 @@ impl SearchController {
                 account_records
                     .into_iter()
                     .map(|row| {
-                        let roi_percentage = row.total_profit.clone() / row.total_cost;
+                        let roi_percentage = if row.total_cost == BigDecimal::from(0) {
+                            BigDecimal::from(0)
+                        } else {
+                            row.total_profit.clone() / row.total_cost
+                        };
                         SearchAccount {
                             account_info: AccountInfo {
                                 account_id: row.account_id,
