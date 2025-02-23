@@ -117,6 +117,10 @@ pub async fn create_thread(
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing thread data".into()))?;
     let thread_controller = ThreadController::new(state.postgres.clone());
 
+    if form_data.content.contains("http") {
+        return Err(AppError::BadRequest("Content cannot contain 'http'".into()));
+    }
+
     // 이미지 업로드
     let image_uri = if let Some((image_data, content_type)) = image_info {
         let last_thread_id = thread_controller.get_last_thread_id().await?;
