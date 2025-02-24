@@ -50,6 +50,9 @@ anyhow = "1.0.92"
 #DOTENV
 dotenv = "0.15.0"
 
+#REGEX
+regex = "1.10.3"
+
 #RAYON
 rayon = "1.10.0"
 
