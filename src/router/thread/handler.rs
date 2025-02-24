@@ -3,6 +3,7 @@ use axum::{
     Extension, Json,
 };
 use bytes::Bytes;
+use regex::Regex;
 use serde::Serialize;
 use tracing::{error, info, instrument};
 use utoipa::ToSchema;
@@ -117,9 +118,11 @@ pub async fn create_thread(
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing thread data".into()))?;
     let thread_controller = ThreadController::new(state.postgres.clone());
 
-    if form_data.content.contains("http") || form_data.content.contains("t.me") {
+    // Check for any URLs or Telegram links using regex
+    let url_regex = Regex::new(r"(https?://|t\.me/|www\.)[^\s]+").unwrap();
+    if url_regex.is_match(&form_data.content) {
         return Err(AppError::BadRequest(
-            "Content cannot contain 'http' or 't.me'".into(),
+            "Content cannot contain URLs or Telegram links".into(),
         ));
     }
 
