@@ -117,8 +117,10 @@ pub async fn create_thread(
     let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing thread data".into()))?;
     let thread_controller = ThreadController::new(state.postgres.clone());
 
-    if form_data.content.contains("http") {
-        return Err(AppError::BadRequest("Content cannot contain 'http'".into()));
+    if form_data.content.contains("http") || form_data.content.contains("t.me") {
+        return Err(AppError::BadRequest(
+            "Content cannot contain 'http' or 't.me'".into(),
+        ));
     }
 
     // 이미지 업로드
