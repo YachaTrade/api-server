@@ -119,7 +119,7 @@ pub async fn create_thread(
     let thread_controller = ThreadController::new(state.postgres.clone());
 
     // Check for any URLs or Telegram links using regex
-    let url_regex = Regex::new(r"(https?://|t\.me|www\.)[^\s]*").unwrap();
+    let url_regex = Regex::new(r"(https?://|t\.me|www\.|discord\.gg|discord\.com|bit\.ly|tinyurl\.com|goo\.gl|youtu\.be)[^\s]*").unwrap();
     if url_regex.is_match(&form_data.content) {
         return Err(AppError::BadRequest(
             "Content cannot contain URLs or Telegram links".into(),
