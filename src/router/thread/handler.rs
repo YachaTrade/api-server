@@ -120,13 +120,15 @@ pub async fn create_thread(
 
     // Check for any URLs or Telegram links using regex
 
-    let valid_content_regex = Regex::new(r"^(?!.*(?:https?://|t\.me|www\.|discord\.gg|discord\.com|bit\.ly|tinyurl\.com|goo\.gl|youtu\.be)).*$").unwrap();
-    if !valid_content_regex.is_match(&form_data.content) {
+    let url_regex = Regex::new(
+        r"(https?://|t\.me|www\.|discord\.gg|discord\.com|bit\.ly|tinyurl\.com|goo\.gl|youtu\.be)",
+    )
+    .unwrap();
+    if url_regex.is_match(&form_data.content) {
         return Err(AppError::BadRequest(
             "Content cannot contain URLs or Telegram links".into(),
         ));
     }
-
     // 이미지 업로드
     let image_uri = if let Some((image_data, content_type)) = image_info {
         let last_thread_id = thread_controller.get_last_thread_id().await?;
