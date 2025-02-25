@@ -6,11 +6,18 @@ use tracing::{debug, info};
 use anyhow::Result;
 
 use crate::{
-    config::{NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION, SEARCH_EXPIRATION},
+    config::{
+        NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION,
+    },
     types::{
         common::pagination::PaginationParams,
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
         token::order::{OrderMessage, TokenOrderType},
+        trading::{
+            chart::{ChartQuery, ChartResponse},
+            position::TokenHolderResponse,
+            swap_history::TokenSwapResponse,
+        },
     },
 };
 
@@ -216,5 +223,115 @@ impl RedisDatabase {
         let response: OrderMessage = serde_json::from_str(&response_json)?;
         debug!("Order response retrieved for order type {:?}", order_type);
         Ok(response)
+    }
+}
+
+//Token 관련
+impl RedisDatabase {
+    pub async fn set_token_swap_history(
+        &self,
+        token_id: &str,
+        response: &TokenSwapResponse,
+        pagination: &PaginationParams,
+    ) -> Result<()> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!(
+            "token:{}:swap_history:{}:{}",
+            token_id, pagination.limit, pagination.page
+        );
+        let history_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
+            .await?;
+        debug!("Token swap history set for token {:?}", token_id);
+        Ok(())
+    }
+
+    pub async fn get_token_swap_history(
+        &self,
+        token_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenSwapResponse> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!(
+            "token:{}:swap_history:{}:{}",
+            token_id, pagination.limit, pagination.page
+        );
+        let history_json: String = conn.get(key).await?;
+        let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
+        debug!("Token swap history retrieved for token {:?}", token_id);
+        Ok(history)
+    }
+
+    pub async fn set_token_holder_response(
+        &self,
+        token_id: &str,
+        response: &TokenHolderResponse,
+        pagination: &PaginationParams,
+    ) -> Result<()> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!(
+            "token:{}:holder:{}:{}",
+            token_id, pagination.limit, pagination.page
+        );
+        let history_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
+            .await?;
+        debug!("Token holder set for token {:?}", token_id);
+        Ok(())
+    }
+    pub async fn get_token_holder_response(
+        &self,
+        token_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenHolderResponse> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!(
+            "token:{}:holder:{}:{}",
+            token_id, pagination.limit, pagination.page
+        );
+        let history_json: String = conn.get(key).await?;
+        let history: TokenHolderResponse = serde_json::from_str(&history_json)?;
+        debug!("Token holder retrieved for token {:?}", token_id);
+        Ok(history)
+    }
+
+    pub async fn set_chart_response(
+        &self,
+        token_id: &str,
+        query: &ChartQuery,
+        response: &ChartResponse,
+    ) -> Result<()> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!(
+            "token:{}:chart:interval:{}:page:{}",
+            token_id,
+            query.interval,
+            query.pagination.unwrap_or(0)
+        );
+        let history_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
+            .await?;
+        debug!("Token chart set for token {:?}", token_id);
+        Ok(())
+    }
+    pub async fn get_chart_response(
+        &self,
+        token_id: &str,
+        query: &ChartQuery,
+    ) -> Result<ChartResponse> {
+        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let key = format!(
+            "token:{}:chart:interval:{}:page:{}",
+            token_id,
+            query.interval,
+            query.pagination.unwrap_or(0)
+        );
+        let history_json: String = conn.get(key).await?;
+        let history: ChartResponse = serde_json::from_str(&history_json)?;
+        debug!("Token chart retrieved for token {:?}", token_id);
+        Ok(history)
     }
 }
