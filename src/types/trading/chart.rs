@@ -88,7 +88,7 @@ impl From<ChartInterval> for i16 {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChartResponse {
     pub data: Vec<Chart>,
     pub token_id: String,

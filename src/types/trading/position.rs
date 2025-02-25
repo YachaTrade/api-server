@@ -285,7 +285,7 @@ impl PositionController {
     pub async fn get_holders_by_token(
         &self,
         token_id: &str,
-        pagination: PaginationParams,
+        pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
         let record = sqlx::query!(

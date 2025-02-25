@@ -6,4 +6,5 @@ lazy_static! {
     pub static ref QUERY_EXPIRATION:u64 = 5;
     pub static ref ORDER_EXPIRATION:u64 = 1000; //miliseconds
     pub static ref SEARCH_EXPIRATION:u64 = 15;
+    pub static ref TOKEN_EXPIRATION:u64 = 1000; //miliseconds
 }

@@ -154,7 +154,7 @@ impl SwapController {
     pub async fn get_swaps_by_token(
         &self,
         token_id: &str,
-        pagination: PaginationParams,
+        pagination: &PaginationParams,
     ) -> Result<TokenSwapResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
         let swaps = sqlx::query!(
