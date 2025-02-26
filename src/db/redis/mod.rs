@@ -1,6 +1,10 @@
 use std::env;
 
-use redis::{pipe, AsyncCommands, Client};
+use deadpool_redis::{
+    redis::{self, cmd, pipe, AsyncCommands},
+    Config, PoolConfig, Runtime,
+};
+
 use tracing::{debug, info};
 
 use anyhow::Result;
@@ -22,26 +26,24 @@ use crate::{
 };
 
 pub struct RedisDatabase {
-    pub client: Client,
+    pool: deadpool_redis::Pool, // 연결 풀 추가
 }
-
 impl RedisDatabase {
     pub async fn new() -> Self {
-        let client = {
-            let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
-            debug!("Connecting to standalone Redis at: {}", redis_url);
-            let client = Client::open(redis_url).unwrap();
-            client
-        };
+        let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
 
-        RedisDatabase { client }
+        let cfg = Config::from_url(redis_url);
+
+        let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+
+        RedisDatabase { pool }
     }
 
     //session
 
     //nonce -> address -> nonce
     pub async fn set_nonce(&self, address: &str, nonce: &str) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
 
         let key = format!("session:{}:nonce", address);
 
@@ -52,7 +54,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_nonce(&self, address: &str) -> Result<String> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
 
         let key = format!("session:{}:nonce", address);
         let nonce: Option<String> = conn.get(key).await?;
@@ -64,7 +66,7 @@ impl RedisDatabase {
     }
 
     pub async fn del_nonce(&self, address: &str) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
 
         let key = format!("session:{}:nonce", address);
         conn.del::<_, ()>(key).await?;
@@ -79,7 +81,7 @@ impl RedisDatabase {
         address: &str,
         expiration: u64,
     ) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
 
         let key = format!("session:{}:id", session_id);
         conn.set_ex::<_, _, ()>(key, address, expiration).await?;
@@ -91,7 +93,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_address_by_session(&self, session_id: &str) -> Result<String> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!("session:{}:id", session_id);
         let address = conn.get::<_, String>(key).await?;
         debug!("Address for session {}: {:?}", session_id, address);
@@ -99,7 +101,7 @@ impl RedisDatabase {
     }
 
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!("session:{}:id", session_id);
         conn.del::<_, ()>(key).await?;
         debug!("Session deleted: {}", session_id);
@@ -110,7 +112,7 @@ impl RedisDatabase {
 //search response
 impl RedisDatabase {
     pub async fn set_search_response(&self, query: &str, response: &SearchResponse) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let token_key = format!("search:{}:tokens", query);
         let account_key = format!("search:{}:accounts", query);
 
@@ -119,9 +121,9 @@ impl RedisDatabase {
         let account_json = serde_json::to_string(&response.accounts)?;
 
         // Use pipeline to set both values atomically
-        let mut pipe = redis::pipe();
-        pipe.set_ex::<_, _>(token_key, token_json, *SEARCH_EXPIRATION)
-            .set_ex::<_, _>(account_key, account_json, *SEARCH_EXPIRATION);
+        let mut pipe = pipe();
+        pipe.set_ex(&token_key, token_json, *SEARCH_EXPIRATION)
+            .set_ex(&account_key, account_json, *SEARCH_EXPIRATION);
 
         let _: ((), ()) = pipe.query_async(&mut conn).await?;
         debug!("Search response set for query {}", query);
@@ -133,12 +135,12 @@ impl RedisDatabase {
         query: &str,
         pagination: PaginationParams,
     ) -> Result<Option<SearchResponse>> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let token_key = format!("search:{}:tokens", query);
         let account_key = format!("search:{}:accounts", query);
 
         // Get both token and account responses
-        let (token_json, account_json): (Option<String>, Option<String>) = redis::pipe()
+        let (token_json, account_json): (Option<String>, Option<String>) = pipe()
             .atomic()
             .get(&token_key)
             .get(&account_key)
@@ -206,7 +208,7 @@ impl RedisDatabase {
         order_type: &TokenOrderType,
         response: &OrderMessage,
     ) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!("order:{}:response", order_type.as_str());
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
@@ -217,7 +219,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_order_response(&self, order_type: &TokenOrderType) -> Result<OrderMessage> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!("order:{}:response", order_type.as_str());
         let response_json: String = conn.get(key).await?;
         let response: OrderMessage = serde_json::from_str(&response_json)?;
@@ -234,7 +236,7 @@ impl RedisDatabase {
         response: &TokenSwapResponse,
         pagination: &PaginationParams,
     ) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!(
             "token:{}:swap_history:{}:{}",
             token_id, pagination.limit, pagination.page
@@ -252,7 +254,7 @@ impl RedisDatabase {
         token_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenSwapResponse> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!(
             "token:{}:swap_history:{}:{}",
             token_id, pagination.limit, pagination.page
@@ -269,7 +271,7 @@ impl RedisDatabase {
         response: &TokenHolderResponse,
         pagination: &PaginationParams,
     ) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!(
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
@@ -286,7 +288,7 @@ impl RedisDatabase {
         token_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!(
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
@@ -303,7 +305,7 @@ impl RedisDatabase {
         query: &ChartQuery,
         response: &ChartResponse,
     ) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!(
             "token:{}:chart:interval:{}:page:{}",
             token_id,
@@ -322,7 +324,7 @@ impl RedisDatabase {
         token_id: &str,
         query: &ChartQuery,
     ) -> Result<ChartResponse> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.pool.get().await?;
         let key = format!(
             "token:{}:chart:interval:{}:page:{}",
             token_id,
