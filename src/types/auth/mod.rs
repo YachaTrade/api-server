@@ -38,7 +38,6 @@ pub struct AuthSessionRequest {
     pub chain_id: u64,
 }
 
-
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthSessionResponse {
     pub account: Account,
