@@ -48,9 +48,9 @@ pub async fn get_swap_history(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
-    if let Ok(cached_response) = state.redis.get_token_swap_history(&token_id, &params).await {
-        return Ok(Json(cached_response));
-    }
+    // if let Ok(cached_response) = state.redis.get_token_swap_history(&token_id, &params).await {
+    //     return Ok(Json(cached_response));
+    // }
 
     let response = SwapController::new(state.postgres.clone())
         .get_swaps_by_token(&token_id, &params)
@@ -62,13 +62,13 @@ pub async fn get_swap_history(
             );
             AppError::InternalError(err.to_string())
         })?;
-    if let Err(err) = state
-        .redis
-        .set_token_swap_history(&token_id, &response, &params)
-        .await
-    {
-        warn!("Failed to set token swap history cache: {}", err);
-    }
+    // if let Err(err) = state
+    //     .redis
+    //     .set_token_swap_history(&token_id, &response, &params)
+    //     .await
+    // {
+    //     warn!("Failed to set token swap history cache: {}", err);
+    // }
     info!(
         "Get Swap History: token_id: {}, response: {:?}",
         token_id, response
@@ -102,13 +102,13 @@ pub async fn get_holder(
         error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    if let Ok(cached_response) = state
-        .redis
-        .get_token_holder_response(&token_id, &params)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
+    // if let Ok(cached_response) = state
+    //     .redis
+    //     .get_token_holder_response(&token_id, &params)
+    //     .await
+    // {
+    //     return Ok(Json(cached_response));
+    // }
     let response = PositionController::new(state.postgres.clone())
         .get_holders_by_token(&token_id, &params)
         .await
@@ -119,13 +119,13 @@ pub async fn get_holder(
             );
             AppError::InternalError(err.to_string())
         })?;
-    if let Err(err) = state
-        .redis
-        .set_token_holder_response(&token_id, &response, &params)
-        .await
-    {
-        warn!("Failed to set token holder cache: {}", err);
-    }
+    // if let Err(err) = state
+    //     .redis
+    //     .set_token_holder_response(&token_id, &response, &params)
+    //     .await
+    // {
+    //     warn!("Failed to set token holder cache: {}", err);
+    // }
     info!(
         "Get Token Holders: token_id: {}, response: {:?}",
         token_id, response
@@ -204,9 +204,9 @@ pub async fn get_chart(
     let pagenation = query.pagination.unwrap_or(0);
 
     let chart_controller = ChartController::new(state.postgres.clone());
-    if let Ok(cached_response) = state.redis.get_chart_response(&token, &query).await {
-        return Ok(Json(cached_response));
-    }
+    // if let Ok(cached_response) = state.redis.get_chart_response(&token, &query).await {
+    //     return Ok(Json(cached_response));
+    // }
     let chart_response = chart_controller
         .get_chart(&token, chart_interval, pagenation)
         .await
@@ -215,13 +215,13 @@ pub async fn get_chart(
             AppError::InternalError(format!("Failed to get chart: {}", err))
         })?;
 
-    if let Err(err) = state
-        .redis
-        .set_chart_response(&token, &query, &chart_response)
-        .await
-    {
-        warn!("Failed to set chart cache: {}", err);
-    }
+    // if let Err(err) = state
+    //     .redis
+    //     .set_chart_response(&token, &query, &chart_response)
+    //     .await
+    // {
+    //     warn!("Failed to set chart cache: {}", err);
+    // }
     info!(
         "Get Chart: token: {}, response: {:?}",
         token, chart_response
