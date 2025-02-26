@@ -138,14 +138,26 @@ pub async fn auth_session(
     let account = account_controller
         .upsert_account(account)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to upsert account: address: {}, error: {}",
+                address, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
 
     let session_controller = SessionController::new(postgres.clone());
 
     session_controller
         .set_session(&session_id, &account.account_id)
         .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to set session: session_id: {}, account_id: {}, error: {}",
+                session_id, account.account_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
 
     //추후 프론트 배포시 samesite = strict 로 변경
     let mut cookie = Cookie::new("api-session", session_id);
