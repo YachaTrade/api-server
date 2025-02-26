@@ -13,7 +13,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use tower_cookies::cookie::time::Duration;
 use tower_cookies::Cookie;
 
-use tracing::instrument;
+use tracing::{error, info, instrument};
 
 use uuid::Uuid;
 
@@ -98,26 +98,36 @@ pub async fn auth_session(
         .to_string();
 
     let redis = state.redis.clone();
-
-    let session_nonce = redis
-        .get_nonce(&address)
-        .await
-        .map_err(|err| AppError::RedisError(err.to_string()))?;
-
+    info!("Nonce for address {}: {}", address, nonce);
+    let session_nonce = redis.get_nonce(&address).await.map_err(|err| {
+        error!("Failed to get nonce: address: {}, error: {}", address, err);
+        AppError::RedisError(err.to_string())
+    })?;
+    info!("Session nonce for address {}: {}", address, session_nonce);
     if nonce != session_nonce {
-        AppError::Unauthorized("Invalid nonce".to_string());
+        error!("Invalid nonce: address: {}, nonce: {}", address, nonce);
+        return Err(AppError::Unauthorized("Invalid nonce".to_string()).into());
     }
 
-    redis
-        .del_nonce(&address)
-        .await
-        .map_err(|err| AppError::RedisError(err.to_string()))?;
+    redis.del_nonce(&address).await.map_err(|err| {
+        error!(
+            "Failed to delete nonce: address: {}, error: {}",
+            address, err
+        );
+        AppError::RedisError(err.to_string())
+    })?;
     let session_id = generate_session_id(address.as_str(), nonce.as_str());
 
     redis
         .set_session(&session_id, &address, *EXPIRATION_SESSION_KEY)
         .await
-        .map_err(|err| AppError::RedisError(err.to_string()))?;
+        .map_err(|err| {
+            error!(
+                "Failed to set session: session_id: {}, address: {}, error: {}",
+                session_id, address, err
+            );
+            AppError::RedisError(err.to_string())
+        })?;
     //session key는 postgres에 어떻게 저장할거냐?
 
     let postgres = state.postgres.clone();
