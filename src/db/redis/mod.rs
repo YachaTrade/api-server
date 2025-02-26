@@ -27,13 +27,31 @@ pub struct RedisDatabase {
     pool: deadpool_redis::Pool, // 연결 풀 추가
 }
 impl RedisDatabase {
-    pub async fn new() -> Self {
-        let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
-
-        let mut cfg = Config::from_url(redis_url);
+    pub async fn new_session_pool() -> Self {
+        let url = env::var("SESSION_REDIS_URL").expect("SESSION_REDIS_URL must be set");
+        let mut cfg = Config::from_url(url);
 
         cfg.pool = Some(PoolConfig {
-            max_size: 1000, // 최대 연결 수 증가
+            max_size: 100, // 최대 연결 수 증가
+            timeouts: deadpool_redis::Timeouts {
+                wait: Some(std::time::Duration::from_secs(5)),
+                create: Some(std::time::Duration::from_secs(2)),
+                recycle: Some(std::time::Duration::from_secs(1)),
+            },
+            queue_mode: deadpool::managed::QueueMode::Fifo,
+        });
+
+        let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+
+        RedisDatabase { pool }
+    }
+
+    pub async fn new_trade_pool() -> Self {
+        let url = env::var("TRADE_REDIS_URL").expect("TRADE_REDIS_URL must be set");
+        let mut cfg = Config::from_url(url);
+
+        cfg.pool = Some(PoolConfig {
+            max_size: 100, // 최대 연결 수 증가
             timeouts: deadpool_redis::Timeouts {
                 wait: Some(std::time::Duration::from_secs(5)),
                 create: Some(std::time::Duration::from_secs(2)),

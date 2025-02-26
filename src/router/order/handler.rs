@@ -38,7 +38,7 @@ pub async fn get_creation_time_order(
 ) -> AppJsonResult<OrderMessage> {
     // 캐시된 결과 확인
     if let Ok(cached_response) = state
-        .redis
+        .trade_redis
         .get_order_response(&TokenOrderType::CreationTime)
         .await
     {
@@ -67,7 +67,7 @@ pub async fn get_creation_time_order(
 
     // 결과를 캐시에 저장
     if let Err(err) = state
-        .redis
+        .trade_redis
         .set_order_response(&TokenOrderType::CreationTime, &response)
         .await
     {
@@ -103,7 +103,7 @@ pub async fn get_market_cap_order(
 ) -> AppJsonResult<OrderMessage> {
     // 캐시된 결과 확인
     if let Ok(cached_response) = state
-        .redis
+        .trade_redis
         .get_order_response(&TokenOrderType::MarketCap)
         .await
     {
@@ -133,7 +133,7 @@ pub async fn get_market_cap_order(
 
     // 결과를 캐시에 저장
     if let Err(err) = state
-        .redis
+        .trade_redis
         .set_order_response(&TokenOrderType::MarketCap, &response)
         .await
     {
@@ -169,7 +169,7 @@ pub async fn get_latest_trade_order(
 ) -> AppJsonResult<OrderMessage> {
     // 캐시된 결과 확인
     if let Ok(cached_response) = state
-        .redis
+        .trade_redis
         .get_order_response(&TokenOrderType::LatestTrade)
         .await
     {
@@ -197,7 +197,7 @@ pub async fn get_latest_trade_order(
 
     // 결과를 캐시에 저장
     if let Err(err) = state
-        .redis
+        .trade_redis
         .set_order_response(&TokenOrderType::LatestTrade, &response)
         .await
     {

@@ -49,7 +49,7 @@ pub async fn auth_nonce(
     let nonce = Uuid::new_v4().to_string();
     Address::from_str(&payload.address)
         .map_err(|_e| AppError::BadRequest("Invalid address".to_string()))?;
-    let redis = state.redis.clone();
+    let redis = state.session_redis.clone();
     redis
         .set_nonce(&payload.address, &nonce)
         .await
@@ -97,7 +97,7 @@ pub async fn auth_session(
         .map_err(|_| AppError::BadRequest("Invalid signature".to_string()))?
         .to_string();
 
-    let redis = state.redis.clone();
+    let redis = state.session_redis.clone();
     info!("Nonce for address {}: {}", address, nonce);
     let session_nonce = redis.get_nonce(&address).await.map_err(|err| {
         error!("Failed to get nonce: address: {}, error: {}", address, err);
@@ -203,7 +203,7 @@ pub async fn auth_delete_session(
         .delete_session_by_id(&session_address)
         .await
         .map_err(|err| AppError::InternalError(err.to_string()))?;
-    let redis = state.redis.clone();
+    let redis = state.session_redis.clone();
     redis
         .delete_session(&session_address)
         .await
