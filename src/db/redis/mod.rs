@@ -33,7 +33,7 @@ impl RedisDatabase {
         let mut cfg = Config::from_url(redis_url);
 
         cfg.pool = Some(PoolConfig {
-            max_size: 40, // 최대 연결 수 증가
+            max_size: 1000, // 최대 연결 수 증가
             timeouts: deadpool_redis::Timeouts {
                 wait: Some(std::time::Duration::from_secs(5)),
                 create: Some(std::time::Duration::from_secs(2)),
