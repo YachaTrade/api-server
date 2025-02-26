@@ -107,4 +107,5 @@ urlencoding = "2.1"
 
 clap = { version = "4.4.11", features = ["derive"] }
 url = "2.5.4"
-deadpool-redis = "0.19.0"
+deadpool-redis = { version = "0.19.0", features = ["rt_tokio_1"] }
+deadpool = "0.12.2"

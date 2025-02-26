@@ -620,6 +620,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "deadpool",
  "deadpool-redis",
  "dotenv",
  "lazy_static",
