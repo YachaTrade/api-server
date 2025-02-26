@@ -1,7 +1,7 @@
 use std::env;
 
 use deadpool_redis::{
-    redis::{self, cmd, pipe, AsyncCommands},
+    redis::{pipe, AsyncCommands},
     Config, PoolConfig, Runtime,
 };
 
@@ -10,9 +10,7 @@ use tracing::{debug, info};
 use anyhow::Result;
 
 use crate::{
-    config::{
-        NONCE_EXPIRATION, ORDER_EXPIRATION, QUERY_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION,
-    },
+    config::{NONCE_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION},
     types::{
         common::pagination::PaginationParams,
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
@@ -32,7 +30,17 @@ impl RedisDatabase {
     pub async fn new() -> Self {
         let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
 
-        let cfg = Config::from_url(redis_url);
+        let mut cfg = Config::from_url(redis_url);
+
+        cfg.pool = Some(PoolConfig {
+            max_size: 64, // 최대 연결 수 증가
+            timeouts: deadpool_redis::Timeouts {
+                wait: Some(std::time::Duration::from_secs(5)),
+                create: Some(std::time::Duration::from_secs(2)),
+                recycle: Some(std::time::Duration::from_secs(1)),
+            },
+            queue_mode: deadpool::managed::QueueMode::Fifo,
+        });
 
         let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
 
