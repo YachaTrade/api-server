@@ -2,7 +2,21 @@
 name = "api-server"
 version = "0.1.0"
 edition = "2021"
+[profile.release]
+# 최대 최적화 수준
+opt-level = 3
 
+# 전체 프로그램 최적화를 위한 Link Time Optimization 활성화
+lto = "fat"
+
+# 단일 코드 생성 단위로 최대한의 크로스모듈 최적화 적용
+codegen-units = 1
+
+# 불필요한 디버그 심볼 제거로 메모리 사용량 감소
+strip = true
+
+# 증분 컴파일 비활성화로 각 빌드마다 완전한 최적화 적용
+incremental = false
 [dependencies]
 #DB
 ##POSTGRES
@@ -93,3 +107,4 @@ urlencoding = "2.1"
 
 clap = { version = "4.4.11", features = ["derive"] }
 url = "2.5.4"
+deadpool-redis = "0.19.0"
