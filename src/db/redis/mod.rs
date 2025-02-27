@@ -11,9 +11,10 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        ACCOUNT_POINT_EXPIRATION, INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION, NONCE_EXPIRATION,
-        ORDER_EXPIRATION, PNL_EXPIRATION, POSITION_EXPIRATION, REFERRAL_CHILD_COUNT_EXPIRATION,
-        REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
+        ACCOUNT_POINT_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION, INVITED_CREATE_EXPIRATION,
+        MISSION_EXPIRATION, NONCE_EXPIRATION, ORDER_EXPIRATION, PNL_EXPIRATION,
+        POSITION_EXPIRATION, REFERRAL_CHILD_COUNT_EXPIRATION, REFERRAL_CODE_EXPIRATION,
+        SEARCH_EXPIRATION, TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
     },
     types::{
         campaign::point::{
@@ -28,6 +29,7 @@ use crate::{
         token::{
             create_token::TokenCreatedResponse,
             order::{OrderMessage, TokenOrderType},
+            TokenResponse,
         },
         trading::{
             chart::{ChartQuery, ChartResponse},
@@ -634,5 +636,27 @@ impl RedisDatabase {
         let response_json: String = conn.get(key).await?;
         let response: TokenCreatedResponse = serde_json::from_str(&response_json)?;
         Ok(response)
+    }
+}
+
+impl RedisDatabase {
+    pub async fn set_token_response(&self, token_id: &str, response: &TokenResponse) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("token:{}", token_id);
+
+        let json = serde_json::to_string(response)?;
+        conn.set_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_token_response(&self, token_id: &str) -> Result<TokenResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("token:{}", token_id);
+
+        let token_json: String = conn.get(key).await?;
+        let response_json: TokenResponse = serde_json::from_str(&token_json)?;
+        Ok(response_json)
     }
 }
