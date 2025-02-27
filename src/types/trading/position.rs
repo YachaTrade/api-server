@@ -124,8 +124,8 @@ impl PositionController {
     pub async fn get_positions(
         &self,
         account_id: &str,
-        pagination: PaginationParams,
-        position_type: PositionType,
+        pagination: &PaginationParams,
+        position_type: &PositionType,
     ) -> Result<PositionResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 

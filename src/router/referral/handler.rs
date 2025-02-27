@@ -33,6 +33,7 @@ pub async fn check_register_referral_code(
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<CheckRegisterReferralResponse> {
     let referral_controller = ReferralController::new(state.postgres.clone());
+
     let response = referral_controller
         .check_register_referral(session_address.clone())
         .await
@@ -106,6 +107,13 @@ pub async fn get_referral_code(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<GetReferralCodeResponse> {
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_referral_code(&session_address)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
     let referral_controller = ReferralController::new(state.postgres.clone());
     let response = referral_controller
         .get_referral_code(&session_address)
@@ -114,6 +122,14 @@ pub async fn get_referral_code(
             error!("Failed to check existing referral code: session_address: {}, error: {}", session_address, err);
             AppError::InternalError(err.to_string())
         })?;
+    if let Err(err) = state
+        .trade_redis
+        .set_referral_code(&session_address, &response)
+        .await
+    {
+        error!("Failed to set referral code: session_address: {}, error: {}", session_address, err);
+        return Err(AppError::InternalError(err.to_string()));
+    }
     Ok(Json(response))
 }
 
@@ -180,6 +196,13 @@ pub async fn get_referral_child_count(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 )->AppJsonResult<GetReferralChildCountResponse> {
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_referral_child_count(&session_address)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
     let referral_controller = ReferralController::new(state.postgres.clone());
     let response = referral_controller
         .get_referral_child_count(&session_address)
@@ -188,6 +211,14 @@ pub async fn get_referral_child_count(
             error!("Failed to get referral child count: session_address: {}, error: {}", session_address, err);
             AppError::InternalError(err.to_string())
         })?;
+    if let Err(err) = state
+        .trade_redis
+        .set_referral_child_count(&session_address, &response)
+        .await
+    {
+        error!("Failed to set referral child count: session_address: {}, error: {}", session_address, err);
+        return Err(AppError::InternalError(err.to_string()));
+    }
     Ok(Json(response))
 }
 
@@ -210,6 +241,13 @@ pub async fn get_invited_create(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<GetInvitedCreateResponse> {
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_invited_create(&session_address)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
     let referral_controller = ReferralController::new(state.postgres.clone());
     let response = referral_controller
         .get_invited_create(&session_address)
@@ -218,5 +256,13 @@ pub async fn get_invited_create(
             error!("Failed to get referral target create: session_address: {}, error: {}", session_address, err);
             AppError::InternalError(err.to_string())
         })?;
+    if let Err(err) = state
+        .trade_redis
+        .set_invited_create(&session_address, &response)
+        .await
+    {
+        error!("Failed to set invited create: session_address: {}, error: {}", session_address, err);
+        return Err(AppError::InternalError(err.to_string()));
+    };
     Ok(Json(response))
 }

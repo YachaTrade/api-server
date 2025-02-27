@@ -88,6 +88,9 @@ pub async fn get_pnl(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
+    if let Ok(cached_response) = state.trade_redis.get_account_pnl(&account_id).await {
+        return Ok(Json(cached_response));
+    }
     let pnl_controller = PNLController::new(state.postgres.clone());
     let pnl = pnl_controller.get_pnl(&account_id).await.map_err(|err| {
         error!(
@@ -96,6 +99,9 @@ pub async fn get_pnl(
         );
         AppError::InternalError(err.to_string())
     })?;
+    if let Err(err) = state.trade_redis.set_account_pnl(&account_id, &pnl).await {
+        error!("Failed to set PNL in cache: {}, error: {}", account_id, err);
+    }
     info!("Get PNL: account_id :{} pnl :{:?}", account_id, pnl);
     Ok(Json(pnl))
 }
@@ -126,13 +132,20 @@ pub async fn get_position(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_account_position(&account_id, &query)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
     let pagination = PaginationParams {
         page: query.page,
         limit: query.limit,
     };
     let position_controller = PositionController::new(state.postgres.clone());
     let response = position_controller
-        .get_positions(&account_id, pagination, query.position_type)
+        .get_positions(&account_id, &pagination, &query.position_type)
         .await
         .map_err(|err| {
             error!(
@@ -145,6 +158,16 @@ pub async fn get_position(
         "Get Position: account_id :{} response :{:?}",
         account_id, response
     );
+    if let Err(err) = state
+        .trade_redis
+        .set_account_position(&account_id, &query, &response)
+        .await
+    {
+        error!(
+            "Failed to set position: account_id: {}, error: {}",
+            account_id, err
+        );
+    }
     Ok(Json(response))
 }
 
@@ -173,9 +196,16 @@ pub async fn get_token_created(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_account_token_created(&account_id, &pagination)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
     let token_created_controller = TokenCreatedController::new(state.postgres.clone());
     let response = token_created_controller
-        .get_tokens_created(&account_id, pagination)
+        .get_tokens_created(&account_id, &pagination)
         .await
         .map_err(|err| {
             error!(
@@ -188,6 +218,16 @@ pub async fn get_token_created(
         "Get Token Created: account_id :{} response :{:?}",
         account_id, response
     );
+    if let Err(err) = state
+        .trade_redis
+        .set_account_token_created(&account_id, &pagination, &response)
+        .await
+    {
+        error!(
+            "Failed to set token created: account_id: {}, error: {}",
+            account_id, err
+        );
+    }
     Ok(Json(response))
 }
 

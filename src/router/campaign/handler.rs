@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     Extension, Json,
 };
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -47,7 +47,14 @@ pub async fn check_active_user(
     }
     let response = ActiveUserController::new(state.postgres.clone())
         .check_active_user(&wallet_address)
-        .await?;
+        .await
+        .map_err(|err| {
+            error!(
+                "Failed to check active user: wallet_address: {}, error: {}",
+                wallet_address, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
     Ok(Json(response))
 }
 
@@ -73,10 +80,26 @@ pub async fn get_top_point(
     State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
 ) -> AppJsonResult<TopPointResponse> {
-    let response = PointController::new(state.postgres.clone())
-        .get_top_point(params)
-        .await?;
-
+    if let Ok(cached_response) = state.trade_redis.get_top_point_response(&params).await {
+        return Ok(Json(cached_response));
+    }
+    let response = match PointController::new(state.postgres.clone())
+        .get_top_point(&params)
+        .await
+    {
+        Ok(res) => res,
+        Err(err) => {
+            error!("Failed to get top point: {}", err);
+            return Err(AppError::InternalError(err.to_string()));
+        }
+    };
+    if let Err(err) = state
+        .trade_redis
+        .set_top_point_response(&params, &response)
+        .await
+    {
+        error!("Failed to set top point response: {:?}", err);
+    }
     Ok(Json(response))
 }
 ///Get account point by account id
@@ -99,9 +122,30 @@ pub async fn get_point_by_account_id(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<AccountPointResponse> {
-    let response = PointController::new(state.postgres.clone())
-        .get_account_point_rank(session_address)
-        .await?;
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_point_by_account_id(&session_address)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
+    let response = match PointController::new(state.postgres.clone())
+        .get_account_point_rank(&session_address)
+        .await
+    {
+        Ok(res) => res,
+        Err(err) => {
+            error!("Failed to get account point rank: {}", err);
+            return Err(AppError::InternalError(err.to_string()));
+        }
+    };
+    if let Err(err) = state
+        .trade_redis
+        .set_point_by_account_id(&session_address, &response)
+        .await
+    {
+        error!("Failed to set point by account id: {:?}", err);
+    }
     Ok(Json(response))
 }
 
@@ -128,10 +172,31 @@ pub async fn complete_mission(
     Json(payload): Json<MissionCompleteRequest>,
 ) -> AppJsonResult<MissionCompleteResponse> {
     let MissionCompleteRequest { mission_type } = payload;
-    let response = PointController::new(state.postgres.clone())
-        .add_point_by_mission(session_address, mission_type)
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_complete_mission(&session_address)
         .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?; //이미 존재한 미션에서
+    {
+        return Ok(Json(cached_response));
+    }
+    let response = match PointController::new(state.postgres.clone())
+        .add_point_by_mission(&session_address, mission_type)
+        .await
+    {
+        Ok(res) => res,
+        Err(err) => {
+            error!("Failed to add point by mission: {}", err);
+            return Err(AppError::BadRequest(err.to_string()));
+        }
+    };
+
+    if let Err(err) = state
+        .trade_redis
+        .set_complete_mission(&session_address, &response)
+        .await
+    {
+        error!("Failed to set complete mission: {:?}", err);
+    }
     Ok(Json(response))
 }
 
@@ -155,8 +220,30 @@ pub async fn get_completed_missions(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<MissionCompletedResponse> {
-    let response = PointController::new(state.postgres.clone())
-        .get_completed_missions(session_address)
-        .await?;
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_completed_missions(&session_address)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
+    let response = match PointController::new(state.postgres.clone())
+        .get_completed_missions(&session_address)
+        .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            error!("Failed to get completed missions: {:?}", e);
+            return Err(AppError::InternalError(e.to_string()));
+        }
+    };
+
+    if let Err(err) = state
+        .trade_redis
+        .set_completed_missions(&session_address, &response)
+        .await
+    {
+        error!("Failed to set completed missions: {:?}", err);
+    }
     Ok(Json(response))
 }

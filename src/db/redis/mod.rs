@@ -10,14 +10,29 @@ use tracing::{debug, info};
 use anyhow::Result;
 
 use crate::{
-    config::{NONCE_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION},
+    config::{
+        ACCOUNT_POINT_EXPIRATION, INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION, NONCE_EXPIRATION,
+        ORDER_EXPIRATION, PNL_EXPIRATION, POSITION_EXPIRATION, REFERRAL_CHILD_COUNT_EXPIRATION,
+        REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
+    },
     types::{
+        campaign::point::{
+            AccountPointResponse, MissionCompleteResponse, MissionCompletedResponse,
+            TopPointResponse,
+        },
         common::pagination::PaginationParams,
+        referral::{
+            GetInvitedCreateResponse, GetReferralChildCountResponse, GetReferralCodeResponse,
+        },
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
-        token::order::{OrderMessage, TokenOrderType},
+        token::{
+            create_token::TokenCreatedResponse,
+            order::{OrderMessage, TokenOrderType},
+        },
         trading::{
             chart::{ChartQuery, ChartResponse},
-            position::TokenHolderResponse,
+            pnl::PNLResponse,
+            position::{PositionQuery, PositionResponse, TokenHolderResponse},
             swap_history::TokenSwapResponse,
         },
     },
@@ -148,8 +163,8 @@ impl RedisDatabase {
 
         // Use pipeline to set both values atomically
         let mut pipe = pipe();
-        pipe.set_ex(&token_key, token_json, *SEARCH_EXPIRATION)
-            .set_ex(&account_key, account_json, *SEARCH_EXPIRATION);
+        pipe.pset_ex(&token_key, token_json, *SEARCH_EXPIRATION)
+            .pset_ex(&account_key, account_json, *SEARCH_EXPIRATION);
 
         let _: ((), ()) = pipe.query_async(&mut conn).await?;
         debug!("Search response set for query {}", query);
@@ -361,5 +376,263 @@ impl RedisDatabase {
         let history: ChartResponse = serde_json::from_str(&history_json)?;
         debug!("Token chart retrieved for token {:?}", token_id);
         Ok(history)
+    }
+}
+
+impl RedisDatabase {
+    pub async fn set_top_point_response(
+        &self,
+        pagination: &PaginationParams,
+        response: &TopPointResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("top_point:{}", pagination.limit);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *TOP_POINT_EXPIRATION)
+            .await?;
+
+        Ok(())
+    }
+    pub async fn get_top_point_response(
+        &self,
+        pagination: &PaginationParams,
+    ) -> Result<TopPointResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("top_point:{}", pagination.limit);
+        let response_json: String = conn.get(key).await?;
+        let response: TopPointResponse = serde_json::from_str(&response_json)?;
+        debug!("Top point retrieved");
+        Ok(response)
+    }
+
+    pub async fn set_point_by_account_id(
+        &self,
+        address: &str,
+        response: &AccountPointResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("point:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *ACCOUNT_POINT_EXPIRATION)
+            .await?;
+        debug!("Point set for address {:?}", address);
+        Ok(())
+    }
+
+    pub async fn get_point_by_account_id(&self, address: &str) -> Result<AccountPointResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("point:{}", address);
+        let response_json: String = conn.get(key).await?;
+        let response: AccountPointResponse = serde_json::from_str(&response_json)?;
+        debug!("Point retrieved for address {:?}", address);
+        Ok(response)
+    }
+
+    pub async fn set_complete_mission(
+        &self,
+        address: &str,
+        response: &MissionCompleteResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("mission:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *MISSION_EXPIRATION)
+            .await?;
+        debug!("Point set for address {:?}", address);
+        Ok(())
+    }
+    pub async fn get_complete_mission(&self, address: &str) -> Result<MissionCompleteResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("mission:{}", address);
+        let response_json: String = conn.get(key).await?;
+        let response: MissionCompleteResponse = serde_json::from_str(&response_json)?;
+        debug!("Point retrieved for address {:?}", address);
+        Ok(response)
+    }
+
+    pub async fn set_completed_missions(
+        &self,
+        address: &str,
+        response: &MissionCompletedResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("completed_missions:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *MISSION_EXPIRATION)
+            .await?;
+        debug!("Point set for address {:?}", address);
+        Ok(())
+    }
+    pub async fn get_completed_missions(&self, address: &str) -> Result<MissionCompletedResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("completed_missions:{}", address);
+        let response_json: String = conn.get(key).await?;
+        let response: MissionCompletedResponse = serde_json::from_str(&response_json)?;
+        debug!("Point retrieved for address {:?}", address);
+        Ok(response)
+    }
+}
+
+impl RedisDatabase {
+    pub async fn get_referral_code(&self, address: &str) -> Result<GetReferralCodeResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("referral_code:{}", address);
+        let value: String = conn.get(key).await?;
+        let response: GetReferralCodeResponse = serde_json::from_str(&value)?;
+        Ok(response)
+    }
+
+    pub async fn set_referral_code(
+        &self,
+        address: &str,
+        response: &GetReferralCodeResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("referral_code:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *REFERRAL_CODE_EXPIRATION)
+            .await?;
+        debug!("Point set for address {:?}", address);
+        Ok(())
+    }
+
+    pub async fn get_referral_child_count(
+        &self,
+        address: &str,
+    ) -> Result<GetReferralChildCountResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("referral_child_count:{}", address);
+        let value: String = conn.get(key).await?;
+        let response: GetReferralChildCountResponse = serde_json::from_str(&value)?;
+        Ok(response)
+    }
+    pub async fn set_referral_child_count(
+        &self,
+        address: &str,
+        response: &GetReferralChildCountResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("referral_child_count:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *REFERRAL_CHILD_COUNT_EXPIRATION)
+            .await?;
+        debug!("Point set for address {:?}", address);
+        Ok(())
+    }
+
+    pub async fn get_invited_create(&self, address: &str) -> Result<GetInvitedCreateResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("invited_create:{}", address);
+        let value: String = conn.get(key).await?;
+        let response: GetInvitedCreateResponse = serde_json::from_str(&value)?;
+        Ok(response)
+    }
+
+    pub async fn set_invited_create(
+        &self,
+        address: &str,
+        response: &GetInvitedCreateResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("invited_create:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *INVITED_CREATE_EXPIRATION)
+            .await?;
+
+        Ok(())
+    }
+}
+
+impl RedisDatabase {
+    pub async fn get_account_pnl(&self, address: &str) -> Result<PNLResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("pnl:{}", address);
+        let value: String = conn.get(key).await?;
+        let response: PNLResponse = serde_json::from_str(&value)?;
+        Ok(response)
+    }
+
+    pub async fn set_account_pnl(&self, address: &str, response: &PNLResponse) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("pnl:{}", address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *PNL_EXPIRATION)
+            .await?;
+        debug!("Point set for address {:?}", address);
+        Ok(())
+    }
+
+    pub async fn get_account_position(
+        &self,
+        address: &str,
+        position_query: &PositionQuery,
+    ) -> Result<PositionResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "position:{}:type:{:?}:page:{}:limit:{}",
+            address, position_query.position_type, position_query.page, position_query.limit
+        );
+        let value: String = conn.get(key).await?;
+        let response: PositionResponse = serde_json::from_str(&value)?;
+        Ok(response)
+    }
+    pub async fn set_account_position(
+        &self,
+        address: &str,
+        position_query: &PositionQuery,
+        response: &PositionResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "position:{}:type:{:?}:page:{}:limit:{}",
+            address, position_query.position_type, position_query.page, position_query.limit
+        );
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *POSITION_EXPIRATION)
+            .await?;
+        debug!("Position set for address {:?}", address);
+        Ok(())
+    }
+
+    pub async fn set_account_token_created(
+        &self,
+        address: &str,
+        pagination: &PaginationParams,
+        response: &TokenCreatedResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "create_token:{}:page:{}:limit:{}",
+            address, pagination.page, pagination.limit
+        );
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_EXPIRATION)
+            .await?;
+        debug!("Token set for address {:?}", address);
+        Ok(())
+    }
+    pub async fn get_account_token_created(
+        &self,
+        address: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenCreatedResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "create_token:{}:page:{}:limit:{}",
+            address, pagination.page, pagination.limit
+        );
+        let response_json: String = conn.get(key).await?;
+        let response: TokenCreatedResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
     }
 }
