@@ -46,16 +46,24 @@ pub async fn auth_nonce(
     State(state): State<AppState>,
     Json(payload): Json<AuthNonceRequest>,
 ) -> AppJsonResult<AuthNonceResponse> {
+    let time_start = std::time::Instant::now();
     let nonce = Uuid::new_v4().to_string();
-    Address::from_str(&payload.address)
-        .map_err(|_e| AppError::BadRequest("Invalid address".to_string()))?;
+    match Address::from_str(&payload.address) {
+        Ok(_) => (),
+        Err(e) => {
+            error!("Invalid address: {}", e);
+            return Err(AppError::BadRequest("Invalid address".to_string()).into());
+        }
+    }
 
     let redis = state.session_redis.clone();
-    redis
-        .set_nonce(&payload.address, &nonce)
-        .await
-        .map_err(|err| AppError::RedisError(err.to_string()))?;
+    if let Err(err) = redis.set_nonce(&payload.address, &nonce).await {
+        error!("Failed to set nonce: {}", err);
+        return Err(AppError::RedisError(err.to_string()).into());
+    }
 
+    let time_end = time_start.elapsed();
+    info!("auth_nonce time: {:?}ms", time_end.as_millis());
     Ok(Json(AuthNonceResponse { nonce }))
 }
 
