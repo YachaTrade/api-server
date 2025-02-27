@@ -46,7 +46,7 @@ pub async fn get_token(
             "Failed to get token: token_id: {}, error: {}",
             token_id, err
         );
-        AppError::InternalError(err.to_string())
+        AppError::NotFound(err.to_string())
     })?;
     if let Err(e) = state
         .trade_redis
