@@ -9,7 +9,7 @@ lazy_static! {
     pub static ref TOKEN_EXPIRATION:u64 = 1500; //miliseconds
 
     pub static ref TOP_POINT_EXPIRATION:u64 = 300_000; // 5 minutes in milliseconds
-    pub static ref MISSION_EXPIRATION:u64 = 300_000;// 5 minutes in milliseconds
+    pub static ref MISSION_EXPIRATION:u64 = 1500;// 5 minutes in milliseconds
     pub static ref ACCOUNT_POINT_EXPIRATION: u64 = 60_000; // 1 minute in milliseconds
     pub static ref REFERRAL_CODE_EXPIRATION:u64 = 86_400; // 24 hours in milliseconds
     pub static ref REFERRAL_CHILD_COUNT_EXPIRATION:u64 = 300_000; // 5 minutes in milliseconds
