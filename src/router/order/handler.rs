@@ -3,7 +3,7 @@ use axum::{
     Json,
 };
 
-use tracing::{instrument, warn};
+use tracing::{error, instrument, warn};
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -46,18 +46,32 @@ pub async fn get_creation_time_order(
     }
 
     let order_controller = OrderController::new(state.postgres.clone());
-    let order_tokens = order_controller
-        .get_order_tokens(TokenOrderType::CreationTime, query)
-        .await?;
-    let king_of_the_hill = OrderController::new(state.postgres.clone())
-        .get_latest_king_of_the_hill()
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-
-    let total_count = OrderController::new(state.postgres.clone())
-        .get_total_count()
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
+        async {
+            order_controller
+                .get_order_tokens(TokenOrderType::CreationTime, query)
+                .await
+                .map_err(|err| {
+                    error!("Failed to get order tokens: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
+        },
+        async {
+            order_controller
+                .get_latest_king_of_the_hill()
+                .await
+                .map_err(|err| {
+                    error!("Failed to get latest king of the hill: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
+        },
+        async {
+            order_controller.get_total_count().await.map_err(|err| {
+                error!("Failed to get total count: {}", err);
+                AppError::InternalError(err.to_string())
+            })
+        }
+    )?;
     let response = OrderMessage {
         order_type: TokenOrderType::CreationTime,
         order_token: Some(order_tokens),
@@ -111,19 +125,15 @@ pub async fn get_market_cap_order(
     }
 
     let order_controller = OrderController::new(state.postgres.clone());
-    let order_tokens = order_controller
-        .get_order_tokens(TokenOrderType::MarketCap, query)
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-
-    let king_of_the_hill = OrderController::new(state.postgres.clone())
-        .get_latest_king_of_the_hill()
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-    let total_count = OrderController::new(state.postgres.clone())
-        .get_total_count()
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
+        order_controller.get_order_tokens(TokenOrderType::MarketCap, query),
+        order_controller.get_latest_king_of_the_hill(),
+        order_controller.get_total_count()
+    )
+    .map_err(|err| {
+        error!("Failed to fetch order data: {}", err);
+        AppError::InternalError(err.to_string())
+    })?;
     let response = OrderMessage {
         order_type: TokenOrderType::MarketCap,
         order_token: Some(order_tokens),
@@ -177,17 +187,32 @@ pub async fn get_latest_trade_order(
     }
 
     let order_controller = OrderController::new(state.postgres.clone());
-    let order_tokens = order_controller
-        .get_order_tokens(TokenOrderType::LatestTrade, query)
-        .await?;
-    let king_of_the_hill = OrderController::new(state.postgres.clone())
-        .get_latest_king_of_the_hill()
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-    let total_count = OrderController::new(state.postgres.clone())
-        .get_total_count()
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
+    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
+        async {
+            order_controller
+                .get_order_tokens(TokenOrderType::LatestTrade, query)
+                .await
+                .map_err(|err| {
+                    error!("Failed to get order tokens: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
+        },
+        async {
+            order_controller
+                .get_latest_king_of_the_hill()
+                .await
+                .map_err(|err| {
+                    error!("Failed to get latest king of the hill: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
+        },
+        async {
+            order_controller.get_total_count().await.map_err(|err| {
+                error!("Failed to get total count: {}", err);
+                AppError::InternalError(err.to_string())
+            })
+        }
+    )?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestTrade,
         order_token: Some(order_tokens),
