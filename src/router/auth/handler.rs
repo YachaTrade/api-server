@@ -113,19 +113,38 @@ pub async fn auth_session(
     let session_id = generate_session_id(address.as_str(), nonce.as_str());
 
     // 병렬로 Redis 작업 실행
+    let start_time = std::time::Instant::now();
     let (del_nonce_result, set_session_result, postgres_set_session_result) = tokio::join!(
-        redis.del_nonce(&address),
-        redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY),
         {
+            let start = std::time::Instant::now();
+            let result = redis.del_nonce(&address);
+            let elapsed = start.elapsed();
+            info!("del_nonce elapsed: {:?}", elapsed);
+            result
+        },
+        {
+            let start = std::time::Instant::now();
+            let result = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
+            let elapsed = start.elapsed();
+            info!("set_session elapsed: {:?}", elapsed);
+            result
+        },
+        {
+            let start = std::time::Instant::now();
             let postgres = state.postgres.clone();
             let session_id = session_id.clone();
             let address = address.clone();
             async move {
                 let session_controller = SessionController::new(postgres);
-                session_controller.set_session(&session_id, &address).await
+                let result = session_controller.set_session(&session_id, &address).await;
+                let elapsed = start.elapsed();
+                info!("postgres_set_session elapsed: {:?}", elapsed);
+                result
             }
         }
     );
+    let total_elapsed = start_time.elapsed();
+    info!("Total elapsed time: {:?}", total_elapsed);
 
     // 각 결과 확인
     del_nonce_result.map_err(|err| {
@@ -211,10 +230,21 @@ pub async fn auth_delete_session(
     let session_controller = SessionController::new(postgres_clone);
 
     let start_time = std::time::Instant::now();
-
     let (redis_result, postgres_result) = tokio::join!(
-        redis_clone.delete_session(&session_address),
-        session_controller.delete_session_by_id(&session_address)
+        {
+            let start = std::time::Instant::now();
+            let result = redis_clone.delete_session(&session_address);
+            let elapsed = start.elapsed();
+            info!("Redis delete_session elapsed: {:?}", elapsed);
+            result
+        },
+        {
+            let start = std::time::Instant::now();
+            let result = session_controller.delete_session_by_id(&session_address);
+            let elapsed = start.elapsed();
+            info!("PostgreSQL delete_session elapsed: {:?}", elapsed);
+            result
+        }
     );
 
     let elapsed = start_time.elapsed();
