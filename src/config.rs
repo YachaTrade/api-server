@@ -4,7 +4,7 @@ lazy_static! {
     pub static ref EXPIRATION_SESSION_KEY: u64 = 86_400; // 24 * 60 * 60 = 1Day
     pub static ref NONCE_EXPIRATION:u64 = 300; //5 minutes
     pub static ref QUERY_EXPIRATION:u64 = 5;
-    pub static ref ORDER_EXPIRATION:u64 = 1000; //miliseconds
+    pub static ref ORDER_EXPIRATION:u64 = 1500; //miliseconds
     pub static ref SEARCH_EXPIRATION:u64 = 15;
-    pub static ref TOKEN_EXPIRATION:u64 = 1000; //miliseconds
+    pub static ref TOKEN_EXPIRATION:u64 = 1500; //miliseconds
 }
