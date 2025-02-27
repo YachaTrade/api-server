@@ -30,7 +30,7 @@ pub struct TokenWithAccountInfo {
     pub is_king_created_at: Option<i64>,
     pub total_supply: BigDecimal,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TokenResponse {
     pub token: TokenWithAccountInfo,
 }
