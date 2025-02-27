@@ -33,6 +33,6 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             ReferralPath::GetInvitedCreate.as_str(),
-            post(handler::get_invited_create),
+            get(handler::get_invited_create),
         )
 }
