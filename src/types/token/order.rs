@@ -124,32 +124,34 @@ impl OrderController {
             TokenOrderType::CreationTime => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
-                    SELECT 
-                        t.token_id as token_id,
-                        a.account_id as account_id,
-                        a.follower_count as follower_count,
-                        a.following_count as following_count,
-                        a.nickname,
-                        a.image_uri as account_image_uri,
-                        t.name,
-                        t.symbol,
-                        t.image_uri as token_image_uri,
-                        t.description,
+                   SELECT 
+                        t.token_id, a.account_id, a.follower_count, a.following_count, 
+                        a.nickname, a.image_uri as account_image_uri, t.name, t.symbol, 
+                        t.image_uri as token_image_uri, t.description, 
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
-                        m.market_type,
-                        t.created_at as created_at,
-                        t.created_at::FLOAT8 as score
+                        m.market_type, t.created_at, t.created_at::FLOAT8 as score
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
-                    LEFT JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY score DESC
-                    LIMIT $1
-                    OFFSET $2
+                    LEFT JOIN LATERAL (
+                        SELECT token_id, reply_count 
+                        FROM token_reply_count 
+                        WHERE token_id = t.token_id
+                    ) trc ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT token_id, price, reserve_token, market_type 
+                        FROM market 
+                        WHERE token_id = t.token_id
+                    ) m ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT token_id 
+                        FROM king 
+                        WHERE token_id = t.token_id
+                    ) k ON TRUE
+                    ORDER BY t.created_at DESC
+                    LIMIT $1 OFFSET $2
                     "#,
                 )
                 .bind(pagination.limit)
@@ -160,41 +162,27 @@ impl OrderController {
             TokenOrderType::LatestTrade => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
-                    WITH ranked_swaps AS (
-                        SELECT 
-                            token_id,
-                            created_at,
-                            ROW_NUMBER() OVER (PARTITION BY token_id ORDER BY created_at DESC) as rn
-                        FROM swap
-                    ),
-                    latest_swaps AS (
-                        SELECT token_id, created_at
-                        FROM ranked_swaps
-                        WHERE rn = 1
-                        ORDER BY created_at DESC
-                        LIMIT $1
-                        OFFSET $2
+                    WITH latest_swap_times AS (
+                            SELECT DISTINCT ON (token_id) 
+                                token_id, created_at
+                            FROM swap
+                            ORDER BY token_id, created_at DESC
                     )
                     SELECT 
-                        t.token_id as token_id,
-                        a.account_id as account_id,
-                        a.nickname,
-                        a.image_uri as account_image_uri,
-                        a.follower_count as follower_count,
-                        a.following_count as following_count,
-                        t.name,
-                        t.symbol,
-                        t.image_uri as token_image_uri,
-                        t.description,
+                        t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
+                        a.follower_count, a.following_count, t.name, t.symbol,
+                        t.image_uri as token_image_uri, t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
-                        m.market_type,
-                        t.created_at as created_at,
-                        ls.created_at::FLOAT8 as score
-                    FROM latest_swaps ls
-                    JOIN token t ON ls.token_id = t.token_id
+                        m.market_type, t.created_at, lst.created_at::FLOAT8 as score
+                    FROM (
+                        SELECT * FROM latest_swap_times
+                        ORDER BY created_at DESC
+                        LIMIT $1 OFFSET $2
+                    ) lst
+                    JOIN token t ON lst.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
@@ -211,31 +199,25 @@ impl OrderController {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
                    SELECT 
-                        t.token_id as token_id,
-                        a.account_id as account_id,
-                        a.nickname,
-                        a.image_uri as account_image_uri,
-                        a.follower_count as follower_count,
-                        a.following_count as following_count,
-                        t.name,
-                        t.symbol,
-                        t.image_uri as token_image_uri,
-                        t.description,
+                        t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
+                        a.follower_count, a.following_count, t.name, t.symbol,
+                        t.image_uri as token_image_uri, t.description,
                         COALESCE(trc.reply_count::TEXT, '0') as reply_count,
                         COALESCE(m.price::TEXT, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
-                        m.market_type,
-                        t.created_at as created_at,
-                        m.price::FLOAT8 as score
-                    FROM market m
+                        m.market_type, t.created_at, m.price::FLOAT8 as score
+                    FROM (
+                        SELECT token_id, price, reserve_token, market_type
+                        FROM market
+                        ORDER BY price DESC
+                        LIMIT $1 OFFSET $2
+                    ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY score DESC
-                    LIMIT $1
-                    OFFSET $2
                     "#,
                 )
                 .bind(pagination.limit)
