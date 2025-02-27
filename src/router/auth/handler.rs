@@ -49,6 +49,7 @@ pub async fn auth_nonce(
     let nonce = Uuid::new_v4().to_string();
     Address::from_str(&payload.address)
         .map_err(|_e| AppError::BadRequest("Invalid address".to_string()))?;
+
     let redis = state.session_redis.clone();
     redis
         .set_nonce(&payload.address, &nonce)
@@ -109,30 +110,50 @@ pub async fn auth_session(
         return Err(AppError::Unauthorized("Invalid nonce".to_string()).into());
     }
 
-    redis.del_nonce(&address).await.map_err(|err| {
+    let session_id = generate_session_id(address.as_str(), nonce.as_str());
+
+    // 병렬로 Redis 작업 실행
+    let (del_nonce_result, set_session_result, postgres_set_session_result) = tokio::join!(
+        redis.del_nonce(&address),
+        redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY),
+        {
+            let postgres = state.postgres.clone();
+            let session_id = session_id.clone();
+            let address = address.clone();
+            async move {
+                let session_controller = SessionController::new(postgres);
+                session_controller.set_session(&session_id, &address).await
+            }
+        }
+    );
+
+    // 각 결과 확인
+    del_nonce_result.map_err(|err| {
         error!(
             "Failed to delete nonce: address: {}, error: {}",
             address, err
         );
         AppError::RedisError(err.to_string())
     })?;
-    let session_id = generate_session_id(address.as_str(), nonce.as_str());
 
-    redis
-        .set_session(&session_id, &address, *EXPIRATION_SESSION_KEY)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to set session: session_id: {}, address: {}, error: {}",
-                session_id, address, err
-            );
-            AppError::RedisError(err.to_string())
-        })?;
-    //session key는 postgres에 어떻게 저장할거냐?
+    set_session_result.map_err(|err| {
+        error!(
+            "Failed to set session: session_id: {}, address: {}, error: {}",
+            session_id, address, err
+        );
+        AppError::RedisError(err.to_string())
+    })?;
 
+    postgres_set_session_result.map_err(|err| {
+        error!(
+            "Failed to set session in Postgres: session_id: {}, address: {}, error: {}",
+            session_id, address, err
+        );
+        AppError::InternalError(err.to_string())
+    })?;
+
+    // 이전 작업들이 모두 성공한 후 계정 업서트 수행
     let postgres = state.postgres.clone();
-
-    // 여기선 account 가 없을수가 없음
     let account_controller = AccountController::new(postgres.clone());
     let account = Account::new(address.clone());
     let account = account_controller
@@ -146,23 +167,9 @@ pub async fn auth_session(
             AppError::InternalError(err.to_string())
         })?;
 
-    let session_controller = SessionController::new(postgres.clone());
-
-    session_controller
-        .set_session(&session_id, &account.account_id)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to set session: session_id: {}, account_id: {}, error: {}",
-                session_id, account.account_id, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-
-    //추후 프론트 배포시 samesite = strict 로 변경
+    // 쿠키 설정
     let mut cookie = Cookie::new("api-session", session_id);
     cookie.set_http_only(true);
-    // // cookie.set_domain("nad.fun"); // 변경
     cookie.set_secure(true);
     cookie.set_path("/");
     cookie.set_same_site(tower_cookies::cookie::SameSite::None);
@@ -179,7 +186,6 @@ pub async fn auth_session(
 
     Ok(response)
 }
-
 /// Delete authentication session
 #[utoipa::path(
     delete,
@@ -199,15 +205,39 @@ pub async fn auth_delete_session(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppResult<impl IntoResponse> {
-    SessionController::new(state.postgres.clone())
-        .delete_session_by_id(&session_address)
-        .await
-        .map_err(|err| AppError::InternalError(err.to_string()))?;
-    let redis = state.session_redis.clone();
-    redis
-        .delete_session(&session_address)
-        .await
-        .map_err(|err| AppError::RedisError(err.to_string()))?;
+    // 병렬로 Redis와 PostgreSQL에서 세션 정보 삭제
+    let postgres_clone = state.postgres.clone();
+    let redis_clone = state.session_redis.clone();
+    let session_controller = SessionController::new(postgres_clone);
+
+    let start_time = std::time::Instant::now();
+
+    let (redis_result, postgres_result) = tokio::join!(
+        redis_clone.delete_session(&session_address),
+        session_controller.delete_session_by_id(&session_address)
+    );
+
+    let elapsed = start_time.elapsed();
+
+    // PostgreSQL 결과 처리
+    postgres_result.map_err(|err| {
+        error!(
+            "Failed to delete session from PostgreSQL: session_address: {}, error: {}, elapsed: {:?}",
+            session_address, err, elapsed
+        );
+        AppError::InternalError(err.to_string())
+    })?;
+
+    info!("Session deletion completed in {:?}", elapsed);
+
+    // Redis 결과 처리
+    redis_result.map_err(|err| {
+        error!(
+            "Failed to delete session from Redis: session_address: {}, error: {}",
+            session_address, err
+        );
+        AppError::RedisError(err.to_string())
+    })?;
 
     // Remove session cookie by setting its expiry to a past date
     let mut cookie = Cookie::new("api-session", "");
