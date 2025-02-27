@@ -77,6 +77,8 @@ pub async fn auth_session(
     State(state): State<AppState>,
     Json(payload): Json<AuthSessionRequest>,
 ) -> AppResult<impl IntoResponse> {
+    let time_start = std::time::Instant::now();
+
     let chain_id = payload.chain_id;
     let env_chain_id = env::var("CHAIN_ID")
         .expect("CHAIN_ID must be set")
@@ -113,7 +115,7 @@ pub async fn auth_session(
     let session_id = generate_session_id(address.as_str(), nonce.as_str());
 
     // 병렬로 Redis 작업 실행
-    let start_time = std::time::Instant::now();
+
     let (del_nonce_result, set_session_result, postgres_set_session_result) = tokio::join!(
         {
             let start = std::time::Instant::now();
@@ -143,8 +145,6 @@ pub async fn auth_session(
             }
         }
     );
-    let total_elapsed = start_time.elapsed();
-    info!("Total elapsed time: {:?}", total_elapsed);
 
     // 각 결과 확인
     del_nonce_result.map_err(|err| {
@@ -202,7 +202,10 @@ pub async fn auth_session(
         )
         .body(body.into_response())
         .map_err(|e| AppError::InternalError(e.to_string()))?;
-
+    info!(
+        "auth session success {}ms",
+        time_start.elapsed().as_millis()
+    );
     Ok(response)
 }
 /// Delete authentication session
@@ -224,11 +227,11 @@ pub async fn auth_delete_session(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppResult<impl IntoResponse> {
+    let time_start = std::time::Instant::now();
     // 병렬로 Redis와 PostgreSQL에서 세션 정보 삭제
     let postgres_clone = state.postgres.clone();
     let redis_clone = state.session_redis.clone();
     let session_controller = SessionController::new(postgres_clone);
-
     let start_time = std::time::Instant::now();
     let (redis_result, postgres_result) = tokio::join!(
         {
@@ -246,9 +249,7 @@ pub async fn auth_delete_session(
             result
         }
     );
-
     let elapsed = start_time.elapsed();
-
     // PostgreSQL 결과 처리
     postgres_result.map_err(|err| {
         error!(
@@ -283,7 +284,10 @@ pub async fn auth_delete_session(
         HeaderValue::from_str(&cookie.to_string())
             .map_err(|err| AppError::InternalError(err.to_string()))?,
     );
-
+    info!(
+        "Delete session success {}ms",
+        time_start.elapsed().as_millis()
+    );
     Ok(response)
 }
 
