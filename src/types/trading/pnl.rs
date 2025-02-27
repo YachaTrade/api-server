@@ -36,7 +36,7 @@ pub struct BestTrade {
     pub roi_percentage: f64, // 투자수익률
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PNLResponse {
     pub last_7d: PeriodPnL,            // 최근 7일 PNL
     pub total: PeriodPnL,              // 전체 기간 PNL

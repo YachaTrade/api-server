@@ -9,7 +9,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreatedResponse {
     pub tokens: Vec<TokenCreated>,
     pub total_count: i64,
@@ -56,7 +56,7 @@ impl TokenCreatedController {
     pub async fn get_tokens_created(
         &self,
         account_id: &str,
-        pagination: PaginationParams,
+        pagination: &PaginationParams,
     ) -> Result<TokenCreatedResponse> {
         // Query tokens created by the account with their market and position information
         let offset = (pagination.page - 1) * pagination.limit;

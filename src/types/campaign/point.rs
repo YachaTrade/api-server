@@ -9,18 +9,18 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Point {
     pub account_info: AccountInfo,
     pub point: i64,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TopPointResponse {
     pub points: Vec<Point>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AccountPointResponse {
     pub account_id: String,
     pub point: i64,
@@ -62,7 +62,7 @@ impl MissionType {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MissionCompleteResponse {
     pub account_id: String,
     pub mission_type: MissionType,
@@ -74,7 +74,7 @@ pub struct MissionCompleteRequest {
     pub mission_type: MissionType,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MissionCompletedResponse {
     pub account_id: String,
     #[schema(example = json!([ "CONNECT_WALLET", "CREATE_COIN", "TRADE" ]))]
@@ -89,7 +89,7 @@ impl PointController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         PointController { db }
     }
-    pub async fn get_top_point(&self, pagination: PaginationParams) -> Result<TopPointResponse> {
+    pub async fn get_top_point(&self, pagination: &PaginationParams) -> Result<TopPointResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
         let point_response = sqlx::query!(
             r#"
@@ -129,7 +129,7 @@ impl PointController {
         })
     }
 
-    pub async fn get_account_point_rank(&self, account_id: String) -> Result<AccountPointResponse> {
+    pub async fn get_account_point_rank(&self, account_id: &str) -> Result<AccountPointResponse> {
         let result = sqlx::query!(
             r#"
             SELECT rank, point
@@ -147,12 +147,12 @@ impl PointController {
 
         Ok(match result {
             Some(r) => AccountPointResponse {
-                account_id,
+                account_id: account_id.to_string(),
                 rank: r.rank.unwrap_or(1), // rank가 NULL이면 1로 설정
                 point: r.point,
             },
             None => AccountPointResponse {
-                account_id,
+                account_id: account_id.to_string(),
                 rank: 1, // 결과가 없는 경우도 rank를 1로 설정
                 point: 0,
             },
@@ -161,7 +161,7 @@ impl PointController {
 
     pub async fn get_completed_missions(
         &self,
-        account_id: String,
+        account_id: &str,
     ) -> Result<MissionCompletedResponse> {
         let mission_types = match sqlx::query!(
             r#"
@@ -184,13 +184,13 @@ impl PointController {
         };
 
         Ok(MissionCompletedResponse {
-            account_id,
+            account_id: account_id.to_string(),
             mission_types,
         })
     }
     pub async fn add_point_by_mission(
         &self,
-        account_id: String,
+        account_id: &str,
         mission_type: MissionType,
     ) -> Result<MissionCompleteResponse> {
         let mut tx = self.db.write_pool.begin().await?;

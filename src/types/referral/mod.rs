@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CheckRegisterReferralResponse {
     pub account_id: String,
     pub is_registered: bool,
@@ -16,31 +16,31 @@ pub struct CheckRegisterReferralResponse {
 pub struct RegisterReferralRequest {
     pub parent_referral_code: String,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RegisterReferralResponse {
     pub parent_account_id: String,
     pub child_account_id: String,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ExistsReferralCodeResponse {
     pub account_id: String,
     pub exists: bool,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MakeReferralCodeResponse {
     pub account_id: String,
     pub referral_code: String,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct GetReferralCodeResponse {
     pub account_id: String,
     pub referral_code: String,
 }
 
 /// Response for getting referral child count
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct GetReferralChildCountResponse {
     /// The account ID for which the child count was retrieved
     pub account_id: String,
@@ -48,7 +48,7 @@ pub struct GetReferralChildCountResponse {
     pub child_count: i64,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct GetInvitedCreateResponse {
     pub account_id: String,
     pub invited_by_create_count: i32,
