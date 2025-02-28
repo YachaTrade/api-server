@@ -11,7 +11,10 @@ pub fn get_cors() -> CorsLayer {
     // Allow CORS
     // From: https://github.com/MystenLabs/sui/blob/13df03f2fad0e80714b596f55b04e0b7cea37449/crates/sui-faucet/src/main.rs#L85
     // License: Apache-2.0
-    let mut origins = vec!["https://nad.fun".parse::<HeaderValue>().unwrap()];
+    let mut origins = vec![
+        "https://nad.fun".parse::<HeaderValue>().unwrap(),
+        "https://nadapp.net".parse::<HeaderValue>().unwrap(),
+    ];
     // Get the `ENVIROMENT` variable and if it is `development` then add `http://localhost:3000`
     // to the `origins` array.
     let environment = env::var("ENVIRONMENT").expect("ENVIRONMENT must be set");
