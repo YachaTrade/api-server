@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                t.token_id,\n                t.name,\n                t.symbol,\n                t.image_uri,\n                t.created_at,\n                t.total_supply,\n                m.market_type,\n                m.price\n            FROM token t\n            JOIN market m ON t.token_id = m.token_id\n            WHERE \n                LOWER(t.token_id) LIKE $1\n                OR LOWER(t.name) LIKE $1\n                OR LOWER(t.symbol) LIKE $1\n            ",
+  "query": "\n            SELECT \n                t.token_id,\n                t.name,\n                t.symbol,\n                t.image_uri,\n                t.created_at,\n                t.total_supply,\n                m.market_type,\n                m.price\n            FROM token t\n            JOIN market m ON t.token_id = m.token_id\n            WHERE \n                LOWER(t.token_id) LIKE $1\n                OR LOWER(t.name) LIKE $1\n                OR LOWER(t.symbol) LIKE $1\n            ORDER BY m.price DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "2593b947fe4d5a1e77dc1153d802862d1051bc25b54cc8787f7954e34323729f"
+  "hash": "08cf47e7701f2a5ab485aeaa198c197534bf7bccf08e1ae37c46410a035406b5"
 }
