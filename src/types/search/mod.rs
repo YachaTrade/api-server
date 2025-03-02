@@ -80,6 +80,7 @@ impl SearchController {
                 LOWER(t.token_id) LIKE $1
                 OR LOWER(t.name) LIKE $1
                 OR LOWER(t.symbol) LIKE $1
+            ORDER BY m.price DESC
             "#,
             search_pattern
         )
