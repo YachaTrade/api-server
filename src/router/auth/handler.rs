@@ -96,7 +96,7 @@ pub async fn auth_session(
     if chain_id != env_chain_id {
         error!(
             "Invalid chain ID. Monad test chain Id is {} your chain Id is {}",
-            chain_id, env_chain_id
+            env_chain_id, chain_id
         );
         return Err(AppError::BadRequest(format!(
             "Invalid chain ID. Monad test chain Id is {} your chain Id is {}",
