@@ -94,10 +94,14 @@ pub async fn auth_session(
         .unwrap();
 
     if chain_id != env_chain_id {
-        error!("Chainid is Invalid {} is not monadTestnet", chain_id);
-        return Err(AppError::BadRequest(
-            "Chainid is Invalid {:chain_id} is not monadTestnet".to_string(),
-        )
+        error!(
+            "Invalid chain ID. Monad test chain Id is {} your chain Id is {}",
+            chain_id, env_chain_id
+        );
+        return Err(AppError::BadRequest(format!(
+            "Invalid chain ID. Monad test chain Id is {} your chain Id is {}",
+            env_chain_id, chain_id
+        ))
         .into());
     }
 
