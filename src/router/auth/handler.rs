@@ -94,27 +94,40 @@ pub async fn auth_session(
         .unwrap();
 
     if chain_id != env_chain_id {
-        return Err(AppError::BadRequest("Invalid chain id".to_string()).into());
+        error!("Chainid is Invalid {} is not monadTestnet", chain_id);
+        return Err(AppError::BadRequest(
+            "Chainid is Invalid {:chain_id} is not monadTestnet".to_string(),
+        )
+        .into());
     }
 
     // 1. 주소와 서명 파싱
     let nonce = payload.nonce;
-    let signature = Signature::from_str(&payload.signature)
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+    let signature = Signature::from_str(&payload.signature).map_err(|err| {
+        error!("Invalid signature format: {}", err);
+        AppError::BadRequest(err.to_string())
+    })?;
 
     // 2. 서명에서 주소 복구
     let address = signature
         .recover_address_from_msg(nonce.clone())
-        .map_err(|_| AppError::BadRequest("Invalid signature".to_string()))?
+        .map_err(|_| {
+            error!("Failed to recover address: {}", nonce);
+            AppError::Unauthorized("Failed to recover address".to_string())
+        })?
         .to_string();
 
     let redis = state.session_redis.clone();
+
     info!("Nonce for address {}: {}", address, nonce);
+
     let session_nonce = redis.get_nonce(&address).await.map_err(|err| {
         error!("Failed to get nonce: address: {}, error: {}", address, err);
         AppError::RedisError(err.to_string())
     })?;
+
     info!("Session nonce for address {}: {}", address, session_nonce);
+
     if nonce != session_nonce {
         error!("Invalid nonce: address: {}, nonce: {}", address, nonce);
         return Err(AppError::Unauthorized("Invalid nonce".to_string()).into());
