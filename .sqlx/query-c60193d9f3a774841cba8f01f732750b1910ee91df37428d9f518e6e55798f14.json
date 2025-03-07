@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (account_id) \n            DO UPDATE SET\n                image_uri = $2,\n                nickname = $3,\n                bio = $4,\n                follower_count = $5,\n                following_count = $6\n            RETURNING *\n            ",
+  "query": "\n            INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (account_id) \n            DO NOTHING\n            RETURNING *\n            ",
   "describe": {
     "columns": [
       {
@@ -53,5 +53,5 @@
       false
     ]
   },
-  "hash": "060f9a2c1ad0a1ee4481d8cd58d447c3ede5d61df8fe176b3f9586f64784c35a"
+  "hash": "c60193d9f3a774841cba8f01f732750b1910ee91df37428d9f518e6e55798f14"
 }
