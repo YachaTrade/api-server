@@ -13,16 +13,6 @@ use crate::db::postgres::PostgresDatabase;
 
 use super::common::identifier::Identifier;
 
-#[derive(Debug, Deserialize, ToSchema)]
-
-pub struct UpdateAccountRequest {
-    #[schema(example = json!("Your nickname" ), nullable)]
-    pub nickname: Option<String>,
-
-    #[schema(example = json!("Your bio" ), nullable)]
-    pub bio: Option<String>,
-}
-
 #[derive(ToSchema)]
 pub struct UpdateAccountFormData {
     #[schema(example = json!({
@@ -32,6 +22,13 @@ pub struct UpdateAccountFormData {
 
     #[schema(format = "binary")]
     pub image: Option<Bytes>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateAccountRequest {
+    pub nickname: Option<String>,
+    pub bio: Option<String>,
+    pub image_uri: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -109,12 +106,7 @@ impl AccountController {
             INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (account_id) 
-            DO UPDATE SET
-                image_uri = $2,
-                nickname = $3,
-                bio = $4,
-                follower_count = $5,
-                following_count = $6
+            DO NOTHING
             RETURNING *
             "#,
             account.account_id,
@@ -124,19 +116,21 @@ impl AccountController {
             account.follower_count,
             account.following_count,
         )
-        .fetch_one(self.db.get_write_pool())
+        .fetch_optional(self.db.get_write_pool())
         .await
-        .map_err(|err| anyhow!("Fail upsert account Reason :{:?}", err))?;
+        .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
-        Ok(Account {
-            account_id: record.account_id,
-            nickname: record.nickname,
-            image_uri: record.image_uri,
-            bio: record.bio,
-            follower_count: record.follower_count,
-            following_count: record.following_count,
-            mutual: None,
-        })
+        Ok(record
+            .map(|r| Account {
+                account_id: r.account_id,
+                nickname: r.nickname,
+                image_uri: r.image_uri,
+                bio: r.bio,
+                follower_count: r.follower_count,
+                following_count: r.following_count,
+                mutual: None,
+            })
+            .unwrap_or(account))
     }
 
     pub async fn update_account(
