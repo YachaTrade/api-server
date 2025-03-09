@@ -190,7 +190,7 @@ pub async fn get_market(
     params(
         ("token" = String, Path, description = "Token ID"),
         ("interval" = String, Query, description = "Chart interval (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)"),
-        ("pagination" = Option<i16>, Query, description = "Page number (default 0, returns 300 records per page)")
+        ("base_timestamp" = i64, Query, description = "Base timestamp")
     ),
     tag = "Trade",
 )]
