@@ -93,14 +93,14 @@ pub struct ChartResponse {
     pub data: Vec<Chart>,
     pub token_id: String,
     pub interval: String,
-    pub pagination: i64,
+    pub base_timestamp: i64,
     pub total_count: i64,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ChartQuery {
     pub interval: String,
-    pub pagination: Option<i64>,
+    pub base_timestamp: i64,
 }
 
 pub struct ChartController {
@@ -136,12 +136,18 @@ impl ChartController {
         &self,
         token_id: &str,
         interval: ChartInterval,
-        pagination: i64,
+        base_timestamp: i64,
     ) -> Result<ChartResponse> {
         let chart_interval: i16 = interval.into();
-        let pagination = if pagination <= 0 { 1 } else { pagination };
-        let offset = (pagination - 1) * 300;
-        let charts = sqlx::query_as::<_, Chart>(
+
+        // Use base_timestamp as a filter condition if provided
+        let time_condition = if base_timestamp > 0 {
+            format!("AND ch.time_stamp < {}\n", base_timestamp)
+        } else {
+            String::new()
+        };
+
+        let query = format!(
             r#"
             SELECT 
                 interval_type,
@@ -155,17 +161,19 @@ impl ChartController {
             FROM chart ch
             WHERE ch.token_id = $1
             AND ch.interval_type = $2
+            {}
             ORDER BY ch.time_stamp DESC
             LIMIT 300
-            OFFSET $3
             "#,
-        )
-        .bind(token_id)
-        .bind(chart_interval)
-        .bind(offset)
-        .fetch_all(self.db.get_read_pool())
-        .await
-        .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
+            time_condition
+        );
+
+        let charts = sqlx::query_as::<_, Chart>(&query)
+            .bind(token_id)
+            .bind(chart_interval)
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
 
         let total_count = if charts.is_empty() {
             0
@@ -173,13 +181,12 @@ impl ChartController {
             self.get_total_count(token_id, interval).await?
         };
 
-        let chart_data = charts.into_iter().map(Chart::from).collect();
-
+        // Return the chart data without unnecessary transformation
         Ok(ChartResponse {
-            data: chart_data,
+            data: charts,
             token_id: token_id.to_string(),
             interval: ChartInterval::i16_to_string(chart_interval)?,
-            pagination,
+            base_timestamp,
             total_count,
         })
     }

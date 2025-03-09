@@ -350,10 +350,8 @@ impl RedisDatabase {
     ) -> Result<()> {
         let mut conn = self.pool.get().await?;
         let key = format!(
-            "token:{}:chart:interval:{}:page:{}",
-            token_id,
-            query.interval,
-            query.pagination.unwrap_or(0)
+            "token:{}:chart:interval:{}:base_timestamp:{}",
+            token_id, query.interval, query.base_timestamp
         );
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
@@ -369,10 +367,8 @@ impl RedisDatabase {
     ) -> Result<ChartResponse> {
         let mut conn = self.pool.get().await?;
         let key = format!(
-            "token:{}:chart:interval:{}:page:{}",
-            token_id,
-            query.interval,
-            query.pagination.unwrap_or(0)
+            "token:{}:chart:interval:{}:base_timestamp:{}",
+            token_id, query.interval, query.base_timestamp
         );
         let history_json: String = conn.get(key).await?;
         let history: ChartResponse = serde_json::from_str(&history_json)?;
