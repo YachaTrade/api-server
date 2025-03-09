@@ -205,14 +205,12 @@ pub async fn get_chart(
         AppError::BadRequest(format!("Invalid chart interval: {}", err))
     })?;
 
-    let pagenation = query.pagination.unwrap_or(0);
-
     let chart_controller = ChartController::new(state.postgres.clone());
     if let Ok(cached_response) = state.trade_redis.get_chart_response(&token, &query).await {
         return Ok(Json(cached_response));
     }
     let chart_response = chart_controller
-        .get_chart(&token, chart_interval, pagenation)
+        .get_chart(&token, chart_interval, query.base_timestamp)
         .await
         .map_err(|err| {
             error!("Failed to get chart: token: {}, error: {}", token, err);
