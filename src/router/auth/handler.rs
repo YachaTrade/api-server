@@ -109,7 +109,7 @@ pub async fn auth_session(
     let nonce = payload.nonce;
     let signature = Signature::from_str(&payload.signature).map_err(|err| {
         error!("Invalid signature format: {}", err);
-        AppError::BadRequest(err.to_string())
+        AppError::BadRequest("Invalid signature format".to_string())
     })?;
 
     // 2. 서명에서 주소 복구
