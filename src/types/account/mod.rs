@@ -28,7 +28,6 @@ pub struct UpdateAccountFormData {
 pub struct UpdateAccountRequest {
     pub nickname: Option<String>,
     pub bio: Option<String>,
-    pub image_uri: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]

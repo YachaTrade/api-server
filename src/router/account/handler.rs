@@ -97,8 +97,13 @@ pub async fn update_account(
         }
     }
 
-    // 요청 데이터 검증
-    let form_data = form_data.ok_or_else(|| AppError::BadRequest("Missing account data".into()))?;
+    // form_data가 없으면 빈 업데이트 객체 생성
+    let form_data = form_data.unwrap_or_else(|| UpdateAccountRequest {
+        nickname: None,
+        bio: None,
+    });
+    
+    // 이미지나 텍스트 필드 중 하나는 업데이트되어야 함
     if form_data.nickname.is_none() && form_data.bio.is_none() && image_info.is_none() {
         warn!("update account Error: At least one of nickName, bio, or image must be provided");
         return Err(AppError::BadRequest("At least one of nickName, bio, or image must be provided".into()));
