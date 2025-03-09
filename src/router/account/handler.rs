@@ -1,36 +1,31 @@
 use axum::{
     extract::{Multipart, State},
-    Extension, Json, 
+    Extension, Json,
 };
 use bytes::Bytes;
 
 use tracing::{info, instrument, warn};
 
-
 use crate::{
-     result::{AppError, AppJsonResult}, state::AppState, types::account::{wallet::{AccountWalletResponse, RegisterWalletRequest, WalletController}, x::{AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest, DisconnectedXAccountResponse, GetXHandleResponse}, AccountController, AccountResponse, UpdateAccountRequest}
-
+    result::{AppError, AppJsonResult},
+    state::AppState,
+    types::account::{
+        wallet::{AccountWalletResponse, RegisterWalletRequest, WalletController},
+        x::{
+            AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest,
+            DisconnectedXAccountResponse, GetXHandleResponse,
+        },
+        AccountController, AccountResponse, UpdateAccountRequest,
+    },
 };
 
 use super::path::AccountPath;
-
-
 
 /// Update account profile
 #[utoipa::path(
     patch,
     path = AccountPath::UpdateAccount.docs_str(),
-    request_body(
-        content = UpdateAccountFormData,
-        content_type = "multipart/form-data",
-        description = "Account update nickname and image",
-        example = json!({ 
-            "data": {
-                "nickname": "Your Nickname"
-            },
-            "image": "[binary]"
-        })
-    ),
+    request_body = UpdateAccountRequest,
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),
@@ -45,117 +40,63 @@ use super::path::AccountPath;
     ),
     tag="Account"
 )]
-
-#[instrument(skip(state, session_address, multipart))]
+#[instrument(skip(state, session_address, payload))]
 pub async fn update_account(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    mut multipart: Multipart,
+    Json(payload): Json<UpdateAccountRequest>,
 ) -> AppJsonResult<AccountResponse> {
-    // 필드 파싱을 위한 헬퍼 함수
-    async fn parse_field(field: axum::extract::multipart::Field<'_>) -> Result<(String, Option<String>, Option<(Bytes, String)>), AppError> {
-        let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "data" => {
-                let data = field.text().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
-                Ok((name, Some(data), None))
-            },
-            "image" => {
-                let content_type = field.content_type()
-                    .map(|ct| ct.to_string())
-                    .unwrap_or_else(|| {
-                        if field.file_name().map(|f| f.ends_with(".png")).unwrap_or(false) {
-                            "image/png".to_string()
-                        } else {
-                            "image/jpeg".to_string()
-                        }
-                    });
-                let bytes = field.bytes().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
-                Ok((name, None, Some((bytes, content_type))))
-            },
-            _ => Ok((name, None, None))
-        }
-    }
-
-    // multipart 데이터 파싱
-    let mut form_data = None;
-    let mut image_info = None;
-
-    while let Some(field) = multipart.next_field().await.map_err(|e| AppError::BadRequest(e.to_string()))? {
-        let (name, text_data, file_data) = parse_field(field).await?;
-        match name.as_str() {
-            "data" if text_data.is_some() => {
-                form_data = Some(serde_json::from_str::<UpdateAccountRequest>(
-                    &text_data.unwrap()
-                ).map_err(|e| 
-                    AppError::BadRequest(e.to_string()))?);
-            },
-            "image" if file_data.is_some() => {
-                image_info = file_data;
-            },
-            _ => {}
-        }
-    }
-
-    // form_data가 없으면 빈 업데이트 객체 생성
-    let form_data = form_data.unwrap_or_else(|| UpdateAccountRequest {
-        nickname: None,
-        bio: None,
-    });
-    
+    let UpdateAccountRequest {
+        nickname,
+        bio,
+        image_uri,
+    } = payload;
     // 이미지나 텍스트 필드 중 하나는 업데이트되어야 함
-    if form_data.nickname.is_none() && form_data.bio.is_none() && image_info.is_none() {
-        warn!("update account Error: At least one of nickName, bio, or image must be provided");
-        return Err(AppError::BadRequest("At least one of nickName, bio, or image must be provided".into()));
+    if nickname.is_none() && bio.is_none() && image_uri.is_none() {
+        warn!("Update account Error: At least one of nickName or bio, or image must be provided");
+        return Err(AppError::BadRequest(
+            "At least one of nickName, bio, or image must be provided".into(),
+        ));
+    }
+    //checking url
+    if let Some(image_uri) = &image_uri {
+        if !image_uri.starts_with("https://storage.nadapp.net/profile/") {
+            warn!("Update account Error: Invalid image URL");
+            return Err(AppError::BadRequest("Invalid image URL".into()));
+        }
     }
 
     // @ = x handle 전용
-    if let Some(nickname) = &form_data.nickname {
+    if let Some(nickname) = &nickname {
         if nickname.starts_with('@') {
-            warn!("update account Error: Nickname cannot start with @");
+            warn!("Update account Error: Nickname cannot start with @");
             return Err(AppError::BadRequest("Nickname cannot start with @".into()));
         }
     }
 
-
-
     // 텍스트 필드 처리
-    let clean_text = |text: Option<String>| {
-        text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
-    };
-
-    // 이미지 업로드
-    let image_uri = if let Some((image_data, content_type)) = image_info {
-        info!("Uploading image with content-type: {}", content_type);
-        Some(state.s3_client
-            .upload_profile_image_file(&session_address, image_data, content_type)
-            .await
-            .map_err(|e| {
-                warn!("upload profile image Error {:?}", e);
-                AppError::InternalError(e.to_string())
-            })?)
-    } else {
-        None
-    };
+    let clean_text =
+        |text: Option<String>| text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
 
     // 계정 업데이트
     let account_controller = AccountController::new(state.postgres.clone());
     let updated_account = account_controller
         .update_account(
             &session_address,
-            image_uri,
-            clean_text(form_data.nickname),
-            clean_text(form_data.bio)
+            clean_text(image_uri),
+            clean_text(nickname),
+            clean_text(bio),
         )
         .await
         .map_err(|e| {
-            warn!("update account Error {:?}", e);
-            AppError::BadRequest(e.to_string())
+            warn!("Update account Error {:?}", e);
+            AppError::InternalError(e.to_string())
         })?;
 
-    Ok(Json(AccountResponse { account: updated_account }))
+    Ok(Json(AccountResponse {
+        account: updated_account,
+    }))
 }
-
 
 /// Get account session check
 #[utoipa::path(
@@ -178,7 +119,7 @@ pub async fn update_account(
 #[instrument(skip(state, session_address))]
 pub async fn get_account(
     State(state): State<AppState>,
-    Extension(session_address): Extension<String>
+    Extension(session_address): Extension<String>,
 ) -> AppJsonResult<AccountResponse> {
     let account_controller = AccountController::new(state.postgres.clone());
     let account = account_controller
@@ -189,12 +130,8 @@ pub async fn get_account(
             AppError::BadRequest(err.to_string())
         })?;
 
-    Ok(Json(AccountResponse {
-        account,
-    }))
+    Ok(Json(AccountResponse { account }))
 }
-
-
 
 // Account Connect X
 #[utoipa::path(
@@ -215,10 +152,8 @@ pub async fn get_account(
 pub async fn connect_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<ConnectXRequest>
-)->AppJsonResult<ConnectedXAccountResponse>{
-
-  
+    Json(payload): Json<ConnectXRequest>,
+) -> AppJsonResult<ConnectedXAccountResponse> {
     payload.validate()?;
     let account_x_controller = AccountXController::new(state.postgres.clone());
     let response = account_x_controller
@@ -250,9 +185,9 @@ pub async fn connect_x(
 pub async fn disconnect_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<DisconnectXRequest>
-)->AppJsonResult<DisconnectedXAccountResponse>{
-    let DisconnectXRequest{x_handle} = payload;
+    Json(payload): Json<DisconnectXRequest>,
+) -> AppJsonResult<DisconnectedXAccountResponse> {
+    let DisconnectXRequest { x_handle } = payload;
     let account_x_controller = AccountXController::new(state.postgres.clone());
     let response = account_x_controller
         .disconnect_x(session_address, x_handle)
@@ -263,7 +198,6 @@ pub async fn disconnect_x(
         })?;
     Ok(Json(response))
 }
-
 
 #[utoipa::path(
     get,
@@ -283,7 +217,7 @@ pub async fn disconnect_x(
 pub async fn get_x_handle(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-)->AppJsonResult<GetXHandleResponse>{
+) -> AppJsonResult<GetXHandleResponse> {
     let account_x_controller = AccountXController::new(state.postgres.clone());
     let response = account_x_controller
         .get_x_handle(session_address)
@@ -294,7 +228,6 @@ pub async fn get_x_handle(
         })?;
     Ok(Json(response))
 }
-
 
 #[utoipa::path(
     patch,
@@ -314,16 +247,15 @@ pub async fn get_x_handle(
 pub async fn register_wallet(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<RegisterWalletRequest>
-)->AppJsonResult<AccountWalletResponse>{
+    Json(payload): Json<RegisterWalletRequest>,
+) -> AppJsonResult<AccountWalletResponse> {
     let response = WalletController::new(state.postgres.clone())
         .register_wallet(session_address, payload.wallet)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
-    
+
     Ok(Json(response))
 }
-
 
 #[utoipa::path(
     get,
@@ -342,11 +274,11 @@ pub async fn register_wallet(
 pub async fn get_wallet(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-)->AppJsonResult<AccountWalletResponse>{
+) -> AppJsonResult<AccountWalletResponse> {
     let response = WalletController::new(state.postgres.clone())
         .get_wallet(session_address)
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
-    
+
     Ok(Json(response))
 }

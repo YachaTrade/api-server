@@ -117,7 +117,6 @@ use clap::Parser;
             types::account::Account,
             types::account::AccountResponse,
             types::account::UpdateAccountRequest,
-            types::account::UpdateAccountFormData,
             types::account::Mutual,
             types::account::MutualFriend,
             types::account::x::ConnectXRequest,
