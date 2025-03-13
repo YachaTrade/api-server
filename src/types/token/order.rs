@@ -117,7 +117,7 @@ impl OrderController {
     pub async fn get_order_tokens(
         &self,
         order_by: TokenOrderType,
-        pagination: PaginationParams,
+        pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
         let offset = (pagination.page - 1) * pagination.limit;
         let order_token_raw = match order_by {
