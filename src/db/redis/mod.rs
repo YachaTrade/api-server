@@ -250,23 +250,58 @@ impl RedisDatabase {
         &self,
         order_type: &TokenOrderType,
         response: &OrderMessage,
+        pagination: Option<&PaginationParams>,
     ) -> Result<()> {
         let mut conn = self.pool.get().await?;
-        let key = format!("order:{}:response", order_type.as_str());
+
+        // 페이지네이션 파라미터가 있는 경우 키에 포함
+        let key = match pagination {
+            Some(params) => format!(
+                "order:{}:response:page:{}_limit:{}",
+                order_type.as_str(),
+                params.page,
+                params.limit
+            ),
+            None => format!("order:{}:response", order_type.as_str()),
+        };
+
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, response_json, *ORDER_EXPIRATION)
             .await?;
-        debug!("Order response set for order type {:?}", order_type);
+
+        debug!(
+            "Order response set for order type {:?} with pagination {:?}",
+            order_type, pagination
+        );
         Ok(())
     }
 
-    pub async fn get_order_response(&self, order_type: &TokenOrderType) -> Result<OrderMessage> {
+    pub async fn get_order_response(
+        &self,
+        order_type: &TokenOrderType,
+        pagination: Option<&PaginationParams>,
+    ) -> Result<OrderMessage> {
         let mut conn = self.pool.get().await?;
-        let key = format!("order:{}:response", order_type.as_str());
+
+        // 페이지네이션 파라미터가 있는 경우 키에 포함
+        let key = match pagination {
+            Some(params) => format!(
+                "order:{}:response:page:{}_limit:{}",
+                order_type.as_str(),
+                params.page,
+                params.limit
+            ),
+            None => format!("order:{}:response", order_type.as_str()),
+        };
+
         let response_json: String = conn.get(key).await?;
         let response: OrderMessage = serde_json::from_str(&response_json)?;
-        debug!("Order response retrieved for order type {:?}", order_type);
+
+        debug!(
+            "Order response retrieved for order type {:?} with pagination {:?}",
+            order_type, pagination
+        );
         Ok(response)
     }
 }
