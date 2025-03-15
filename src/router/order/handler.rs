@@ -39,7 +39,7 @@ pub async fn get_creation_time_order(
     // 캐시된 결과 확인
     if let Ok(cached_response) = state
         .trade_redis
-        .get_order_response(&TokenOrderType::CreationTime)
+        .get_order_response(&TokenOrderType::CreationTime, Some(&query))
         .await
     {
         return Ok(Json(cached_response));
@@ -49,7 +49,7 @@ pub async fn get_creation_time_order(
     let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
         async {
             order_controller
-                .get_order_tokens(TokenOrderType::CreationTime, query)
+                .get_order_tokens(TokenOrderType::CreationTime, &query)
                 .await
                 .map_err(|err| {
                     error!("Failed to get order tokens: {}", err);
@@ -82,7 +82,7 @@ pub async fn get_creation_time_order(
     // 결과를 캐시에 저장
     if let Err(err) = state
         .trade_redis
-        .set_order_response(&TokenOrderType::CreationTime, &response)
+        .set_order_response(&TokenOrderType::CreationTime, &response, Some(&query))
         .await
     {
         warn!(
@@ -118,7 +118,7 @@ pub async fn get_market_cap_order(
     // 캐시된 결과 확인
     if let Ok(cached_response) = state
         .trade_redis
-        .get_order_response(&TokenOrderType::MarketCap)
+        .get_order_response(&TokenOrderType::MarketCap, Some(&query))
         .await
     {
         return Ok(Json(cached_response));
@@ -126,7 +126,7 @@ pub async fn get_market_cap_order(
 
     let order_controller = OrderController::new(state.postgres.clone());
     let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
-        order_controller.get_order_tokens(TokenOrderType::MarketCap, query),
+        order_controller.get_order_tokens(TokenOrderType::MarketCap, &query),
         order_controller.get_latest_king_of_the_hill(),
         order_controller.get_total_count()
     )
@@ -144,7 +144,7 @@ pub async fn get_market_cap_order(
     // 결과를 캐시에 저장
     if let Err(err) = state
         .trade_redis
-        .set_order_response(&TokenOrderType::MarketCap, &response)
+        .set_order_response(&TokenOrderType::MarketCap, &response, Some(&query))
         .await
     {
         warn!(
@@ -180,7 +180,7 @@ pub async fn get_latest_trade_order(
     // 캐시된 결과 확인
     if let Ok(cached_response) = state
         .trade_redis
-        .get_order_response(&TokenOrderType::LatestTrade)
+        .get_order_response(&TokenOrderType::LatestTrade, Some(&query))
         .await
     {
         return Ok(Json(cached_response));
@@ -190,7 +190,7 @@ pub async fn get_latest_trade_order(
     let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
         async {
             order_controller
-                .get_order_tokens(TokenOrderType::LatestTrade, query)
+                .get_order_tokens(TokenOrderType::LatestTrade, &query)
                 .await
                 .map_err(|err| {
                     error!("Failed to get order tokens: {}", err);
@@ -223,7 +223,7 @@ pub async fn get_latest_trade_order(
     // 결과를 캐시에 저장
     if let Err(err) = state
         .trade_redis
-        .set_order_response(&TokenOrderType::LatestTrade, &response)
+        .set_order_response(&TokenOrderType::LatestTrade, &response, Some(&query))
         .await
     {
         warn!(

@@ -190,7 +190,7 @@ pub async fn get_market(
     params(
         ("token" = String, Path, description = "Token ID"),
         ("interval" = String, Query, description = "Chart interval (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)"),
-        ("pagination" = Option<i16>, Query, description = "Page number (default 0, returns 300 records per page)")
+        ("base_timestamp" = i64, Query, description = "Base timestamp")
     ),
     tag = "Trade",
 )]
@@ -205,14 +205,12 @@ pub async fn get_chart(
         AppError::BadRequest(format!("Invalid chart interval: {}", err))
     })?;
 
-    let pagenation = query.pagination.unwrap_or(0);
-
     let chart_controller = ChartController::new(state.postgres.clone());
     if let Ok(cached_response) = state.trade_redis.get_chart_response(&token, &query).await {
         return Ok(Json(cached_response));
     }
     let chart_response = chart_controller
-        .get_chart(&token, chart_interval, pagenation)
+        .get_chart(&token, chart_interval, query.base_timestamp)
         .await
         .map_err(|err| {
             error!("Failed to get chart: token: {}, error: {}", token, err);

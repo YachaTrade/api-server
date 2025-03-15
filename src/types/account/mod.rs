@@ -13,21 +13,11 @@ use crate::db::postgres::PostgresDatabase;
 
 use super::common::identifier::Identifier;
 
-#[derive(ToSchema)]
-pub struct UpdateAccountFormData {
-    #[schema(example = json!({
-        "nickname": "user nickname",
-    }))]
-    pub data: UpdateAccountRequest, // JSON string
-
-    #[schema(format = "binary")]
-    pub image: Option<Bytes>,
-}
-
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateAccountRequest {
     pub nickname: Option<String>,
     pub bio: Option<String>,
+    pub image_uri: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
