@@ -164,7 +164,7 @@ impl ChartController {
             AND ch.interval_type = $2
             {}
             ORDER BY ch.time_stamp DESC
-            LIMIT 50
+            LIMIT 500
             "#,
             time_condition
         );
