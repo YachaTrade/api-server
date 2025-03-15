@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -142,7 +143,7 @@ impl ChartController {
 
         // Use base_timestamp as a filter condition if provided
         let time_condition = if base_timestamp > 0 {
-            format!("AND ch.time_stamp < {}\n", base_timestamp)
+            format!("AND ch.time_stamp <= {}\n", base_timestamp)
         } else {
             String::new()
         };
@@ -163,7 +164,7 @@ impl ChartController {
             AND ch.interval_type = $2
             {}
             ORDER BY ch.time_stamp DESC
-            LIMIT 20
+            LIMIT 50
             "#,
             time_condition
         );
