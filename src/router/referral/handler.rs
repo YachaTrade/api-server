@@ -5,7 +5,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::referral::{
-        CheckRegisterReferralResponse, ExistsReferralCodeResponse, GetInvitedCreateResponse, GetReferralChildCountResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
+        CheckRegisterReferralResponse, GetInvitedCreateResponse, GetReferralChildCountResponse, GetReferralCodeResponse, MakeReferralCodeResponse, ReferralController, RegisterReferralRequest, RegisterReferralResponse
     },
 };
 

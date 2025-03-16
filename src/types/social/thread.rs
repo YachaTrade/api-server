@@ -121,7 +121,7 @@ impl ThreadController {
                    t.reply_count as "reply_count!",
                    t.image_uri
             FROM inserted_thread t
-            LEFT JOIN account a ON t.account_id = a.account_id
+            JOIN account a ON t.account_id = a.account_id
             "#,
             token_id,
             account_id,
@@ -173,7 +173,7 @@ impl ThreadController {
                    COALESCE(COUNT(tr.thread_id)::int, 0) as "reply_count!",
                    t.image_uri
             FROM thread t
-            LEFT JOIN account a ON t.account_id = a.account_id
+            JOIN account a ON t.account_id = a.account_id
             LEFT JOIN thread tr ON t.thread_id = tr.root_id
             WHERE t.token_id = $1 AND t.root_id IS NULL
             GROUP BY t.thread_id, t.token_id, t.account_id, a.account_id, a.nickname, a.image_uri,
@@ -257,7 +257,7 @@ impl ThreadController {
                    COALESCE(COUNT(DISTINCT tr.thread_id), 0)::int as "reply_count!",
                    t.image_uri
             FROM thread t
-            LEFT JOIN account a ON t.account_id = a.account_id
+            JOIN account a ON t.account_id = a.account_id
             LEFT JOIN thread_likes tl ON t.thread_id = tl.thread_id
             LEFT JOIN thread tr ON t.thread_id = tr.root_id
             WHERE t.thread_id = $1
