@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, campaign, follow, order, profile, referral, search, thread, token, trade},
+    router::{self, account, auth, campaign, follow, hype, order, profile, referral, search, thread, token, trade},
     state::AppState,
     types,
 };
@@ -59,6 +59,9 @@ use clap::Parser;
 
         // ----------------Token----------------
         router::token::handler::get_token,
+
+        // ----------------Hype----------------
+        router::hype::handler::get_hype_token,
 
         // ----------------Trade----------------
         router::trade::handler::get_swap_history,
@@ -137,7 +140,9 @@ use clap::Parser;
             types::token::order::OrderTokenInfo,
             types::token::order::OrderToken,
             types::token::order::OrderMessage,
-            
+            types::token::hype::HypeToken,
+            types::token::hype::HypeTokenResponse,
+            types::token::hype::HypeInfo,
 
             //Trading
             types::trading::chart::Chart,
@@ -213,6 +218,7 @@ use clap::Parser;
         (name="Order",description="Order endpoints"),
         (name="Campaign",description="Campaign endpoints"),
         (name="Referral",description="Referral endpoints"),
+        (name="Hype",description="Hype Token endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -272,6 +278,7 @@ async fn main() -> Result<()> {
         .merge(trade::router())
         .merge(profile::router())
         .merge(order::router())
+        .merge(hype::router())
         .merge(follow::router(app_state.clone()))
         .merge(campaign::router(app_state.clone()))
         .merge(referral::router().layer(ServiceBuilder::new().layer(

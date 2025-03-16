@@ -3,7 +3,7 @@ pub mod x;
 use std::{env, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use bytes::Bytes;
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
