@@ -6,7 +6,6 @@ use crate::{
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

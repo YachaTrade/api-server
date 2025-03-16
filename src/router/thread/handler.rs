@@ -4,9 +4,8 @@ use axum::{
 };
 use bytes::Bytes;
 use regex::Regex;
-use serde::Serialize;
+
 use tracing::{error, info, instrument};
-use utoipa::ToSchema;
 
 use crate::{
     result::{AppError, AppJsonResult},
