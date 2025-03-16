@@ -7,7 +7,7 @@ use crate::{
         token::create_token::{TokenCreatedController, TokenCreatedResponse},
         trading::{
             pnl::{PNLController, PNLResponse},
-            position::{PositionController, PositionQuery, PositionResponse, PositionType},
+            position::{PositionController, PositionQuery, PositionResponse},
             swap_history::{PositionSwapResponse, SwapController},
         },
     },

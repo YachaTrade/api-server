@@ -1,6 +1,6 @@
 pub mod create_token;
+pub mod hype;
 pub mod order;
-
 use std::sync::Arc;
 
 use anyhow::Result;

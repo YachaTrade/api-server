@@ -17,5 +17,5 @@ lazy_static! {
     pub static ref PNL_EXPIRATION:u64 = 10000; // 10s in milliseconds
     pub static ref POSITION_EXPIRATION:u64 = 10000; // 10s in milliseconds
     pub static ref GET_TOKEN_RESPONSE_EXPIRATION: u64 = 60_000; // 1 minutes in milliseconds
-
+    pub static ref GET_HYPE_TOKEN_RESPONSE_EXPIRATION: u64 = 10_000; // 10 seconds in milliseconds
 }
