@@ -28,13 +28,13 @@ struct HypeTokenRecord {
     creator_image_uri: String,
     creator_follower_count: i32,
     creator_following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
     holder_count: Option<i64>,
     market_cap: Option<BigDecimal>,
     current_price: Option<BigDecimal>,
     day_ago_price: Option<BigDecimal>,
-    x_handle: Option<String>,
-    x_image_uri: Option<String>,
-    is_blue_label: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
