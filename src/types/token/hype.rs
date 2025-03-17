@@ -96,9 +96,9 @@ impl HypeTokenController {
                 a.image_uri as creator_image_uri,
                 a.follower_count as creator_follower_count, 
                 a.following_count as creator_following_count,
-                x.x_handle,
-                x.x_image_uri,
-                x.is_blue_label,
+                x.x_handle as x_handle,
+                x.x_image_uri as x_image_uri,
+                x.is_blue_label as is_blue_label,
                 -- 홀더 수 계산 - 기존 인덱스 활용
                 (SELECT COUNT(*) FROM position p WHERE p.token_id = h.token_id AND p.current_token_amount > 0 AND p.is_active = true) as holder_count,
                 -- 시가총액 계산 (가격 * 총 공급량)
@@ -154,7 +154,7 @@ impl HypeTokenController {
         // 결과 처리
         let records = records_result?;
         let total_count = total_count_result?.unwrap_or(0) as u64;
-
+       
         // 결과 매핑
         let tokens = records
             .into_par_iter()
