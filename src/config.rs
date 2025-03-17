@@ -5,12 +5,12 @@ lazy_static! {
     pub static ref NONCE_EXPIRATION:u64 = 300; //5 minutes
 
     pub static ref ORDER_EXPIRATION:u64 = 1500; //miliseconds
-    pub static ref SEARCH_EXPIRATION:u64 = 30_000; //30 secons in milliseconds
+    pub static ref SEARCH_EXPIRATION:u64 = 15_000; //30 secons in milliseconds
     pub static ref TOKEN_EXPIRATION:u64 = 1500; //miliseconds
 
     pub static ref TOP_POINT_EXPIRATION:u64 = 60_000; // 1 minutes in milliseconds
-    pub static ref MISSION_EXPIRATION:u64 = 60_000; // 1 minutes in milliseconds
-    pub static ref ACCOUNT_POINT_EXPIRATION: u64 = 60_000; // 1 minute in milliseconds
+    pub static ref MISSION_EXPIRATION:u64 = 5_000; // 5 seconds in milliseconds
+    pub static ref ACCOUNT_POINT_EXPIRATION: u64 = 5_000; // 1 minute in milliseconds
     pub static ref REFERRAL_CODE_EXPIRATION:u64 = 10_000; // 10 seconds in milliseconds
     pub static ref REFERRAL_CHILD_COUNT_EXPIRATION:u64 = 60_000; // 1 minutes in milliseconds
     pub static ref INVITED_CREATE_EXPIRATION:u64 = 60_000; // 1 minutes in milliseconds
