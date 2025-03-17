@@ -109,30 +109,32 @@ impl HypeTokenController {
             AccountHolderRecord,
             r#"
             WITH top_tokens AS (
-                -- hype_token에서 market 테이블과 조인하여 가격순으로 정렬
-                SELECT 
-                    h.token_id
+                SELECT h.token_id
                 FROM hype_token h
                 JOIN market m ON h.token_id = m.token_id
                 ORDER BY m.price DESC
                 LIMIT $1 OFFSET $2
             ),
+            active_positions AS (
+                -- 미리 필터링된 포지션 선택
+                SELECT p.token_id, p.account_id, p.current_token_amount
+                FROM position p
+                JOIN top_tokens tt ON p.token_id = tt.token_id
+                WHERE p.is_active = true
+                AND p.current_token_amount > 0
+            ),
             top_holders AS (
-                -- 각 토큰별로 홀더 정보를 가져와 등수를 매김
                 SELECT 
-                    tt.token_id,
+                    ap.token_id,
                     a.account_id,
                     a.nickname,
                     a.image_uri,
                     a.follower_count,
                     a.following_count,
-                    p.current_token_amount,
-                    ROW_NUMBER() OVER(PARTITION BY tt.token_id ORDER BY p.current_token_amount DESC) as holder_rank
-                FROM top_tokens tt
-                JOIN position p ON tt.token_id = p.token_id
-                JOIN account a ON p.account_id = a.account_id
-                WHERE p.is_active = true
-                  AND p.current_token_amount > 0
+                    ap.current_token_amount,
+                    ROW_NUMBER() OVER(PARTITION BY ap.token_id ORDER BY ap.current_token_amount DESC) as holder_rank
+                FROM active_positions ap
+                JOIN account a ON ap.account_id = a.account_id
             )
             SELECT 
                 token_id,
@@ -144,7 +146,7 @@ impl HypeTokenController {
                 current_token_amount
             FROM top_holders
             WHERE holder_rank <= 20
-            ORDER BY token_id, current_token_amount DESC
+            ORDER BY token_id, current_token_amount DESC;
             "#,
             pagination.limit,
             offset,
