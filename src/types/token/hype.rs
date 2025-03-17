@@ -16,6 +16,28 @@ use crate::{
     types::trading::chart::ChartInterval,
 };
 
+// 홀더 정보를 담을 구조체
+#[derive(Debug,Clone)]
+struct AccountHolderRecord {
+    token_id: String,
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+    current_token_amount: BigDecimal,
+}
+
+// 홀더 응답을 위한 구조체
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct TokenHolderResponse {
+    pub holders: Vec<AccountInfoWithX>,
+    pub total_count: u64,
+}
+
 // 데이터베이스 쿼리 결과를 담을 구조체
 #[derive(Debug)]
 struct HypeTokenRecord {
@@ -48,6 +70,7 @@ pub struct HypeToken {
     pub token_info: TokenInfo,
     pub account_info: AccountInfoWithX,
     pub hype_info: HypeInfo,
+    pub holders: Vec<AccountInfoWithX>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -64,6 +87,8 @@ impl HypeTokenController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         HypeTokenController { db }
     }
+    
+ 
 
     pub async fn get_hype_token(&self, pagination: &PaginationParams) -> Result<HypeTokenResponse> {
         info!("Get Hype Token start");
@@ -82,7 +107,45 @@ impl HypeTokenController {
 
         // 페이지네이션 계산
         let offset = (pagination.page - 1) * pagination.limit;
-
+        let holder_future = sqlx::query_as!(
+            AccountHolderRecord,
+            r#"
+            WITH top_tokens AS (
+            -- hype_token에서 market 테이블과 조인하여 가격순으로 정렬
+            SELECT 
+                h.token_id
+            FROM hype_token h
+            JOIN market m ON h.token_id = m.token_id
+            ORDER BY m.price DESC
+            LIMIT $1 OFFSET $2
+            )
+            SELECT 
+                tt.token_id,
+                a.account_id,
+                a.nickname,
+                a.image_uri,
+                a.follower_count,
+                a.following_count,
+                x.x_handle,
+                x.x_image_uri,
+                x.is_blue_label,
+                p.current_token_amount
+            FROM top_tokens tt
+            JOIN position p ON tt.token_id = p.token_id
+            JOIN account a ON p.account_id = a.account_id
+            LEFT JOIN account_x x ON a.account_id = x.account_id
+            WHERE  p.is_active = true
+            AND p.current_token_amount > 0
+            ORDER BY tt.token_id, p.current_token_amount DESC
+            LIMIT 20
+            "#,
+            pagination.limit,
+            offset,
+          
+        )
+        .fetch_all(self.db.get_read_pool());
+        
+        
         // 데이터 조회와 총 개수 조회를 병렬로 처리
         let records_future = sqlx::query_as!(HypeTokenRecord,
             r#"
@@ -136,6 +199,7 @@ impl HypeTokenController {
         )
         .fetch_all(self.db.get_read_pool());
 
+
         // 총 개수 조회 Future
         let total_count_future = sqlx::query_scalar!(
             r#"
@@ -146,70 +210,111 @@ impl HypeTokenController {
         .fetch_one(self.db.get_read_pool());
 
         // 두 쿼리를 병렬로 실행
-        let (records_result, total_count_result) = tokio::join!(records_future, total_count_future);
+        let (records_result, holder_result, total_count_result) = tokio::join!(records_future, holder_future, total_count_future);
         info!(
             "records_result: {:?}, total_count_result: {:?}",
             records_result, total_count_result
         );
         // 결과 처리
-        let records = records_result?;
+        let holder_result = holder_result?;
+        let token_records = records_result?;
         let total_count = total_count_result?.unwrap_or(0) as u64;
-       
-        // 결과 매핑
-        let tokens = records
-            .into_par_iter()
-            .map(|record| {
-                // 가격 증가율 계산 (백분율)
-                let price_increase_rate = match (&record.current_price, &record.day_ago_price) {
-                    (Some(current_price), Some(day_ago_price)) => {
-                        info!(
-                            "token_id = {:?}, current_price: {:?}, day_ago_price: {:?}",
-                            record.token_id, current_price, day_ago_price
-                        );
-                        if *day_ago_price == BigDecimal::from(0) {
-                            BigDecimal::from(0)
-                        } else {
-                            // ((현재 가격 - 이전 가격) / 이전 가격) * 100
-                            ((current_price.clone() - day_ago_price.clone())
-                                / day_ago_price.clone())
-                                * BigDecimal::from(100)
-                        }
-                    }
-                    _ => BigDecimal::from(0),
-                };
 
-                HypeToken {
-                    token_info: TokenInfo {
-                        token_id: record.token_id,
-                        name: record.name,
-                        symbol: record.symbol,
-                        image_uri: record.image_uri,
+
+
+        let holders_by_token_id = holder_result.into_iter().fold(
+            std::collections::HashMap::<String, Vec<AccountHolderRecord>>::new(),
+            |mut acc, record| {
+                acc.entry(record.token_id.clone())
+                    .or_default()
+                    .push(record);
+                acc
+            },
+        );
+        
+        // 결과 매핑
+      let tokens = token_records
+        .into_par_iter()
+        .map(|record| {
+            // 가격 증가율 계산 (백분율)
+            let price_increase_rate = match (&record.current_price, &record.day_ago_price) {
+                (Some(current_price), Some(day_ago_price)) => {
+                    info!(
+                        "token_id = {:?}, current_price: {:?}, day_ago_price: {:?}",
+                        record.token_id, current_price, day_ago_price
+                    );
+                    if *day_ago_price == BigDecimal::from(0) {
+                        BigDecimal::from(0)
+                    } else {
+                        // ((현재 가격 - 이전 가격) / 이전 가격) * 100
+                        ((current_price.clone() - day_ago_price.clone())
+                            / day_ago_price.clone())
+                            * BigDecimal::from(100)
+                    }
+                }
+                _ => BigDecimal::from(0),
+            };
+
+        // 현재 토큰의 홀더 정보 가져오기
+        let token_holders = holders_by_token_id
+            .get(&record.token_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|holder| {
+                AccountInfoWithX {
+                    account_info: AccountInfo {
+                        account_id: holder.account_id,
+                        nickname: holder.nickname,
+                        image_uri: holder.image_uri,
+                        follower_count: holder.follower_count,
+                        following_count: holder.following_count,
                     },
-                    account_info: AccountInfoWithX {
-                        account_info: AccountInfo {
-                            account_id: record.creator_account_id,
-                            nickname: record.creator_nickname,
-                            image_uri: record.creator_image_uri,
-                            follower_count: record.creator_follower_count,
-                            following_count: record.creator_following_count,
-                        },
-                        x_info: match (record.x_handle, record.x_image_uri, record.is_blue_label) {
-                            (Some(handle), Some(image_uri), Some(is_blue)) => Some(XInfo {
-                                x_handle: handle,
-                                x_image_uri: image_uri,
-                                is_blue_label: is_blue,
-                            }),
-                            _ => None,
-                        },
-                    },
-                    hype_info: HypeInfo {
-                        holder_count: record.holder_count.unwrap_or_default() as u64,
-                        price_increate_rate: price_increase_rate,
-                        market_cap: record.market_cap.unwrap_or_default().to_u64().unwrap_or(0),
+                    x_info: match (holder.x_handle, holder.x_image_uri, holder.is_blue_label) {
+                        (Some(handle), Some(image_uri), Some(is_blue)) => Some(XInfo {
+                            x_handle: handle,
+                            x_image_uri: image_uri,
+                            is_blue_label: is_blue,
+                        }),
+                        _ => None,
                     },
                 }
             })
-            .collect::<Vec<HypeToken>>();
+            .collect::<Vec<AccountInfoWithX>>();
+
+        HypeToken {
+            token_info: TokenInfo {
+                token_id: record.token_id,
+                name: record.name,
+                symbol: record.symbol,
+                image_uri: record.image_uri,
+            },
+            account_info: AccountInfoWithX {
+                account_info: AccountInfo {
+                    account_id: record.creator_account_id,
+                    nickname: record.creator_nickname,
+                    image_uri: record.creator_image_uri,
+                    follower_count: record.creator_follower_count,
+                    following_count: record.creator_following_count,
+                },
+                x_info: match (record.x_handle, record.x_image_uri, record.is_blue_label) {
+                    (Some(handle), Some(image_uri), Some(is_blue)) => Some(XInfo {
+                        x_handle: handle,
+                        x_image_uri: image_uri,
+                        is_blue_label: is_blue,
+                    }),
+                    _ => None,
+                },
+            },
+            hype_info: HypeInfo {
+                holder_count: record.holder_count.unwrap_or_default() as u64,
+                price_increate_rate: price_increase_rate,
+                market_cap: record.market_cap.unwrap_or_default().to_u64().unwrap_or(0),
+            },
+            holders: token_holders,
+        }
+    })
+    .collect::<Vec<HypeToken>>();
 
         Ok(HypeTokenResponse {
             tokens,
