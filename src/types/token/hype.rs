@@ -25,9 +25,7 @@ struct AccountHolderRecord {
     image_uri: String,
     follower_count: i32,
     following_count: i32,
-    x_handle: Option<String>,
-    x_image_uri: Option<String>,
-    is_blue_label: Option<bool>,
+
     current_token_amount: BigDecimal,
 }
 
@@ -70,7 +68,7 @@ pub struct HypeToken {
     pub token_info: TokenInfo,
     pub account_info: AccountInfoWithX,
     pub hype_info: HypeInfo,
-    pub holders: Vec<AccountInfoWithX>,
+    pub holders: Vec<AccountInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -126,14 +124,10 @@ impl HypeTokenController {
                 a.image_uri,
                 a.follower_count,
                 a.following_count,
-                x.x_handle,
-                x.x_image_uri,
-                x.is_blue_label,
                 p.current_token_amount
             FROM top_tokens tt
             JOIN position p ON tt.token_id = p.token_id
             JOIN account a ON p.account_id = a.account_id
-            LEFT JOIN account_x x ON a.account_id = x.account_id
             WHERE  p.is_active = true
             AND p.current_token_amount > 0
             ORDER BY tt.token_id, p.current_token_amount DESC
@@ -212,8 +206,8 @@ impl HypeTokenController {
         // 두 쿼리를 병렬로 실행
         let (records_result, holder_result, total_count_result) = tokio::join!(records_future, holder_future, total_count_future);
         info!(
-            "records_result: {:?}, total_count_result: {:?}",
-            records_result, total_count_result
+            "records_result: {:?}, total_count_result: {:?} holder_result: {:?}",
+            records_result, total_count_result, holder_result
         );
         // 결과 처리
         let holder_result = holder_result?;
@@ -262,25 +256,15 @@ impl HypeTokenController {
             .unwrap_or_default()
             .into_iter()
             .map(|holder| {
-                AccountInfoWithX {
-                    account_info: AccountInfo {
-                        account_id: holder.account_id,
-                        nickname: holder.nickname,
-                        image_uri: holder.image_uri,
-                        follower_count: holder.follower_count,
-                        following_count: holder.following_count,
-                    },
-                    x_info: match (holder.x_handle, holder.x_image_uri, holder.is_blue_label) {
-                        (Some(handle), Some(image_uri), Some(is_blue)) => Some(XInfo {
-                            x_handle: handle,
-                            x_image_uri: image_uri,
-                            is_blue_label: is_blue,
-                        }),
-                        _ => None,
-                    },
+                AccountInfo {
+                    account_id: holder.account_id,
+                    nickname: holder.nickname,
+                    image_uri: holder.image_uri,
+                    follower_count: holder.follower_count,
+                    following_count: holder.following_count,
                 }
             })
-            .collect::<Vec<AccountInfoWithX>>();
+            .collect::<Vec<AccountInfo>>();
 
         HypeToken {
             token_info: TokenInfo {

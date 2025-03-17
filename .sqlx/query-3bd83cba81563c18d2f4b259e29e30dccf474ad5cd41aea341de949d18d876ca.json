@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH top_tokens AS (\n            -- hype_token에서 market 테이블과 조인하여 가격순으로 정렬\n            SELECT \n                h.token_id\n            FROM hype_token h\n            JOIN market m ON h.token_id = m.token_id\n            ORDER BY m.price DESC\n            LIMIT $1 OFFSET $2\n            )\n            SELECT \n                tt.token_id,\n                a.account_id,\n                a.nickname,\n                a.image_uri,\n                a.follower_count,\n                a.following_count,\n                p.current_token_amount\n            FROM top_tokens tt\n            JOIN position p ON tt.token_id = p.token_id\n            JOIN account a ON p.account_id = a.account_id\n            WHERE  p.is_active = true\n            AND p.current_token_amount > 0\n            ORDER BY tt.token_id, p.current_token_amount DESC\n            LIMIT 20\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nickname",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "follower_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "following_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_token_amount",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3bd83cba81563c18d2f4b259e29e30dccf474ad5cd41aea341de949d18d876ca"
+}
