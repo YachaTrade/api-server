@@ -38,6 +38,12 @@ impl sqlx::Type<sqlx::Postgres> for AccountInfo {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AccountInfoWithX {
+    pub account_info: AccountInfo,
+    pub x_info: Option<XInfo>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct PositionTokenInfo {
     pub token_id: String,
@@ -73,7 +79,7 @@ pub struct PositionInfo {
     pub last_traded_at: i64,
 }
 
-#[derive(Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct XInfo {
     pub x_handle: String,
     pub x_image_uri: String,
