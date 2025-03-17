@@ -109,33 +109,45 @@ impl HypeTokenController {
             AccountHolderRecord,
             r#"
             WITH top_tokens AS (
-            -- hype_token에서 market 테이블과 조인하여 가격순으로 정렬
-            SELECT 
-                h.token_id
-            FROM hype_token h
-            JOIN market m ON h.token_id = m.token_id
-            ORDER BY m.price DESC
-            LIMIT $1 OFFSET $2
+                -- hype_token에서 market 테이블과 조인하여 가격순으로 정렬
+                SELECT 
+                    h.token_id
+                FROM hype_token h
+                JOIN market m ON h.token_id = m.token_id
+                ORDER BY m.price DESC
+                LIMIT $1 OFFSET $2
+            ),
+            top_holders AS (
+                -- 각 토큰별로 홀더 정보를 가져와 등수를 매김
+                SELECT 
+                    tt.token_id,
+                    a.account_id,
+                    a.nickname,
+                    a.image_uri,
+                    a.follower_count,
+                    a.following_count,
+                    p.current_token_amount,
+                    ROW_NUMBER() OVER(PARTITION BY tt.token_id ORDER BY p.current_token_amount DESC) as holder_rank
+                FROM top_tokens tt
+                JOIN position p ON tt.token_id = p.token_id
+                JOIN account a ON p.account_id = a.account_id
+                WHERE p.is_active = true
+                  AND p.current_token_amount > 0
             )
             SELECT 
-                tt.token_id,
-                a.account_id,
-                a.nickname,
-                a.image_uri,
-                a.follower_count,
-                a.following_count,
-                p.current_token_amount
-            FROM top_tokens tt
-            JOIN position p ON tt.token_id = p.token_id
-            JOIN account a ON p.account_id = a.account_id
-            WHERE  p.is_active = true
-            AND p.current_token_amount > 0
-            ORDER BY tt.token_id, p.current_token_amount DESC
-            LIMIT 20
+                token_id,
+                account_id,
+                nickname,
+                image_uri,
+                follower_count,
+                following_count,
+                current_token_amount
+            FROM top_holders
+            WHERE holder_rank <= 20
+            ORDER BY token_id, current_token_amount DESC
             "#,
             pagination.limit,
             offset,
-          
         )
         .fetch_all(self.db.get_read_pool());
         
@@ -205,27 +217,23 @@ impl HypeTokenController {
 
         // 두 쿼리를 병렬로 실행
         let (records_result, holder_result, total_count_result) = tokio::join!(records_future, holder_future, total_count_future);
-        info!(
-            "records_result: {:?}, total_count_result: {:?} holder_result: {:?}",
-            records_result, total_count_result, holder_result
-        );
+       
         // 결과 처리
         let holder_result = holder_result?;
         let token_records = records_result?;
         let total_count = total_count_result?.unwrap_or(0) as u64;
 
 
-
-        let holders_by_token_id = holder_result.into_iter().fold(
-            std::collections::HashMap::<String, Vec<AccountHolderRecord>>::new(),
-            |mut acc, record| {
-                acc.entry(record.token_id.clone())
-                    .or_default()
-                    .push(record);
-                acc
-            },
-        );
-        
+        let mut holders_by_token_id: std::collections::HashMap<String, Vec<AccountHolderRecord>> = 
+        std::collections::HashMap::new();
+    
+    for holder in holder_result {
+        holders_by_token_id
+            .entry(holder.token_id.clone())
+            .or_insert_with(Vec::new)
+            .push(holder);
+    }
+        info!("holders_by_token_id: {:?}", holders_by_token_id);
         // 결과 매핑
       let tokens = token_records
         .into_par_iter()
@@ -265,7 +273,7 @@ impl HypeTokenController {
                 }
             })
             .collect::<Vec<AccountInfo>>();
-
+        info!("token_holders: {:?}", token_holders);
         HypeToken {
             token_info: TokenInfo {
                 token_id: record.token_id,
