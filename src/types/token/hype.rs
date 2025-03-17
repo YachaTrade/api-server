@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::types::common::info::{AccountInfoWithX, XInfo};
+use crate::types::common::info::{AccountInfoWithX, TokenInfoWithDescription, XInfo};
 use crate::types::common::pagination::PaginationParams;
 use crate::{
     db::postgres::PostgresDatabase,
@@ -43,6 +43,7 @@ struct HypeTokenRecord {
     name: String,
     symbol: String,
     image_uri: String,
+    description: Option<String>,
     creator_account_id: String,
     creator_nickname: String,
     creator_image_uri: String,
@@ -65,7 +66,7 @@ pub struct HypeInfo {
 }
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
-    pub token_info: TokenInfo,
+    pub token_info: TokenInfoWithDescription,
     pub account_info: AccountInfoWithX,
     pub hype_info: HypeInfo,
     pub holders: Vec<AccountInfo>,
@@ -162,6 +163,7 @@ impl HypeTokenController {
                 t.name,
                 t.symbol,
                 t.image_uri,
+                t.description,
                 t.creator as creator_account_id,
                 a.nickname as creator_nickname,
                 a.image_uri as creator_image_uri,
@@ -277,11 +279,12 @@ impl HypeTokenController {
             .collect::<Vec<AccountInfo>>();
         info!("token_holders: {:?}", token_holders);
         HypeToken {
-            token_info: TokenInfo {
+            token_info: TokenInfoWithDescription {
                 token_id: record.token_id,
                 name: record.name,
                 symbol: record.symbol,
                 image_uri: record.image_uri,
+                description: record.description,
             },
             account_info: AccountInfoWithX {
                 account_info: AccountInfo {
