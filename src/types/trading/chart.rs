@@ -132,6 +132,40 @@ impl ChartController {
         Ok(count)
     }
 
+    // Get count of chart data with timestamps less than the given base_timestamp
+    pub async fn get_total_count_before_timestamp(
+        &self,
+        token_id: &str,
+        interval: ChartInterval,
+        base_timestamp: i64,
+    ) -> Result<i64> {
+        // If base_timestamp is 0 or negative, return total count
+        if base_timestamp <= 0 {
+            return self.get_total_count(token_id, interval).await;
+        }
+
+        let chart_interval: i16 = interval.into();
+        let count = sqlx::query!(
+            r#"
+            SELECT 
+                COUNT(*)
+            FROM chart
+            WHERE token_id = $1
+                AND interval_type = $2
+                AND time_stamp <= $3
+            "#,
+            token_id,
+            chart_interval,
+            base_timestamp
+        )
+        .fetch_one(self.db.get_read_pool())
+        .await?
+        .count
+        .unwrap_or(0);
+
+        Ok(count)
+    }
+
     pub async fn get_chart(
         &self,
         token_id: &str,
@@ -178,7 +212,9 @@ impl ChartController {
         let total_count = if charts.is_empty() {
             0
         } else {
-            self.get_total_count(token_id, interval).await?
+            // Get count of data with timestamps less than or equal to base_timestamp
+            self.get_total_count_before_timestamp(token_id, interval, base_timestamp)
+                .await?
         };
 
         // Return the chart data without unnecessary transformation

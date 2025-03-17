@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
+use crate::types::common::info::{AccountInfoWithX, XInfo};
 use crate::types::common::pagination::PaginationParams;
 use crate::{
     db::postgres::PostgresDatabase,
@@ -27,6 +28,9 @@ struct HypeTokenRecord {
     creator_image_uri: String,
     creator_follower_count: i32,
     creator_following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
     holder_count: Option<i64>,
     market_cap: Option<BigDecimal>,
     current_price: Option<BigDecimal>,
@@ -42,7 +46,7 @@ pub struct HypeInfo {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
     pub token_info: TokenInfo,
-    pub account_info: AccountInfo,
+    pub account_info: AccountInfoWithX,
     pub hype_info: HypeInfo,
 }
 
@@ -92,6 +96,9 @@ impl HypeTokenController {
                 a.image_uri as creator_image_uri,
                 a.follower_count as creator_follower_count, 
                 a.following_count as creator_following_count,
+                x.x_handle as x_handle,
+                x.x_image_uri as x_image_uri,
+                x.is_blue_label as is_blue_label,
                 -- 홀더 수 계산 - 기존 인덱스 활용
                 (SELECT COUNT(*) FROM position p WHERE p.token_id = h.token_id AND p.current_token_amount > 0 AND p.is_active = true) as holder_count,
                 -- 시가총액 계산 (가격 * 총 공급량)
@@ -118,6 +125,7 @@ impl HypeTokenController {
             JOIN token t ON h.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
             JOIN market m ON h.token_id = m.token_id
+            LEFT JOIN account_x x ON a.account_id = x.account_id
             ORDER BY m.price DESC NULLS LAST
             LIMIT $3 OFFSET $4
             "#,
@@ -146,7 +154,7 @@ impl HypeTokenController {
         // 결과 처리
         let records = records_result?;
         let total_count = total_count_result?.unwrap_or(0) as u64;
-
+       
         // 결과 매핑
         let tokens = records
             .into_par_iter()
@@ -177,12 +185,22 @@ impl HypeTokenController {
                         symbol: record.symbol,
                         image_uri: record.image_uri,
                     },
-                    account_info: AccountInfo {
-                        account_id: record.creator_account_id,
-                        nickname: record.creator_nickname,
-                        image_uri: record.creator_image_uri,
-                        follower_count: record.creator_follower_count,
-                        following_count: record.creator_following_count,
+                    account_info: AccountInfoWithX {
+                        account_info: AccountInfo {
+                            account_id: record.creator_account_id,
+                            nickname: record.creator_nickname,
+                            image_uri: record.creator_image_uri,
+                            follower_count: record.creator_follower_count,
+                            following_count: record.creator_following_count,
+                        },
+                        x_info: match (record.x_handle, record.x_image_uri, record.is_blue_label) {
+                            (Some(handle), Some(image_uri), Some(is_blue)) => Some(XInfo {
+                                x_handle: handle,
+                                x_image_uri: image_uri,
+                                is_blue_label: is_blue,
+                            }),
+                            _ => None,
+                        },
                     },
                     hype_info: HypeInfo {
                         holder_count: record.holder_count.unwrap_or_default() as u64,
