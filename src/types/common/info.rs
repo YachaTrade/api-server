@@ -10,6 +10,14 @@ pub struct TokenInfo {
     pub symbol: String,
     pub image_uri: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct TokenInfoWithDescription {
+    pub token_id: String,
+    pub name: String,
+    pub symbol: String,
+    pub image_uri: String,
+    pub description: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AccountInfo {
