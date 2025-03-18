@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH top_tokens AS (\n                SELECT h.token_id\n                FROM hype_token h\n                JOIN market m ON h.token_id = m.token_id\n                ORDER BY m.price DESC\n                LIMIT $1 OFFSET $2\n            )\n            SELECT \n                p.token_id,\n                a.account_id,\n                a.nickname,\n                a.image_uri,\n                a.follower_count,\n                a.following_count,\n                p.current_token_amount\n            FROM top_tokens tt\n            CROSS JOIN LATERAL (\n                SELECT p.token_id, p.account_id, p.current_token_amount\n                FROM position p\n                WHERE p.token_id = tt.token_id\n                AND p.is_active = true\n                AND p.current_token_amount > 0\n                ORDER BY p.current_token_amount DESC\n                LIMIT 20\n            ) p\n            JOIN account a ON p.account_id = a.account_id\n            ORDER BY p.token_id, p.current_token_amount DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "nickname",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "follower_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "following_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_token_amount",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f6e1bb62bc0c4ecbf22bd4b2d4ada40995c5bf04b62509431f8df7d88e7a908c"
+}
