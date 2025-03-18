@@ -62,7 +62,7 @@ struct HypeTokenRecord {
 pub struct HypeInfo {
     pub holder_count: u64,
     pub price_increate_rate: BigDecimal,
-    pub market_cap: u64,
+    pub market_cap: BigDecimal,
 }
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
@@ -306,7 +306,7 @@ impl HypeTokenController {
             hype_info: HypeInfo {
                 holder_count: record.holder_count.unwrap_or_default() as u64,
                 price_increate_rate: price_increase_rate,
-                market_cap: record.market_cap.unwrap_or_default().to_u64().unwrap_or(0),
+                market_cap: record.market_cap.unwrap_or_default(),
             },
             holders: token_holders,
         }
