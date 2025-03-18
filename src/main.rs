@@ -103,7 +103,9 @@ use clap::Parser;
         schemas(
             // Common
             types::common::info::TokenInfo,
+            types::common::info::TokenInfoWithDescription,
             types::common::info::AccountInfo,
+            types::common::info::AccountInfoWithX,
             types::common::info::MarketInfo,
             types::common::info::PositionInfo,
             types::common::info::PositionTokenInfo,
