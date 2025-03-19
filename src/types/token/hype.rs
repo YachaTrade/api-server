@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
-use bigdecimal::{BigDecimal};
+use bigdecimal::BigDecimal;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -11,11 +11,9 @@ use utoipa::ToSchema;
 use crate::types::common::info::{AccountInfoWithX, TokenInfoWithDescription, XInfo};
 use crate::types::common::pagination::PaginationParams;
 use crate::{
-    db::postgres::PostgresDatabase,
-    types::common::info::{AccountInfo, },
+    db::postgres::PostgresDatabase, types::common::info::AccountInfo,
     types::trading::chart::ChartInterval,
 };
-
 
 // 홀더 응답을 위한 구조체
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -57,7 +55,6 @@ pub struct HypeToken {
     pub token_info: TokenInfoWithDescription,
     pub account_info: AccountInfoWithX,
     pub hype_info: HypeInfo,
-    
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -150,7 +147,7 @@ impl HypeTokenController {
         //         ORDER BY m.price DESC
         //         LIMIT $1 OFFSET $2
         //     )
-        //     SELECT 
+        //     SELECT
         //         p.token_id,
         //         a.account_id,
         //         a.nickname,
@@ -176,6 +173,7 @@ impl HypeTokenController {
         // )
         // .fetch_all(self.db.get_read_pool());
 
+        // 데이터 조회 Future
         let records_future = sqlx::query_as!(HypeTokenRecord,
             r#"
             SELECT 
@@ -192,8 +190,8 @@ impl HypeTokenController {
                 x.x_handle as x_handle,
                 x.x_image_uri as x_image_uri,
                 x.is_blue_label as is_blue_label,
-                -- 홀더 수 계산 - 기존 인덱스 활용
-                (SELECT COUNT(*) FROM position p WHERE p.token_id = h.token_id AND p.current_token_amount > 0 AND p.is_active = true) as holder_count,
+                -- 홀더 수 계산 - 기존 인덱스 활용 (idx_position_token_is_active)
+                (SELECT COUNT(*) FROM position p WHERE p.token_id = h.token_id AND p.is_active = true AND p.current_token_amount > 0) as holder_count,
                 -- 시가총액 계산 (가격 * 총 공급량)
                 COALESCE(m.price * t.total_supply, 0) as market_cap,
                 -- 현재 가격
@@ -215,22 +213,22 @@ impl HypeTokenController {
                      LIMIT 1)
                 ) as day_ago_price
             FROM hype_token h
+            -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)
             JOIN token t ON h.token_id = t.token_id
-            JOIN account a ON t.creator = a.account_id
             JOIN market m ON h.token_id = m.token_id
+            JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x x ON a.account_id = x.account_id
             ORDER BY m.price DESC NULLS LAST
             LIMIT $3 OFFSET $4
             "#,
             interval_type,
-            day_ago_timestamp, 
+            day_ago_timestamp,
             pagination.limit,
             offset
         )
         .fetch_all(self.db.get_read_pool());
 
-
-        // 총 개수 조회 Future
+        // 총 개수 조회 Future - 캐싱 가능한 데이터, 필요한 경우 별도 테이블에 저장할 수 있음
         let total_count_future = sqlx::query_scalar!(
             r#"
             SELECT COUNT(*) as count
@@ -240,15 +238,11 @@ impl HypeTokenController {
         .fetch_one(self.db.get_read_pool());
 
         // 두 쿼리를 병렬로 실행
-        let (records_result,  total_count_result) =
-            tokio::join!(records_future,  total_count_future);
+        let (records_result, total_count_result) = tokio::join!(records_future, total_count_future);
 
         // 결과 처리
-        
         let token_records = records_result?;
         let total_count = total_count_result?.unwrap_or(0) as u64;
-
-      
 
         // 결과 매핑
         let tokens = token_records
@@ -272,8 +266,6 @@ impl HypeTokenController {
                     }
                     _ => BigDecimal::from(0),
                 };
-
-       
 
                 HypeToken {
                     token_info: TokenInfoWithDescription {
@@ -305,7 +297,6 @@ impl HypeTokenController {
                         price_increate_rate: price_increase_rate,
                         market_cap: record.market_cap.unwrap_or_default(),
                     },
-                    
                 }
             })
             .collect::<Vec<HypeToken>>();
