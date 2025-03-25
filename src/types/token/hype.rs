@@ -323,7 +323,7 @@ pub struct HonorTokenRecord {
     pub x_handle: Option<String>,
     pub x_image_uri: Option<String>,
     pub is_blue_label: Option<bool>,
-    pub market_cap_snapshot: Option<i64>,
+    pub market_cap_snapshot: BigDecimal,
     pub week: i32,
 }
 
@@ -429,10 +429,7 @@ impl HonorTokenController {
                     },
                 },
                 honor_info: HonorInfo {
-                    market_cap_snapshot: match record.market_cap_snapshot {
-                        Some(cap) => BigDecimal::from(cap),
-                        None => BigDecimal::from(0),
-                    },
+                    market_cap_snapshot: record.market_cap_snapshot,
                 },
             })
             .collect::<Vec<HonorToken>>();
