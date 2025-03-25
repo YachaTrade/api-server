@@ -325,6 +325,7 @@ pub struct HonorTokenRecord {
     pub is_blue_label: Option<bool>,
     pub market_cap_snapshot: BigDecimal,
     pub week: i32,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -375,7 +376,8 @@ impl HonorTokenController {
                 x.x_image_uri as x_image_uri,
                 x.is_blue_label as is_blue_label,
                 h.market_cap_snapshot,
-                h.week
+                h.week,
+                h.created_at
             FROM honor_token h
             -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)
             JOIN token t ON h.token_id = t.token_id
