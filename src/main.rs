@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, campaign, follow, hype, order, profile, referral, search, thread, token, trade},
+    router::{self, account, auth, campaign, follow, hype, order, profile, referral, search, thread, token, trade},
     state::AppState,
     types,
 };
@@ -288,7 +288,7 @@ async fn main() -> Result<()> {
         .merge(hype::router())
         .merge(follow::router(app_state.clone()))
         .merge(campaign::router(app_state.clone()))
-        .merge(bot::router())
+        // .merge(bot::router())
         .merge(referral::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
