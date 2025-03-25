@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -323,7 +324,7 @@ pub struct HonorTokenRecord {
     pub x_handle: Option<String>,
     pub x_image_uri: Option<String>,
     pub is_blue_label: Option<bool>,
-    pub market_cap_snapshot: BigDecimal,
+    pub market_cap_snapshot: Option<BigDecimal>,
     pub week: i32,
     pub created_at: i64,
 }
@@ -375,7 +376,7 @@ impl HonorTokenController {
                 x.x_handle as x_handle,
                 x.x_image_uri as x_image_uri,
                 x.is_blue_label as is_blue_label,
-                h.market_cap_snapshot,
+                h.market_cap_snapshot::NUMERIC as market_cap_snapshot,
                 h.week,
                 h.created_at
             FROM honor_token h
@@ -431,7 +432,7 @@ impl HonorTokenController {
                     },
                 },
                 honor_info: HonorInfo {
-                    market_cap_snapshot: record.market_cap_snapshot,
+                    market_cap_snapshot: record.market_cap_snapshot.unwrap_or(BigDecimal::from(0)),
                 },
             })
             .collect::<Vec<HonorToken>>();
