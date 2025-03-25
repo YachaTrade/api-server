@@ -62,7 +62,6 @@ pub struct HypeTokenResponse {
     pub tokens: Vec<HypeToken>,
     pub total_count: u64,
 }
-
 pub struct HypeTokenController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -302,6 +301,143 @@ impl HypeTokenController {
             .collect::<Vec<HypeToken>>();
 
         Ok(HypeTokenResponse {
+            tokens,
+            total_count,
+        })
+    }
+}
+
+// Honor 토큰 쿼리 결과를 매핑하기 위한 구조체
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct HonorTokenRecord {
+    pub token_id: String,
+    pub name: String,
+    pub symbol: String,
+    pub image_uri: String,
+    pub description: Option<String>,
+    pub creator_account_id: String,
+    pub creator_nickname: String,
+    pub creator_image_uri: String,
+    pub creator_follower_count: i32,
+    pub creator_following_count: i32,
+    pub x_handle: Option<String>,
+    pub x_image_uri: Option<String>,
+    pub is_blue_label: Option<bool>,
+    pub market_cap_snapshot: Option<i64>,
+    pub week: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct HonorInfo {
+    pub market_cap_snapshot: BigDecimal,
+}
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct HonorToken {
+    pub token_info: TokenInfoWithDescription,
+    pub account_info: AccountInfoWithX,
+    pub honor_info: HonorInfo,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct HonorTokenResponse {
+    pub tokens: Vec<HonorToken>,
+    pub total_count: u64,
+}
+
+pub struct HonorTokenController {
+    pub db: Arc<PostgresDatabase>,
+}
+
+impl HonorTokenController {
+    pub fn new(db: Arc<PostgresDatabase>) -> Self {
+        HonorTokenController { db }
+    }
+    pub async fn get_honor_token(
+        &self,
+        pagination: &PaginationParams,
+    ) -> Result<HonorTokenResponse> {
+        let offset = (pagination.page - 1) * pagination.limit;
+        let records_future = sqlx::query_as!(
+            HonorTokenRecord,
+            r#"
+            SELECT 
+                h.token_id,
+                t.name,
+                t.symbol,
+                t.image_uri,
+                t.description,
+                t.creator as creator_account_id,
+                a.nickname as creator_nickname,
+                a.image_uri as creator_image_uri,
+                a.follower_count as creator_follower_count, 
+                a.following_count as creator_following_count,
+                x.x_handle as x_handle,
+                x.x_image_uri as x_image_uri,
+                x.is_blue_label as is_blue_label,
+                h.market_cap_snapshot,
+                h.week
+            FROM honor_token h
+            -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)
+            JOIN token t ON h.token_id = t.token_id
+            JOIN account a ON t.creator = a.account_id
+            LEFT JOIN account_x x ON a.account_id = x.account_id
+            ORDER BY h.week
+            LIMIT $1 OFFSET $2
+            "#,
+            pagination.limit,
+            offset
+        )
+        .fetch_all(self.db.get_read_pool());
+        let total_count_future = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) as count
+            FROM honor_token h
+            "#
+        )
+        .fetch_one(self.db.get_read_pool());
+
+        let (records_result, total_count_result) = tokio::join!(records_future, total_count_future);
+        let token_records = records_result?;
+        let total_count = total_count_result?.unwrap_or(0) as u64;
+
+        // HonorTokenRecord에서 HonorToken으로 매핑
+        let tokens = token_records
+            .into_iter()
+            .map(|record| HonorToken {
+                token_info: TokenInfoWithDescription {
+                    token_id: record.token_id,
+                    name: record.name,
+                    symbol: record.symbol,
+                    image_uri: record.image_uri,
+                    description: record.description,
+                },
+                account_info: AccountInfoWithX {
+                    account_info: AccountInfo {
+                        account_id: record.creator_account_id,
+                        nickname: record.creator_nickname,
+                        image_uri: record.creator_image_uri,
+                        follower_count: record.creator_follower_count,
+                        following_count: record.creator_following_count,
+                    },
+                    x_info: match (record.x_handle, record.x_image_uri, record.is_blue_label) {
+                        (Some(handle), Some(image_uri), Some(is_blue)) => Some(XInfo {
+                            x_handle: handle,
+                            x_image_uri: image_uri,
+                            is_blue_label: is_blue,
+                        }),
+                        _ => None,
+                    },
+                },
+                honor_info: HonorInfo {
+                    market_cap_snapshot: match record.market_cap_snapshot {
+                        Some(cap) => BigDecimal::from(cap),
+                        None => BigDecimal::from(0),
+                    },
+                },
+            })
+            .collect::<Vec<HonorToken>>();
+
+        Ok(HonorTokenResponse {
             tokens,
             total_count,
         })
