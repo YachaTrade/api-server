@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                h.token_id,\n                t.name,\n                t.symbol,\n                t.image_uri,\n                t.description,\n                t.creator as creator_account_id,\n                a.nickname as creator_nickname,\n                a.image_uri as creator_image_uri,\n                a.follower_count as creator_follower_count, \n                a.following_count as creator_following_count,\n                x.x_handle as x_handle,\n                x.x_image_uri as x_image_uri,\n                x.is_blue_label as is_blue_label,\n                h.market_cap_snapshot,\n                h.week,\n                h.created_at\n            FROM honor_token h\n            -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)\n            JOIN token t ON h.token_id = t.token_id\n            JOIN account a ON t.creator = a.account_id\n            LEFT JOIN account_x x ON a.account_id = x.account_id\n            ORDER BY h.week\n            LIMIT $1 OFFSET $2\n            ",
+  "query": "\n            SELECT \n                h.token_id,\n                t.name,\n                t.symbol,\n                t.image_uri,\n                t.description,\n                t.creator as creator_account_id,\n                a.nickname as creator_nickname,\n                a.image_uri as creator_image_uri,\n                a.follower_count as creator_follower_count, \n                a.following_count as creator_following_count,\n                x.x_handle as x_handle,\n                x.x_image_uri as x_image_uri,\n                x.is_blue_label as is_blue_label,\n                h.market_cap_snapshot as market_cap_snapshot,\n                h.week,\n                h.created_at\n            FROM honor_token h\n            -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)\n            JOIN token t ON h.token_id = t.token_id\n            JOIN account a ON t.creator = a.account_id\n            LEFT JOIN account_x x ON a.account_id = x.account_id\n            ORDER BY h.week\n            LIMIT $1 OFFSET $2\n            ",
   "describe": {
     "columns": [
       {
@@ -109,5 +109,5 @@
       false
     ]
   },
-  "hash": "c0cdf1afba6647027cf8f706c29872851346142b5bad8be9be0c0b58a06c2945"
+  "hash": "d6f38099fa72c029bd4b2f59c7184b17008dda2d4d75579b1b639409551837a2"
 }
