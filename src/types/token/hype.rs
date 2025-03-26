@@ -323,14 +323,18 @@ pub struct HonorTokenRecord {
     pub x_handle: Option<String>,
     pub x_image_uri: Option<String>,
     pub is_blue_label: Option<bool>,
-    pub market_cap_snapshot: Option<BigDecimal>,
+    pub market_cap_snapshot: BigDecimal,
     pub week: i32,
+    pub prize: BigDecimal,
     pub created_at: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct HonorInfo {
     pub market_cap_snapshot: BigDecimal,
+    pub week: i32,
+    pub created_at: i64,
+    pub prize: BigDecimal,
 }
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct HonorToken {
@@ -376,6 +380,7 @@ impl HonorTokenController {
                 x.x_image_uri as x_image_uri,
                 x.is_blue_label as is_blue_label,
                 h.market_cap_snapshot::NUMERIC as market_cap_snapshot,
+                h.prize as prize,
                 h.week,
                 h.created_at
             FROM honor_token h
@@ -431,7 +436,10 @@ impl HonorTokenController {
                     },
                 },
                 honor_info: HonorInfo {
-                    market_cap_snapshot: record.market_cap_snapshot.unwrap_or(BigDecimal::from(0)),
+                    market_cap_snapshot: record.market_cap_snapshot,
+                    week: record.week,
+                    prize: record.prize,
+                    created_at: record.created_at,
                 },
             })
             .collect::<Vec<HonorToken>>();
