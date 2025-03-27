@@ -388,7 +388,7 @@ impl HonorTokenController {
             JOIN token t ON h.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x x ON a.account_id = x.account_id
-            ORDER BY h.week
+            ORDER BY h.week DESC, h.market_cap_snapshot DESC NULLS LAST
             LIMIT $1 OFFSET $2
             "#,
             pagination.limit,
