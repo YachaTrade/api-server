@@ -11,11 +11,11 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        ACCOUNT_POINT_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-        GET_TOKEN_RESPONSE_EXPIRATION, INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION,
-        NONCE_EXPIRATION, ORDER_EXPIRATION, PNL_EXPIRATION, POSITION_EXPIRATION,
-        REFERRAL_CHILD_COUNT_EXPIRATION, REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION,
-        TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
+        ACCOUNT_POINT_EXPIRATION, GET_HONOR_TOKEN_RESPONSE_EXPIRATION,
+        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
+        INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION, NONCE_EXPIRATION, ORDER_EXPIRATION,
+        PNL_EXPIRATION, POSITION_EXPIRATION, REFERRAL_CHILD_COUNT_EXPIRATION,
+        REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
     },
     types::{
         campaign::point::{
@@ -29,7 +29,7 @@ use crate::{
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
         token::{
             create_token::TokenCreatedResponse,
-            hype::HypeTokenResponse,
+            hype::{HonorTokenResponse, HypeTokenResponse},
             order::{OrderMessage, TokenOrderType},
             TokenResponse,
         },
@@ -728,6 +728,42 @@ impl RedisDatabase {
         let response_json: String = conn.get(key).await?;
         info!("Get Hype Token: response: {:?}", response_json);
         let response_json: HypeTokenResponse = serde_json::from_str(&response_json)?;
+        Ok(response_json)
+    }
+
+    pub async fn set_honor_token_response(
+        &self,
+        pagination: &PaginationParams,
+        response: &HonorTokenResponse,
+    ) -> Result<()> {
+        info!(
+            "Set Honor Token: pagination: {:?}, response: {:?}",
+            pagination, response
+        );
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "honor_token:page:{}:limit:{}",
+            pagination.page, pagination.limit
+        );
+        let json = serde_json::to_string(response)?;
+        conn.pset_ex::<String, String, ()>(key, json, *GET_HONOR_TOKEN_RESPONSE_EXPIRATION)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_honor_token_response(
+        &self,
+        pagination: &PaginationParams,
+    ) -> Result<HonorTokenResponse> {
+        info!("Get Honor Token: pagination: {:?}", pagination);
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "honor_token:page:{}:limit:{}",
+            pagination.page, pagination.limit
+        );
+        let response_json: String = conn.get(key).await?;
+        info!("Get Honor Token: response: {:?}", response_json);
+        let response_json: HonorTokenResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
 }

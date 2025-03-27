@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                h.token_id,\n                t.name,\n                t.symbol,\n                t.image_uri,\n                t.description,\n                t.creator as creator_account_id,\n                a.nickname as creator_nickname,\n                a.image_uri as creator_image_uri,\n                a.follower_count as creator_follower_count, \n                a.following_count as creator_following_count,\n                x.x_handle as x_handle,\n                x.x_image_uri as x_image_uri,\n                x.is_blue_label as is_blue_label,\n                h.market_cap_snapshot::NUMERIC as market_cap_snapshot,\n                h.prize as prize,\n                h.week,\n                h.created_at\n            FROM honor_token h\n            -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)\n            JOIN token t ON h.token_id = t.token_id\n            JOIN account a ON t.creator = a.account_id\n            LEFT JOIN account_x x ON a.account_id = x.account_id\n            ORDER BY h.week\n            LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "creator_account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "creator_nickname",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "creator_image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "creator_follower_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "creator_following_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "x_handle",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "x_image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_blue_label",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "market_cap_snapshot",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 14,
+        "name": "prize",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 15,
+        "name": "week",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1efaba20f8f4024f653205d136bb5479d7e82abccf8ebe3cd5e9f813b01d77a0"
+}
