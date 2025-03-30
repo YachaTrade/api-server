@@ -39,7 +39,7 @@ const ALLOWED_IMAGE_TYPES: [&str; 9] = [
     "image/avif",
 ];
 // 파일 크기 제한 상수 정의
-const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
+// const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 pub async fn parse_multipart_data(
     multipart: &mut Multipart,
@@ -70,13 +70,13 @@ pub async fn parse_multipart_data(
                     AppError::BadRequest(format!("Failed to read image file: {}", e))
                 })?;
 
-                // Validate file size
-                if data.len() > MAX_FILE_SIZE {
-                    return Err(AppError::BadRequest(format!(
-                        "Image file size exceeds the 5MB limit: {} bytes",
-                        data.len()
-                    )));
-                }
+                // // Validate file size
+                // if data.len() > MAX_FILE_SIZE {
+                //     return Err(AppError::BadRequest(format!(
+                //         "Image file size exceeds the 5MB limit: {} bytes",
+                //         data.len()
+                //     )));
+                // }
 
                 image_file = Some((data, content_type));
             }
