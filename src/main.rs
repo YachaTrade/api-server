@@ -296,7 +296,7 @@ async fn main() -> Result<()> {
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_timeout_error))
-                .timeout(Duration::from_secs(10)),
+                .timeout(Duration::from_secs(5)),
         )
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
