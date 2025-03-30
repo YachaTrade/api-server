@@ -28,30 +28,30 @@ pub async fn set_metadata(
 
     let unique_id = Uuid::new_v4().to_string();
     let image_file_name = format!("coin/{}", unique_id);
-
-    let image_upload_request_response =
-        request_upload_image_url(&image_file_name, &image_content_type, image_data.len()).await?;
-
-    let (upload_url, image_url) = parse_upload_response(&image_upload_request_response)?;
+    let metadata_file_name = format!("metadata-{}.json", unique_id);
+    let (image_upload_request_response, metadata_upload_response) = tokio::join!(
+        request_upload_image_url(&image_file_name, &image_content_type, image_data.len()),
+        request_update_metadata_url(&metadata_file_name, &metadata)
+    );
+    let image_upload_request_response = image_upload_request_response?;
+    let metadata_upload_response = metadata_upload_response?;
+    let (image_upload_url, image_url) = parse_upload_response(&image_upload_request_response)?;
+    let (metadata_upload_url, metadata_url) = parse_upload_response(&metadata_upload_response)?;
     // Upload image and get image URL
     info!("image url {}", image_url);
     metadata.image_uri = Some(image_url);
-    upload_image_to_url(
-        &upload_url,
-        &image_data,
-        &image_content_type,
-        &image_file_name,
-    )
-    .await?;
+    let (image_upload_result, metadata_upload_result) = tokio::join!(
+        upload_image_to_url(
+            &image_upload_url,
+            &image_data,
+            &image_content_type,
+            &image_file_name,
+        ),
+        upload_metadata_to_url(&metadata_upload_url, metadata, &metadata_file_name)
+    );
 
-    let metadata_file_name = format!("metadata-{}.json", unique_id);
-
-    let metadata_upload_response =
-        request_update_metadata_url(&metadata_file_name, &metadata).await?;
-
-    let (upload_url, metadata_url) = parse_upload_response(&metadata_upload_response)?;
-
-    upload_metadata_to_url(&upload_url, metadata, &metadata_file_name).await?;
+    image_upload_result?;
+    metadata_upload_result?;
 
     Ok(Json(BotMetadataResponse { metadata_url }))
 }
