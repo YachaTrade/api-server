@@ -41,13 +41,6 @@ const ALLOWED_IMAGE_TYPES: [&str; 9] = [
 // 파일 크기 제한 상수 정의
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
-// Worker API URL 관련 함수
-fn get_worker_api_url() -> Result<String, AppError> {
-    env::var("WORKER_API_URL").map_err(|_| {
-        AppError::InternalError("WORKER_API_URL environment variable not found".to_string())
-    })
-}
-
 pub async fn parse_multipart_data(
     multipart: &mut Multipart,
 ) -> Result<(BotMetadataRequest, (Bytes, String)), AppError> {
