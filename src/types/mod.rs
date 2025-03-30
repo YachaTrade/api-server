@@ -2,6 +2,7 @@ pub mod auth;
 pub mod common;
 
 pub mod account;
+pub mod bot;
 pub mod campaign;
 pub mod referral;
 pub mod search;
