@@ -110,16 +110,9 @@ pub async fn auth_session(
         .into());
     }
 
-    // 1. 주소와 서명 파싱
     let nonce = payload.nonce;
 
-    let signature = Signature::from_str(&payload.signature).map_err(|err| {
-        error!("Invalid signature format: {}", err);
-        AppError::BadRequest("Invalid signature format".to_string())
-    })?;
-
-    // 2. 서명에서 주소 복구
-    let address = verify_wallet_address(payload.wallet_address, &nonce, &signature).await?;
+    let address = verify_wallet_address(payload.wallet_address, &nonce, &payload.signature).await?;
     let redis = state.session_redis.clone();
 
     info!("Nonce for address {}: {}", address, nonce);
@@ -344,12 +337,10 @@ fn generate_session_id(address: &str, nonce: &str) -> String {
 async fn verify_wallet_address(
     wallet_address: Option<String>,
     nonce: &str,
-    signature: &Signature,
+    signature: &String,
 ) -> Result<String> {
     match wallet_address {
-        Some(wallet_address) => {
-            verify_smart_wallet(&wallet_address, nonce, &signature.to_string()).await
-        }
+        Some(wallet_address) => verify_smart_wallet(&wallet_address, nonce, &signature).await,
         None => verify_regular_wallet(signature, nonce),
     }
 }
@@ -406,7 +397,12 @@ async fn verify_smart_wallet(
     Ok(wallet_address.to_string())
 }
 
-fn verify_regular_wallet(signature: &Signature, nonce: &str) -> Result<String> {
+fn verify_regular_wallet(signature: &String, nonce: &str) -> Result<String> {
+    let signature = Signature::from_str(signature).map_err(|err| {
+        error!("Invalid signature format: {}", err);
+        anyhow::anyhow!("Invalid signature format")
+    })?;
+
     signature
         .recover_address_from_msg(nonce)
         .map_err(|err| {
