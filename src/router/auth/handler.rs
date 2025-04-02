@@ -367,13 +367,13 @@ async fn verify_smart_wallet(
     // Parse signature
     let signature_bytes = Bytes::from_str(signature_str).map_err(|err| {
         error!("Invalid signature format: {}", err);
-        anyhow::anyhow!("Invalid signature format")
+        anyhow::anyhow!("Invalid signature format {}", err)
     })?;
 
     // Create smart wallet interface
     let wallet = wallet_address.parse().map_err(|err| {
         error!("Invalid wallet address: {}", err);
-        anyhow::anyhow!("Invalid wallet address")
+        anyhow::anyhow!("Invalid wallet address {}", err)
     })?;
     let smart_wallet = IEIP1271::new(wallet, provider);
 
@@ -385,13 +385,13 @@ async fn verify_smart_wallet(
         .await
         .map_err(|err| {
             error!("Failed to verify signature: {}", err);
-            anyhow::anyhow!("Failed to verify signature")
+            anyhow::anyhow!("Failed to verify signature {}", err)
         })?
         ._0;
 
     if return_magic_number != magic_value {
         error!("Invalid signature: magic value mismatch");
-        return Err(anyhow::anyhow!("Invalid signature"));
+        return Err(anyhow::anyhow!("Invalid signature magic value mismatch"));
     }
 
     Ok(wallet_address.to_string())
@@ -407,7 +407,7 @@ fn verify_regular_wallet(signature: &String, nonce: &str) -> Result<String> {
         .recover_address_from_msg(nonce)
         .map_err(|err| {
             error!("Failed to recover address from signature: {}", err);
-            anyhow::anyhow!("Failed to recover address from signature")
+            anyhow::anyhow!("Failed to recover address from signature {}", err)
         })
         .map(|address| address.to_string())
 }
