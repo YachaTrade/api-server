@@ -36,6 +36,7 @@ pub struct AuthSessionRequest {
     #[schema(example = "abcdef-abcedef-abcedf")]
     pub nonce: String,
     pub chain_id: u64,
+    pub wallet_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
