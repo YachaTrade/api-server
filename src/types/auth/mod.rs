@@ -26,16 +26,11 @@ pub struct AuthNonceResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-#[schema(example = json!({
-    "signature": "Signature with nonce signed with private key",
-    "nonce": "Get nonce from /auth/nonce"
-}))]
 pub struct AuthSessionRequest {
-    #[schema(example = "0x1234567890abcdef...")]
     pub signature: String,
-    #[schema(example = "abcdef-abcedef-abcedf")]
     pub nonce: String,
     pub chain_id: u64,
+    pub wallet_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

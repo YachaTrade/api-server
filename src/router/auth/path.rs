@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub enum Path {
+pub enum AuthPath {
     #[doc = "Generate authentication nonce"]
     Nonce,
 
@@ -9,12 +9,12 @@ pub enum Path {
     DeleteSession,
 }
 
-impl Path {
+impl AuthPath {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Path::Nonce => "/auth/nonce",
-            Path::Session => "/auth/session",
-            Path::DeleteSession => "/auth/delete_session",
+            AuthPath::Nonce => "/auth/nonce",
+            AuthPath::Session => "/auth/session",
+            AuthPath::DeleteSession => "/auth/delete_session",
         }
     }
 }

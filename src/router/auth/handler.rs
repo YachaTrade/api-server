@@ -1,7 +1,11 @@
 use std::env;
 use std::str::FromStr;
 
+use alloy::primitives::{keccak256, Bytes};
+use alloy::providers::{Provider, ProviderBuilder};
+use alloy::sol;
 use alloy::{primitives::Address, signers::Signature};
+use anyhow::Result;
 use axum::http::header::{HeaderValue, SET_COOKIE};
 use axum::{
     extract::State,
@@ -15,6 +19,7 @@ use tower_cookies::Cookie;
 
 use tracing::{error, info, instrument};
 
+use url::Url;
 use uuid::Uuid;
 
 use crate::types::account::{Account, AccountController};
@@ -27,12 +32,12 @@ use crate::{
     state::AppState,
 };
 
-use super::path::Path;
+use crate::router::auth::path::AuthPath;
 
 /// Generate authentication nonce
 #[utoipa::path(
     post,
-    path = Path::Nonce.as_str(),
+    path = AuthPath::Nonce.as_str(),
     request_body = AuthNonceRequest,
     responses(
         (status = 200, description = "Nonce generated successfully", body = AuthNonceResponse),
@@ -70,7 +75,7 @@ pub async fn auth_nonce(
 /// Generate authentication session
 #[utoipa::path(
     post,
-    path = Path::Session.as_str(),
+    path = AuthPath::Session.as_str(),
     request_body = AuthSessionRequest,
     responses(
         (status = 200, description = "Session created successfully", body = AuthSessionResponse),
@@ -105,22 +110,9 @@ pub async fn auth_session(
         .into());
     }
 
-    // 1. 주소와 서명 파싱
     let nonce = payload.nonce;
-    let signature = Signature::from_str(&payload.signature).map_err(|err| {
-        error!("Invalid signature format: {}", err);
-        AppError::BadRequest("Invalid signature format".to_string())
-    })?;
 
-    // 2. 서명에서 주소 복구
-    let address = signature
-        .recover_address_from_msg(nonce.clone())
-        .map_err(|_| {
-            error!("Failed to recover address: {}", nonce);
-            AppError::Unauthorized("Failed to recover address".to_string())
-        })?
-        .to_string();
-
+    let address = verify_wallet_address(payload.wallet_address, &nonce, &payload.signature).await?;
     let redis = state.session_redis.clone();
 
     info!("Nonce for address {}: {}", address, nonce);
@@ -233,10 +225,11 @@ pub async fn auth_session(
     );
     Ok(response)
 }
+
 /// Delete authentication session
 #[utoipa::path(
     delete,
-    path = Path::DeleteSession.as_str(),
+    path = AuthPath::DeleteSession.as_str(),
     params(
         ("session" = String, Cookie, description = "Session token for authentication")
     ),
@@ -339,4 +332,82 @@ fn generate_session_id(address: &str, nonce: &str) -> String {
 
     // Base64로 인코딩
     BASE64_STANDARD.encode(combined.as_bytes())[..32].to_string()
+}
+
+async fn verify_wallet_address(
+    wallet_address: Option<String>,
+    nonce: &str,
+    signature: &String,
+) -> Result<String> {
+    match wallet_address {
+        Some(wallet_address) => verify_smart_wallet(&wallet_address, nonce, &signature).await,
+        None => verify_regular_wallet(signature, nonce),
+    }
+}
+async fn verify_smart_wallet(
+    wallet_address: &str,
+    nonce: &str,
+    signature_str: &str,
+) -> Result<String> {
+    sol! {
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        interface IEIP1271 {
+            function isValidSignature(bytes32 hash, bytes signature) external view returns (bytes4);
+        }
+    }
+
+    // Setup RPC provider
+    let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
+    let provider = ProviderBuilder::new().on_http(Url::parse(&rpc_url).expect("URL must be valid"));
+
+    // Hash the nonce for verification
+    let hash = keccak256(nonce.as_bytes());
+
+    // Parse signature
+    let signature_bytes = Bytes::from_str(signature_str).map_err(|err| {
+        error!("Invalid signature format: {}", err);
+        anyhow::anyhow!("Invalid signature format {}", err)
+    })?;
+
+    // Create smart wallet interface
+    let wallet = wallet_address.parse().map_err(|err| {
+        error!("Invalid wallet address: {}", err);
+        anyhow::anyhow!("Invalid wallet address {}", err)
+    })?;
+    let smart_wallet = IEIP1271::new(wallet, provider);
+
+    // Verify signature with EIP-1271
+    let magic_value: [u8; 4] = [0x16, 0x26, 0xba, 0x7e]; // EIP-1271 magic value
+    let return_magic_number = smart_wallet
+        .isValidSignature(hash, signature_bytes)
+        .call()
+        .await
+        .map_err(|err| {
+            error!("Failed to verify signature: {}", err);
+            anyhow::anyhow!("Failed to verify signature {}", err)
+        })?
+        ._0;
+
+    if return_magic_number != magic_value {
+        error!("Invalid signature: magic value mismatch");
+        return Err(anyhow::anyhow!("Invalid signature magic value mismatch"));
+    }
+
+    Ok(wallet_address.to_string())
+}
+
+fn verify_regular_wallet(signature: &String, nonce: &str) -> Result<String> {
+    let signature = Signature::from_str(signature).map_err(|err| {
+        error!("Invalid signature format: {}", err);
+        anyhow::anyhow!("Invalid signature format")
+    })?;
+
+    signature
+        .recover_address_from_msg(nonce)
+        .map_err(|err| {
+            error!("Failed to recover address from signature: {}", err);
+            anyhow::anyhow!("Failed to recover address from signature {}", err)
+        })
+        .map(|address| address.to_string())
 }
