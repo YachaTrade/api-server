@@ -124,7 +124,7 @@ impl OrderController {
             TokenOrderType::CreationTime => {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
-                   SELECT 
+                     SELECT 
                         t.token_id, a.account_id, a.follower_count, a.following_count, 
                         a.nickname, a.image_uri as account_image_uri, t.name, t.symbol, 
                         t.image_uri as token_image_uri, t.description, 
@@ -135,21 +135,9 @@ impl OrderController {
                         m.market_type, t.created_at, t.created_at::FLOAT8 as score
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN LATERAL (
-                        SELECT token_id, reply_count 
-                        FROM token_reply_count 
-                        WHERE token_id = t.token_id
-                    ) trc ON TRUE
-                    LEFT JOIN LATERAL (
-                        SELECT token_id, price, reserve_token, market_type 
-                        FROM market 
-                        WHERE token_id = t.token_id
-                    ) m ON TRUE
-                    LEFT JOIN LATERAL (
-                        SELECT token_id 
-                        FROM king 
-                        WHERE token_id = t.token_id
-                    ) k ON TRUE
+                    LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
+                    LEFT JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY t.created_at DESC
                     LIMIT $1 OFFSET $2
                     "#,
