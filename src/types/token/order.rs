@@ -151,29 +151,21 @@ impl OrderController {
                 sqlx::query_as::<_, OrderTokenRaw>(
                     r#"
                     SELECT 
-                    t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
-                    a.follower_count, a.following_count, t.name, t.symbol,
-                    t.image_uri as token_image_uri, t.description,
-                    COALESCE(trc.reply_count::TEXT, '0') as reply_count,
-                    COALESCE(m.price::TEXT, '0') as price,
-                    COALESCE(m.reserve_token, '0') as reserve_token,
-                    COALESCE(k.token_id IS NOT NULL, false) as is_king,
-                    m.market_type, t.created_at, s.latest_trade_time::FLOAT8 as score
-                        FROM (
-                            SELECT 
-                                token_id, 
-                                MAX(created_at) as latest_trade_time
-                            FROM swap
-                            GROUP BY token_id
-                            ORDER BY latest_trade_time DESC
-                            LIMIT $1 OFFSET $2
-                        ) s
-                    JOIN token t ON s.token_id = t.token_id
+                        t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
+                        a.follower_count, a.following_count, t.name, t.symbol,
+                        t.image_uri as token_image_uri, t.description,
+                        COALESCE(trc.reply_count::TEXT, '0') as reply_count,
+                        COALESCE(m.price::TEXT, '0') as price,
+                        COALESCE(m.reserve_token, '0') as reserve_token,
+                        COALESCE(k.token_id IS NOT NULL, false) as is_king,
+                        m.market_type, t.created_at, m.latest_trade_at::FLOAT8 as score
+                    FROM market m
+                    JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
-                    LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY s.latest_trade_time DESC
+                    ORDER BY m.latest_trade_at DESC
+                    LIMIT $1 OFFSET $2
                     "#,
                 )
                 .bind(pagination.limit)
