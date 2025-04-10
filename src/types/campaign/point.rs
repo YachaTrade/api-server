@@ -203,8 +203,8 @@ impl PointController {
             MissionType::ReferrerCreate => "REFERRER_CREATE",
         };
 
-        // ON CONFLICT DO NOTHING 제거 - 중복 시 에러 발생
-        let row = sqlx::query!(
+        // 미션 기록 추가 시도
+        let row = match sqlx::query!(
             r#"
             INSERT INTO mission_record(account_id, mission_type)
             VALUES ($1, $2)
@@ -215,16 +215,31 @@ impl PointController {
         )
         .fetch_one(tx.as_mut())
         .await
-        .map_err(|err| anyhow::anyhow!("Already completed mission {err}"))?; // 실패하면 여기서 에러 반환
+        {
+            Ok(record) => record,
+            Err(err) => {
+                // 비동기 롤백을 적절히 처리
+                if let Err(rollback_err) = tx.rollback().await {
+                    // 롤백 실패 로깅 (여기서는 간단히 에러만 포함)
+                    return Err(anyhow::anyhow!(
+                        "Failed to insert mission record: {}, and rollback failed: {}",
+                        err,
+                        rollback_err
+                    ));
+                }
+                return Err(anyhow::anyhow!("Already completed mission: {}", err));
+            }
+        };
 
         let response = MissionCompleteResponse {
             account_id: row.account_id,
             mission_type: MissionType::from_str(&row.mission_type).unwrap(),
         };
-        // mission_record 추가 성공한 경우에만 실행됨
+
+        // 포인트 추가
         let points = mission_type.to_i64();
 
-        sqlx::query!(
+        match sqlx::query!(
             r#"
             INSERT INTO point (account_id, point)
             VALUES ($1, $2)
@@ -236,8 +251,22 @@ impl PointController {
         )
         .execute(tx.as_mut())
         .await
-        .map_err(|err| anyhow::anyhow!("Failed to add point by mission {err}"))?;
+        {
+            Ok(_) => (),
+            Err(err) => {
+                // 비동기 롤백을 적절히 처리
+                if let Err(rollback_err) = tx.rollback().await {
+                    return Err(anyhow::anyhow!(
+                        "Failed to add points: {}, and rollback failed: {}",
+                        err,
+                        rollback_err
+                    ));
+                }
+                return Err(anyhow::anyhow!("Failed to add point by mission: {}", err));
+            }
+        };
 
+        // 트랜잭션 커밋
         tx.commit().await?;
 
         Ok(response)
