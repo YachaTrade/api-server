@@ -195,7 +195,7 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY score DESC
+                    ORDER BY m.price DESC
                     "#,
                 )
                 .bind(pagination.limit)
