@@ -9,3 +9,5 @@ migration/
 
 railway/
 migrations.*
+
+tests/

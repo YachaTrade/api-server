@@ -129,100 +129,111 @@ impl PositionController {
     ) -> Result<PositionResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
-        // PositionPaginationParams에 position_type 필드가 있다고 가정 ("all", "open", "close")
-        let record = sqlx::query!(
-            r#"
-            WITH position_data AS (
+        // 데이터 조회와 카운트를 병렬로 수행
+        let (record, total_count) = tokio::join!(
+            // 기존 데이터 조회 쿼리
+            sqlx::query!(
+                r#"
+                WITH position_data AS (
+                    SELECT 
+                        p.position_id,
+                        p.token_id,
+                        p.total_bought_native,
+                        p.total_bought_token,
+                        p.current_token_amount,
+                        p.realized_pnl,
+                        p.created_at,
+                        p.last_traded_at,
+                        t.symbol as token_symbol,
+                        t.name as token_name,
+                        t.image_uri as token_image,
+                        t.created_at as token_created_at,
+                        t.total_supply as token_total_supply,
+                        m.market_id as token_market_id,
+                        m.market_type as token_market_type,
+                        m.virtual_token as token_virtual_token,
+                        m.virtual_native as token_virtual_native,
+                        m.reserve_token as token_reserve_token,
+                        m.reserve_native as token_reserve_native,
+                        COALESCE(m.price, 0) as token_price,
+                        
+                        -- Calculate unrealized_pnl using AMM 공식
+                        COALESCE(
+                            CASE 
+                                WHEN p.current_token_amount = 0 THEN 0
+                                WHEN m.market_type = 'CURVE' THEN
+                                    m.virtual_native 
+                                    - (
+                                        ((m.virtual_token * m.virtual_native) 
+                                        + (m.virtual_token + p.current_token_amount) - 1)
+                                        / (m.virtual_token + p.current_token_amount)
+                                    )
+                                WHEN m.market_type = 'DEX' THEN
+                                    m.price * p.current_token_amount
+                                ELSE 0
+                            END,
+                        0) AS unrealized_pnl
+                    FROM position p
+                    JOIN token t ON p.token_id = t.token_id
+                    JOIN market m ON p.token_id = m.token_id
+                    WHERE p.account_id = $1 
+                      AND ($4::text = 'ALL' 
+                           OR ($4::text = 'OPEN' AND p.is_active = true)
+                           OR ($4::text = 'CLOSE' AND p.is_active = false))
+                )
                 SELECT 
-                    p.position_id,
-                    p.token_id,
-                    p.total_bought_native,
-                    p.total_bought_token,
-                    p.current_token_amount,
-                    p.realized_pnl,
-                    p.created_at,
-                    p.last_traded_at,
-                    t.symbol as token_symbol,
-                    t.name as token_name,
-                    t.image_uri as token_image,
-                    t.created_at as token_created_at,
-                    t.total_supply as token_total_supply,
-                    m.market_id as token_market_id,
-                    m.market_type as token_market_type,
-                    m.virtual_token as token_virtual_token,
-                    m.virtual_native as token_virtual_native,
-                    m.reserve_token as token_reserve_token,
-                    m.reserve_native as token_reserve_native,
-                    COALESCE(m.price, 0) as token_price,
-                    
-                    -- Calculate unrealized_pnl using AMM 공식
-                    COALESCE(
-                        CASE 
-                            WHEN p.current_token_amount = 0 THEN 0
-                            WHEN m.market_type = 'CURVE' THEN
-                                m.virtual_native 
-                                - (
-                                    ((m.virtual_token * m.virtual_native) 
-                                    + (m.virtual_token + p.current_token_amount) - 1)
-                                    / (m.virtual_token + p.current_token_amount)
-                                )
-                            WHEN m.market_type = 'DEX' THEN
-                                m.price * p.current_token_amount
-                            ELSE 0
-                        END,
-                    0) AS unrealized_pnl
-                FROM position p
-                JOIN token t ON p.token_id = t.token_id
-                JOIN market m ON p.token_id = m.token_id
-                WHERE p.account_id = $1 
-                  AND ($4::text = 'ALL' 
-                       OR ($4::text = 'OPEN' AND p.is_active = true)
-                       OR ($4::text = 'CLOSE' AND p.is_active = false))
+                    position_id,
+                    token_id,
+                    token_symbol,
+                    token_price as "token_price!",
+                    token_image, 
+                    token_name,
+                    total_bought_native,
+                    total_bought_token,
+                    current_token_amount,
+                    -- current_value 계산식: 여기서는 unrealized_pnl와 동일하게 계산하도록 함
+                    unrealized_pnl as "current_value!",
+                    realized_pnl,
+                    unrealized_pnl as "unrealized_pnl!",
+                    (realized_pnl + unrealized_pnl) as "total_pnl!",
+                    created_at,
+                    last_traded_at,
+                    token_created_at,
+                    token_total_supply,
+                    token_market_id,
+                    token_market_type,
+                    token_virtual_token as "token_virtual_token!",
+                    token_virtual_native as "token_virtual_native!",
+                    token_reserve_token as "token_reserve_token!",
+                    token_reserve_native as "token_reserve_native!"
+                FROM position_data
+                ORDER BY (realized_pnl + unrealized_pnl) DESC
+                LIMIT $2
+                OFFSET $3
+                "#,
+                account_id,
+                pagination.limit as i64,
+                offset,
+                position_type.to_string()
             )
-            SELECT 
-                position_id,
-                token_id,
-                token_symbol,
-                token_price as "token_price!",
-                token_image, 
-                token_name,
-                total_bought_native,
-                total_bought_token,
-                current_token_amount,
-                -- current_value 계산식: 여기서는 unrealized_pnl와 동일하게 계산하도록 함
-                unrealized_pnl as "current_value!",
-                realized_pnl,
-                unrealized_pnl as "unrealized_pnl!",
-                (realized_pnl + unrealized_pnl) as "total_pnl!",
-                created_at,
-                last_traded_at,
-                token_created_at,
-                token_total_supply,
-                token_market_id,
-                token_market_type,
-                token_virtual_token as "token_virtual_token!",
-                token_virtual_native as "token_virtual_native!",
-                token_reserve_token as "token_reserve_token!",
-                token_reserve_native as "token_reserve_native!"
-            FROM position_data
-            ORDER BY (realized_pnl + unrealized_pnl) DESC
-            LIMIT $2
-            OFFSET $3
-            "#,
-            account_id,
-            pagination.limit as i64,
-            offset,
-            position_type.to_string() // "all", "open", or "close"
-        )
-        .fetch_all(self.db.get_read_pool())
-        .await?;
-
-        let total_count = if record.is_empty() {
-            0
-        } else {
-            self.get_total_count_by_account(account_id).await?
-        };
-
+            .fetch_all(self.db.get_read_pool()),
+            // 조건에 맞는 총 레코드 수를 조회하는 쿼리
+            sqlx::query!(
+                r#"
+                SELECT COUNT(*) as "count!"
+                FROM position p
+                WHERE p.account_id = $1
+                  AND ($2::text = 'ALL' 
+                       OR ($2::text = 'OPEN' AND p.is_active = true)
+                       OR ($2::text = 'CLOSE' AND p.is_active = false))
+                "#,
+                account_id,
+                position_type.to_string()
+            )
+            .fetch_one(self.db.get_read_pool())
+        );
+        let record = record?;
+        let total_count = total_count?.count;
         let positions = record
             .into_iter()
             .map(|row| Position {
@@ -270,7 +281,6 @@ impl PositionController {
             SELECT COALESCE(COUNT(*)::bigint, 0) as count
             FROM position p
             WHERE p.token_id = $1 AND p.current_token_amount > 0
-            AND p.current_token_amount > 0
             "#,
             token_id
         )
