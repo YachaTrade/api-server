@@ -1,5 +1,6 @@
 pub mod create_token;
 pub mod hype;
+pub mod metadata;
 pub mod order;
 use std::sync::Arc;
 
