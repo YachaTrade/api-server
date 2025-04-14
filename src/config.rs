@@ -8,6 +8,7 @@ lazy_static! {
     pub static ref SEARCH_EXPIRATION:u64 = 15_000; //30 secons in milliseconds
     pub static ref TOKEN_EXPIRATION:u64 = 1500; //miliseconds
 
+
     pub static ref TOP_POINT_EXPIRATION:u64 = 60_000; // 1 minutes in milliseconds
     pub static ref MISSION_EXPIRATION:u64 = 5_000; // 5 seconds in milliseconds
     pub static ref ACCOUNT_POINT_EXPIRATION: u64 = 5_000; // 1 minute in milliseconds
@@ -17,6 +18,7 @@ lazy_static! {
     pub static ref PNL_EXPIRATION:u64 = 10000; // 10s in milliseconds
     pub static ref POSITION_EXPIRATION:u64 = 10000; // 10s in milliseconds
     pub static ref GET_TOKEN_RESPONSE_EXPIRATION: u64 = 60_000; // 1 minutes in milliseconds
+    pub static ref GET_TOKEN_METADATA_EXPIRATION:u64 = 43_200_000; // 12 hours in milliseconds
     pub static ref GET_HYPE_TOKEN_RESPONSE_EXPIRATION: u64 = 10_000; // 10 seconds in milliseconds
     pub static ref GET_HONOR_TOKEN_RESPONSE_EXPIRATION: u64 = 60_000; // 1m in milliseconds
 }

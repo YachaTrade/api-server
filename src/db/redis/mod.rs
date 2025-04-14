@@ -12,10 +12,11 @@ use anyhow::Result;
 use crate::{
     config::{
         ACCOUNT_POINT_EXPIRATION, GET_HONOR_TOKEN_RESPONSE_EXPIRATION,
-        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
-        INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION, NONCE_EXPIRATION, ORDER_EXPIRATION,
-        PNL_EXPIRATION, POSITION_EXPIRATION, REFERRAL_CHILD_COUNT_EXPIRATION,
-        REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
+        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
+        GET_TOKEN_RESPONSE_EXPIRATION, INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION,
+        NONCE_EXPIRATION, ORDER_EXPIRATION, PNL_EXPIRATION, POSITION_EXPIRATION,
+        REFERRAL_CHILD_COUNT_EXPIRATION, REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION,
+        TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
     },
     types::{
         campaign::point::{
@@ -30,6 +31,7 @@ use crate::{
         token::{
             create_token::TokenCreatedResponse,
             hype::{HonorTokenResponse, HypeTokenResponse},
+            metadata::TokenMetadataResponse,
             order::{OrderMessage, TokenOrderType},
             TokenResponse,
         },
@@ -691,6 +693,29 @@ impl RedisDatabase {
         let token_json: String = conn.get(key).await?;
         let response_json: TokenResponse = serde_json::from_str(&token_json)?;
         Ok(response_json)
+    }
+
+    pub async fn set_token_metadata(
+        &self,
+        token_address: &str,
+        response: &TokenMetadataResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("token_metadata:{}", token_address);
+        let response_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, response_json, *GET_TOKEN_METADATA_EXPIRATION)
+            .await?;
+        debug!("Token metadata set for address {:?}", token_address);
+        Ok(())
+    }
+
+    pub async fn get_token_metadata(&self, token_address: &str) -> Result<TokenMetadataResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("token_metadata:{}", token_address);
+        let response_json: String = conn.get(key).await?;
+        let response: TokenMetadataResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
     }
 }
 
