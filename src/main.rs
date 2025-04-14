@@ -59,6 +59,7 @@ use clap::Parser;
 
         // ----------------Token----------------
         router::token::handler::get_token,
+        router::token::handler::get_token_metadata,
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
@@ -149,6 +150,8 @@ use clap::Parser;
             types::token::hype::HonorInfo,
             types::token::hype::HonorToken,
             types::token::hype::HonorTokenResponse,
+            types::token::metadata::TokenMetadata,
+            types::token::metadata::TokenMetadataResponse,
 
             //Trading
             types::trading::chart::Chart,
