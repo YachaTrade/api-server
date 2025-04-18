@@ -13,6 +13,7 @@ use crate::{
             chart::{ChartController, ChartInterval, ChartQuery, ChartResponse},
             market::{Market, MarketController},
             position::{PositionController, TokenHolderResponse},
+            price::{PriceController, PriceResponse},
             swap_history::{SwapController, TokenSwapResponse},
         },
     },
@@ -229,4 +230,35 @@ pub async fn get_chart(
         token, chart_response
     );
     Ok(Json(chart_response))
+}
+
+///Get price for a token
+#[utoipa::path(
+    get,
+    path = TradePath::GetPrice.docs_str(),
+    responses(
+        (status = 200, description = "Success", body = PriceResponse),
+        (status = 400, description = "Invalid token ID"),
+        (status = 500, description = "Internal server error")
+    ),
+    params(
+        ("token_id" = String, Path, description = "Token ID")
+    ),
+    tag = "Trade"
+)]
+#[instrument(skip(state))]
+pub async fn get_price(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+) -> AppJsonResult<PriceResponse> {
+    let price_controller = PriceController::new(state.postgres.clone());
+    let price_response = price_controller.get_price(&token).await.map_err(|err| {
+        error!("Failed to get price: token: {}, error: {}", token, err);
+        AppError::InternalError(format!("Failed to get price: {}", err))
+    })?;
+    info!(
+        "Get Price: token: {}, response: {:?}",
+        token, price_response
+    );
+    Ok(Json(price_response))
 }

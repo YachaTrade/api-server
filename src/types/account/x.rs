@@ -94,6 +94,22 @@ impl AccountXController {
         account_id: String,
         x_handle: String,
     ) -> Result<DisconnectedXAccountResponse> {
+        // 먼저 해당 X 핸들이 존재하는지 확인
+        let exists = sqlx::query!(
+            "SELECT 1 as exists FROM account_x WHERE account_id = $1 AND x_handle = $2",
+            account_id,
+            x_handle
+        )
+        .fetch_optional(self.db.get_read_pool())
+        .await
+        .map_err(|err| anyhow!("Failed to check if x handle exists\n Reason :{err}"))?;
+
+        // 존재하지 않으면 NotFound 오류 반환
+        if exists.is_none() {
+            return Err(anyhow!("X handle not found for this account"));
+        }
+
+        // 존재하면 삭제 진행
         sqlx::query!(
             r#"
             DELETE FROM account_x
@@ -105,6 +121,7 @@ impl AccountXController {
         .execute(self.db.get_write_pool())
         .await
         .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
+
         Ok(DisconnectedXAccountResponse {
             account_id,
             x_handle,
