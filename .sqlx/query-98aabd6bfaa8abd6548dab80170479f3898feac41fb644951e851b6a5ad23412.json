@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                COALESCE(m.price, 0)::numeric as \"price!\"\n            FROM market m\n            WHERE m.token_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "price!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "98aabd6bfaa8abd6548dab80170479f3898feac41fb644951e851b6a5ad23412"
+}

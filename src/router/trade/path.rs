@@ -3,6 +3,7 @@ pub enum TradePath {
     GetHolder,
     GetMarket,
     GetChart,
+    GetPrice,
 }
 
 impl TradePath {
@@ -12,6 +13,7 @@ impl TradePath {
             TradePath::GetHolder => "/trade/holder/:token_id",
             TradePath::GetMarket => "/trade/market/:token_id",
             TradePath::GetChart => "/trade/chart/:token_id",
+            TradePath::GetPrice => "/trade/price/:token_id",
         }
     }
     pub fn docs_str(&self) -> &'static str {
@@ -20,6 +22,7 @@ impl TradePath {
             TradePath::GetHolder => "/trade/holder/{token_id}",
             TradePath::GetMarket => "/trade/market/{token_id}",
             TradePath::GetChart => "/trade/chart/{token_id}",
+            TradePath::GetPrice => "/trade/price/{token_id}",
         }
     }
 }
