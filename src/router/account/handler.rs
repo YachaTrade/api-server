@@ -150,7 +150,9 @@ pub async fn connect_x(
     Extension(session_address): Extension<String>,
     Json(payload): Json<ConnectXRequest>,
 ) -> AppJsonResult<ConnectedXAccountResponse> {
-    payload.validate()?;
+    payload
+        .validate()
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
     let account_x_controller = AccountXController::new(state.postgres.clone());
     let response = account_x_controller
         .connect_x(&session_address, payload)
@@ -190,7 +192,12 @@ pub async fn disconnect_x(
         .await
         .map_err(|err| {
             warn!("disconnect x account Error {:?}", err);
-            AppError::BadRequest(err.to_string())
+            // X 핸들을 찾을 수 없는 경우 NotFound 오류 반환
+            if err.to_string().contains("not found") {
+                AppError::NotFound(err.to_string())
+            } else {
+                AppError::BadRequest(err.to_string())
+            }
         })?;
     Ok(Json(response))
 }
