@@ -16,4 +16,5 @@ pub fn router() -> Router<AppState> {
         .route(TradePath::GetHolder.as_str(), get(handler::get_holder))
         .route(TradePath::GetMarket.as_str(), get(handler::get_market))
         .route(TradePath::GetChart.as_str(), get(handler::get_chart))
+        .route(TradePath::GetPrice.as_str(), get(handler::get_price))
 }
