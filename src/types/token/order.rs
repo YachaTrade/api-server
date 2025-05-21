@@ -79,7 +79,7 @@ impl From<OrderTokenRaw> for OrderToken {
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
                 description: row.description.unwrap_or_default(),
-                total_supply: row.total_supply,
+                total_supply: row.total_supply.to_string(),
                 price: row.price,
                 reserve_token: row.reserve_token,
                 created_at: row.created_at,
