@@ -9,6 +9,13 @@ pub struct PaginationParams {
     pub limit: i64,
 }
 
+impl PaginationParams {
+    // 페이지 번호가 음수인 경우 역순 정렬을 의미
+    pub fn is_reverse_order(&self) -> bool {
+        self.page < 0
+    }
+}
+
 fn default_page() -> i64 {
     1
 }
