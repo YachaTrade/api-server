@@ -127,7 +127,7 @@ impl OrderController {
         };
         let order_token_raw = match order_by {
             TokenOrderType::CreationTime => {
-                sqlx::query_as::<_, OrderTokenRaw>(
+                let query = format!(
                     r#"
                      SELECT 
                         t.token_id, a.account_id, a.follower_count, a.following_count, 
@@ -143,18 +143,20 @@ impl OrderController {
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY t.created_at $3
+                    ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
                     "#,
-                )
-                .bind(pagination.limit)
-                .bind(offset)
-                .bind(order_direction)
-                .fetch_all(&*self.db.get_read_pool())
-                .await?
+                    order_direction
+                );
+
+                sqlx::query_as::<_, OrderTokenRaw>(&query)
+                    .bind(pagination.limit)
+                    .bind(offset)
+                    .fetch_all(&*self.db.get_read_pool())
+                    .await?
             }
             TokenOrderType::LatestTrade => {
-                sqlx::query_as::<_, OrderTokenRaw>(
+                let query = format!(
                     r#"
                     SELECT 
                         t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
@@ -170,18 +172,20 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY m.latest_trade_at $3
+                    ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
                     "#,
-                )
-                .bind(pagination.limit)
-                .bind(offset)
-                .bind(order_direction)
-                .fetch_all(&*self.db.get_read_pool())
-                .await?
+                    order_direction
+                );
+
+                sqlx::query_as::<_, OrderTokenRaw>(&query)
+                    .bind(pagination.limit)
+                    .bind(offset)
+                    .fetch_all(&*self.db.get_read_pool())
+                    .await?
             }
             TokenOrderType::MarketCap => {
-                sqlx::query_as::<_, OrderTokenRaw>(
+                let query = format!(
                     r#"
                    SELECT 
                         t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
@@ -195,21 +199,23 @@ impl OrderController {
                     FROM (
                         SELECT token_id, price, reserve_token, market_type
                         FROM market
-                        ORDER BY price $3
+                        ORDER BY price {}
                         LIMIT $1 OFFSET $2
                     ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY m.price $3
+                    ORDER BY m.price {}
                     "#,
-                )
-                .bind(pagination.limit)
-                .bind(offset)
-                .bind(order_direction)
-                .fetch_all(&*self.db.get_read_pool())
-                .await?
+                    order_direction, order_direction
+                );
+
+                sqlx::query_as::<_, OrderTokenRaw>(&query)
+                    .bind(pagination.limit)
+                    .bind(offset)
+                    .fetch_all(&*self.db.get_read_pool())
+                    .await?
             }
         };
 
