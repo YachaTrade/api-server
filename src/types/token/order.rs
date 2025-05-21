@@ -140,7 +140,6 @@ impl OrderController {
                         m.market_type, t.created_at, t.created_at::FLOAT8 as score
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY t.created_at {}
@@ -170,7 +169,6 @@ impl OrderController {
                     FROM market m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
@@ -204,7 +202,6 @@ impl OrderController {
                     ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY m.price {}
                     "#,
@@ -248,7 +245,6 @@ impl OrderController {
             FROM king k
             JOIN token t ON t.token_id = k.token_id
             JOIN account a ON t.creator = a.account_id
-            LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
             LEFT JOIN market m ON t.token_id = m.token_id
             WHERE k.created_at = (SELECT MAX(created_at) FROM king)
             "#,
