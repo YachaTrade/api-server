@@ -119,7 +119,7 @@ impl OrderController {
         order_by: TokenOrderType,
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
-        let offset = (pagination.page - 1) * pagination.limit;
+        let offset = (pagination.page.abs() - 1) * pagination.limit;
         let order_direction = if pagination.is_reverse_order() {
             "ASC" // 음수 페이지일 때 오름차순
         } else {
@@ -252,7 +252,7 @@ impl OrderController {
         .fetch_optional(self.db.get_read_pool())
         .await
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
-
+        //
         Ok(row.map(OrderToken::from))
     }
 
