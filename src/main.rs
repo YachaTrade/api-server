@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, campaign, follow, hype, order, profile, referral, search, thread, token, trade},
+    router::{self, account, auth, bot, campaign, follow, hype, order, profile, referral, search, token, trade},
     state::AppState,
     types,
 };
@@ -49,13 +49,6 @@ use clap::Parser;
 
         // ----------------Search----------------
         router::search::handler::search,
-
-        // ----------------Thread----------------
-        router::thread::handler::create_thread,
-        router::thread::handler::like_thread,
-        router::thread::handler::unlike_thread,
-        router::thread::handler::get_threads_by_token,
-        router::thread::handler::get_thread_like_by_account,
 
         // ----------------Token----------------
         router::token::handler::get_token,
@@ -188,14 +181,7 @@ use clap::Parser;
             types::social::follow::FollowResponse,
             types::social::follow::CheckFollowResponse,
         
-            // Thread
-            types::social::thread::Thread,
-            types::social::thread::ThreadLike,
-            types::social::thread::CreateThreadRequest,
-            types::social::thread::CreateThreadFormData,
-            types::social::thread::ThreadRequest,
-            types::social::thread::ThreadResponse,
-            types::social::thread::ThreadsResponse,
+        
 
             // Campaign
             types::campaign::active::ActiveUserResponse,
@@ -222,7 +208,6 @@ use clap::Parser;
         (name="Auth",description = "Authentication endpoints"),
         (name="Account",description="Account management endpoints"),
         (name="Follow",description="Follow management endpoints"),
-        (name="Thread",description="Thread management endpoints"),
         (name="Token",description="Token management endpoints"),
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
@@ -284,7 +269,6 @@ async fn main() -> Result<()> {
         .merge(account::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
-        .merge(thread::router(app_state.clone()))
         .merge(token::router())
         .merge(search::router())
         .merge(trade::router())

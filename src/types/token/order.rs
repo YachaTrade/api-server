@@ -120,6 +120,11 @@ impl OrderController {
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
         let offset = (pagination.page - 1) * pagination.limit;
+        let order_direction = if pagination.is_reverse_order() {
+            "ASC" // 음수 페이지일 때 오름차순
+        } else {
+            "DESC" // 양수 페이지일 때 내림차순(기본값)
+        };
         let order_token_raw = match order_by {
             TokenOrderType::CreationTime => {
                 sqlx::query_as::<_, OrderTokenRaw>(
@@ -138,12 +143,13 @@ impl OrderController {
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY t.created_at DESC
+                    ORDER BY t.created_at $3
                     LIMIT $1 OFFSET $2
                     "#,
                 )
                 .bind(pagination.limit)
                 .bind(offset)
+                .bind(order_direction)
                 .fetch_all(&*self.db.get_read_pool())
                 .await?
             }
@@ -164,12 +170,13 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY m.latest_trade_at DESC
+                    ORDER BY m.latest_trade_at $3
                     LIMIT $1 OFFSET $2
                     "#,
                 )
                 .bind(pagination.limit)
                 .bind(offset)
+                .bind(order_direction)
                 .fetch_all(&*self.db.get_read_pool())
                 .await?
             }
@@ -188,18 +195,19 @@ impl OrderController {
                     FROM (
                         SELECT token_id, price, reserve_token, market_type
                         FROM market
-                        ORDER BY price DESC
+                        ORDER BY price $3
                         LIMIT $1 OFFSET $2
                     ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN token_reply_count trc ON t.token_id = trc.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
-                    ORDER BY m.price DESC
+                    ORDER BY m.price $3
                     "#,
                 )
                 .bind(pagination.limit)
                 .bind(offset)
+                .bind(order_direction)
                 .fetch_all(&*self.db.get_read_pool())
                 .await?
             }

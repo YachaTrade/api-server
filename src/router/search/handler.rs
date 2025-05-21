@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query};
 use axum::{extract::State, Json};
 
-use tracing::{debug, error,  instrument, warn};
+use tracing::{debug, error, instrument, warn};
 
 use crate::result::{AppError, AppJsonResult};
 use crate::state::AppState;
