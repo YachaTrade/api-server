@@ -120,11 +120,7 @@ impl OrderController {
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
         let offset = (pagination.page.abs() - 1) * pagination.limit;
-        let order_direction = if pagination.is_reverse_order() {
-            "ASC" // 음수 페이지일 때 오름차순
-        } else {
-            "DESC" // 양수 페이지일 때 내림차순(기본값)
-        };
+        let order_direction = &pagination.direction;
         let order_token_raw = match order_by {
             TokenOrderType::CreationTime => {
                 let query = format!(
