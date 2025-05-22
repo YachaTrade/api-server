@@ -142,6 +142,7 @@ pub async fn get_position(
     let pagination = PaginationParams {
         page: query.page,
         limit: query.limit,
+        direction: "DESC".to_string(),
     };
     let position_controller = PositionController::new(state.postgres.clone());
     let response = position_controller
