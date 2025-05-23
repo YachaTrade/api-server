@@ -310,6 +310,7 @@ impl PositionController {
             FROM position p
             JOIN account a ON p.account_id = a.account_id
             WHERE p.token_id = $1 AND p.current_token_amount > 0 AND p.is_active = true
+            ORDER BY p.current_token_amount DESC
             OFFSET $2 LIMIT $3
             "#,
             token_id,
