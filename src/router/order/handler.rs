@@ -22,7 +22,8 @@ use super::path::OrderPath;
     path = OrderPath::Creationtime.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("limit" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page"),
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by creation time", body = OrderMessage),
@@ -101,7 +102,8 @@ pub async fn get_creation_time_order(
     path = OrderPath::MarketCap.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("limit" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page"),
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by market cap", body = OrderMessage),
@@ -163,7 +165,8 @@ pub async fn get_market_cap_order(
     path = OrderPath::LatestTrade.docs_str(),
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("limit" = Option<i64>, Query, description = "Number of items per page")
+        ("limit" = Option<i64>, Query, description = "Number of items per page"),
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by latest trade", body = OrderMessage),
