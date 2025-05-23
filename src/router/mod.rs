@@ -9,7 +9,7 @@ pub mod account;
 pub mod campaign;
 pub mod order;
 pub mod search;
-pub mod thread;
+
 pub mod token;
 pub mod trade;
 
