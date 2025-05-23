@@ -37,8 +37,7 @@ pub struct OrderTokenInfo {
     pub symbol: String,
     pub image_uri: String,
     pub description: String,
-    pub total_supply: String,
-    pub price: String, //market.price
+    pub market_cap: String,
     pub reserve_token: BigDecimal,
     pub created_at: i64,
     pub market_type: String,
@@ -79,8 +78,9 @@ impl From<OrderTokenRaw> for OrderToken {
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
                 description: row.description.unwrap_or_default(),
-                total_supply: row.total_supply.to_string(),
-                price: row.price,
+                market_cap: (row.total_supply.parse::<u64>().unwrap_or(0)
+                    * row.price.parse::<u64>().unwrap_or(0))
+                .to_string(),
                 reserve_token: row.reserve_token,
                 created_at: row.created_at,
                 market_type: row.market_type,
