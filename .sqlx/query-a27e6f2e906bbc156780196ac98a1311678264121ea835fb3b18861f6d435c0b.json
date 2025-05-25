@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT \n                    t.token_id,\n                    t.name,\n                    t.symbol,\n                    t.description,\n                    t.twitter,\n                    t.telegram,\n                    t.website,\n                    t.image_uri,\n                    t.is_listing,\n                    t.total_supply,\n                    t.created_at,\n                    t.create_transaction_hash,\n                    COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,\n                    k.created_at as \"is_king_created_at?\",\n                    t.creator as creator_account_id,\n                    a.nickname as creator_nickname,\n                    a.image_uri as creator_image_uri,\n                    a.follower_count as creator_follower_count, \n                    a.following_count as creator_following_count\n                    \n                FROM token t\n                LEFT JOIN king k ON t.token_id = k.token_id\n                JOIN account a ON t.creator = a.account_id\n                WHERE t.token_id = $1\n            ",
+  "query": "\n                SELECT \n                    t.token_id,\n                    t.name,\n                    t.symbol,\n                    t.description,\n                    t.twitter,\n                    t.telegram,\n                    t.website,\n                    t.image_uri,\n                    t.is_listing,\n                    t.total_supply,\n                    m.price,\n                    t.created_at,\n                    t.create_transaction_hash,\n                    COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,\n                    k.created_at as \"is_king_created_at?\",\n                    t.creator as creator_account_id,\n                    a.nickname as creator_nickname,\n                    a.image_uri as creator_image_uri,\n                    a.follower_count as creator_follower_count, \n                    a.following_count as creator_following_count\n                    \n                FROM token t\n                LEFT JOIN king k ON t.token_id = k.token_id\n                JOIN market m ON t.token_id = m.token_id\n                JOIN account a ON t.creator = a.account_id\n                WHERE t.token_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -55,46 +55,51 @@
       },
       {
         "ordinal": 10,
+        "name": "price",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Int8"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "create_transaction_hash",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "is_king",
         "type_info": "Bool"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "is_king_created_at?",
         "type_info": "Int8"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "creator_account_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "creator_nickname",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "creator_image_uri",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "creator_follower_count",
         "type_info": "Int4"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "creator_following_count",
         "type_info": "Int4"
       }
@@ -117,6 +122,7 @@
       false,
       false,
       false,
+      false,
       null,
       false,
       false,
@@ -126,5 +132,5 @@
       false
     ]
   },
-  "hash": "ade766df156db08f2e9d2c6cc3b9ef826195a17e36fe5bcf60e01c20b533fbb1"
+  "hash": "a27e6f2e906bbc156780196ac98a1311678264121ea835fb3b18861f6d435c0b"
 }
