@@ -15,6 +15,7 @@ pub struct SearchToken {
     pub token_info: TokenInfo,
     pub total_supply: BigDecimal,
     pub price: BigDecimal,
+    pub market_cap: String,
     pub created_at: i64,
 }
 
@@ -110,6 +111,7 @@ impl SearchController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                 },
+                market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
                 total_supply: row.total_supply,
                 price: row.price,
                 created_at: row.created_at,

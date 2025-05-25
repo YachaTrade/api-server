@@ -30,6 +30,8 @@ pub struct TokenWithAccountInfo {
     pub is_king: bool,
     pub is_king_created_at: Option<i64>,
     pub total_supply: BigDecimal,
+    pub price: BigDecimal,
+    pub market_cap: String,
 }
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TokenResponse {
@@ -57,6 +59,7 @@ impl TokenController {
                     t.image_uri,
                     t.is_listing,
                     t.total_supply,
+                    m.price,
                     t.created_at,
                     t.create_transaction_hash,
                     COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
@@ -69,6 +72,7 @@ impl TokenController {
                     
                 FROM token t
                 LEFT JOIN king k ON t.token_id = k.token_id
+                JOIN market m ON t.token_id = m.token_id
                 JOIN account a ON t.creator = a.account_id
                 WHERE t.token_id = $1
             "#,
@@ -98,7 +102,9 @@ impl TokenController {
             },
             is_king: record.is_king.unwrap_or(false),
             is_king_created_at: record.is_king_created_at,
+            market_cap: (record.total_supply.clone() * record.price.clone()).to_string(),
             total_supply: record.total_supply,
+            price: record.price,
         };
         let response = TokenResponse { token };
         Ok(response)
