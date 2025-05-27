@@ -67,7 +67,7 @@ pub struct SwapQuery {
     #[serde(default)]
     pub account_id: Option<String>,
 
-    /// Trade type filter: "buy", "sell", or "all" (default)
+    /// Trade type filter: "BUY", "SELL", or "ALL" (default)
     #[serde(default = "default_trade_type")]
     pub trade_type: String,
 }
