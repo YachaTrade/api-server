@@ -423,6 +423,7 @@ impl SwapController {
         sql_query = sql_query.bind(token_id);
 
         if let Some(min_vol) = &query_params.min_volume {
+            let min_vol = BigDecimal::from_str(&min_vol)?;
             sql_query = sql_query.bind(min_vol);
         }
 
