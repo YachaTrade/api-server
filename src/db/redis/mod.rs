@@ -39,7 +39,7 @@ use crate::{
             chart::{ChartQuery, ChartResponse},
             pnl::PNLResponse,
             position::{PositionQuery, PositionResponse, TokenHolderResponse},
-            swap_history::TokenSwapResponse,
+            swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
 };
@@ -316,13 +316,10 @@ impl RedisDatabase {
         &self,
         token_id: &str,
         response: &TokenSwapResponse,
-        pagination: &PaginationParams,
+        swap_query: &SwapQuery,
     ) -> Result<()> {
         let mut conn = self.pool.get().await?;
-        let key = format!(
-            "token:{}:swap_history:{}:{}",
-            token_id, pagination.limit, pagination.page
-        );
+        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
@@ -334,13 +331,10 @@ impl RedisDatabase {
     pub async fn get_token_swap_history(
         &self,
         token_id: &str,
-        pagination: &PaginationParams,
+        swap_query: &SwapQuery,
     ) -> Result<TokenSwapResponse> {
         let mut conn = self.pool.get().await?;
-        let key = format!(
-            "token:{}:swap_history:{}:{}",
-            token_id, pagination.limit, pagination.page
-        );
+        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json: String = conn.get(key).await?;
         let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
         debug!("Token swap history retrieved for token {:?}", token_id);

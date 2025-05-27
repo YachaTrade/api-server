@@ -36,7 +36,7 @@ axum-aws-lambda = "0.6.0"
 tokio = { version = "1.38.0", features = ["full"] }
 
 #SERVER
-axum = { version = "0.7.5", features = ["multipart"] }
+axum = { version = "0.7.5", features = ["multipart", "macros"] }
 tower-http = { version = "0.5.2", features = ["full"] }
 axum-server = { version = "0.6", features = ["tls-rustls"] }
 tower = { version = "0.4", features = ["full"] }
