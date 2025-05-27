@@ -292,8 +292,8 @@ impl SwapController {
 
         // Add trade type filter
         match query.trade_type.as_str() {
-            "buy" => query_sql.push_str(" AND s.is_buy = true"),
-            "sell" => query_sql.push_str(" AND s.is_buy = false"),
+            "BUY" => query_sql.push_str(" AND s.is_buy = true"),
+            "SELL" => query_sql.push_str(" AND s.is_buy = false"),
             _ => {} // "all" - no filter
         }
 
@@ -405,8 +405,8 @@ impl SwapController {
 
         // Add trade type filter
         match query_params.trade_type.as_str() {
-            "buy" => query.push_str(" AND s.is_buy = true"),
-            "sell" => query.push_str(" AND s.is_buy = false"),
+            "BUY" => query.push_str(" AND s.is_buy = true"),
+            "SELL" => query.push_str(" AND s.is_buy = false"),
             _ => {} // "all" - no filter
         }
 
