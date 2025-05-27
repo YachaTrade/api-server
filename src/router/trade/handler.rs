@@ -58,19 +58,12 @@ pub async fn get_swap_history(
         AppError::BadRequest(e)
     })?;
 
-    // Note: Cache key needs to include filter parameters
-    // For now, we'll skip caching when filters are applied
-    let use_cache =
-        query.min_volume.is_none() && !query.own_trades_only && query.trade_type == "all";
-
-    if use_cache {
-        if let Ok(cached_response) = state
-            .trade_redis
-            .get_token_swap_history(&token_id, &query)
-            .await
-        {
-            return Ok(Json(cached_response));
-        }
+    if let Ok(cached_response) = state
+        .trade_redis
+        .get_token_swap_history(&token_id, &query)
+        .await
+    {
+        return Ok(Json(cached_response));
     }
 
     let response = SwapController::new(state.postgres.clone())
@@ -84,14 +77,12 @@ pub async fn get_swap_history(
             AppError::InternalError(err.to_string())
         })?;
 
-    if use_cache {
-        if let Err(err) = state
-            .trade_redis
-            .set_token_swap_history(&token_id, &response, &query)
-            .await
-        {
-            warn!("Failed to set token swap history cache: {}", err);
-        }
+    if let Err(err) = state
+        .trade_redis
+        .set_token_swap_history(&token_id, &response, &query)
+        .await
+    {
+        warn!("Failed to set token swap history cache: {}", err);
     }
 
     info!(
