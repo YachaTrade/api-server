@@ -2,7 +2,9 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+use serde::Deserialize;
 use tracing::{error, info, instrument, warn};
+use utoipa::ToSchema;
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -14,7 +16,7 @@ use crate::{
             market::{Market, MarketController},
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
-            swap_history::{SwapController, TokenSwapResponse},
+            swap_history::{SwapController, SwapFilterParams, TokenSwapResponse},
         },
     },
     utils::valid_evm_address,
@@ -34,49 +36,72 @@ use super::path::TradePath;
     params(
         ("token_id" = String, Path, description = "Token ID"),
         ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page")
+        ("limit" = i64, Query, description = "Number of items per page"),
+        ("direction" = String, Query, description = "Sort direction (ASC or DESC)"),
+        ("min_volume" = String, Query, description = "Minimum volume filter"),
+        ("own_trades_only" = bool, Query, description = "Filter for own trades only"),
+        ("account_id" = String, Query, description = "Account ID for own trades filter"),
+        ("trade_type" = String, Query, description = "Trade type filter: 'buy', 'sell', or 'all'")
     ),
     tag = "Trade"
 )]
 #[instrument(skip(state))]
 pub async fn get_swap_history(
-    Path(token_id): Path<String>,
-    Query(params): Query<PaginationParams>,
-    State(state): State<AppState>,
+    token_id: Path<String>,
+    pagination: Query<PaginationParams>,
+    filter: Query<SwapFilterParams>,
+    state: State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
     if !valid_evm_address(&token_id) {
-        error!("Invalid token ID format: {}", token_id);
+        error!("Invalid token ID format: {:?}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
-    if let Ok(cached_response) = state
-        .trade_redis
-        .get_token_swap_history(&token_id, &params)
-        .await
-    {
-        return Ok(Json(cached_response));
+    // Validate filter parameters
+    if let Err(e) = filter.validate() {
+        error!("Invalid filter parameters: {}", e);
+        return Err(AppError::BadRequest(e.to_string()));
+    }
+
+    // Note: Cache key needs to include filter parameters
+    // For now, we'll skip caching when filters are applied
+    let use_cache =
+        filter.min_volume.is_none() && !filter.own_trades_only && filter.trade_type == "all";
+
+    if use_cache {
+        if let Ok(cached_response) = state
+            .trade_redis
+            .get_token_swap_history(&token_id, &pagination)
+            .await
+        {
+            return Ok(Json(cached_response));
+        }
     }
 
     let response = SwapController::new(state.postgres.clone())
-        .get_swaps_by_token(&token_id, &params)
+        .get_swaps_by_token(&token_id, &pagination, &filter)
         .await
         .map_err(|err| {
             error!(
-                "Failed to get swap history: token_id: {}, error: {}",
+                "Failed to get swap history: token_id: {:?}, error: {}",
                 token_id, err
             );
             AppError::InternalError(err.to_string())
         })?;
-    if let Err(err) = state
-        .trade_redis
-        .set_token_swap_history(&token_id, &response, &params)
-        .await
-    {
-        warn!("Failed to set token swap history cache: {}", err);
+
+    if use_cache {
+        if let Err(err) = state
+            .trade_redis
+            .set_token_swap_history(&token_id, &response, &pagination)
+            .await
+        {
+            warn!("Failed to set token swap history cache: {}", err);
+        }
     }
+
     info!(
-        "Get Swap History: token_id: {}, response: {:?}",
-        token_id, response
+        "Get Swap History: token_id: {:?}, filters: {:?}, response: {:?}",
+        token_id, filter, response
     );
     Ok(Json(response))
 }
