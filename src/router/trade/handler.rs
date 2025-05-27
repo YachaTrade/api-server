@@ -2,9 +2,8 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use serde::Deserialize;
+
 use tracing::{error, info, instrument, warn};
-use utoipa::ToSchema;
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -16,7 +15,7 @@ use crate::{
             market::{Market, MarketController},
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
-            swap_history::{SwapController, SwapFilterParams, TokenSwapResponse},
+            swap_history::{SwapController, SwapQuery, TokenSwapResponse},
         },
     },
     utils::valid_evm_address,
@@ -41,37 +40,35 @@ use super::path::TradePath;
         ("min_volume" = String, Query, description = "Minimum volume filter"),
         ("own_trades_only" = bool, Query, description = "Filter for own trades only"),
         ("account_id" = String, Query, description = "Account ID for own trades filter"),
-        ("trade_type" = String, Query, description = "Trade type filter: 'buy', 'sell', or 'all'")
+        ("trade_type" = String, Query, description = "Trade type filter: 'BUY', 'SELL', or 'ALL'")
     ),
     tag = "Trade"
 )]
 #[instrument(skip(state))]
+// #[debug_handler]
 pub async fn get_swap_history(
-    token_id: Path<String>,
-    pagination: Query<PaginationParams>,
-    filter: Query<SwapFilterParams>,
-    state: State<AppState>,
+    Path(token_id): Path<String>,
+    Query(query): Query<SwapQuery>,
+    State(state): State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
     if !valid_evm_address(&token_id) {
         error!("Invalid token ID format: {:?}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-
-    // Validate filter parameters
-    if let Err(e) = filter.validate() {
+    query.validate().map_err(|e| {
         error!("Invalid filter parameters: {}", e);
-        return Err(AppError::BadRequest(e.to_string()));
-    }
+        AppError::BadRequest(e)
+    })?;
 
     // Note: Cache key needs to include filter parameters
     // For now, we'll skip caching when filters are applied
     let use_cache =
-        filter.min_volume.is_none() && !filter.own_trades_only && filter.trade_type == "all";
+        query.min_volume.is_none() && !query.own_trades_only && query.trade_type == "all";
 
     if use_cache {
         if let Ok(cached_response) = state
             .trade_redis
-            .get_token_swap_history(&token_id, &pagination)
+            .get_token_swap_history(&token_id, &query)
             .await
         {
             return Ok(Json(cached_response));
@@ -79,7 +76,7 @@ pub async fn get_swap_history(
     }
 
     let response = SwapController::new(state.postgres.clone())
-        .get_swaps_by_token(&token_id, &pagination, &filter)
+        .get_swaps_by_token(&token_id, &query)
         .await
         .map_err(|err| {
             error!(
@@ -92,7 +89,7 @@ pub async fn get_swap_history(
     if use_cache {
         if let Err(err) = state
             .trade_redis
-            .set_token_swap_history(&token_id, &response, &pagination)
+            .set_token_swap_history(&token_id, &response, &query)
             .await
         {
             warn!("Failed to set token swap history cache: {}", err);
@@ -101,7 +98,7 @@ pub async fn get_swap_history(
 
     info!(
         "Get Swap History: token_id: {:?}, filters: {:?}, response: {:?}",
-        token_id, filter, response
+        token_id, query, response
     );
     Ok(Json(response))
 }

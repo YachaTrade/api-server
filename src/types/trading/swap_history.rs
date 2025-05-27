@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::Result;
 use bigdecimal::BigDecimal;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
 use sqlx::Row;
 use utoipa::ToSchema;
@@ -26,7 +26,7 @@ pub struct PositionSwap {
     pub transaction_hash: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct PositionSwapResponse {
     pub swaps: Vec<PositionSwap>,
     pub total_count: i64,
@@ -48,9 +48,16 @@ pub struct TokenSwapResponse {
     pub total_count: i64,
 }
 
-/// Filter parameters for swap history
-#[derive(Deserialize, ToSchema, Debug, Default)]
-pub struct SwapFilterParams {
+/// Combined query parameters for swap history
+#[derive(Debug, Clone, Deserialize, ToSchema, Default)]
+pub struct SwapQuery {
+    // PaginationParams fields
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_limit", deserialize_with = "validate_limit")]
+    pub limit: i64,
+    #[serde(default = "default_direction", deserialize_with = "validate_direction")]
+    pub direction: String,
     /// Minimum volume filter (native amount)
     #[serde(default)]
     pub min_volume: Option<String>,
@@ -68,29 +75,71 @@ pub struct SwapFilterParams {
     pub trade_type: String,
 }
 
-fn default_trade_type() -> String {
-    "all".to_string()
-}
-
-impl SwapFilterParams {
-    pub fn validate(&self) -> Result<()> {
-        // Validate trade_type
-        let valid_types = ["all", "buy", "sell"];
-        if !valid_types.contains(&self.trade_type.as_str()) {
-            return Err(anyhow::anyhow!(
-                "Invalid trade_type. Must be 'all', 'buy', or 'sell'"
-            ));
+impl SwapQuery {
+    /// Validate the query parameters
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate min_volume if provided
+        if let Some(min_vol) = &self.min_volume {
+            if min_vol.parse::<f64>().is_err() {
+                return Err("Invalid min_volume: must be a valid number".to_string());
+            }
         }
 
-        // Validate own_trades_only requires account_id
+        // Validate own_trades_only and account_id
         if self.own_trades_only && self.account_id.is_none() {
-            return Err(anyhow::anyhow!(
-                "account_id is required when own_trades_only is true"
-            ));
+            return Err("account_id is required when own_trades_only is true".to_string());
+        }
+
+        // Validate trade_type
+        if !["BUY", "SELL", "ALL"].contains(&self.trade_type.as_str()) {
+            return Err("Invalid trade_type: must be 'BUY', 'SELL', or 'ALL'".to_string());
         }
 
         Ok(())
     }
+}
+
+fn default_page() -> i64 {
+    1
+}
+
+fn default_limit() -> i64 {
+    10
+}
+
+fn default_direction() -> String {
+    "DESC".to_string()
+}
+
+fn default_trade_type() -> String {
+    "ALL".to_string()
+}
+
+fn validate_limit<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let limit = i64::deserialize(deserializer)?;
+    if limit < 1 || limit > 100 {
+        return Err(serde::de::Error::custom(
+            "Invalid limit: must be between 1 and 100",
+        ));
+    }
+    Ok(limit)
+}
+
+fn validate_direction<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let direction = String::deserialize(deserializer)?;
+    let direction_upper = direction.to_uppercase();
+    if !["ASC", "DESC"].contains(&direction_upper.as_str()) {
+        return Err(serde::de::Error::custom(
+            "Invalid direction: must be 'ASC' or 'DESC'",
+        ));
+    }
+    Ok(direction_upper)
 }
 
 pub struct SwapController {
@@ -199,16 +248,12 @@ impl SwapController {
     pub async fn get_swaps_by_token(
         &self,
         token_id: &str,
-        pagination: &PaginationParams,
-        filters: &SwapFilterParams,
+        query: &SwapQuery,
     ) -> Result<TokenSwapResponse> {
-        // Validate filters
-        filters.validate()?;
-
-        let offset = (pagination.page - 1) * pagination.limit;
+        let offset = (query.page - 1) * query.limit;
 
         // Build dynamic query with placeholders
-        let mut query = r#"
+        let mut query_sql = r#"
         SELECT 
             s.swap_id,
             s.token_id,
@@ -233,56 +278,56 @@ impl SwapController {
         let mut param_index = 2; // $1은 이미 token_id에 사용됨
 
         // Add volume filters
-        if let Some(min_vol) = &filters.min_volume {
-            query.push_str(&format!(" AND s.native_amount >= ${}", param_index));
+        if let Some(min_vol) = &query.min_volume {
+            query_sql.push_str(&format!(" AND s.native_amount >= ${}", param_index));
             params.push(min_vol);
             param_index += 1;
         }
 
         // Add own trades filter
-        if filters.own_trades_only {
-            if let Some(account_id) = &filters.account_id {
-                query.push_str(&format!(" AND s.sender = ${}", param_index));
+        if query.own_trades_only {
+            if let Some(account_id) = &query.account_id {
+                query_sql.push_str(&format!(" AND s.sender = ${}", param_index));
                 params.push(account_id);
                 param_index += 1;
             }
         }
 
         // Add trade type filter
-        match filters.trade_type.as_str() {
-            "buy" => query.push_str(" AND s.is_buy = true"),
-            "sell" => query.push_str(" AND s.is_buy = false"),
+        match query.trade_type.as_str() {
+            "buy" => query_sql.push_str(" AND s.is_buy = true"),
+            "sell" => query_sql.push_str(" AND s.is_buy = false"),
             _ => {} // "all" - no filter
         }
 
         // 페이지네이션 추가 (고정된 인덱스 사용)
-        query.push_str(" ORDER BY s.created_at DESC");
-        query.push_str(&format!(
+        query_sql.push_str(" ORDER BY s.created_at DESC");
+        query_sql.push_str(&format!(
             " LIMIT ${} OFFSET ${}",
             param_index,
             param_index + 1
         ));
 
         // 쿼리 준비 및 파라미터 바인딩
-        let mut query_builder = sqlx::query(&query);
+        let mut query_builder = sqlx::query(&query_sql);
 
         // 첫 번째 파라미터 바인딩 (token_id)
         query_builder = query_builder.bind(token_id);
 
         // 필터 파라미터 바인딩
-        if let Some(min_vol) = &filters.min_volume {
+        if let Some(min_vol) = &query.min_volume {
             let min_vol = BigDecimal::from_str(&min_vol)?;
             query_builder = query_builder.bind(min_vol);
         }
 
-        if filters.own_trades_only {
-            if let Some(account_id) = &filters.account_id {
+        if query.own_trades_only {
+            if let Some(account_id) = &query.account_id {
                 query_builder = query_builder.bind(account_id);
             }
         }
 
         // 페이지네이션 파라미터 바인딩
-        query_builder = query_builder.bind(pagination.limit);
+        query_builder = query_builder.bind(query.limit);
         query_builder = query_builder.bind(offset);
 
         // 쿼리 실행
@@ -325,7 +370,7 @@ impl SwapController {
         let total_count = if swaps.is_empty() {
             0
         } else {
-            self.get_total_count_by_token_with_filters(token_id, filters)
+            self.get_total_count_by_token_with_filters(token_id, &query)
                 .await?
         };
 
@@ -335,7 +380,7 @@ impl SwapController {
     async fn get_total_count_by_token_with_filters(
         &self,
         token_id: &str,
-        filters: &SwapFilterParams,
+        query_params: &SwapQuery,
     ) -> Result<i64> {
         // Build dynamic query
         let mut query = r#"
@@ -346,26 +391,26 @@ impl SwapController {
             .to_string();
 
         let mut param_count = 1;
-        let mut params: Vec<Box<dyn std::any::Any>> = vec![Box::new(token_id.to_string())];
-
+        let mut params = Vec::new();
+        params.push(token_id);
         // Add volume filters
-        if let Some(min_vol) = &filters.min_volume {
+        if let Some(min_vol) = &query_params.min_volume {
             param_count += 1;
             query.push_str(&format!(" AND s.native_amount >= ${}", param_count));
-            params.push(Box::new(min_vol.clone()));
+            params.push(min_vol);
         }
 
         // Add own trades filter
-        if filters.own_trades_only {
-            if let Some(account_id) = &filters.account_id {
+        if query_params.own_trades_only {
+            if let Some(account_id) = &query_params.account_id {
                 param_count += 1;
                 query.push_str(&format!(" AND s.sender = ${}", param_count));
-                params.push(Box::new(account_id.clone()));
+                params.push(account_id);
             }
         }
 
         // Add trade type filter
-        match filters.trade_type.as_str() {
+        match query_params.trade_type.as_str() {
             "buy" => query.push_str(" AND s.is_buy = true"),
             "sell" => query.push_str(" AND s.is_buy = false"),
             _ => {} // "all" - no filter
@@ -377,12 +422,12 @@ impl SwapController {
         // Bind parameters
         sql_query = sql_query.bind(token_id);
 
-        if let Some(min_vol) = &filters.min_volume {
+        if let Some(min_vol) = &query_params.min_volume {
             sql_query = sql_query.bind(min_vol);
         }
 
-        if filters.own_trades_only {
-            if let Some(account_id) = &filters.account_id {
+        if query_params.own_trades_only {
+            if let Some(account_id) = &query_params.account_id {
                 sql_query = sql_query.bind(account_id);
             }
         }
