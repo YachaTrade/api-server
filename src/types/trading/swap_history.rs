@@ -6,6 +6,7 @@ use crate::{
         info::{AccountInfo, TokenInfo},
         pagination::PaginationParams,
     },
+    utils::valid_evm_address,
 };
 use anyhow::Result;
 use bigdecimal::BigDecimal;
@@ -62,10 +63,6 @@ pub struct SwapQuery {
     #[serde(default)]
     pub min_volume: Option<String>,
 
-    /// Filter for own trades only (requires account_id)
-    #[serde(default)]
-    pub own_trades_only: bool,
-
     /// Account ID for own trades filter
     #[serde(default)]
     pub account_id: Option<String>,
@@ -85,9 +82,10 @@ impl SwapQuery {
             }
         }
 
-        // Validate own_trades_only and account_id
-        if self.own_trades_only && self.account_id.is_none() {
-            return Err("account_id is required when own_trades_only is true".to_string());
+        if self.account_id.is_some() {
+            if !valid_evm_address(self.account_id.as_ref().unwrap()) {
+                return Err("Invalid account ID format".to_string());
+            }
         }
 
         // Validate trade_type
@@ -285,12 +283,11 @@ impl SwapController {
         }
 
         // Add own trades filter
-        if query.own_trades_only {
-            if let Some(account_id) = &query.account_id {
-                query_sql.push_str(&format!(" AND s.sender = ${}", param_index));
-                params.push(account_id);
-                param_index += 1;
-            }
+
+        if let Some(account_id) = &query.account_id {
+            query_sql.push_str(&format!(" AND s.sender = ${}", param_index));
+            params.push(account_id);
+            param_index += 1;
         }
 
         // Add trade type filter
@@ -320,10 +317,8 @@ impl SwapController {
             query_builder = query_builder.bind(min_vol);
         }
 
-        if query.own_trades_only {
-            if let Some(account_id) = &query.account_id {
-                query_builder = query_builder.bind(account_id);
-            }
+        if let Some(account_id) = &query.account_id {
+            query_builder = query_builder.bind(account_id);
         }
 
         // 페이지네이션 파라미터 바인딩
@@ -401,12 +396,11 @@ impl SwapController {
         }
 
         // Add own trades filter
-        if query_params.own_trades_only {
-            if let Some(account_id) = &query_params.account_id {
-                param_count += 1;
-                query.push_str(&format!(" AND s.sender = ${}", param_count));
-                params.push(account_id);
-            }
+
+        if let Some(account_id) = &query_params.account_id {
+            param_count += 1;
+            query.push_str(&format!(" AND s.sender = ${}", param_count));
+            params.push(account_id);
         }
 
         // Add trade type filter
@@ -427,10 +421,8 @@ impl SwapController {
             sql_query = sql_query.bind(min_vol);
         }
 
-        if query_params.own_trades_only {
-            if let Some(account_id) = &query_params.account_id {
-                sql_query = sql_query.bind(account_id);
-            }
+        if let Some(account_id) = &query_params.account_id {
+            sql_query = sql_query.bind(account_id);
         }
 
         let row = sql_query.fetch_one(self.db.get_read_pool()).await?;
