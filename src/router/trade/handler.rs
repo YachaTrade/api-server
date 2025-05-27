@@ -36,10 +36,10 @@ use super::path::TradePath;
         ("token_id" = String, Path, description = "Token ID"),
         ("page" = i64, Query, description = "Page number"),
         ("limit" = i64, Query, description = "Number of items per page"),
-        ("direction" = Option<String>, Query, description = "Sort direction (ASC or DESC)"),
+        ("direction" = Option<String>, Query, description = "Sort direction (ASC or DESC) Default DESC"),
         ("min_volume" = Option<String>, Query, description = "Minimum volume filter"),
         ("account_id" = Option<String>, Query, description = "Account ID for own trades filter"),
-        ("trade_type" = Option<String>, Query, description = "Trade type filter: 'BUY', 'SELL', or 'ALL'")
+        ("trade_type" = Option<String>, Query, description = "Trade type filter: (BUY, SELL) Default ALL")
     ),
     tag = "Trade"
 )]
