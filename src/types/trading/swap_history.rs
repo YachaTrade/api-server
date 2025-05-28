@@ -270,24 +270,15 @@ impl SwapController {
         WHERE s.token_id = $1"#
             .to_string();
 
-        // 파라미터 인덱스 추적
-        let mut params = Vec::new();
-        params.push(token_id);
-        let mut param_index = 2; // $1은 이미 token_id에 사용됨
-
         // Add volume filters
         if let Some(min_vol) = &query.min_volume {
-            query_sql.push_str(&format!(" AND s.native_amount >= ${}", param_index));
-            params.push(min_vol);
-            param_index += 1;
+            query_sql.push_str(&format!(" AND s.native_amount >= {:?}", &min_vol));
         }
 
         // Add own trades filter
 
         if let Some(account_id) = &query.account_id {
-            query_sql.push_str(&format!(" AND s.sender = ${}", param_index));
-            params.push(account_id);
-            param_index += 1;
+            query_sql.push_str(&format!(" AND s.sender = {:?}", &account_id));
         }
 
         // Add trade type filter
@@ -301,31 +292,13 @@ impl SwapController {
         // 정렬 방향 추가
         query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
 
-        query_sql.push_str(&format!(
-            " LIMIT ${} OFFSET ${}",
-            param_index,
-            param_index + 1
-        ));
+        query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
 
         // 쿼리 준비 및 파라미터 바인딩
         let mut query_builder = sqlx::query(&query_sql);
 
         // 첫 번째 파라미터 바인딩 (token_id)
         query_builder = query_builder.bind(token_id);
-
-        // 필터 파라미터 바인딩
-        if let Some(min_vol) = &query.min_volume {
-            let min_vol = BigDecimal::from_str(&min_vol)?;
-            query_builder = query_builder.bind(min_vol);
-        }
-
-        if let Some(account_id) = &query.account_id {
-            query_builder = query_builder.bind(account_id);
-        }
-
-        // 페이지네이션 파라미터 바인딩
-        query_builder = query_builder.bind(query.limit);
-        query_builder = query_builder.bind(offset);
 
         // 쿼리 실행
         let rows = query_builder.fetch_all(self.db.get_read_pool()).await?;
@@ -387,22 +360,14 @@ impl SwapController {
         WHERE s.token_id = $1"#
             .to_string();
 
-        let mut param_count = 1;
-        let mut params = Vec::new();
-        params.push(token_id);
         // Add volume filters
         if let Some(min_vol) = &query_params.min_volume {
-            param_count += 1;
-            query.push_str(&format!(" AND s.native_amount >= ${}", param_count));
-            params.push(min_vol);
+            query.push_str(&format!(" AND s.native_amount >= {:?}", &min_vol));
         }
 
         // Add own trades filter
-
         if let Some(account_id) = &query_params.account_id {
-            param_count += 1;
-            query.push_str(&format!(" AND s.sender = ${}", param_count));
-            params.push(account_id);
+            query.push_str(&format!(" AND s.sender = {:?}", &account_id));
         }
 
         // Add trade type filter
@@ -413,19 +378,7 @@ impl SwapController {
         }
 
         // Execute query using raw SQL
-        let mut sql_query = sqlx::query(&query);
-
-        // Bind parameters
-        sql_query = sql_query.bind(token_id);
-
-        if let Some(min_vol) = &query_params.min_volume {
-            let min_vol = BigDecimal::from_str(&min_vol)?;
-            sql_query = sql_query.bind(min_vol);
-        }
-
-        if let Some(account_id) = &query_params.account_id {
-            sql_query = sql_query.bind(account_id);
-        }
+        let sql_query = sqlx::query(&query).bind(token_id);
 
         let row = sql_query.fetch_one(self.db.get_read_pool()).await?;
 
