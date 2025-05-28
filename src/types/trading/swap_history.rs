@@ -272,33 +272,37 @@ impl SwapController {
 
         // Add volume filters
         if let Some(min_vol) = &query.min_volume {
-            query_sql.push_str(&format!(" AND s.native_amount >= {}", &min_vol));
+            query_sql.push_str(&format!("AND s.native_amount >= $2"));
         }
 
         // Add own trades filter
 
         if let Some(account_id) = &query.account_id {
-            query_sql.push_str(&format!(" AND s.sender = {}", &account_id));
+            query_sql.push_str(&format!("AND s.sender = {}", &account_id));
         }
 
         // Add trade type filter
         match query.trade_type.as_str() {
-            "BUY" => query_sql.push_str(" AND s.is_buy = true"),
-            "SELL" => query_sql.push_str(" AND s.is_buy = false"),
+            "BUY" => query_sql.push_str("AND s.is_buy = true"),
+            "SELL" => query_sql.push_str("AND s.is_buy = false"),
             _ => {} // "all" - no filter
         }
 
-        // 페이지네이션 추가 (고정된 인덱스 사용)
         // 정렬 방향 추가
-        query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
+        query_sql.push_str(&format!("ORDER BY s.created_at {}", query.direction));
 
-        query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
+        query_sql.push_str(&format!("LIMIT {} OFFSET {}", query.limit, offset));
 
         // 쿼리 준비 및 파라미터 바인딩
         let mut query_builder = sqlx::query(&query_sql);
 
         // 첫 번째 파라미터 바인딩 (token_id)
         query_builder = query_builder.bind(token_id);
+
+        if let Some(min_vol) = &query.min_volume {
+            let min_vol_decimal = BigDecimal::from_str(min_vol)?;
+            query_builder = query_builder.bind(min_vol_decimal);
+        }
 
         // 쿼리 실행
         let rows = query_builder.fetch_all(self.db.get_read_pool()).await?;
@@ -361,8 +365,8 @@ impl SwapController {
             .to_string();
 
         // Add volume filters
-        if let Some(min_vol) = &query_params.min_volume {
-            query.push_str(&format!(" AND s.native_amount >= {}", &min_vol));
+        if let Some(_) = &query_params.min_volume {
+            query.push_str(&format!(" AND s.native_amount >= $2"));
         }
 
         // Add own trades filter
@@ -378,9 +382,17 @@ impl SwapController {
         }
 
         // Execute query using raw SQL
-        let sql_query = sqlx::query(&query).bind(token_id);
+        let mut query_builder = sqlx::query(&query);
 
-        let row = sql_query.fetch_one(self.db.get_read_pool()).await?;
+        // 첫 번째 파라미터 바인딩 (token_id)
+        query_builder = query_builder.bind(token_id);
+
+        if let Some(min_vol) = &query_params.min_volume {
+            let min_vol_decimal = BigDecimal::from_str(min_vol)?;
+            query_builder = query_builder.bind(min_vol_decimal);
+        }
+
+        let row = query_builder.fetch_one(self.db.get_read_pool()).await?;
 
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
