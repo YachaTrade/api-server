@@ -278,7 +278,7 @@ impl SwapController {
         // Add own trades filter
 
         if let Some(account_id) = &query.account_id {
-            query_sql.push_str(&format!(" AND s.sender = {}", &account_id));
+            query_sql.push_str(&format!(" AND s.sender = $3"));
         }
 
         // Add trade type filter
@@ -302,6 +302,10 @@ impl SwapController {
         if let Some(min_vol) = &query.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
+        }
+
+        if let Some(account_id) = &query.account_id {
+            query_builder = query_builder.bind(account_id);
         }
 
         // 쿼리 실행
@@ -370,8 +374,8 @@ impl SwapController {
         }
 
         // Add own trades filter
-        if let Some(account_id) = &query_params.account_id {
-            query.push_str(&format!(" AND s.sender = {}", &account_id));
+        if let Some(_) = &query_params.account_id {
+            query.push_str(&format!(" AND s.sender = $3"));
         }
 
         // Add trade type filter
@@ -390,6 +394,10 @@ impl SwapController {
         if let Some(min_vol) = &query_params.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
+        }
+
+        if let Some(account_id) = &query_params.account_id {
+            query_builder = query_builder.bind(account_id);
         }
 
         let row = query_builder.fetch_one(self.db.get_read_pool()).await?;
