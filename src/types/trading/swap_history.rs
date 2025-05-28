@@ -272,26 +272,26 @@ impl SwapController {
 
         // Add volume filters
         if let Some(min_vol) = &query.min_volume {
-            query_sql.push_str(&format!("AND s.native_amount >= $2"));
+            query_sql.push_str(&format!(" AND s.native_amount >= $2"));
         }
 
         // Add own trades filter
 
         if let Some(account_id) = &query.account_id {
-            query_sql.push_str(&format!("AND s.sender = {}", &account_id));
+            query_sql.push_str(&format!(" AND s.sender = {}", &account_id));
         }
 
         // Add trade type filter
         match query.trade_type.as_str() {
-            "BUY" => query_sql.push_str("AND s.is_buy = true"),
-            "SELL" => query_sql.push_str("AND s.is_buy = false"),
+            "BUY" => query_sql.push_str(" AND s.is_buy = true"),
+            "SELL" => query_sql.push_str(" AND s.is_buy = false"),
             _ => {} // "all" - no filter
         }
 
         // 정렬 방향 추가
-        query_sql.push_str(&format!("ORDER BY s.created_at {}", query.direction));
+        query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
 
-        query_sql.push_str(&format!("LIMIT {} OFFSET {}", query.limit, offset));
+        query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
 
         // 쿼리 준비 및 파라미터 바인딩
         let mut query_builder = sqlx::query(&query_sql);
