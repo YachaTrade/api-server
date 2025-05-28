@@ -298,9 +298,11 @@ impl SwapController {
         }
 
         // 페이지네이션 추가 (고정된 인덱스 사용)
+        // 정렬 방향 추가
+        query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
+
         query_sql.push_str(&format!(
-            " ORDER BY s.created_at {} LIMIT ${} OFFSET ${}",
-            query.direction,
+            " LIMIT ${} OFFSET ${}",
             param_index,
             param_index + 1
         ));
@@ -322,7 +324,6 @@ impl SwapController {
         }
 
         // 페이지네이션 파라미터 바인딩
-        query_builder = query_builder.bind(&query.direction);
         query_builder = query_builder.bind(query.limit);
         query_builder = query_builder.bind(offset);
 
