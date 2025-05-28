@@ -272,13 +272,13 @@ impl SwapController {
 
         // Add volume filters
         if let Some(min_vol) = &query.min_volume {
-            query_sql.push_str(&format!(" AND s.native_amount >= {:?}", &min_vol));
+            query_sql.push_str(&format!(" AND s.native_amount >= {}", &min_vol));
         }
 
         // Add own trades filter
 
         if let Some(account_id) = &query.account_id {
-            query_sql.push_str(&format!(" AND s.sender = {:?}", &account_id));
+            query_sql.push_str(&format!(" AND s.sender = {}", &account_id));
         }
 
         // Add trade type filter
@@ -362,12 +362,12 @@ impl SwapController {
 
         // Add volume filters
         if let Some(min_vol) = &query_params.min_volume {
-            query.push_str(&format!(" AND s.native_amount >= {:?}", &min_vol));
+            query.push_str(&format!(" AND s.native_amount >= {}", &min_vol));
         }
 
         // Add own trades filter
         if let Some(account_id) = &query_params.account_id {
-            query.push_str(&format!(" AND s.sender = {:?}", &account_id));
+            query.push_str(&format!(" AND s.sender = {}", &account_id));
         }
 
         // Add trade type filter
