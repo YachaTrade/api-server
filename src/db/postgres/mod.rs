@@ -16,7 +16,7 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
         // PgBouncer가 이미 연결 풀링을 처리하므로 최대 연결 수를 낮게 설정
-        .max_connections(1000)
+        .max_connections(50)
         // 콜드 스타트 방지를 위해 최소 연결 수 유지
         .min_connections(5)
         // Neon 서버리스 환경에 맞는 짧은 연결 수명
@@ -74,7 +74,7 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
         // PgBouncer가 빠르게 응답해야 하므로 짧은 획득 타임아웃
         .acquire_timeout(Duration::from_secs(15))
         // 서버리스 환경에서 리소스 해제를 위한 적극적인 유휴 타임아웃
-        .idle_timeout(Duration::from_secs(20))
+        .idle_timeout(Duration::from_secs(60))
         // PgBouncer가 연결 상태를 관리하므로 테스트 생략
         .test_before_acquire(false)
         // 읽기 작업에 최적화된 연결 초기화
