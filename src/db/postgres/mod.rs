@@ -16,7 +16,7 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
         // PgBouncer가 이미 연결 풀링을 처리하므로 최대 연결 수를 낮게 설정
-        .max_connections(50)
+        .max_connections(1000)
         // 콜드 스타트 방지를 위해 최소 연결 수 유지
         .min_connections(5)
         // Neon 서버리스 환경에 맞는 짧은 연결 수명
