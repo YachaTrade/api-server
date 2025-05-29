@@ -24,7 +24,7 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
         // PgBouncer가 빠르게 연결을 제공하므로 짧은 획득 타임아웃 설정
         .acquire_timeout(Duration::from_secs(15))
         // 서버리스 환경에서 리소스 해제를 위한 적극적인 유휴 타임아웃
-        .idle_timeout(Duration::from_secs(20))
+        .idle_timeout(Duration::from_secs(60))
         // PgBouncer가 연결 테스트를 처리하므로 생략
         .test_before_acquire(false)
         // 연결 초기화 - PgBouncer에 최적화된 최소 설정
