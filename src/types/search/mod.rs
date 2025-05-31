@@ -55,53 +55,80 @@ impl SearchController {
     }
 
     pub async fn search(&self, query: &str) -> Result<SearchResponse> {
-        // 검색 패턴을 소문자로 변환한 후 와일드카드 적용
-        let search_pattern = format!("%{}%", query.to_lowercase());
         let pool = self.db.get_read_pool();
 
-        // 현재 시간 및 7일 전 타임스탬프 계산
+        // 빈 검색어 처리
+        if query.trim().is_empty() {
+            return Ok(SearchResponse {
+                tokens: SearchTokenResponse {
+                    total_count: 0,
+                    tokens: vec![],
+                },
+                accounts: SearchAccountResponse {
+                    total_count: 0,
+                    accounts: vec![],
+                },
+            });
+        }
+
         let now = Utc::now().timestamp();
         let seven_days_ago = now - (7 * 24 * 60 * 60);
 
-        // 토큰 검색 쿼리와 계정 ID 검색 쿼리를 동시에 실행합니다.
-        let token_query = sqlx::query!(
-            r#"
-            SELECT 
-                t.token_id,
-                t.name,
-                t.symbol,
-                t.image_uri,
-                t.created_at,
-                t.total_supply,
-                m.market_type,
-                m.price
-            FROM token t
-            JOIN market m ON t.token_id = m.token_id
-            WHERE 
-                LOWER(t.token_id) LIKE $1
-                OR LOWER(t.name) LIKE $1
-                OR LOWER(t.symbol) LIKE $1
-            ORDER BY m.price DESC
-            "#,
-            search_pattern
-        )
-        .fetch_all(pool);
+        // 토큰과 계정 검색을 병렬로 실행
+        let (token_result, account_result) = tokio::join!(
+            // 토큰 검색
+            sqlx::query!(
+                r#"
+                SELECT 
+                    t.token_id, t.name, t.symbol, t.image_uri,
+                    t.created_at, t.total_supply, m.market_type, m.price
+                FROM token t
+                JOIN market m ON t.token_id = m.token_id
+                WHERE 
+                    LOWER(t.name) = LOWER($1)
+                    OR LOWER(t.symbol) = LOWER($1)
+                    OR LOWER(t.token_id) = LOWER($1)
+                    OR LOWER(t.name) % LOWER($1)
+                    OR LOWER(t.symbol) % LOWER($1)
+                    OR LOWER(t.token_id) % LOWER($1)
+                ORDER BY 
+                    CASE 
+                        WHEN LOWER(t.name) = LOWER($1) 
+                          OR LOWER(t.symbol) = LOWER($1)
+                          OR LOWER(t.token_id) = LOWER($1) THEN 0
+                        ELSE 1
+                    END,
+                    m.price DESC
+                LIMIT 50
+                "#,
+                query
+            )
+            .fetch_optional(pool),
+            // 계정 검색 (첫 번째 매칭만)
+            sqlx::query!(
+                r#"
+                SELECT account_id
+                FROM account
+                WHERE 
+                    LOWER(nickname) = LOWER($1)
+                    OR LOWER(account_id) = LOWER($1)
+                    OR LOWER(nickname) % LOWER($1)
+                    OR LOWER(account_id) % LOWER($1)
+                ORDER BY 
+                    CASE 
+                        WHEN LOWER(nickname) = LOWER($1) OR LOWER(account_id) = LOWER($1) THEN 0
+                        ELSE 1
+                    END,
+                    follower_count DESC
+                LIMIT 1
+                "#,
+                query
+            )
+            .fetch_optional(pool)
+        );
 
-        let account_id_query = sqlx::query!(
-            r#"
-            SELECT account_id
-            FROM account
-            WHERE LOWER(account_id) LIKE $1
-               OR LOWER(nickname) LIKE $1
-            "#,
-            search_pattern
-        )
-        .fetch_optional(pool);
-
-        let (token_records_res, account_id_res) = tokio::join!(token_query, account_id_query);
-
-        // 토큰 쿼리 결과 처리
-        let token_records = token_records_res.map_err(|err| anyhow::anyhow!(err))?;
+        // 토큰 결과 처리
+        let token_records = token_result?;
         let tokens_vec: Vec<SearchToken> = token_records
             .into_iter()
             .map(|row| SearchToken {
@@ -123,11 +150,10 @@ impl SearchController {
             tokens: tokens_vec,
         };
 
-        // 계정 관련 쿼리: 계정 ID 결과가 있는 경우에만 추가 쿼리를 실행합니다.
-        let accounts_vec =
-            if let Some(account_row) = account_id_res.map_err(|err| anyhow::anyhow!(err))? {
-                let account_records = sqlx::query!(
-                    r#"
+        // 계정 결과 처리
+        let accounts_vec = if let Some(account_row) = account_result? {
+            let account_records = sqlx::query!(
+                r#"
                 SELECT 
                     a.account_id,
                     a.nickname,
@@ -139,29 +165,30 @@ impl SearchController {
                 FROM account a
                 LEFT JOIN (
                     SELECT 
-                        p.account_id,
+                        b.account_id,
                         SUM(p.total_bought_native) AS total_cost,
-                        (SUM(p.realized_pnl) + SUM(
+                        (SUM(p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token)) + SUM(
                             COALESCE(
                                 CASE 
-                                    WHEN p.current_token_amount = 0 THEN 0
+                                    WHEN b.balance = 0 THEN 0
                                     WHEN m.market_type = 'CURVE' THEN
                                         m.virtual_native 
                                         - (
                                             ((m.virtual_token * m.virtual_native) 
-                                            + (m.virtual_token + p.current_token_amount) - 1)
-                                            / (m.virtual_token + p.current_token_amount)
+                                            + (m.virtual_token + b.balance) - 1)
+                                            / (m.virtual_token + b.balance)
                                         )
                                     WHEN m.market_type = 'DEX' THEN
-                                        m.price * p.current_token_amount
+                                        m.price * b.balance
                                     ELSE 0
                                 END,
                             0)
                         )) AS total_profit
-                    FROM position p            
+                    FROM balance b
+                    JOIN positions p ON b.account_id = p.account_id AND b.token_id = p.token_id
                     JOIN market m ON p.token_id = m.token_id
                     WHERE p.created_at >= $2
-                    GROUP BY p.account_id
+                    GROUP BY b.account_id
                 ) ps ON a.account_id = ps.account_id
                 WHERE a.account_id = $1
                 ORDER BY 
@@ -170,38 +197,37 @@ impl SearchController {
                         / NULLIF(COALESCE(ps.total_cost, 0), 0)
                     ) DESC
                 "#,
-                    account_row.account_id,
-                    seven_days_ago,
-                )
-                .fetch_all(pool)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
+                account_row.account_id,
+                seven_days_ago,
+            )
+            .fetch_all(pool)
+            .await?;
 
-                account_records
-                    .into_iter()
-                    .map(|row| {
-                        let roi_percentage = if row.total_cost == BigDecimal::from(0) {
-                            BigDecimal::from(0)
-                        } else {
-                            row.total_profit.clone() / row.total_cost
-                        };
-                        SearchAccount {
-                            account_info: AccountInfo {
-                                account_id: row.account_id,
-                                nickname: row.nickname,
-                                image_uri: row.image_uri,
-                                follower_count: row.follower_count,
-                                following_count: row.following_count,
-                            },
-                            period: "7D".to_string(),
-                            total_profit: row.total_profit,
-                            roi_percentage,
-                        }
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
+            account_records
+                .into_iter()
+                .map(|row| {
+                    let roi_percentage = if row.total_cost == BigDecimal::from(0) {
+                        BigDecimal::from(0)
+                    } else {
+                        row.total_profit.clone() / row.total_cost
+                    };
+                    SearchAccount {
+                        account_info: AccountInfo {
+                            account_id: row.account_id,
+                            nickname: row.nickname,
+                            image_uri: row.image_uri,
+                            follower_count: row.follower_count,
+                            following_count: row.following_count,
+                        },
+                        period: "7D".to_string(),
+                        total_profit: row.total_profit,
+                        roi_percentage,
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         let accounts = SearchAccountResponse {
             total_count: accounts_vec.len() as i64,
