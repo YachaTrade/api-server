@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT \n                    t.token_id, t.name, t.symbol, t.image_uri,\n                    t.created_at, t.total_supply, m.market_type, m.price,\n                    GREATEST(\n                        similarity(LOWER(t.name), LOWER($1)),\n                        similarity(LOWER(t.symbol), LOWER($1)),\n                        similarity(LOWER(t.token_id), LOWER($1))\n                    ) as similarity_score\n                FROM token t\n                JOIN market m ON t.token_id = m.token_id\n                WHERE \n                    -- 정확한 매칭 (최우선)\n                    LOWER(t.name) = LOWER($1)\n                    OR LOWER(t.symbol) = LOWER($1)\n                    OR LOWER(t.token_id) = LOWER($1)\n                    -- Trigram 유사도 매칭\n                    OR LOWER(t.name) % LOWER($1)\n                    OR LOWER(t.symbol) % LOWER($1)\n                    OR LOWER(t.token_id) % LOWER($1)\n                ORDER BY \n                    -- 정확한 매칭을 최우선으로\n                    CASE \n                        WHEN LOWER(t.name) = LOWER($1) \n                          OR LOWER(t.symbol) = LOWER($1)\n                          OR LOWER(t.token_id) = LOWER($1) THEN 0\n                        ELSE 1\n                    END,\n                    similarity_score DESC,\n                    m.price DESC\n                LIMIT 50\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_supply",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "market_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "price",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "similarity_score",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "05e96863d2150ee7eb866f45f7353f6c03e4d17a84bd109808565415d3b403e7"
+}
