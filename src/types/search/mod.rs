@@ -56,7 +56,7 @@ impl SearchController {
 
     pub async fn search(&self, query: &str) -> Result<SearchResponse> {
         let pool = self.db.get_read_pool();
-
+    
         // 빈 검색어 처리
         if query.trim().is_empty() {
             return Ok(SearchResponse {
@@ -70,89 +70,52 @@ impl SearchController {
                 },
             });
         }
-
+    
         let now = Utc::now().timestamp();
         let seven_days_ago = now - (7 * 24 * 60 * 60);
-
+    
         // 토큰과 계정 검색을 병렬로 실행
         let (token_result, account_result) = tokio::join!(
-            // 토큰 검색
+            // 토큰 검색 (Trigram 사용) - fetch_all로 변경
             sqlx::query!(
                 r#"
                 SELECT 
                     t.token_id, t.name, t.symbol, t.image_uri,
-                    t.created_at, t.total_supply, m.market_type, m.price
+                    t.created_at, t.total_supply, m.market_type, m.price,
+                    GREATEST(
+                        similarity(LOWER(t.name), LOWER($1)),
+                        similarity(LOWER(t.symbol), LOWER($1)),
+                        similarity(LOWER(t.token_id), LOWER($1))
+                    ) as similarity_score
                 FROM token t
                 JOIN market m ON t.token_id = m.token_id
                 WHERE 
+                    -- 정확한 매칭 (최우선)
                     LOWER(t.name) = LOWER($1)
                     OR LOWER(t.symbol) = LOWER($1)
                     OR LOWER(t.token_id) = LOWER($1)
+                    -- Trigram 유사도 매칭
                     OR LOWER(t.name) % LOWER($1)
                     OR LOWER(t.symbol) % LOWER($1)
                     OR LOWER(t.token_id) % LOWER($1)
                 ORDER BY 
+                    -- 정확한 매칭을 최우선으로
                     CASE 
                         WHEN LOWER(t.name) = LOWER($1) 
                           OR LOWER(t.symbol) = LOWER($1)
                           OR LOWER(t.token_id) = LOWER($1) THEN 0
                         ELSE 1
                     END,
+                    similarity_score DESC,
                     m.price DESC
                 LIMIT 50
                 "#,
                 query
             )
-            .fetch_optional(pool),
-            // 계정 검색 (첫 번째 매칭만)
+            .fetch_all(pool),  // fetch_optional → fetch_all로 변경
+    
+            // 계정 검색 (Trigram 사용) - 상세 정보까지 한 번에
             sqlx::query!(
-                r#"
-                SELECT account_id
-                FROM account
-                WHERE 
-                    LOWER(nickname) = LOWER($1)
-                    OR LOWER(account_id) = LOWER($1)
-                    OR LOWER(nickname) % LOWER($1)
-                    OR LOWER(account_id) % LOWER($1)
-                ORDER BY 
-                    CASE 
-                        WHEN LOWER(nickname) = LOWER($1) OR LOWER(account_id) = LOWER($1) THEN 0
-                        ELSE 1
-                    END,
-                    follower_count DESC
-                LIMIT 1
-                "#,
-                query
-            )
-            .fetch_optional(pool)
-        );
-
-        // 토큰 결과 처리
-        let token_records = token_result?;
-        let tokens_vec: Vec<SearchToken> = token_records
-            .into_iter()
-            .map(|row| SearchToken {
-                token_info: TokenInfo {
-                    token_id: row.token_id,
-                    name: row.name,
-                    symbol: row.symbol,
-                    image_uri: row.image_uri,
-                },
-                market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
-                total_supply: row.total_supply,
-                price: row.price,
-                created_at: row.created_at,
-            })
-            .collect();
-
-        let tokens = SearchTokenResponse {
-            total_count: tokens_vec.len() as i64,
-            tokens: tokens_vec,
-        };
-
-        // 계정 결과 처리
-        let accounts_vec = if let Some(account_row) = account_result? {
-            let account_records = sqlx::query!(
                 r#"
                 SELECT 
                     a.account_id,
@@ -160,6 +123,10 @@ impl SearchController {
                     a.image_uri,
                     a.follower_count,
                     a.following_count,
+                    GREATEST(
+                        similarity(LOWER(a.nickname), LOWER($1)),
+                        similarity(LOWER(a.account_id), LOWER($1))
+                    ) as similarity_score,
                     COALESCE(ps.total_cost, 0)::numeric AS "total_cost!: BigDecimal",
                     COALESCE(ps.total_profit, 0)::numeric AS "total_profit!: BigDecimal"
                 FROM account a
@@ -190,50 +157,82 @@ impl SearchController {
                     WHERE p.created_at >= $2
                     GROUP BY b.account_id
                 ) ps ON a.account_id = ps.account_id
-                WHERE a.account_id = $1
+                WHERE 
+                    -- 정확한 매칭
+                    LOWER(a.nickname) = LOWER($1)
+                    OR LOWER(a.account_id) = LOWER($1)
+                    -- Trigram 유사도 매칭
+                    OR LOWER(a.nickname) % LOWER($1)
+                    OR LOWER(a.account_id) % LOWER($1)
                 ORDER BY 
-                    (
-                        COALESCE(ps.total_profit, 0)
-                        / NULLIF(COALESCE(ps.total_cost, 0), 0)
-                    ) DESC
+                    -- 정확한 매칭을 최우선으로
+                    CASE 
+                        WHEN LOWER(a.nickname) = LOWER($1) OR LOWER(a.account_id) = LOWER($1) THEN 0
+                        ELSE 1
+                    END,
+                    similarity_score DESC,
+                    a.follower_count DESC
+                LIMIT 20
                 "#,
-                account_row.account_id,
-                seven_days_ago,
+                query,
+                seven_days_ago
             )
-            .fetch_all(pool)
-            .await?;
-
-            account_records
-                .into_iter()
-                .map(|row| {
-                    let roi_percentage = if row.total_cost == BigDecimal::from(0) {
-                        BigDecimal::from(0)
-                    } else {
-                        row.total_profit.clone() / row.total_cost
-                    };
-                    SearchAccount {
-                        account_info: AccountInfo {
-                            account_id: row.account_id,
-                            nickname: row.nickname,
-                            image_uri: row.image_uri,
-                            follower_count: row.follower_count,
-                            following_count: row.following_count,
-                        },
-                        period: "7D".to_string(),
-                        total_profit: row.total_profit,
-                        roi_percentage,
-                    }
-                })
-                .collect()
-        } else {
-            Vec::new()
+            .fetch_all(pool)  // 여러 계정 결과를 가져옴
+        );
+    
+        // 토큰 결과 처리
+        let token_records = token_result?;
+        let tokens_vec: Vec<SearchToken> = token_records
+            .into_iter()
+            .map(|row| SearchToken {
+                token_info: TokenInfo {
+                    token_id: row.token_id,
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.image_uri,
+                },
+                market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
+                total_supply: row.total_supply,
+                price: row.price,
+                created_at: row.created_at,
+            })
+            .collect();
+    
+        let tokens = SearchTokenResponse {
+            total_count: tokens_vec.len() as i64,
+            tokens: tokens_vec,
         };
-
+    
+        // 계정 결과 처리 (한 번에 처리)
+        let account_records = account_result?;
+        let accounts_vec: Vec<SearchAccount> = account_records
+            .into_iter()
+            .map(|row| {
+                let roi_percentage = if row.total_cost == BigDecimal::from(0) {
+                    BigDecimal::from(0)
+                } else {
+                    row.total_profit.clone() / row.total_cost
+                };
+                SearchAccount {
+                    account_info: AccountInfo {
+                        account_id: row.account_id,
+                        nickname: row.nickname,
+                        image_uri: row.image_uri,
+                        follower_count: row.follower_count,
+                        following_count: row.following_count,
+                    },
+                    period: "7D".to_string(),
+                    total_profit: row.total_profit,
+                    roi_percentage,
+                }
+            })
+            .collect();
+    
         let accounts = SearchAccountResponse {
             total_count: accounts_vec.len() as i64,
             accounts: accounts_vec,
         };
-
+    
         Ok(SearchResponse { accounts, tokens })
     }
 }
