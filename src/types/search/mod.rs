@@ -73,9 +73,8 @@ impl SearchController {
         let now = Utc::now().timestamp();
         let seven_days_ago = now - (7 * 24 * 60 * 60);
 
-        // 1단계: 토큰과 계정 기본 정보를 빠르게 병렬 검색
         let (token_result, account_basic_result) = tokio::join!(
-            // 토큰 검색 (기존 유지)
+            // 토큰 검색
             sqlx::query!(
                 r#"
                 SELECT 
@@ -99,7 +98,7 @@ impl SearchController {
                 query
             )
             .fetch_all(pool),
-            // 계정 기본 정보만 먼저 빠르게 검색 (손익 계산 제외)
+            // 계정 기본 정보
             sqlx::query!(
                 r#"
                 SELECT account_id, nickname, image_uri, follower_count, following_count
@@ -115,7 +114,7 @@ impl SearchController {
                         ELSE 1
                     END,
                     follower_count DESC
-                LIMIT 5  -- 계정 수를 줄여서 손익 계산 부담 감소
+                LIMIT 5
                 "#,
                 query
             )
@@ -124,56 +123,55 @@ impl SearchController {
 
         let token_records = token_result?;
         let account_basic_records = account_basic_result?;
-
-        // 2단계: 찾은 계정들에 대해서만 손익 계산 (효율적인 쿼리)
         let account_ids: Vec<String> = account_basic_records
             .iter()
             .map(|r| r.account_id.clone())
             .collect();
 
+        // position 테이블 사용 (balance 대신)
         let profit_data = if !account_ids.is_empty() {
             sqlx::query!(
                 r#"
                 SELECT 
-                    b.account_id,
+                    p.account_id,
                     COALESCE(SUM(p.total_bought_native), 0)::numeric as "total_cost!: BigDecimal",
-                    COALESCE((SUM(p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token)) + SUM(
+                    COALESCE((SUM(p.realized_pnl) + SUM(
                         COALESCE(
                             CASE 
-                                WHEN b.balance = 0 THEN 0
+                                WHEN p.current_token_amount = 0 THEN 0
                                 WHEN m.market_type = 'CURVE' THEN
                                     m.virtual_native 
                                     - (
                                         ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + b.balance) - 1)
-                                        / (m.virtual_token + b.balance)
+                                        + (m.virtual_token + p.current_token_amount) - 1)
+                                        / (m.virtual_token + p.current_token_amount)
                                     )
                                 WHEN m.market_type = 'DEX' THEN
-                                    m.price * b.balance
+                                    m.price * p.current_token_amount
                                 ELSE 0
                             END,
                         0)
                     )), 0)::numeric as "total_profit!: BigDecimal"
-                FROM balance b
-                JOIN positions p ON b.account_id = p.account_id AND b.token_id = p.token_id
+                FROM position p  
                 JOIN market m ON p.token_id = m.token_id
-                WHERE b.account_id = ANY($1) AND p.created_at >= $2
-                GROUP BY b.account_id
+                WHERE p.account_id = ANY($1) AND p.created_at >= $2
+                GROUP BY p.account_id
                 "#,
                 &account_ids,
                 seven_days_ago
-            ).fetch_all(pool).await?
+            )
+            .fetch_all(pool)
+            .await?
         } else {
             vec![]
         };
 
-        // 3단계: 결과 조합 및 반환
+        // 결과 조합 (기존과 동일)
         let profit_map: std::collections::HashMap<String, (BigDecimal, BigDecimal)> = profit_data
             .into_iter()
             .map(|row| (row.account_id, (row.total_cost, row.total_profit)))
             .collect();
 
-        // 토큰 결과 처리
         let tokens_vec: Vec<SearchToken> = token_records
             .into_iter()
             .map(|row| SearchToken {
@@ -190,7 +188,6 @@ impl SearchController {
             })
             .collect();
 
-        // 계정 결과 처리 (기본 정보 + 손익 정보 조합)
         let accounts_vec: Vec<SearchAccount> = account_basic_records
             .into_iter()
             .map(|row| {
