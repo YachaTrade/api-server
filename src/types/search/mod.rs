@@ -83,8 +83,12 @@ impl SearchController {
                 FROM token t
                 JOIN market m ON t.token_id = m.token_id
                 WHERE 
-                    LOWER(t.name) = LOWER($1)
+                   -- 정확한 매칭 (최우선, 가장 빠름)
+                    LOWER(t.token_id) = LOWER($1)
+                    OR LOWER(t.name) = LOWER($1)
                     OR LOWER(t.symbol) = LOWER($1)
+                    -- Trigram 유사도 매칭 (느리지만 유연함)
+                    OR LOWER(t.token_id) % LOWER($1)
                     OR LOWER(t.name) % LOWER($1)
                     OR LOWER(t.symbol) % LOWER($1)
                 ORDER BY 
