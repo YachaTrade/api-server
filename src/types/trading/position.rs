@@ -155,8 +155,7 @@ impl PositionController {
                         m.virtual_native as token_virtual_native,
                         m.reserve_token as token_reserve_token,
                         m.reserve_native as token_reserve_native,
-                        COALESCE(m.price, 0) as token_price,
-                        
+                        COALESCE(m.price, 0) as token_price,                        
                         -- Calculate unrealized_pnl using AMM 공식
                         COALESCE(
                             CASE 
@@ -176,8 +175,8 @@ impl PositionController {
                     FROM balance b
                     JOIN token t ON b.token_id = t.token_id
                     JOIN market m ON b.token_id = m.token_id
-                    JOIN positions p ON b.token_id = p.token_id
-                    WHERE p.account_id = $1 
+                    JOIN positions p ON b.token_id = p.token_id AND b.account_id = p.account_id
+                    WHERE b.account_id = $1 
                       AND ($4::text = 'ALL' 
                            OR ($4::text = 'OPEN' AND b.balance > 0)
                            OR ($4::text = 'CLOSE' AND b.balance = 0))
