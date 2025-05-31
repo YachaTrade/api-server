@@ -95,10 +95,10 @@ impl PNLController {
                             END,
                             0) 
                             ) as unrealized_pnl
-                FROM positions p
-                JOIN market m ON p.token_id = m.token_id
-                JOIN balance b ON p.token_id = b.token_id AND p.account_id = b.account_id
-                WHERE p.account_id = $1
+                FROM balance b
+                JOIN market m ON b.token_id = m.token_id
+                JOIN positions p ON b.token_id = p.token_id AND b.account_id = p.account_id
+                WHERE b.account_id = $1
                     AND ($2::bigint IS NULL OR p.created_at >= $2)
             )
             SELECT 
