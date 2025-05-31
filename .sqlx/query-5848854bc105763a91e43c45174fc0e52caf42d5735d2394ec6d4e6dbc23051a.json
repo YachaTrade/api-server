@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT account_id\n                FROM account\n                WHERE \n                    LOWER(nickname) = LOWER($1)\n                    OR LOWER(account_id) = LOWER($1)\n                    OR LOWER(nickname) % LOWER($1)\n                    OR LOWER(account_id) % LOWER($1)\n                ORDER BY \n                    CASE \n                        WHEN LOWER(nickname) = LOWER($1) OR LOWER(account_id) = LOWER($1) THEN 0\n                        ELSE 1\n                    END,\n                    follower_count DESC\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5848854bc105763a91e43c45174fc0e52caf42d5735d2394ec6d4e6dbc23051a"
+}
