@@ -228,21 +228,6 @@ impl SwapController {
         Ok(PositionSwapResponse { swaps, total_count })
     }
 
-    pub async fn get_total_count_by_token(&self, token_id: &str) -> Result<i64> {
-        let count = sqlx::query!(
-            r#"
-            SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM swap s
-            WHERE s.token_id = $1
-            "#,
-            token_id
-        )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
-        Ok(count)
-    }
     pub async fn get_swaps_by_token(
         &self,
         token_id: &str,
@@ -250,7 +235,8 @@ impl SwapController {
     ) -> Result<TokenSwapResponse> {
         let offset = (query.page - 1) * query.limit;
 
-        // Build dynamic query with placeholders
+        // 파라미터 카운터로 순서 관리
+        let mut param_count = 1;
         let mut query_sql = r#"
         SELECT 
             s.swap_id,
@@ -270,15 +256,18 @@ impl SwapController {
         WHERE s.token_id = $1"#
             .to_string();
 
+        param_count += 1; // token_id는 $1
+
         // Add volume filters
-        if let Some(min_vol) = &query.min_volume {
-            query_sql.push_str(&format!(" AND s.native_amount >= $2"));
+        if let Some(_) = &query.min_volume {
+            query_sql.push_str(&format!(" AND s.native_amount >= ${}", param_count));
+            param_count += 1;
         }
 
         // Add own trades filter
-
-        if let Some(account_id) = &query.account_id {
-            query_sql.push_str(&format!(" AND s.sender = $3"));
+        if let Some(_) = &query.account_id {
+            query_sql.push_str(&format!(" AND s.sender = ${}", param_count));
+            param_count += 1;
         }
 
         // Add trade type filter
@@ -290,15 +279,15 @@ impl SwapController {
 
         // 정렬 방향 추가
         query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
-
         query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
 
-        // 쿼리 준비 및 파라미터 바인딩
+        // 쿼리 준비 및 파라미터 바인딩 (순서대로)
         let mut query_builder = sqlx::query(&query_sql);
 
         // 첫 번째 파라미터 바인딩 (token_id)
         query_builder = query_builder.bind(token_id);
 
+        // 조건부 파라미터 바인딩 (순서 보장)
         if let Some(min_vol) = &query.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
@@ -311,7 +300,7 @@ impl SwapController {
         // 쿼리 실행
         let rows = query_builder.fetch_all(self.db.get_read_pool()).await?;
 
-        // 결과 변환
+        // 결과 변환 (기존과 동일)
         let swaps: Vec<TokenSwap> = rows
             .into_iter()
             .map(|row| {
@@ -355,12 +344,13 @@ impl SwapController {
         Ok(TokenSwapResponse { swaps, total_count })
     }
 
+    // get_total_count_by_token_with_filters도 동일하게 수정
     async fn get_total_count_by_token_with_filters(
         &self,
         token_id: &str,
         query_params: &SwapQuery,
     ) -> Result<i64> {
-        // Build dynamic query
+        let mut param_count = 1;
         let mut query = r#"
         SELECT COALESCE(COUNT(*)::bigint, 0) as count
         FROM swap s
@@ -368,14 +358,18 @@ impl SwapController {
         WHERE s.token_id = $1"#
             .to_string();
 
+        param_count += 1; // token_id는 $1
+
         // Add volume filters
         if let Some(_) = &query_params.min_volume {
-            query.push_str(&format!(" AND s.native_amount >= $2"));
+            query.push_str(&format!(" AND s.native_amount >= ${}", param_count));
+            param_count += 1;
         }
 
         // Add own trades filter
         if let Some(_) = &query_params.account_id {
-            query.push_str(&format!(" AND s.sender = $3"));
+            query.push_str(&format!(" AND s.sender = ${}", param_count));
+            param_count += 1;
         }
 
         // Add trade type filter
@@ -391,6 +385,7 @@ impl SwapController {
         // 첫 번째 파라미터 바인딩 (token_id)
         query_builder = query_builder.bind(token_id);
 
+        // 조건부 파라미터 바인딩 (순서 보장)
         if let Some(min_vol) = &query_params.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
@@ -401,7 +396,6 @@ impl SwapController {
         }
 
         let row = query_builder.fetch_one(self.db.get_read_pool()).await?;
-
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
     }
