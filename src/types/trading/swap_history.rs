@@ -258,12 +258,6 @@ impl SwapController {
 
         param_count += 1; // token_id는 $1
 
-        // Add volume filters
-        if let Some(_) = &query.min_volume {
-            query_sql.push_str(&format!(" AND s.native_amount >= ${}", param_count));
-            param_count += 1;
-        }
-
         // Add own trades filter
         if let Some(_) = &query.account_id {
             query_sql.push_str(&format!(" AND s.sender = ${}", param_count));
@@ -276,7 +270,11 @@ impl SwapController {
             "SELL" => query_sql.push_str(" AND s.is_buy = false"),
             _ => {} // "all" - no filter
         }
-
+        // Add volume filters
+        if let Some(_) = &query.min_volume {
+            query_sql.push_str(&format!(" AND s.native_amount >= ${}", param_count));
+            param_count += 1;
+        }
         // 정렬 방향 추가
         query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
         query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
