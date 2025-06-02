@@ -349,18 +349,22 @@ impl SwapController {
         query_params: &SwapQuery,
     ) -> Result<i64> {
         // 필터가 없으면 캐시된 count 사용
+        // 완전히 필터가 없는 경우 - 전체 count
         if query_params.min_volume.is_none()
             && query_params.account_id.is_none()
             && query_params.trade_type == "ALL"
         {
-            // swap_count 테이블에서 빠르게 가져오기
-            let query = "SELECT count FROM swap_count WHERE token_id = $1";
-            let row = sqlx::query(query)
-                .bind(token_id)
-                .fetch_optional(self.db.get_read_pool())
-                .await?;
+            return self.get_cached_count(token_id, "count").await;
+        }
 
-            return Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0));
+        // 거래 타입만 있는 경우 - buy_count 또는 sell_count
+        if query_params.min_volume.is_none() && query_params.account_id.is_none() {
+            let column = match query_params.trade_type.as_str() {
+                "BUY" => "buy_count",
+                "SELL" => "sell_count",
+                _ => "count", // "ALL"
+            };
+            return self.get_cached_count(token_id, column).await;
         }
 
         let mut param_count = 1;
@@ -411,5 +415,19 @@ impl SwapController {
         let row = query_builder.fetch_one(self.db.get_read_pool()).await?;
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
+    }
+
+    async fn get_cached_count(&self, token_id: &str, column: &str) -> Result<i64> {
+        let query = format!(
+            "SELECT {} as count FROM swap_count WHERE token_id = $1",
+            column
+        );
+
+        let row = sqlx::query(&query)
+            .bind(token_id)
+            .fetch_optional(self.db.get_read_pool())
+            .await?;
+
+        Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
     }
 }
