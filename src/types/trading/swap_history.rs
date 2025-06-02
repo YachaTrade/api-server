@@ -351,7 +351,7 @@ impl SwapController {
         // 필터가 없으면 캐시된 count 사용
         if query_params.min_volume.is_none()
             && query_params.account_id.is_none()
-            && query_params.trade_type == "all"
+            && query_params.trade_type == "ALL"
         {
             // swap_count 테이블에서 빠르게 가져오기
             let query = "SELECT count FROM swap_count WHERE token_id = $1";
