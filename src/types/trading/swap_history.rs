@@ -348,6 +348,21 @@ impl SwapController {
         token_id: &str,
         query_params: &SwapQuery,
     ) -> Result<i64> {
+        // 필터가 없으면 캐시된 count 사용
+        if query_params.min_volume.is_none()
+            && query_params.account_id.is_none()
+            && query_params.trade_type == "all"
+        {
+            // swap_count 테이블에서 빠르게 가져오기
+            let query = "SELECT count FROM swap_count WHERE token_id = $1";
+            let row = sqlx::query(query)
+                .bind(token_id)
+                .fetch_optional(self.db.get_read_pool())
+                .await?;
+
+            return Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0));
+        }
+
         let mut param_count = 1;
         let mut query = r#"
         SELECT COALESCE(COUNT(*)::bigint, 0) as count
