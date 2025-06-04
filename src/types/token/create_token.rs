@@ -74,11 +74,11 @@ impl TokenCreatedController {
                     t.creator,
                     t.is_listing,
                     COALESCE(m.price, 0) as price,
-                    COALESCE(p.current_token_amount, 0) as current_amount,
-                    COALESCE(m.price * p.current_token_amount, 0) as current_value
+                    COALESCE(b.balance, 0) as current_amount,
+                    COALESCE(m.price * b.balance, 0) as current_value
                 FROM token t
                 LEFT JOIN market m ON t.token_id = m.token_id
-                LEFT JOIN position p ON t.token_id = p.token_id AND p.account_id = $1
+                LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                 WHERE t.creator = $1
             )
             SELECT 
