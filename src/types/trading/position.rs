@@ -39,6 +39,19 @@ pub struct TokenHolder {
     pub is_dev: bool,
 }
 
+#[derive(sqlx::FromRow)]
+struct TokenHolderRow {
+    current_token_amount: BigDecimal, // 타입에 맞게 수정 필요
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenHolderResponse {
     pub holders: Vec<TokenHolder>,
@@ -298,7 +311,7 @@ impl PositionController {
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        let record = sqlx::query!(
+        let record = sqlx::query_as::<_, TokenHolderRow>(
             r#"
             SELECT 
                 b.balance as current_token_amount,
@@ -317,10 +330,10 @@ impl PositionController {
             ORDER BY b.balance DESC
             OFFSET $2 LIMIT $3
             "#,
-            token_id,
-            offset,
-            pagination.limit as i64
         )
+        .bind(token_id)
+        .bind(offset)
+        .bind(pagination.limit as i64)
         .fetch_all(self.db.get_read_pool())
         .await?;
         let total_count = if record.is_empty() {
@@ -349,15 +362,13 @@ impl PositionController {
                 is_dev: row.account_id == token_creator,
                 account_info: AccountInfo {
                     account_id: row.account_id,
-                    nickname: if !row.x_handle.is_empty() {
-                        row.x_handle
-                    } else {
-                        row.nickname
+                    nickname: match &row.x_handle {
+                        Some(handle) if !handle.is_empty() => handle.clone(),
+                        _ => row.nickname,
                     },
-                    image_uri: if !row.x_image_uri.is_empty() {
-                        row.x_image_uri
-                    } else {
-                        row.image_uri
+                    image_uri: match &row.x_image_uri {
+                        Some(img) if !img.is_empty() => img.clone(),
+                        _ => row.image_uri,
                     },
                     follower_count: row.follower_count,
                     following_count: row.following_count,

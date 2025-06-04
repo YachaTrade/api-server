@@ -13,6 +13,18 @@ pub struct Point {
     pub account_info: AccountInfo,
     pub point: i64,
 }
+#[derive(sqlx::FromRow)]
+struct PointRow {
+    account_id: String,
+    point: i64, // 또는 적절한 타입
+    nickname: String,
+    image_uri: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TopPointResponse {
@@ -90,7 +102,7 @@ impl PointController {
     }
     pub async fn get_top_point(&self, pagination: &PaginationParams) -> Result<TopPointResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        let point_response = sqlx::query!(
+        let point_response = sqlx::query_as::<_, PointRow>(
             r#"
             SELECT
                 p.account_id,
@@ -109,24 +121,22 @@ impl PointController {
             LIMIT $1
             OFFSET $2
             "#,
-            pagination.limit as i64,
-            offset
         )
+        .bind(pagination.limit as i64)
+        .bind(offset)
         .fetch_all(self.db.get_read_pool())
         .await?
         .into_iter()
         .map(|row| Point {
             account_info: AccountInfo {
                 account_id: row.account_id,
-                nickname: if !row.x_handle.is_empty() {
-                    row.x_handle
-                } else {
-                    row.nickname
+                nickname: match &row.x_handle {
+                    Some(handle) if !handle.is_empty() => handle.clone(),
+                    _ => row.nickname,
                 },
-                image_uri: if !row.x_image_uri.is_empty() {
-                    row.x_image_uri
-                } else {
-                    row.image_uri
+                image_uri: match &row.x_image_uri {
+                    Some(img) if !img.is_empty() => img.clone(),
+                    _ => row.image_uri,
                 },
                 follower_count: row.follower_count,
                 following_count: row.following_count,

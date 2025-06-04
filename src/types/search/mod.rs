@@ -25,6 +25,18 @@ pub struct SearchTokenResponse {
     pub total_count: i64,
 }
 
+#[derive(sqlx::FromRow)]
+struct SearchAccountRow {
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchAccount {
     pub account_info: AccountInfo,
@@ -104,7 +116,7 @@ impl SearchController {
             )
             .fetch_all(pool),
             // 계정 기본 정보
-            sqlx::query!(
+            sqlx::query_as::<_, SearchAccountRow>(
                 r#"
                 SELECT a.account_id, nickname, image_uri, follower_count, following_count,
                 ax.x_handle,
@@ -124,9 +136,9 @@ impl SearchController {
                     END,
                     follower_count DESC
                 LIMIT 5
-                "#,
-                query
+                "#
             )
+            .bind(query)
             .fetch_all(pool)
         );
 
@@ -214,15 +226,13 @@ impl SearchController {
                 SearchAccount {
                     account_info: AccountInfo {
                         account_id: row.account_id,
-                        nickname: if !row.x_handle.is_empty() {
-                            row.x_handle
-                        } else {
-                            row.nickname
+                        nickname: match &row.x_handle {
+                            Some(handle) if !handle.is_empty() => handle.clone(),
+                            _ => row.nickname,
                         },
-                        image_uri: if !row.x_image_uri.is_empty() {
-                            row.x_image_uri
-                        } else {
-                            row.image_uri
+                        image_uri: match &row.x_image_uri {
+                            Some(img) if !img.is_empty() => img.clone(),
+                            _ => row.image_uri,
                         },
                         follower_count: row.follower_count,
                         following_count: row.following_count,
