@@ -90,6 +90,8 @@ struct AccountRow {
     x_handle: Option<String>,
     x_image_uri: Option<String>,
     is_blue_label: Option<bool>,
+    mutual_friends: Option<serde_json::Value>,
+    mutual_friends_count: Option<i64>,
 }
 pub struct AccountController {
     pub db: Arc<PostgresDatabase>,
@@ -248,7 +250,17 @@ impl AccountController {
         identifier: &Identifier,
         request_account_id: Option<String>,
     ) -> Result<Account> {
-        let result = sqlx::query!(
+        let id_type = match identifier {
+            Identifier::Address(_) => "account_id",
+            Identifier::Nickname(_) => "nickname",
+        };
+
+        let id_value = match identifier {
+            Identifier::Address(addr) => addr,
+            Identifier::Nickname(nick) => nick,
+        };
+
+        let result = sqlx::query_as::<_, AccountRow>(
             r#"
             WITH target_account AS (
                 SELECT 
@@ -257,11 +269,15 @@ impl AccountController {
                     image_uri,
                     bio,
                     follower_count,
-                    following_count
-                FROM account
+                    following_count,
+                    ax.x_handle,
+                    ax.x_image_uri,
+                    ax.is_blue_label
+                FROM account a
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 WHERE CASE 
-                    WHEN $1 = 'account_id' THEN account_id = $2
-                    ELSE nickname = $2
+                    WHEN $1 = 'account_id' THEN a.account_id = $2
+                    ELSE a.nickname = $2
                 END
             ),
             mutual_friends AS (
@@ -271,10 +287,14 @@ impl AccountController {
                     a.image_uri,
                     a.follower_count,
                     a.following_count,
+                    ax.x_handle,
+                    ax.x_image_uri,
+                    ax.is_blue_label,
                     COUNT(*) OVER() as total_count
                 FROM follow f
                 JOIN follow f_other ON f.following_id = f_other.following_id
                 JOIN account a ON f.following_id = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 WHERE f.follower_id = $2 
                 AND f_other.follower_id = $3
                 LIMIT 3
@@ -286,12 +306,23 @@ impl AccountController {
                 ta.bio,
                 ta.follower_count,
                 ta.following_count,
+                ta.x_handle,
+                ta.x_image_uri,
+                ta.is_blue_label,
                 COALESCE(
                     jsonb_agg(
                         jsonb_build_object(
                             'account_id', mf.account_id,
-                            'nickname', mf.nickname,
-                            'image_uri', mf.image_uri,
+                            'nickname', CASE 
+                                WHEN mf.x_handle IS NOT NULL AND mf.x_handle != '' 
+                                THEN mf.x_handle 
+                                ELSE mf.nickname 
+                            END,
+                            'image_uri', CASE 
+                                WHEN mf.x_image_uri IS NOT NULL AND mf.x_image_uri != '' 
+                                THEN mf.x_image_uri 
+                                ELSE mf.image_uri 
+                            END,
                             'follower_count', mf.follower_count,
                             'following_count', mf.following_count
                         )
@@ -307,18 +338,15 @@ impl AccountController {
                 ta.image_uri,
                 ta.bio,
                 ta.follower_count,
-                ta.following_count
+                ta.following_count,
+                ta.x_handle,
+                ta.x_image_uri,
+                ta.is_blue_label
             "#,
-            match identifier {
-                Identifier::Address(_) => "account_id",
-                Identifier::Nickname(_) => "nickname",
-            },
-            match identifier {
-                Identifier::Address(addr) => addr,
-                Identifier::Nickname(nick) => nick,
-            },
-            request_account_id
         )
+        .bind(id_type)
+        .bind(id_value)
+        .bind(&request_account_id)
         .fetch_one(self.db.get_read_pool())
         .await?;
 
@@ -335,8 +363,14 @@ impl AccountController {
 
         Ok(Account {
             account_id: result.account_id,
-            nickname: result.nickname,
-            image_uri: result.image_uri,
+            nickname: match &result.x_handle {
+                Some(handle) if !handle.is_empty() => handle.clone(),
+                _ => result.nickname,
+            },
+            image_uri: match &result.x_image_uri {
+                Some(img) if !img.is_empty() => img.clone(),
+                _ => result.image_uri,
+            },
             bio: result.bio,
             follower_count: result.follower_count,
             following_count: result.following_count,
