@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT a.account_id, nickname, image_uri, follower_count, following_count,\n                ax.x_handle,\n                ax.x_image_uri,\n                ax.is_blue_label\n                FROM account a\n                LEFT JOIN account_x ax ON a.account_id = ax.account_id\n                WHERE \n                    LOWER(a.nickname) = LOWER($1)\n                    OR LOWER(a.account_id) = LOWER($1)\n                    OR LOWER(a.nickname) % LOWER($1)\n                    OR LOWER(a.account_id) % LOWER($1)\n                ORDER BY \n                    CASE \n                        WHEN LOWER(a.nickname) = LOWER($1) OR LOWER(a.account_id) = LOWER($1) THEN 0\n                        ELSE 1\n                    END,\n                    follower_count DESC\n                LIMIT 5\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "nickname",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "follower_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "following_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "x_handle",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "x_image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_blue_label",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1d54816dc036fecc3457557f3e7f885299c01c8c4e12502fe23caa5a8afbeb78"
+}

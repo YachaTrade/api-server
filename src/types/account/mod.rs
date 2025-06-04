@@ -194,11 +194,20 @@ impl AccountController {
     }
 
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
-        let record = sqlx::query!(
+        let row = sqlx::query!(
             r#"
-            SELECT *
-            FROM account
-            WHERE LOWER(account_id) = LOWER($1)
+            SELECT a.account_id,
+            a.nickname,
+            a.image_uri,
+            a.bio,
+            a.follower_count,
+            a.following_count,
+            ax.x_handle,
+            ax.x_image_uri,
+            ax.is_blue_label
+            FROM account a
+            LEFT JOIN account_x ax ON a.account_id = ax.account_id
+            WHERE LOWER(a.account_id) = LOWER($1)
             "#,
             account_id
         )
@@ -207,12 +216,20 @@ impl AccountController {
         .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
 
         Ok(Account {
-            account_id: record.account_id,
-            nickname: record.nickname,
-            image_uri: record.image_uri,
-            bio: record.bio,
-            follower_count: record.follower_count,
-            following_count: record.following_count,
+            account_id: row.account_id,
+            nickname: if !row.x_handle.is_empty() {
+                row.x_handle
+            } else {
+                row.nickname
+            },
+            image_uri: if !row.x_image_uri.is_empty() {
+                row.x_image_uri
+            } else {
+                row.image_uri
+            },
+            bio: row.bio,
+            follower_count: row.follower_count,
+            following_count: row.following_count,
             mutual: None,
         })
     }

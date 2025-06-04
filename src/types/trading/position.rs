@@ -306,9 +306,13 @@ impl PositionController {
                 a.nickname,
                 a.image_uri,
                 a.follower_count,
-                a.following_count
+                a.following_count,
+                ax.x_handle,
+                ax.x_image_uri,
+                ax.is_blue_label
             FROM balance b
             JOIN account a ON b.account_id = a.account_id
+            LEFT JOIN account_x ax ON a.account_id = ax.account_id
             WHERE b.token_id = $1 AND b.balance > 0
             ORDER BY b.balance DESC
             OFFSET $2 LIMIT $3
@@ -345,8 +349,16 @@ impl PositionController {
                 is_dev: row.account_id == token_creator,
                 account_info: AccountInfo {
                     account_id: row.account_id,
-                    nickname: row.nickname,
-                    image_uri: row.image_uri,
+                    nickname: if !row.x_handle.is_empty() {
+                        row.x_handle
+                    } else {
+                        row.nickname
+                    },
+                    image_uri: if !row.x_image_uri.is_empty() {
+                        row.x_image_uri
+                    } else {
+                        row.image_uri
+                    },
                     follower_count: row.follower_count,
                     following_count: row.following_count,
                 },

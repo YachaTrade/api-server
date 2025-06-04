@@ -250,9 +250,13 @@ impl SwapController {
             a.nickname as account_nickname,
             a.image_uri as account_image,
             a.follower_count,
-            a.following_count
+            a.following_count,
+            ax.x_handle,
+            ax.x_image_uri,
+            ax.is_blue_label
         FROM swap s
         JOIN account a ON s.sender = a.account_id
+        LEFT JOIN account_x ax ON a.account_id = ax.account_id
         WHERE s.token_id = $1"#
             .to_string();
 
@@ -313,13 +317,24 @@ impl SwapController {
                 let token_amount: BigDecimal = row.try_get("token_amount").unwrap();
                 let created_at: i64 = row.try_get("created_at").unwrap();
                 let transaction_hash: String = row.try_get("transaction_hash").unwrap();
+                let x_handle: Option<String> = row.try_get("x_handle").unwrap();
+                let x_image_uri: Option<String> = row.try_get("x_image_uri").unwrap();
+                let is_blue_label: Option<bool> = row.try_get("is_blue_label").unwrap();
 
                 TokenSwap {
                     swap_id,
                     account_info: AccountInfo {
                         account_id,
-                        nickname: account_nickname,
-                        image_uri: account_image,
+                        nickname: if x_handle.is_some() {
+                            x_handle.unwrap()
+                        } else {
+                            account_nickname
+                        },
+                        image_uri: if x_image_uri.is_some() {
+                            x_image_uri.unwrap()
+                        } else {
+                            account_image
+                        },
                         follower_count,
                         following_count,
                     },
