@@ -276,12 +276,12 @@ impl AccountController {
             r#"
             WITH target_account AS (
                 SELECT 
-                    account_id,
-                    nickname,
-                    image_uri,
-                    bio,
-                    follower_count,
-                    following_count,
+                    a.account_id,           -- 여기에 a. 접두사 추가
+                    a.nickname,             -- 모든 칼럼에 테이블 접두사 붙이기
+                    a.image_uri,
+                    a.bio,
+                    a.follower_count,
+                    a.following_count,
                     ax.x_handle,
                     ax.x_image_uri,
                     ax.is_blue_label
@@ -294,7 +294,7 @@ impl AccountController {
             ),
             mutual_friends AS (
                 SELECT 
-                    a.account_id,
+                    a.account_id,           -- 여기도 a. 접두사 추가
                     a.nickname,
                     a.image_uri,
                     a.follower_count,
@@ -312,7 +312,7 @@ impl AccountController {
                 LIMIT 3
             )
             SELECT 
-                ta.account_id,
+                ta.account_id,              -- 여기도 ta. 접두사 추가
                 ta.nickname,
                 ta.image_uri,
                 ta.bio,
@@ -324,7 +324,7 @@ impl AccountController {
                 COALESCE(
                     jsonb_agg(
                         jsonb_build_object(
-                            'account_id', mf.account_id,
+                            'account_id', mf.account_id,    -- 모든 필드에 테이블 접두사 사용
                             'nickname', CASE 
                                 WHEN mf.x_handle IS NOT NULL AND mf.x_handle != '' 
                                 THEN mf.x_handle 
