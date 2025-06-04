@@ -63,9 +63,9 @@ pub struct OrderTokenRaw {
     pub market_type: String,
     pub created_at: i64,
     pub score: f64,
-    pub x_handle: String,
-    pub x_image_uri: String,
-    pub is_blue_label: bool,
+    pub x_handle: Option<String>,
+    pub x_image_uri: Option<String>,
+    pub is_blue_label: Option<bool>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderToken {
@@ -90,13 +90,13 @@ impl From<OrderTokenRaw> for OrderToken {
             },
             account_info: AccountInfo {
                 account_id: row.account_id,
-                image_uri: if !row.x_handle.is_empty() && !row.x_image_uri.is_empty() {
-                    row.x_image_uri
+                image_uri: if row.x_image_uri.is_some() {
+                    row.x_image_uri.unwrap()
                 } else {
                     row.account_image_uri
                 },
-                nickname: if !row.x_handle.is_empty() {
-                    row.x_handle
+                nickname: if row.x_handle.is_some() {
+                    row.x_handle.unwrap()
                 } else {
                     row.nickname
                 },
