@@ -79,7 +79,18 @@ impl Account {
         }
     }
 }
-
+#[derive(sqlx::FromRow)]
+struct AccountRow {
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    bio: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+}
 pub struct AccountController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -194,7 +205,7 @@ impl AccountController {
     }
 
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
-        let row = sqlx::query!(
+        let row = sqlx::query_as::<_, AccountRow>(
             r#"
             SELECT a.account_id,
             a.nickname,
@@ -209,23 +220,21 @@ impl AccountController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             WHERE LOWER(a.account_id) = LOWER($1)
             "#,
-            account_id
         )
+        .bind(account_id)
         .fetch_one(self.db.get_read_pool())
         .await
         .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
 
         Ok(Account {
             account_id: row.account_id,
-            nickname: if !row.x_handle.is_empty() {
-                row.x_handle
-            } else {
-                row.nickname
+            nickname: match &row.x_handle {
+                Some(handle) if !handle.is_empty() => handle.clone(),
+                _ => row.nickname,
             },
-            image_uri: if !row.x_image_uri.is_empty() {
-                row.x_image_uri
-            } else {
-                row.image_uri
+            image_uri: match &row.x_image_uri {
+                Some(img) if !img.is_empty() => img.clone(),
+                _ => row.image_uri,
             },
             bio: row.bio,
             follower_count: row.follower_count,
