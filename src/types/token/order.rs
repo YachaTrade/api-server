@@ -261,7 +261,7 @@ impl OrderController {
                 k.created_at::FLOAT8 as score,
                 ax.x_handle,
                 ax.x_image_uri,
-                ax.is_blue_label,
+                ax.is_blue_label
             FROM king k
             JOIN token t ON t.token_id = k.token_id
             JOIN account a ON t.creator = a.account_id
