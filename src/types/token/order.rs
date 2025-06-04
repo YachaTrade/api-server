@@ -63,6 +63,9 @@ pub struct OrderTokenRaw {
     pub market_type: String,
     pub created_at: i64,
     pub score: f64,
+    pub x_handle: String,
+    pub x_image_uri: String,
+    pub is_blue_label: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderToken {
@@ -87,8 +90,16 @@ impl From<OrderTokenRaw> for OrderToken {
             },
             account_info: AccountInfo {
                 account_id: row.account_id,
-                image_uri: row.account_image_uri,
-                nickname: row.nickname,
+                image_uri: if !row.x_handle.is_empty() && !row.x_image_uri.is_empty() {
+                    row.x_image_uri
+                } else {
+                    row.account_image_uri
+                },
+                nickname: if !row.x_handle.is_empty() {
+                    row.x_handle
+                } else {
+                    row.nickname
+                },
                 follower_count: row.follower_count,
                 following_count: row.following_count,
             },
@@ -131,9 +142,13 @@ impl OrderController {
                         COALESCE(m.price, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
+                        ax.x_handle,
+                        ax.x_image_uri,
+                        ax.is_blue_label,
                         m.market_type, t.created_at, t.created_at::FLOAT8 as score
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON t.creator = ax.account_id
                     LEFT JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY t.created_at {}
@@ -159,10 +174,14 @@ impl OrderController {
                         COALESCE(m.price, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
+                        ax.x_handle,
+                        ax.x_image_uri,
+                        ax.is_blue_label,
                         m.market_type, t.created_at, m.latest_trade_at::FLOAT8 as score
                     FROM market m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON t.creator = ax.account_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
@@ -187,6 +206,9 @@ impl OrderController {
                         COALESCE(m.price, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
                         COALESCE(k.token_id IS NOT NULL, false) as is_king,
+                        ax.x_handle,
+                        ax.x_image_uri,
+                        ax.is_blue_label,
                         m.market_type, t.created_at, m.price::FLOAT8 as score
                     FROM (
                         SELECT token_id, price, reserve_token, market_type
@@ -196,6 +218,7 @@ impl OrderController {
                     ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON t.creator = ax.account_id
                     LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY m.price {}
                     "#,
@@ -235,10 +258,14 @@ impl OrderController {
                 k.created_at as is_king_created_at,
                 m.market_type,
                 t.created_at,
-                k.created_at::FLOAT8 as score
+                k.created_at::FLOAT8 as score,
+                ax.x_handle,
+                ax.x_image_uri,
+                ax.is_blue_label,
             FROM king k
             JOIN token t ON t.token_id = k.token_id
             JOIN account a ON t.creator = a.account_id
+            LEFT JOIN account_x ax ON t.creator = ax.account_id
             LEFT JOIN market m ON t.token_id = m.token_id
             WHERE k.created_at = (SELECT MAX(created_at) FROM king)
             "#,

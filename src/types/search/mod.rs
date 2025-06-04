@@ -82,6 +82,7 @@ impl SearchController {
                     t.created_at, t.total_supply, m.market_type, m.price
                 FROM token t
                 JOIN market m ON t.token_id = m.token_id
+                
                 WHERE 
                    -- 정확한 매칭 (최우선, 가장 빠름)
                     LOWER(t.token_id) = LOWER($1)
@@ -105,16 +106,20 @@ impl SearchController {
             // 계정 기본 정보
             sqlx::query!(
                 r#"
-                SELECT account_id, nickname, image_uri, follower_count, following_count
-                FROM account
+                SELECT a.account_id, nickname, image_uri, follower_count, following_count,
+                ax.x_handle,
+                ax.x_image_uri,
+                ax.is_blue_label
+                FROM account a
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 WHERE 
-                    LOWER(nickname) = LOWER($1)
-                    OR LOWER(account_id) = LOWER($1)
-                    OR LOWER(nickname) % LOWER($1)
-                    OR LOWER(account_id) % LOWER($1)
+                    LOWER(a.nickname) = LOWER($1)
+                    OR LOWER(a.account_id) = LOWER($1)
+                    OR LOWER(a.nickname) % LOWER($1)
+                    OR LOWER(a.account_id) % LOWER($1)
                 ORDER BY 
                     CASE 
-                        WHEN LOWER(nickname) = LOWER($1) OR LOWER(account_id) = LOWER($1) THEN 0
+                        WHEN LOWER(a.nickname) = LOWER($1) OR LOWER(a.account_id) = LOWER($1) THEN 0
                         ELSE 1
                     END,
                     follower_count DESC
@@ -209,8 +214,16 @@ impl SearchController {
                 SearchAccount {
                     account_info: AccountInfo {
                         account_id: row.account_id,
-                        nickname: row.nickname,
-                        image_uri: row.image_uri,
+                        nickname: if !row.x_handle.is_empty() {
+                            row.x_handle
+                        } else {
+                            row.nickname
+                        },
+                        image_uri: if !row.x_image_uri.is_empty() {
+                            row.x_image_uri
+                        } else {
+                            row.image_uri
+                        },
                         follower_count: row.follower_count,
                         following_count: row.following_count,
                     },
