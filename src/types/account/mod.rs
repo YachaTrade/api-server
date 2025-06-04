@@ -90,6 +90,18 @@ struct AccountRow {
     x_handle: Option<String>,
     x_image_uri: Option<String>,
     is_blue_label: Option<bool>,
+}
+#[derive(sqlx::FromRow)]
+struct AccountMutualRow {
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    bio: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
     mutual_friends: Option<serde_json::Value>,
     mutual_friends_count: Option<i64>,
 }
@@ -260,7 +272,7 @@ impl AccountController {
             Identifier::Nickname(nick) => nick,
         };
 
-        let result = sqlx::query_as::<_, AccountRow>(
+        let result = sqlx::query_as::<_, AccountMutualRow>(
             r#"
             WITH target_account AS (
                 SELECT 
