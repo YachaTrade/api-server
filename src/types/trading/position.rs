@@ -39,6 +39,19 @@ pub struct TokenHolder {
     pub is_dev: bool,
 }
 
+#[derive(sqlx::FromRow)]
+struct TokenHolderRow {
+    current_token_amount: BigDecimal, // 타입에 맞게 수정 필요
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    follower_count: i32,
+    following_count: i32,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenHolderResponse {
     pub holders: Vec<TokenHolder>,
@@ -140,10 +153,10 @@ impl PositionController {
                         p.token_id,
                         p.total_bought_native,
                         p.total_bought_token,
-                        p.current_token_amount,
-                        p.realized_pnl,
+                        (p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token)) as realized_pnl,
                         p.created_at,
                         p.last_traded_at,
+                        b.balance as current_token_amount,
                         t.symbol as token_symbol,
                         t.name as token_name,
                         t.image_uri as token_image,
@@ -155,31 +168,31 @@ impl PositionController {
                         m.virtual_native as token_virtual_native,
                         m.reserve_token as token_reserve_token,
                         m.reserve_native as token_reserve_native,
-                        COALESCE(m.price, 0) as token_price,
-                        
+                        COALESCE(m.price, 0) as token_price,                        
                         -- Calculate unrealized_pnl using AMM 공식
                         COALESCE(
                             CASE 
-                                WHEN p.current_token_amount = 0 THEN 0
+                                WHEN b.balance = 0 THEN 0
                                 WHEN m.market_type = 'CURVE' THEN
                                     m.virtual_native 
                                     - (
                                         ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + p.current_token_amount) - 1)
-                                        / (m.virtual_token + p.current_token_amount)
+                                        + (m.virtual_token + b.balance) - 1)
+                                        / (m.virtual_token + b.balance)
                                     )
                                 WHEN m.market_type = 'DEX' THEN
-                                    m.price * p.current_token_amount
+                                    m.price * b.balance
                                 ELSE 0
                             END,
                         0) AS unrealized_pnl
-                    FROM position p
-                    JOIN token t ON p.token_id = t.token_id
-                    JOIN market m ON p.token_id = m.token_id
-                    WHERE p.account_id = $1 
+                    FROM balance b
+                    JOIN token t ON b.token_id = t.token_id
+                    JOIN market m ON b.token_id = m.token_id
+                    JOIN positions p ON b.token_id = p.token_id AND b.account_id = p.account_id
+                    WHERE b.account_id = $1 
                       AND ($4::text = 'ALL' 
-                           OR ($4::text = 'OPEN' AND p.is_active = true)
-                           OR ($4::text = 'CLOSE' AND p.is_active = false))
+                           OR ($4::text = 'OPEN' AND b.balance > 0)
+                           OR ($4::text = 'CLOSE' AND b.balance = 0))
                 )
                 SELECT 
                     position_id,
@@ -221,11 +234,11 @@ impl PositionController {
             sqlx::query!(
                 r#"
                 SELECT COUNT(*) as "count!"
-                FROM position p
-                WHERE p.account_id = $1
+                FROM balance b
+                WHERE b.account_id = $1
                   AND ($2::text = 'ALL' 
-                       OR ($2::text = 'OPEN' AND p.is_active = true)
-                       OR ($2::text = 'CLOSE' AND p.is_active = false))
+                       OR ($2::text = 'OPEN' AND b.balance > 0)
+                       OR ($2::text = 'CLOSE' AND b.balance = 0))
                 "#,
                 account_id,
                 position_type.to_string()
@@ -251,7 +264,7 @@ impl PositionController {
                     total_bought_token: row.total_bought_token,
                     current_token_amount: row.current_token_amount,
                     current_value: row.unrealized_pnl.clone(),
-                    realized_pnl: row.realized_pnl,
+                    realized_pnl: row.realized_pnl.unwrap_or(BigDecimal::from(0)),
                     unrealized_pnl: row.unrealized_pnl,
                     total_pnl: row.total_pnl,
                     created_at: row.created_at,
@@ -279,8 +292,8 @@ impl PositionController {
         let count = sqlx::query!(
             r#"
             SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM position p
-            WHERE p.token_id = $1 AND p.current_token_amount > 0
+            FROM balance b
+            WHERE b.token_id = $1 AND b.balance > 0
             "#,
             token_id
         )
@@ -298,25 +311,29 @@ impl PositionController {
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        let record = sqlx::query!(
+        let record = sqlx::query_as::<_, TokenHolderRow>(
             r#"
             SELECT 
-                p.current_token_amount,
+                b.balance as current_token_amount,
                 a.account_id,
                 a.nickname,
                 a.image_uri,
                 a.follower_count,
-                a.following_count
-            FROM position p
-            JOIN account a ON p.account_id = a.account_id
-            WHERE p.token_id = $1 AND p.current_token_amount > 0 AND p.is_active = true
-            ORDER BY p.current_token_amount DESC
+                a.following_count,
+                ax.x_handle,
+                ax.x_image_uri,
+                ax.is_blue_label
+            FROM balance b
+            JOIN account a ON b.account_id = a.account_id
+            LEFT JOIN account_x ax ON a.account_id = ax.account_id
+            WHERE b.token_id = $1 AND b.balance > 0
+            ORDER BY b.balance DESC
             OFFSET $2 LIMIT $3
             "#,
-            token_id,
-            offset,
-            pagination.limit as i64
         )
+        .bind(token_id)
+        .bind(offset)
+        .bind(pagination.limit as i64)
         .fetch_all(self.db.get_read_pool())
         .await?;
         let total_count = if record.is_empty() {
@@ -345,8 +362,14 @@ impl PositionController {
                 is_dev: row.account_id == token_creator,
                 account_info: AccountInfo {
                     account_id: row.account_id,
-                    nickname: row.nickname,
-                    image_uri: row.image_uri,
+                    nickname: match &row.x_handle {
+                        Some(handle) if !handle.is_empty() => handle.clone(),
+                        _ => row.nickname,
+                    },
+                    image_uri: match &row.x_image_uri {
+                        Some(img) if !img.is_empty() => img.clone(),
+                        _ => row.image_uri,
+                    },
                     follower_count: row.follower_count,
                     following_count: row.following_count,
                 },

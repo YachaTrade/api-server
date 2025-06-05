@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT COALESCE(COUNT(*)::bigint, 0) as count\n            FROM swap s\n            WHERE s.token_id = $1\n            ",
+  "query": "\n            SELECT COALESCE(COUNT(*)::bigint, 0) as count\n            FROM balance b\n            WHERE b.token_id = $1 AND b.balance > 0\n            ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "04375a4a8ae2b4122d2b813172afad86568099c337cd04acf11a30e2b7a5cb90"
+  "hash": "f4cc86637a33ab636519c704e0ebbf9b14f40ecd0fa28df3a4f639b7cdf59886"
 }
