@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
+
 use tracing::{error, info, instrument, warn};
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
             market::{Market, MarketController},
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
-            swap_history::{SwapController, TokenSwapResponse},
+            swap_history::{SwapController, SwapQuery, TokenSwapResponse},
         },
     },
     utils::valid_evm_address,
@@ -34,49 +35,59 @@ use super::path::TradePath;
     params(
         ("token_id" = String, Path, description = "Token ID"),
         ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page")
+        ("limit" = i64, Query, description = "Number of items per page"),
+        ("direction" = Option<String>, Query, description = "Sort direction (ASC or DESC) Default DESC"),
+        ("min_volume" = Option<String>, Query, description = "Minimum volume filter (1 mon = 1000000000000000000)"),
+        ("account_id" = Option<String>, Query, description = "Account ID for own trades filter"),
+        ("trade_type" = Option<String>, Query, description = "Trade type filter: (BUY, SELL) Default ALL")
     ),
     tag = "Trade"
 )]
 #[instrument(skip(state))]
 pub async fn get_swap_history(
     Path(token_id): Path<String>,
-    Query(params): Query<PaginationParams>,
+    Query(query): Query<SwapQuery>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
     if !valid_evm_address(&token_id) {
-        error!("Invalid token ID format: {}", token_id);
+        error!("Invalid token ID format: {:?}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
+    query.validate().map_err(|e| {
+        error!("Invalid filter parameters: {}", e);
+        AppError::BadRequest(e)
+    })?;
 
     if let Ok(cached_response) = state
         .trade_redis
-        .get_token_swap_history(&token_id, &params)
+        .get_token_swap_history(&token_id, &query)
         .await
     {
         return Ok(Json(cached_response));
     }
 
     let response = SwapController::new(state.postgres.clone())
-        .get_swaps_by_token(&token_id, &params)
+        .get_swaps_by_token(&token_id, &query)
         .await
         .map_err(|err| {
             error!(
-                "Failed to get swap history: token_id: {}, error: {}",
+                "Failed to get swap history: token_id: {:?}, error: {}",
                 token_id, err
             );
             AppError::InternalError(err.to_string())
         })?;
+
     if let Err(err) = state
         .trade_redis
-        .set_token_swap_history(&token_id, &response, &params)
+        .set_token_swap_history(&token_id, &response, &query)
         .await
     {
         warn!("Failed to set token swap history cache: {}", err);
     }
+
     info!(
-        "Get Swap History: token_id: {}, response: {:?}",
-        token_id, response
+        "Get Swap History: token_id: {:?}, filters: {:?}, response: {:?}",
+        token_id, query, response
     );
     Ok(Json(response))
 }

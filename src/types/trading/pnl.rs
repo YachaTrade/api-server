@@ -77,27 +77,28 @@ impl PNLController {
             WITH position_stats AS (
                 SELECT 
                     SUM(p.total_bought_native) as total_cost,
-                    SUM(p.realized_pnl) as realized_pnl,
+                    SUM(p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token))  as realized_pnl,
                     SUM(
                         COALESCE(
                             CASE 
-                                WHEN p.current_token_amount = 0 THEN 0
+                                WHEN b.balance = 0 THEN 0
                                 WHEN m.market_type = 'CURVE' THEN
                                     m.virtual_native 
                                     - (
                                         ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + p.current_token_amount) - 1)
-                                        / (m.virtual_token + p.current_token_amount)
+                                        + (m.virtual_token + b.balance) - 1)
+                                        / (m.virtual_token + b.balance)
                                     )
                                 WHEN m.market_type = 'DEX' THEN
-                                    m.price * p.current_token_amount
+                                    m.price * b.balance
                                 ELSE 0
                             END,
                             0) 
                             ) as unrealized_pnl
-                FROM position p
-                JOIN market m ON p.token_id = m.token_id
-                WHERE p.account_id = $1
+                FROM balance b
+                JOIN market m ON b.token_id = m.token_id
+                JOIN positions p ON b.token_id = p.token_id AND b.account_id = p.account_id
+                WHERE b.account_id = $1
                     AND ($2::bigint IS NULL OR p.created_at >= $2)
             )
             SELECT 
@@ -138,31 +139,32 @@ impl PNLController {
             r#"
             WITH position_stats AS (
                 SELECT 
-                    p.token_id,
+                    b.token_id,
                     t.symbol as token_symbol,
                     t.image_uri as token_image,
                     t.name as token_name,
                     p.total_bought_native as total_cost,
-                    p.realized_pnl,
+                    (p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token)) as realized_pnl,
                      COALESCE(
                     CASE 
-                        WHEN p.current_token_amount = 0 THEN 0
+                        WHEN b.balance = 0 THEN 0
                         WHEN m.market_type = 'CURVE' THEN
                             m.virtual_native 
                             - (
                                 ((m.virtual_token * m.virtual_native) 
-                                + (m.virtual_token + p.current_token_amount) - 1)
-                                / (m.virtual_token + p.current_token_amount)
+                                + (m.virtual_token + b.balance) - 1)
+                                / (m.virtual_token + b.balance)
                             )
                          WHEN m.market_type = 'DEX' THEN
-                            m.price * p.current_token_amount
+                            m.price * b.balance
                         ELSE 0
                     END,
                     0) AS unrealized_pnl
-                FROM position p
-                JOIN token t ON p.token_id = t.token_id
-                JOIN market m ON p.token_id = m.token_id
-                WHERE p.account_id = $1
+                FROM balance b
+                JOIN token t ON b.token_id = t.token_id
+                JOIN market m ON b.token_id = m.token_id
+                JOIN positions p ON b.token_id = p.token_id AND b.account_id = p.account_id
+                WHERE b.account_id = $1
             )
             SELECT 
                 token_id,
