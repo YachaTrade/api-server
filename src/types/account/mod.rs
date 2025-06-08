@@ -115,7 +115,7 @@ impl AccountController {
     }
 
     pub async fn upsert_account(&self, account: Account) -> Result<Account> {
-        let record = sqlx::query!(
+        sqlx::query!(
             r#"
             INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -134,17 +134,7 @@ impl AccountController {
         .await
         .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
-        Ok(record
-            .map(|r| Account {
-                account_id: r.account_id,
-                nickname: r.nickname,
-                image_uri: r.image_uri,
-                bio: r.bio,
-                follower_count: r.follower_count,
-                following_count: r.following_count,
-                mutual: None,
-            })
-            .unwrap_or(account))
+        Ok(self.get_account(&account.account_id).await?)
     }
 
     pub async fn update_account(
