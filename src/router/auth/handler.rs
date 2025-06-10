@@ -72,7 +72,7 @@ pub async fn auth_nonce(
 
     let message = format!(
         "URL : {}\n\n\
-        Ethereum account:\n\n\
+        Account:\n\n\
         {}\n\n\
         URI: {}\n\n\
         Version: 1\n\n\
