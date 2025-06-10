@@ -34,8 +34,8 @@ struct TokenRow {
     creator_account_id: String,
     creator_nickname: String,
     creator_image_uri: String,
-    creator_follower_count: i64,
-    creator_following_count: i64,
+    creator_follower_count: i32,
+    creator_following_count: i32,
     x_handle: Option<String>,
     x_image_uri: Option<String>,
     is_blue_label: Option<bool>,
@@ -128,20 +128,16 @@ impl TokenController {
             create_transaction_hash: row.create_transaction_hash,
             account_info: AccountInfo {
                 account_id: row.creator_account_id,
-                nickname: row
-                    .x_handle
-                    .as_ref()
-                    .filter(|h| !h.is_empty())
-                    .cloned()
-                    .unwrap_or(row.creator_nickname),
-                image_uri: row
-                    .x_image_uri
-                    .as_ref()
-                    .filter(|img| !img.is_empty())
-                    .cloned()
-                    .unwrap_or(row.creator_image_uri),
-                follower_count: row.creator_follower_count as i32,
-                following_count: row.creator_following_count as i32,
+                nickname: match &row.x_handle {
+                    Some(handle) if !handle.is_empty() => handle.clone(),
+                    _ => row.creator_nickname,
+                },
+                image_uri: match &row.x_image_uri {
+                    Some(img) if !img.is_empty() => img.clone(),
+                    _ => row.creator_image_uri,
+                },
+                follower_count: row.creator_follower_count,
+                following_count: row.creator_following_count,
             },
             is_king: row.is_king.unwrap_or(false),
             is_king_created_at: row.is_king_created_at,
