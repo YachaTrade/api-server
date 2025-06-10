@@ -61,15 +61,37 @@ pub async fn auth_nonce(
         }
     }
 
-    let redis = state.session_redis.clone();
-    if let Err(err) = redis.set_nonce(&payload.address, &nonce).await {
+    // Create SIWE message according to EIP-4361 standard
+    let domain = env::var("APP_DOMAIN").unwrap_or_else(|_| "https://testnet.nad.fun".to_string());
+
+    let chain_id = env::var("CHAIN_ID")
+        .expect("CHAIN_ID must be set")
+        .parse::<u64>()
+        .unwrap();
+    let issued_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+    let message = format!(
+        "Account:\n\n\
+        {}\n\n\
+        URI: {}\n\n\
+        Version: 1\n\n\
+        Chain ID: {}\n\n\
+        Nonce: {}\n\n\
+        Issued At: {}",
+        payload.address, domain, chain_id, nonce, issued_at
+    );
+    if let Err(err) = state
+        .session_redis
+        .set_sign_message(&payload.address, &message)
+        .await
+    {
         error!("Failed to set nonce: {}", err);
         return Err(AppError::RedisError(err.to_string()).into());
     }
 
     let time_end = time_start.elapsed();
     info!("auth_nonce time: {:?}ms", time_end.as_millis());
-    Ok(Json(AuthNonceResponse { nonce }))
+    Ok(Json(AuthNonceResponse { nonce: message }))
 }
 
 /// Generate authentication session
@@ -109,34 +131,35 @@ pub async fn auth_session(
         ))
         .into());
     }
+    // nonce = sign message
+    // TODO : 추후 프론트와 논의하여 payload 의 값도 message 로 넘길수있게 하기
+    let message = payload.nonce;
 
-    let nonce = payload.nonce;
-
-    let address = verify_wallet_address(payload.wallet_address, &nonce, &payload.signature).await?;
+    let address = verify_wallet(&payload.signature, &message).await?;
     let redis = state.session_redis.clone();
 
-    info!("Nonce for address {}: {}", address, nonce);
+    info!("Message for address {}: {}", address, message);
 
-    let session_nonce = redis.get_nonce(&address).await.map_err(|err| {
+    let sign_message = redis.get_sign_message(&address).await.map_err(|err| {
         error!("Failed to get nonce: address: {}, error: {}", address, err);
         AppError::RedisError(err.to_string())
     })?;
 
-    info!("Session nonce for address {}: {}", address, session_nonce);
+    info!("Sign message for address {}: {}", address, sign_message);
 
-    if nonce != session_nonce {
-        error!("Invalid nonce: address: {}, nonce: {}", address, nonce);
+    if message != sign_message {
+        error!("Invalid nonce: address: {}, nonce: {}", address, message);
         return Err(AppError::Unauthorized("Invalid nonce".to_string()).into());
     }
 
-    let session_id = generate_session_id(address.as_str(), nonce.as_str());
+    let session_id = generate_session_id(address.as_str(), message.as_str());
 
     // 병렬로 Redis 작업 실행
 
-    let (del_nonce_result, set_session_result, postgres_set_session_result) = tokio::join!(
+    let (del_nonce_result, set_sign_message_result, postgres_set_sign_message_result) = tokio::join!(
         {
             let start = std::time::Instant::now();
-            let result = redis.del_nonce(&address);
+            let result = redis.delete_sign_message(&address);
             let elapsed = start.elapsed();
             info!("del_nonce elapsed: {:?}", elapsed);
             result
@@ -172,7 +195,7 @@ pub async fn auth_session(
         AppError::RedisError(err.to_string())
     })?;
 
-    set_session_result.map_err(|err| {
+    set_sign_message_result.map_err(|err| {
         error!(
             "Failed to set session: session_id: {}, address: {}, error: {}",
             session_id, address, err
@@ -180,7 +203,7 @@ pub async fn auth_session(
         AppError::RedisError(err.to_string())
     })?;
 
-    postgres_set_session_result.map_err(|err| {
+    postgres_set_sign_message_result.map_err(|err| {
         error!(
             "Failed to set session in Postgres: session_id: {}, address: {}, error: {}",
             session_id, address, err
@@ -311,7 +334,7 @@ pub async fn auth_delete_session(
 
 //충돌 방지
 //session 키를 주소와 nonce 로 생성
-fn generate_session_id(address: &str, nonce: &str) -> String {
+fn generate_session_id(address: &str, message: &str) -> String {
     // UUID 생성
     let uuid = Uuid::new_v4();
 
@@ -327,84 +350,84 @@ fn generate_session_id(address: &str, nonce: &str) -> String {
         address,   // 유저 address
         timestamp, // 타임스탬프
         uuid,      // UUID
-        nonce      // 랜덤 논스
+        message    // 랜덤 논스
     );
 
     // Base64로 인코딩
     BASE64_STANDARD.encode(combined.as_bytes())[..32].to_string()
 }
 
-async fn verify_wallet_address(
-    wallet_address: Option<String>,
-    nonce: &str,
-    signature: &String,
-) -> Result<String> {
-    match wallet_address {
-        Some(wallet_address) => verify_smart_wallet(&wallet_address, nonce, &signature).await,
-        None => verify_regular_wallet(signature, nonce),
-    }
-}
-async fn verify_smart_wallet(
-    wallet_address: &str,
-    nonce: &str,
-    signature_str: &str,
-) -> Result<String> {
-    sol! {
-        #[allow(missing_docs)]
-        #[sol(rpc)]
-        interface IEIP1271 {
-            function isValidSignature(bytes32 hash, bytes signature) external view returns (bytes4);
-        }
-    }
+// async fn verify_wallet_address(
+//     wallet_address: Option<String>,
+//     nonce: &str,
+//     signature: &String,
+// ) -> Result<String> {
+//     match wallet_address {
+//         Some(wallet_address) => verify_smart_wallet(&wallet_address, nonce, &signature).await,
+//         None => verify_regular_wallet(signature, nonce),
+//     }
+// }
+// async fn verify_smart_wallet(
+//     wallet_address: &str,
+//     nonce: &str,
+//     signature_str: &str,
+// ) -> Result<String> {
+//     sol! {
+//         #[allow(missing_docs)]
+//         #[sol(rpc)]
+//         interface IEIP1271 {
+//             function isValidSignature(bytes32 hash, bytes signature) external view returns (bytes4);
+//         }
+//     }
 
-    // Setup RPC provider
-    let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
-    let provider = ProviderBuilder::new().on_http(Url::parse(&rpc_url).expect("URL must be valid"));
+//     // Setup RPC provider
+//     let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
+//     let provider = ProviderBuilder::new().on_http(Url::parse(&rpc_url).expect("URL must be valid"));
 
-    // Hash the nonce for verification
-    let hash = keccak256(nonce.as_bytes());
+//     // Hash the nonce for verification
+//     let hash = keccak256(nonce.as_bytes());
 
-    // Parse signature
-    let signature_bytes = Bytes::from_str(signature_str).map_err(|err| {
-        error!("Invalid signature format: {}", err);
-        anyhow::anyhow!("Invalid signature format {}", err)
-    })?;
+//     // Parse signature
+//     let signature_bytes = Bytes::from_str(signature_str).map_err(|err| {
+//         error!("Invalid signature format: {}", err);
+//         anyhow::anyhow!("Invalid signature format {}", err)
+//     })?;
 
-    // Create smart wallet interface
-    let wallet = wallet_address.parse().map_err(|err| {
-        error!("Invalid wallet address: {}", err);
-        anyhow::anyhow!("Invalid wallet address {}", err)
-    })?;
-    let smart_wallet = IEIP1271::new(wallet, provider);
+//     // Create smart wallet interface
+//     let wallet = wallet_address.parse().map_err(|err| {
+//         error!("Invalid wallet address: {}", err);
+//         anyhow::anyhow!("Invalid wallet address {}", err)
+//     })?;
+//     let smart_wallet = IEIP1271::new(wallet, provider);
 
-    // Verify signature with EIP-1271
-    let magic_value: [u8; 4] = [0x16, 0x26, 0xba, 0x7e]; // EIP-1271 magic value
-    let return_magic_number = smart_wallet
-        .isValidSignature(hash, signature_bytes)
-        .call()
-        .await
-        .map_err(|err| {
-            error!("Failed to verify signature: {}", err);
-            anyhow::anyhow!("Failed to verify signature {}", err)
-        })?
-        ._0;
+//     // Verify signature with EIP-1271
+//     let magic_value: [u8; 4] = [0x16, 0x26, 0xba, 0x7e]; // EIP-1271 magic value
+//     let return_magic_number = smart_wallet
+//         .isValidSignature(hash, signature_bytes)
+//         .call()
+//         .await
+//         .map_err(|err| {
+//             error!("Failed to verify signature: {}", err);
+//             anyhow::anyhow!("Failed to verify signature {}", err)
+//         })?
+//         ._0;
 
-    if return_magic_number != magic_value {
-        error!("Invalid signature: magic value mismatch");
-        return Err(anyhow::anyhow!("Invalid signature magic value mismatch"));
-    }
+//     if return_magic_number != magic_value {
+//         error!("Invalid signature: magic value mismatch");
+//         return Err(anyhow::anyhow!("Invalid signature magic value mismatch"));
+//     }
 
-    Ok(wallet_address.to_string())
-}
+//     Ok(wallet_address.to_string())
+// }
 
-fn verify_regular_wallet(signature: &String, nonce: &str) -> Result<String> {
+async fn verify_wallet(signature: &String, message: &str) -> Result<String> {
     let signature = Signature::from_str(signature).map_err(|err| {
         error!("Invalid signature format: {}", err);
         anyhow::anyhow!("Invalid signature format")
     })?;
 
     signature
-        .recover_address_from_msg(nonce)
+        .recover_address_from_msg(message)
         .map_err(|err| {
             error!("Failed to recover address from signature: {}", err);
             anyhow::anyhow!("Failed to recover address from signature {}", err)
