@@ -13,8 +13,8 @@ use crate::{
     config::{
         ACCOUNT_POINT_EXPIRATION, GET_HONOR_TOKEN_RESPONSE_EXPIRATION,
         GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
-        GET_TOKEN_RESPONSE_EXPIRATION, INVITED_CREATE_EXPIRATION, MISSION_EXPIRATION,
-        NONCE_EXPIRATION, ORDER_EXPIRATION, PNL_EXPIRATION, POSITION_EXPIRATION,
+        GET_TOKEN_RESPONSE_EXPIRATION, INVITED_CREATE_EXPIRATION, MESSAGE_EXPIRATION,
+        MISSION_EXPIRATION, ORDER_EXPIRATION, PNL_EXPIRATION, POSITION_EXPIRATION,
         REFERRAL_CHILD_COUNT_EXPIRATION, REFERRAL_CODE_EXPIRATION, SEARCH_EXPIRATION,
         TOKEN_EXPIRATION, TOP_POINT_EXPIRATION,
     },
@@ -89,35 +89,35 @@ impl RedisDatabase {
     //session
 
     //nonce -> address -> nonce
-    pub async fn set_nonce(&self, address: &str, nonce: &str) -> Result<()> {
+    pub async fn set_sign_message(&self, address: &str, message: &str) -> Result<()> {
         let mut conn = self.pool.get().await?;
 
-        let key = format!("session:{}:nonce", address);
+        let key = format!("session:{}:message", address);
 
-        conn.set_ex::<String, String, ()>(key, nonce.to_string(), *NONCE_EXPIRATION)
+        conn.set_ex::<String, String, ()>(key, message.to_string(), *MESSAGE_EXPIRATION)
             .await?;
 
         Ok(())
     }
 
-    pub async fn get_nonce(&self, address: &str) -> Result<String> {
+    pub async fn get_sign_message(&self, address: &str) -> Result<String> {
         let mut conn = self.pool.get().await?;
 
-        let key = format!("session:{}:nonce", address);
-        let nonce: Option<String> = conn.get(key).await?;
-        info!("Nonce for address {}: {:?}", address, nonce);
-        match nonce {
-            Some(nonce) => Ok(nonce),
-            None => Err(anyhow::anyhow!("Nonce not found")),
+        let key = format!("session:{}:message", address);
+        let message: Option<String> = conn.get(key).await?;
+        info!("Message for address {}: {:?}", address, message);
+        match message {
+            Some(message) => Ok(message),
+            None => Err(anyhow::anyhow!("Message not found")),
         }
     }
 
-    pub async fn del_nonce(&self, address: &str) -> Result<()> {
+    pub async fn delete_sign_message(&self, address: &str) -> Result<()> {
         let mut conn = self.pool.get().await?;
 
-        let key = format!("session:{}:nonce", address);
+        let key = format!("session:{}:message", address);
         conn.del::<_, ()>(key).await?;
-        debug!("Nonce deleted for address: {}", address);
+        debug!("Message deleted for address: {}", address);
         Ok(())
     }
 

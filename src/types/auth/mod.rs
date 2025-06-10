@@ -18,10 +18,12 @@ pub struct AuthNonceRequest {
 
 #[derive(Debug, Serialize, ToSchema)]
 #[schema(example = json!({
-    "nonce": "abced-abced-abced"
+    "nonce": "example.com wants you to sign in with your Ethereum account:\n0x0000000000000000000000000000000000000000\n\nURI: https://example.com/login\nVersion: 1\nChain ID: 1\nNonce: abced-abced-abced\nIssued At: 2023-01-01T00:00:00Z"
 }))]
 pub struct AuthNonceResponse {
-    #[schema(example = "abced-abced-abced")]
+    #[schema(
+        example = "example.com wants you to sign in with your Ethereum account:\n0x0000000000000000000000000000000000000000\n\nURI: https://example.com/login\nVersion: 1\nChain ID: 1\nNonce: abced-abced-abced\nIssued At: 2023-01-01T00:00:00Z"
+    )]
     pub nonce: String,
 }
 
