@@ -4,7 +4,7 @@ pub mod metadata;
 pub mod order;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -12,6 +12,34 @@ use utoipa::ToSchema;
 use crate::db::postgres::PostgresDatabase;
 
 use super::common::info::AccountInfo;
+
+// Structure for mapping SQL query results
+#[derive(Debug, sqlx::FromRow)]
+struct TokenRow {
+    token_id: String,
+    name: String,
+    symbol: String,
+    description: Option<String>,
+    twitter: Option<String>,
+    telegram: Option<String>,
+    website: Option<String>,
+    image_uri: String,
+    is_listing: bool,
+    total_supply: BigDecimal,
+    price: BigDecimal,
+    created_at: i64,
+    create_transaction_hash: String,
+    is_king: Option<bool>,
+    is_king_created_at: Option<i64>,
+    creator_account_id: String,
+    creator_nickname: String,
+    creator_image_uri: String,
+    creator_follower_count: i64,
+    creator_following_count: i64,
+    x_handle: Option<String>,
+    x_image_uri: Option<String>,
+    is_blue_label: Option<bool>,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, sqlx::FromRow, ToSchema)]
 pub struct TokenWithAccountInfo {
@@ -46,7 +74,8 @@ impl TokenController {
         TokenController { db }
     }
     pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
-        let record = sqlx::query!(
+        // Using query_as instead of query! to automatically map to the TokenRow struct
+        let row = sqlx::query_as::<_, TokenRow>(
             r#"
                 SELECT 
                     t.token_id,
@@ -63,48 +92,62 @@ impl TokenController {
                     t.created_at,
                     t.create_transaction_hash,
                     COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
-                    k.created_at as "is_king_created_at?",
+                    k.created_at as is_king_created_at,
                     t.creator as creator_account_id,
                     a.nickname as creator_nickname,
                     a.image_uri as creator_image_uri,
                     a.follower_count as creator_follower_count, 
-                    a.following_count as creator_following_count
-                    
+                    a.following_count as creator_following_count,
+                    ax.x_handle,
+                    ax.x_image_uri,
+                    ax.is_blue_label
                 FROM token t
                 LEFT JOIN king k ON t.token_id = k.token_id
+                LEFT JOIN account_x ax ON t.creator = ax.account_id
                 JOIN market m ON t.token_id = m.token_id
                 JOIN account a ON t.creator = a.account_id
                 WHERE t.token_id = $1
             "#,
-            token_id
         )
+        .bind(token_id)
         .fetch_one(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|err| anyhow!("Failed to get token: {}", err))?;
 
         let token = TokenWithAccountInfo {
-            token_id: record.token_id,
-            name: record.name,
-            symbol: record.symbol,
-            image_uri: record.image_uri,
-            description: record.description,
-            twitter: record.twitter,
-            telegram: record.telegram,
-            website: record.website,
-            is_listing: record.is_listing,
-            created_at: record.created_at,
-            create_transaction_hash: record.create_transaction_hash,
+            token_id: row.token_id,
+            name: row.name,
+            symbol: row.symbol,
+            image_uri: row.image_uri,
+            description: row.description,
+            twitter: row.twitter,
+            telegram: row.telegram,
+            website: row.website,
+            is_listing: row.is_listing,
+            created_at: row.created_at,
+            create_transaction_hash: row.create_transaction_hash,
             account_info: AccountInfo {
-                account_id: record.creator_account_id,
-                nickname: record.creator_nickname,
-                image_uri: record.creator_image_uri,
-                follower_count: record.creator_follower_count,
-                following_count: record.creator_following_count,
+                account_id: row.creator_account_id,
+                nickname: row
+                    .x_handle
+                    .as_ref()
+                    .filter(|h| !h.is_empty())
+                    .cloned()
+                    .unwrap_or(row.creator_nickname),
+                image_uri: row
+                    .x_image_uri
+                    .as_ref()
+                    .filter(|img| !img.is_empty())
+                    .cloned()
+                    .unwrap_or(row.creator_image_uri),
+                follower_count: row.creator_follower_count as i32,
+                following_count: row.creator_following_count as i32,
             },
-            is_king: record.is_king.unwrap_or(false),
-            is_king_created_at: record.is_king_created_at,
-            market_cap: (record.total_supply.clone() * record.price.clone()).to_string(),
-            total_supply: record.total_supply,
-            price: record.price,
+            is_king: row.is_king.unwrap_or(false),
+            is_king_created_at: row.is_king_created_at,
+            market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
+            total_supply: row.total_supply,
+            price: row.price,
         };
         let response = TokenResponse { token };
         Ok(response)

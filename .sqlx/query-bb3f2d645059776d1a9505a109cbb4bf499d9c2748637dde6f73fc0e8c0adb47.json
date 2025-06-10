@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT \n                    t.token_id,\n                    t.name,\n                    t.symbol,\n                    t.description,\n                    t.twitter,\n                    t.telegram,\n                    t.website,\n                    t.image_uri,\n                    t.is_listing,\n                    t.total_supply,\n                    m.price,\n                    t.created_at,\n                    t.create_transaction_hash,\n                    COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,\n                    k.created_at as \"is_king_created_at?\",\n                    t.creator as creator_account_id,\n                    a.nickname as creator_nickname,\n                    a.image_uri as creator_image_uri,\n                    a.follower_count as creator_follower_count, \n                    a.following_count as creator_following_count\n                    \n                FROM token t\n                LEFT JOIN king k ON t.token_id = k.token_id\n                JOIN market m ON t.token_id = m.token_id\n                JOIN account a ON t.creator = a.account_id\n                WHERE t.token_id = $1\n            ",
+  "query": "\n                SELECT \n                    t.token_id,\n                    t.name,\n                    t.symbol,\n                    t.description,\n                    t.twitter,\n                    t.telegram,\n                    t.website,\n                    t.image_uri,\n                    t.is_listing,\n                    t.total_supply,\n                    m.price,\n                    t.created_at,\n                    t.create_transaction_hash,\n                    COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,\n                    k.created_at as \"is_king_created_at?\",\n                    t.creator as creator_account_id,\n                    a.nickname as creator_nickname,\n                    a.image_uri as creator_image_uri,\n                    a.follower_count as creator_follower_count, \n                    a.following_count as creator_following_count,\n                    ax.x_handle,\n                    ax.x_image_uri,\n                    ax.is_blue_label\n                FROM token t\n                LEFT JOIN king k ON t.token_id = k.token_id\n                LEFT JOIN account_x ax ON t.creator = ax.account_id\n                JOIN market m ON t.token_id = m.token_id\n                JOIN account a ON t.creator = a.account_id\n                WHERE t.token_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -102,6 +102,21 @@
         "ordinal": 19,
         "name": "creator_following_count",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 20,
+        "name": "x_handle",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 21,
+        "name": "x_image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 22,
+        "name": "is_blue_label",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -129,8 +144,11 @@
       false,
       false,
       false,
+      false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "a27e6f2e906bbc156780196ac98a1311678264121ea835fb3b18861f6d435c0b"
+  "hash": "bb3f2d645059776d1a9505a109cbb4bf499d9c2748637dde6f73fc0e8c0adb47"
 }
