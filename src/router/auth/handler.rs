@@ -91,7 +91,7 @@ pub async fn auth_nonce(
 
     let time_end = time_start.elapsed();
     info!("auth_nonce time: {:?}ms", time_end.as_millis());
-    Ok(Json(AuthNonceResponse { message }))
+    Ok(Json(AuthNonceResponse { nonce: message }))
 }
 
 /// Generate authentication session
