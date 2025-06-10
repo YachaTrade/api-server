@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 
 lazy_static! {
     pub static ref EXPIRATION_SESSION_KEY: u64 = 86_400; // 24 * 60 * 60 = 1Day
-    pub static ref NONCE_EXPIRATION:u64 = 300; //5 minutes
+    pub static ref MESSAGE_EXPIRATION:u64 = 180; //3 minutes
 
     pub static ref ORDER_EXPIRATION:u64 = 1500; //miliseconds
     pub static ref SEARCH_EXPIRATION:u64 = 15_000; //30 secons in milliseconds
