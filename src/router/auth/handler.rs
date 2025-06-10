@@ -63,7 +63,7 @@ pub async fn auth_nonce(
 
     // Create SIWE message according to EIP-4361 standard
     let domain = env::var("APP_DOMAIN").unwrap_or_else(|_| "https://testnet.nad.fun".to_string());
-    let uri = format!("https://{}/login", domain);
+    let uri = format!("https://{}", domain);
     let chain_id = env::var("CHAIN_ID")
         .expect("CHAIN_ID must be set")
         .parse::<u64>()
@@ -71,14 +71,15 @@ pub async fn auth_nonce(
     let issued_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
     let message = format!(
-        "{} wants you to sign in with your Ethereum account:\n\
+        "URL : {}\n\n\
+        Ethereum account:\n\n\
         {}\n\n\
-        URI: {}\n\
-        Version: 1\n\
-        Chain ID: {}\n\
-        Nonce: {}\n\
+        URI: {}\n\n\
+        Version: 1\n\n\
+        Chain ID: {}\n\n\
+        Nonce: {}\n\n\
         Issued At: {}",
-        domain, payload.address, uri, chain_id, nonce, issued_at
+        uri, payload.address, uri, chain_id, nonce, issued_at
     );
     if let Err(err) = state
         .session_redis
