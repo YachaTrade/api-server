@@ -148,32 +148,32 @@ impl SearchController {
             .iter()
             .map(|r| r.account_id.clone())
             .collect();
-
-        // position 테이블 사용 (balance 대신)
+        // position 테이블 사용하지 않음
         let profit_data = if !account_ids.is_empty() {
             sqlx::query!(
                 r#"
                 SELECT 
                     p.account_id,
                     COALESCE(SUM(p.total_bought_native), 0)::numeric as "total_cost!: BigDecimal",
-                    COALESCE((SUM(p.realized_pnl) + SUM(
+                    COALESCE(SUM(p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token)) + SUM(
                         COALESCE(
                             CASE 
-                                WHEN p.current_token_amount = 0 THEN 0
+                                WHEN b.balance = 0 THEN 0
                                 WHEN m.market_type = 'CURVE' THEN
                                     m.virtual_native 
                                     - (
                                         ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + p.current_token_amount) - 1)
-                                        / (m.virtual_token + p.current_token_amount)
+                                        + (m.virtual_token + b.balance) - 1)
+                                        / (m.virtual_token + b.balance)
                                     )
                                 WHEN m.market_type = 'DEX' THEN
-                                    m.price * p.current_token_amount
+                                    m.price * b.balance
                                 ELSE 0
                             END,
                         0)
-                    )), 0)::numeric as "total_profit!: BigDecimal"
-                FROM position p  
+                    ), 0)::numeric as "total_profit!: BigDecimal"
+                FROM positions p
+                JOIN balance b ON p.account_id = b.account_id AND p.token_id = b.token_id
                 JOIN market m ON p.token_id = m.token_id
                 WHERE p.account_id = ANY($1) AND p.created_at >= $2
                 GROUP BY p.account_id

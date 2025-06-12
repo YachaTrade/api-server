@@ -15,7 +15,7 @@ pub struct AuthNonceRequest {
     #[schema(example = "Your address")]
     pub address: String,
 }
-
+// TODO : nocne -> message 로 변경
 #[derive(Debug, Serialize, ToSchema)]
 #[schema(example = json!({
     "nonce": "example.com wants you to sign in with your Ethereum account:\n0x0000000000000000000000000000000000000000\n\nURI: https://example.com/login\nVersion: 1\nChain ID: 1\nNonce: abced-abced-abced\nIssued At: 2023-01-01T00:00:00Z"

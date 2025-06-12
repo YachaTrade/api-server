@@ -190,7 +190,7 @@ impl HypeTokenController {
                 x.x_image_uri as x_image_uri,
                 x.is_blue_label as is_blue_label,
                 -- 홀더 수 계산 - 기존 인덱스 활용 (idx_position_token_is_active)
-                (SELECT COUNT(*) FROM position p WHERE p.token_id = h.token_id AND p.is_active = true AND p.current_token_amount > 0) as holder_count,
+                (SELECT COUNT(*) FROM balance b WHERE b.token_id = h.token_id  AND b.balance > 0) as holder_count,
                 -- 시가총액 계산 (가격 * 총 공급량)
                 COALESCE(m.price * t.total_supply, 0) as market_cap,
                 -- 현재 가격
