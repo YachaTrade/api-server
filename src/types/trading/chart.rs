@@ -94,7 +94,7 @@ pub struct ChartResponse {
     pub token_id: String,
     pub interval: String,
     pub base_timestamp: i64,
-    pub total_count: i64,
+    // pub total_count: i64,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -209,13 +209,13 @@ impl ChartController {
             .await
             .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
 
-        let total_count = if charts.is_empty() {
-            0
-        } else {
-            // Get count of data with timestamps less than or equal to base_timestamp
-            self.get_total_count_before_timestamp(token_id, interval, base_timestamp)
-                .await?
-        };
+        // let total_count = if charts.is_empty() {
+        //     0
+        // } else {
+        //     // Get count of data with timestamps less than or equal to base_timestamp
+        //     self.get_total_count_before_timestamp(token_id, interval, base_timestamp)
+        //         .await?
+        // };
 
         // Return the chart data without unnecessary transformation
         Ok(ChartResponse {
@@ -223,7 +223,7 @@ impl ChartController {
             token_id: token_id.to_string(),
             interval: ChartInterval::i16_to_string(chart_interval)?,
             base_timestamp,
-            total_count,
+            // total_count,
         })
     }
 }

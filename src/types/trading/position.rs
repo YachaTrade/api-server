@@ -117,23 +117,7 @@ impl PositionController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         PositionController { db }
     }
-    pub async fn get_total_count_by_account(&self, account_id: &str) -> Result<i64> {
-        let count = sqlx::query!(
-            r#"
-            SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM position p
-            WHERE p.account_id = $1
-            AND p.current_token_amount > 0
-            "#,
-            account_id
-        )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
 
-        Ok(count)
-    }
     pub async fn get_positions(
         &self,
         account_id: &str,
