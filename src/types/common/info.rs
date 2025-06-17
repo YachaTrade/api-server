@@ -75,7 +75,6 @@ pub struct MarketInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct PositionInfo {
-    pub position_id: i64,
     pub total_bought_native: BigDecimal,
     pub total_bought_token: BigDecimal,
     pub current_token_amount: BigDecimal,
