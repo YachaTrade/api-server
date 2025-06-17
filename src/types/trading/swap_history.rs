@@ -18,7 +18,6 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct PositionSwap {
     pub token: TokenInfo,
-    pub swap_id: i32,
     pub account_id: String,
     pub is_buy: bool,
     pub native_amount: BigDecimal,
@@ -154,7 +153,7 @@ impl SwapController {
             r#"
             SELECT COALESCE(COUNT(*)::bigint, 0) as count
             FROM swap s
-            WHERE s.sender = $1
+            WHERE s.account_id = $1
             "#,
             account_id
         )
@@ -175,8 +174,7 @@ impl SwapController {
         let swaps = sqlx::query!(
             r#"
             SELECT 
-                s.swap_id,
-                s.sender,
+                s.account_id,
                 s.token_id,
                 t.symbol as token_symbol,
                 t.image_uri as token_image,
@@ -188,7 +186,7 @@ impl SwapController {
                 s.transaction_hash
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
-            WHERE s.sender = $1
+            WHERE s.account_id = $1
             ORDER BY s.created_at DESC
             LIMIT $2
             OFFSET $3
@@ -215,8 +213,7 @@ impl SwapController {
                     name: row.token_name,
                     image_uri: row.token_image,
                 },
-                swap_id: row.swap_id,
-                account_id: row.sender,
+                account_id: row.account_id,
                 is_buy: row.is_buy,
                 native_amount: row.native_amount,
                 token_amount: row.token_amount,

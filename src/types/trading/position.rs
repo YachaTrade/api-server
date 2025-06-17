@@ -133,7 +133,6 @@ impl PositionController {
                 r#"
                 WITH position_data AS (
                     SELECT 
-                        p.position_id,
                         p.token_id,
                         p.total_bought_native,
                         p.total_bought_token,
@@ -179,7 +178,6 @@ impl PositionController {
                            OR ($4::text = 'CLOSE' AND b.balance = 0))
                 )
                 SELECT 
-                    position_id,
                     token_id,
                     token_symbol,
                     token_price as "token_price!",
@@ -243,7 +241,6 @@ impl PositionController {
                     total_supply: row.token_total_supply,
                 },
                 position: PositionInfo {
-                    position_id: row.position_id,
                     total_bought_native: row.total_bought_native,
                     total_bought_token: row.total_bought_token,
                     current_token_amount: row.current_token_amount,
