@@ -21,4 +21,19 @@ lazy_static! {
     pub static ref GET_TOKEN_METADATA_EXPIRATION:u64 = 43_200_000; // 12 hours in milliseconds
     pub static ref GET_HYPE_TOKEN_RESPONSE_EXPIRATION: u64 = 10_000; // 10 seconds in milliseconds
     pub static ref GET_HONOR_TOKEN_RESPONSE_EXPIRATION: u64 = 60_000; // 1m in milliseconds
+
+
+
+
+}
+
+//@@@@@@@@@@@@@@@@@@@@TREASURY@@@@@@@@@@@@@@@@@@@@@@@
+lazy_static! {
+    pub static ref GET_DEV_POSITIONS_EXPIRATION: u64 = 5_000; // 5s in milliseconds
+    pub static ref GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION: u64 = 5_000; // 5s in milliseconds
+    pub static ref GET_ACCOUNT_LOCKS_EXPIRATION: u64 = 15_000; // 15s in milliseconds
+
+    pub static ref GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION: u64 = 15_000; // 15s in milliseconds
+
+    pub static ref GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION: u64 = 5_000; // 5s in milliseconds
 }

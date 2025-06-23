@@ -14,4 +14,5 @@ pub mod token;
 pub mod trade;
 
 pub mod hype;
+pub mod management;
 pub mod referral;
