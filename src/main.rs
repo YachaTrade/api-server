@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, campaign, follow, hype, order, profile, referral, search, token, trade},
+    router::{self, account, auth, bot, campaign, follow, hype, management, order, profile, referral, search, token, trade},
     state::AppState,
     types,
 };
@@ -64,6 +64,7 @@ use clap::Parser;
         router::trade::handler::get_market,
         router::trade::handler::get_chart,
         router::trade::handler::get_price,
+        router::trade::handler::get_management_history,
 
         // ----------------Search----------------
         router::search::handler::search,
@@ -93,6 +94,13 @@ use clap::Parser;
         router::referral::handler::get_referral_code,
         router::referral::handler::get_referral_child_count,
         router::referral::handler::get_invited_create,
+
+ 
+        // ----------------Management----------------
+        router::management::handler::get_dev_positions,
+        router::management::handler::get_holding_token_management,
+        router::management::handler::get_account_locks,
+        router::management::handler::get_account_withdrawable_lock,
 
     ),
     components(
@@ -200,8 +208,14 @@ use clap::Parser;
             types::referral::ExistsReferralCodeResponse,
             types::referral::GetReferralCodeResponse,
             types::referral::GetReferralChildCountResponse,
-            types::referral::GetInvitedCreateResponse
+            types::referral::GetInvitedCreateResponse,
            
+           //Management
+           types::management::DevPositionsResponse,
+           types::management::HoldingTokenManagementResponse,
+           types::management::TokenLockResponse,
+           types::management::WithdrawableLockResponse,
+           types::management::ManagementHistoryResponse,
         )
     ),
     tags(
@@ -216,6 +230,7 @@ use clap::Parser;
         (name="Referral",description="Referral endpoints"),
         (name="Hype",description="Hype Token endpoints"),
         (name="Bot",description="Bot endpoints"),
+        (name="Token Management",description="Token Management endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -278,6 +293,9 @@ async fn main() -> Result<()> {
         .merge(follow::router(app_state.clone()))
         .merge(campaign::router(app_state.clone()))
         .merge(bot::router())
+        .merge(management::router().layer(ServiceBuilder::new().layer(
+            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
+        )))
         .merge(referral::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))

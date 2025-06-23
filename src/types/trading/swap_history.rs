@@ -252,7 +252,7 @@ impl SwapController {
             ax.x_image_uri,
             ax.is_blue_label
         FROM swap s
-        JOIN account a ON s.sender = a.account_id
+        JOIN account a ON s.account_id = a.account_id
         LEFT JOIN account_x ax ON a.account_id = ax.account_id
         WHERE s.token_id = $1"#
             .to_string();
@@ -261,7 +261,7 @@ impl SwapController {
 
         // Add own trades filter
         if let Some(_) = &query.account_id {
-            query_sql.push_str(&format!(" AND s.sender = ${}", param_count));
+            query_sql.push_str(&format!(" AND s.account_id = ${}", param_count));
             param_count += 1;
         }
 
@@ -383,7 +383,7 @@ impl SwapController {
         let mut query = r#"
         SELECT COALESCE(COUNT(*)::bigint, 0) as count
         FROM swap s
-        JOIN account a ON s.sender = a.account_id
+        JOIN account a ON s.account_id = a.account_id
         WHERE s.token_id = $1"#
             .to_string();
 
@@ -397,7 +397,7 @@ impl SwapController {
 
         // Add own trades filter
         if let Some(_) = &query_params.account_id {
-            query.push_str(&format!(" AND s.sender = ${}", param_count));
+            query.push_str(&format!(" AND s.account_id = ${}", param_count));
             param_count += 1;
         }
 

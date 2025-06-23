@@ -280,7 +280,7 @@ impl OrderController {
     pub async fn get_total_count(&self) -> Result<i64> {
         let row = sqlx::query!(
             r#"
-            SELECT count
+            SELECT total_count
             FROM token_count
             "#,
         )
@@ -288,6 +288,6 @@ impl OrderController {
         .await
         .map_err(|e| anyhow!("Failed to get token count: {}", e))?;
 
-        Ok(row.count)
+        Ok(row.total_count)
     }
 }

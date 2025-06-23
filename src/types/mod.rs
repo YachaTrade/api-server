@@ -4,6 +4,7 @@ pub mod common;
 pub mod account;
 pub mod bot;
 pub mod campaign;
+pub mod management;
 pub mod referral;
 pub mod search;
 pub mod social;
