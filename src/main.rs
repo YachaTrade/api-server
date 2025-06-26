@@ -212,10 +212,18 @@ use clap::Parser;
            
            //Management
            types::management::DevPositionsResponse,
+           types::management::DevPosition,
            types::management::HoldingTokenManagementResponse,
+           types::management::TokenManagement,
            types::management::TokenLockResponse,
+           types::management::TokenLock,
+           types::management::UnlockInfo,
            types::management::WithdrawableLockResponse,
+           types::management::WithdrawableLock,
            types::management::ManagementHistoryResponse,
+           types::management::ManagementHistory,
+           types::management::ManagementHistoryQuery,
+           
         )
     ),
     tags(
