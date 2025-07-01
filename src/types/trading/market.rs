@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use anyhow::Result;
 use bigdecimal::BigDecimal;
@@ -9,19 +9,42 @@ use utoipa::ToSchema;
 use crate::db::postgres::PostgresDatabase;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct Market {
-    pub market_id: String,
+pub struct MarketRaw {
     pub market_type: String,
     pub token_id: String,
-    pub virtual_native: BigDecimal,
-    pub virtual_token: BigDecimal,
-    pub reserve_token: BigDecimal,
-    pub reserve_native: BigDecimal,
+    pub pool_id: Option<String>,
+    pub price: BigDecimal,
+    pub latest_trade_at: i64,
+    pub created_at: i64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct Market {
+    pub market_type: String,
+    pub token_id: String,
+    pub market_id: Option<String>,
     pub price: BigDecimal,
     pub latest_trade_at: i64,
     pub created_at: i64,
 }
 
+impl From<MarketRaw> for Market {
+    fn from(raw: MarketRaw) -> Self {
+        let mut market = Market {
+            market_type: raw.market_type,
+            token_id: raw.token_id,
+            market_id: raw.pool_id,
+            price: raw.price,
+            latest_trade_at: raw.latest_trade_at,
+            created_at: raw.created_at,
+        };
+
+        if market.market_type == "CURVE" {
+            market.market_id = env::var("BONDING_CURVE").ok();
+        }
+
+        market
+    }
+}
 pub struct MarketController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -33,19 +56,15 @@ impl MarketController {
 
     pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
         let market = sqlx::query_as!(
-            Market,
+            MarketRaw,
             r#"
             SELECT 
-                market_id as "market_id!",
-                market_type as "market_type!",
-                token_id as "token_id!",
-                virtual_native as "virtual_native!",
-                virtual_token as "virtual_token!",
-                reserve_token as "reserve_token!",
-                reserve_native as "reserve_native!",
-                price as "price!",
-                latest_trade_at as "latest_trade_at!",
-                created_at as "created_at!"
+                market_type,
+                token_id,
+                pool_id,
+                price,
+                latest_trade_at,
+                created_at
             FROM market
             WHERE token_id = $1
             "#,
@@ -54,6 +73,6 @@ impl MarketController {
         .fetch_one(self.db.get_read_pool())
         .await?;
 
-        Ok(market)
+        Ok(Market::from(market))
     }
 }

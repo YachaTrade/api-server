@@ -40,9 +40,6 @@ struct SearchAccountRow {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchAccount {
     pub account_info: AccountInfo,
-    pub period: String,
-    pub total_profit: BigDecimal,
-    pub roi_percentage: BigDecimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -82,10 +79,7 @@ impl SearchController {
             });
         }
 
-        let now = Utc::now().timestamp();
-        let seven_days_ago = now - (7 * 24 * 60 * 60);
-
-        let (token_result, account_basic_result) = tokio::join!(
+        let (token_result, account_result) = tokio::join!(
             // 토큰 검색
             sqlx::query!(
                 r#"
@@ -143,55 +137,7 @@ impl SearchController {
         );
 
         let token_records = token_result?;
-        let account_basic_records = account_basic_result?;
-        let account_ids: Vec<String> = account_basic_records
-            .iter()
-            .map(|r| r.account_id.clone())
-            .collect();
-        // position 테이블 사용하지 않음
-        let profit_data = if !account_ids.is_empty() {
-            sqlx::query!(
-                r#"
-                SELECT 
-                    p.account_id,
-                    COALESCE(SUM(p.total_bought_native), 0)::numeric as "total_cost!: BigDecimal",
-                    COALESCE(SUM(p.total_sold_native - ((p.total_bought_native / p.total_bought_token) * p.total_sold_token)) + SUM(
-                        COALESCE(
-                            CASE 
-                                WHEN b.balance = 0 THEN 0
-                                WHEN m.market_type = 'CURVE' THEN
-                                    m.virtual_native 
-                                    - (
-                                        ((m.virtual_token * m.virtual_native) 
-                                        + (m.virtual_token + b.balance) - 1)
-                                        / (m.virtual_token + b.balance)
-                                    )
-                                WHEN m.market_type = 'DEX' THEN
-                                    m.price * b.balance
-                                ELSE 0
-                            END,
-                        0)
-                    ), 0)::numeric as "total_profit!: BigDecimal"
-                FROM positions p
-                JOIN balance b ON p.account_id = b.account_id AND p.token_id = b.token_id
-                JOIN market m ON p.token_id = m.token_id
-                WHERE p.account_id = ANY($1) AND p.created_at >= $2
-                GROUP BY p.account_id
-                "#,
-                &account_ids,
-                seven_days_ago
-            )
-            .fetch_all(pool)
-            .await?
-        } else {
-            vec![]
-        };
-
-        // 결과 조합 (기존과 동일)
-        let profit_map: std::collections::HashMap<String, (BigDecimal, BigDecimal)> = profit_data
-            .into_iter()
-            .map(|row| (row.account_id, (row.total_cost, row.total_profit)))
-            .collect();
+        let account_records = account_result?;
 
         let tokens_vec: Vec<SearchToken> = token_records
             .into_iter()
@@ -209,38 +155,22 @@ impl SearchController {
             })
             .collect();
 
-        let accounts_vec: Vec<SearchAccount> = account_basic_records
+        let accounts_vec: Vec<SearchAccount> = account_records
             .into_iter()
-            .map(|row| {
-                let (total_cost, total_profit) = profit_map
-                    .get(&row.account_id)
-                    .cloned()
-                    .unwrap_or((BigDecimal::from(0), BigDecimal::from(0)));
-
-                let roi_percentage = if total_cost == BigDecimal::from(0) {
-                    BigDecimal::from(0)
-                } else {
-                    total_profit.clone() / total_cost.clone()
-                };
-
-                SearchAccount {
-                    account_info: AccountInfo {
-                        account_id: row.account_id,
-                        nickname: match &row.x_handle {
-                            Some(handle) if !handle.is_empty() => handle.clone(),
-                            _ => row.nickname,
-                        },
-                        image_uri: match &row.x_image_uri {
-                            Some(img) if !img.is_empty() => img.clone(),
-                            _ => row.image_uri,
-                        },
-                        follower_count: row.follower_count,
-                        following_count: row.following_count,
+            .map(|row| SearchAccount {
+                account_info: AccountInfo {
+                    account_id: row.account_id,
+                    nickname: match &row.x_handle {
+                        Some(handle) if !handle.is_empty() => handle.clone(),
+                        _ => row.nickname,
                     },
-                    period: "7D".to_string(),
-                    total_profit,
-                    roi_percentage,
-                }
+                    image_uri: match &row.x_image_uri {
+                        Some(img) if !img.is_empty() => img.clone(),
+                        _ => row.image_uri,
+                    },
+                    follower_count: row.follower_count,
+                    following_count: row.following_count,
+                },
             })
             .collect();
 

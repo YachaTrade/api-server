@@ -31,7 +31,7 @@ struct TokenRow {
     create_transaction_hash: String,
     is_king: Option<bool>,
     is_king_created_at: Option<i64>,
-    creator_account_id: String,
+    creator: String,
     creator_nickname: String,
     creator_image_uri: String,
     creator_follower_count: i32,
@@ -93,7 +93,7 @@ impl TokenController {
                     t.create_transaction_hash,
                     COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
                     k.created_at as is_king_created_at,
-                    t.creator as creator_account_id,
+                    t.creator,
                     a.nickname as creator_nickname,
                     a.image_uri as creator_image_uri,
                     a.follower_count as creator_follower_count, 
@@ -127,7 +127,7 @@ impl TokenController {
             created_at: row.created_at,
             create_transaction_hash: row.create_transaction_hash,
             account_info: AccountInfo {
-                account_id: row.creator_account_id,
+                account_id: row.creator,
                 nickname: match &row.x_handle {
                     Some(handle) if !handle.is_empty() => handle.clone(),
                     _ => row.creator_nickname,
