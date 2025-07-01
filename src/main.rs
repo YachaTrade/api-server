@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, campaign, follow, hype, management, order, profile, referral, search, token, trade},
+    router::{self, account, auth, bot, follow, hype, management, order, profile, search, token, trade},
     state::AppState,
     types,
 };
@@ -42,8 +42,7 @@ use clap::Parser;
         
         // ----------------Profile----------------
         router::profile::handler::get_profile,
-        router::profile::handler::get_pnl,
-        router::profile::handler::get_position,
+        router::profile::handler::get_hold_token,
         router::profile::handler::get_token_created,
         router::profile::handler::get_swap_history,
 
@@ -56,14 +55,13 @@ use clap::Parser;
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
-        router::hype::handler::get_honor_token,
 
         // ----------------Trade----------------
         router::trade::handler::get_swap_history,
-        router::trade::handler::get_holder,
         router::trade::handler::get_market,
         router::trade::handler::get_chart,
         router::trade::handler::get_price,
+        router::trade::handler::get_holder,
         router::trade::handler::get_management_history,
 
         // ----------------Search----------------
@@ -80,20 +78,7 @@ use clap::Parser;
         router::follow::handler::check_follow,
         router::follow::handler::get_followers,
         router::follow::handler::get_followings,  
-        // ----------------Campaign----------------
-        router::campaign::handler::check_active_user,
-        router::campaign::handler::get_top_point,
-        router::campaign::handler::get_point_by_account_id,
-        router::campaign::handler::complete_mission,
-        router::campaign::handler::get_completed_missions,
 
-        // ----------------Referral----------------
-        router::referral::handler::check_register_referral_code,
-        router::referral::handler::register_referral_code,
-        router::referral::handler::make_referral_code,
-        router::referral::handler::get_referral_code,
-        router::referral::handler::get_referral_child_count,
-        router::referral::handler::get_invited_create,
 
  
         // ----------------Management----------------
@@ -149,23 +134,20 @@ use clap::Parser;
             types::token::hype::HypeToken,
             types::token::hype::HypeTokenResponse,
             types::token::hype::HypeInfo,
-            types::token::hype::HonorInfo,
-            types::token::hype::HonorToken,
-            types::token::hype::HonorTokenResponse,
+   
             types::token::metadata::TokenMetadata,
             types::token::metadata::TokenMetadataResponse,
 
             //Trading
             types::trading::chart::Chart,
             types::trading::chart::ChartResponse,
-            types::trading::pnl::PNLResponse,
-            types::trading::pnl::PeriodPnL,
-            types::trading::pnl::BestTrade,
+
             types::trading::position::Position,
             types::trading::position::PositionResponse,
             types::trading::position::TokenHolder,
             types::trading::position::TokenHolderResponse,
-            types::trading::position::PositionType,
+            types::trading::position::HoldToken,
+            types::trading::position::HoldTokenResponse,
             types::trading::swap_history::PositionSwap,
             types::trading::swap_history::PositionSwapResponse,
             types::trading::swap_history::TokenSwap,
@@ -189,26 +171,7 @@ use clap::Parser;
             types::social::follow::FollowResponse,
             types::social::follow::CheckFollowResponse,
         
-        
-
-            // Campaign
-            types::campaign::active::ActiveUserResponse,
-            types::campaign::point::Point,
-            types::campaign::point::TopPointResponse,
-            types::campaign::point::AccountPointResponse,
-            types::campaign::point::MissionCompleteRequest,
-            types::campaign::point::MissionCompleteResponse,
-            types::campaign::point::MissionCompletedResponse,
-
-            // Reward
-            types::referral::CheckRegisterReferralResponse,
-            types::referral::RegisterReferralRequest,
-            types::referral::RegisterReferralResponse,
-            types::referral::MakeReferralCodeResponse,
-            types::referral::ExistsReferralCodeResponse,
-            types::referral::GetReferralCodeResponse,
-            types::referral::GetReferralChildCountResponse,
-            types::referral::GetInvitedCreateResponse,
+   
            
            //Management
            types::management::DevPositionsResponse,
@@ -234,8 +197,6 @@ use clap::Parser;
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
         (name="Order",description="Order endpoints"),
-        (name="Campaign",description="Campaign endpoints"),
-        (name="Referral",description="Referral endpoints"),
         (name="Hype",description="Hype Token endpoints"),
         (name="Bot",description="Bot endpoints"),
         (name="Token Management",description="Token Management endpoints"),
@@ -299,14 +260,11 @@ async fn main() -> Result<()> {
         .merge(order::router())
         .merge(hype::router())
         .merge(follow::router(app_state.clone()))
-        .merge(campaign::router(app_state.clone()))
         .merge(bot::router())
         .merge(management::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
-        .merge(referral::router().layer(ServiceBuilder::new().layer(
-            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
-        )))
+
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()

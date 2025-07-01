@@ -9,10 +9,9 @@ use path::ProfilePath;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(ProfilePath::GetProfile.as_str(), get(handler::get_profile))
-        .route(ProfilePath::GetPnl.as_str(), get(handler::get_pnl))
         .route(
-            ProfilePath::GetPosition.as_str(),
-            get(handler::get_position),
+            ProfilePath::GetHoldToken.as_str(),
+            get(handler::get_hold_token),
         )
         .route(
             ProfilePath::GetTokenCreated.as_str(),

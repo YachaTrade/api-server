@@ -6,8 +6,7 @@ use crate::{
         common::{identifier::Identifier, pagination::PaginationParams},
         token::create_token::{TokenCreatedController, TokenCreatedResponse},
         trading::{
-            pnl::{PNLController, PNLResponse},
-            position::{PositionController, PositionQuery, PositionResponse},
+            position::{HoldTokenResponse, PositionController, PositionResponse},
             swap_history::{PositionSwapResponse, SwapController},
         },
     },
@@ -66,75 +65,34 @@ pub async fn get_profile(
     Ok(Json(AccountResponse { account }))
 }
 
-/// Get profile PNL information
-#[utoipa::path(
-    get,
-    path = ProfilePath::GetPnl.docs_str(),
-    params(
-        ("account_id" = String, Path, description = "Account ID to get PNL information for")
-    ),
-    responses(
-        (status = 200, description = "Successfully retrieved PNL information", body = PNLResponse),
-        (status = 404, description = "Account invalid"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Profile"
-)]
-#[instrument(skip(state))]
-pub async fn get_pnl(
-    Path(account_id): Path<String>,
-    State(state): State<AppState>,
-) -> AppJsonResult<PNLResponse> {
-    if !valid_evm_address(&account_id) {
-        return Err(AppError::BadRequest("Invalid account ID".to_string()));
-    }
-    if let Ok(cached_response) = state.trade_redis.get_account_pnl(&account_id).await {
-        return Ok(Json(cached_response));
-    }
-    let pnl_controller = PNLController::new(state.postgres.clone());
-    let pnl = pnl_controller.get_pnl(&account_id).await.map_err(|err| {
-        error!(
-            "Failed to get PNL: account_id: {}, error: {}",
-            account_id, err
-        );
-        AppError::InternalError(err.to_string())
-    })?;
-    if let Err(err) = state.trade_redis.set_account_pnl(&account_id, &pnl).await {
-        error!("Failed to set PNL in cache: {}, error: {}", account_id, err);
-    }
-    info!("Get PNL: account_id :{} pnl :{:?}", account_id, pnl);
-    Ok(Json(pnl))
-}
-
 /// Get profile positions with pagination
 #[utoipa::path(
     get,
-    path = ProfilePath::GetPosition.docs_str(),
+    path = ProfilePath::GetHoldToken.docs_str(),
     params(
-        ("account_id" = String, Path, description = "Account ID to get positions for"),
+        ("account_id" = String, Path, description = "Account ID to get hold token for"),
         ("page" = i64, Query, description = "Page number (starts from 1)"),
         ("limit" = i64, Query, description = "Number of items per page"),
-        ("position_type" = String, Query, description = "Type of position to get (ALL, OPEN, CLOSE)")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved positions", body = PositionResponse),
+        (status = 200, description = "Successfully retrieved positions", body = HoldTokenResponse),
         (status = 404, description = "Account invalid"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Profile"
 )]
 #[instrument(skip(state))]
-pub async fn get_position(
+pub async fn get_hold_token(
     Path(account_id): Path<String>,
-    Query(query): Query<PositionQuery>,
+    Query(query): Query<PaginationParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<PositionResponse> {
+) -> AppJsonResult<HoldTokenResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
     if let Ok(cached_response) = state
         .trade_redis
-        .get_account_position(&account_id, &query)
+        .get_account_hold_token(&account_id, &query)
         .await
     {
         return Ok(Json(cached_response));
@@ -146,7 +104,7 @@ pub async fn get_position(
     };
     let position_controller = PositionController::new(state.postgres.clone());
     let response = position_controller
-        .get_positions(&account_id, &pagination, &query.position_type)
+        .get_hold_token_by_account(&account_id, &pagination)
         .await
         .map_err(|err| {
             error!(
@@ -156,16 +114,16 @@ pub async fn get_position(
             AppError::InternalError(err.to_string())
         })?;
     info!(
-        "Get Position: account_id :{} response :{:?}",
+        "Get Hold Token: account_id :{} response :{:?}",
         account_id, response
     );
     if let Err(err) = state
         .trade_redis
-        .set_account_position(&account_id, &query, &response)
+        .set_account_hold_token(&account_id, &query, &response)
         .await
     {
         error!(
-            "Failed to set position: account_id: {}, error: {}",
+            "Failed to set hold token: account_id: {}, error: {}",
             account_id, err
         );
     }
