@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT COUNT(*) AS count\n            FROM referral\n            WHERE parent_account_id = $1\n            ",
+  "query": "\n            SELECT COALESCE(COUNT(*)::bigint, 0) as count\n            FROM balance b\n            WHERE b.account_id = $1 AND b.balance > 0\n            ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "da2a7a3667d9593a683df614b72d13fa38069485cca4463bedb21e2520986459"
+  "hash": "8e09896136a0728a445b7d501deca316228920e7f3a6a6a7cd5ec1cd1e7841ad"
 }
