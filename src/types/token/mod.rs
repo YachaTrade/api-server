@@ -28,7 +28,7 @@ struct TokenRow {
     total_supply: BigDecimal,
     price: BigDecimal,
     created_at: i64,
-    create_transaction_hash: String,
+    transaction_hash: String,
     is_king: Option<bool>,
     is_king_created_at: Option<i64>,
     creator: String,
@@ -38,7 +38,6 @@ struct TokenRow {
     creator_following_count: i32,
     x_handle: Option<String>,
     x_image_uri: Option<String>,
-    is_blue_label: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, sqlx::FromRow, ToSchema)]
@@ -53,7 +52,7 @@ pub struct TokenWithAccountInfo {
     pub website: Option<String>,
     pub is_listing: bool,
     pub created_at: i64,
-    pub create_transaction_hash: String,
+    pub transaction_hash: String,
     pub account_info: AccountInfo,
     pub is_king: bool,
     pub is_king_created_at: Option<i64>,
@@ -90,7 +89,7 @@ impl TokenController {
                     t.total_supply,
                     m.price,
                     t.created_at,
-                    t.create_transaction_hash,
+                    t.transaction_hash,
                     COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
                     k.created_at as is_king_created_at,
                     t.creator,
@@ -100,7 +99,6 @@ impl TokenController {
                     a.following_count as creator_following_count,
                     ax.x_handle,
                     ax.x_image_uri,
-                    ax.is_blue_label
                 FROM token t
                 LEFT JOIN king k ON t.token_id = k.token_id
                 LEFT JOIN account_x ax ON t.creator = ax.account_id
@@ -125,7 +123,7 @@ impl TokenController {
             website: row.website,
             is_listing: row.is_listing,
             created_at: row.created_at,
-            create_transaction_hash: row.create_transaction_hash,
+            transaction_hash: row.transaction_hash,
             account_info: AccountInfo {
                 account_id: row.creator,
                 nickname: match &row.x_handle {
