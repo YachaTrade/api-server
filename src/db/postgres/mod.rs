@@ -1,4 +1,4 @@
-use sqlx::{Executor, Postgres};
+use sqlx::Executor;
 use std::{env, str::FromStr, time::Duration};
 use tracing::info;
 
@@ -69,6 +69,7 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
         .max_connections(1000)
         // 즉시 읽기 작업을 위한 충분한 최소 연결 유지
         .min_connections(10)
+        
         // Neon 서버리스 환경에 맞는 짧은 수명
         .max_lifetime(Duration::from_secs(10 * 60))
         // PgBouncer가 빠르게 응답해야 하므로 짧은 획득 타임아웃

@@ -329,7 +329,7 @@ impl SwapController {
                 let transaction_hash: String = row.try_get("transaction_hash").unwrap();
                 let x_handle: Option<String> = row.try_get("x_handle").unwrap();
                 let x_image_uri: Option<String> = row.try_get("x_image_uri").unwrap();
-                let is_blue_label: Option<bool> = row.try_get("is_blue_label").unwrap();
+                let _is_blue_label: Option<bool> = row.try_get("is_blue_label").unwrap();
 
                 TokenSwap {
                     swap_id,

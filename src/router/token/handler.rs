@@ -39,7 +39,7 @@ pub async fn get_token(
         error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    if let Ok(cached_response) = state.trade_redis.get_token_response(&token_id).await {
+    if let Ok(cached_response) = state.redis.get_token_response(&token_id).await {
         return Ok(Json(cached_response));
     }
     info!("Get token Request for token: {}", token_id);
@@ -51,11 +51,7 @@ pub async fn get_token(
         );
         AppError::NotFound(err.to_string())
     })?;
-    if let Err(e) = state
-        .trade_redis
-        .set_token_response(&token_id, &response)
-        .await
-    {
+    if let Err(e) = state.redis.set_token_response(&token_id, &response).await {
         error!("Failed to set token response: {}", e);
     }
     info!(
@@ -88,7 +84,7 @@ pub async fn get_token_metadata(
         error!("Invalid token ID format: {}", token_address);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    if let Ok(cached_response) = state.trade_redis.get_token_metadata(&token_address).await {
+    if let Ok(cached_response) = state.redis.get_token_metadata(&token_address).await {
         return Ok(Json(cached_response));
     }
     let token_metadata_controller = TokenMetadataController::new(state.postgres.clone());
@@ -103,7 +99,7 @@ pub async fn get_token_metadata(
             AppError::InternalError(err.to_string())
         })?;
     if let Err(e) = state
-        .trade_redis
+        .redis
         .set_token_metadata(&token_address, &response)
         .await
     {

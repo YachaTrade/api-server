@@ -21,10 +21,10 @@ pub async fn authenticate_user(
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),
     };
 
-    let session_redis = state.session_redis.clone();
+    let redis = state.redis.clone();
     let postgres = state.postgres.clone();
 
-    let session_address = match session_redis.get_address_by_session(&session_key).await {
+    let session_address = match redis.get_address_by_session(&session_key).await {
         Ok(address) => address,
         Err(_) => {
             let session_controller = SessionController::new(postgres.clone());
@@ -33,7 +33,7 @@ pub async fn authenticate_user(
                 .await
                 .map_err(|_| AppError::AuthError("Invalid session key".to_string()))?;
 
-            session_redis
+            redis
                 .set_session(&session_key, &address, *EXPIRATION_SESSION_KEY)
                 .await
                 .map_err(|_| AppError::InternalError("Session Save is Error".into()))?;

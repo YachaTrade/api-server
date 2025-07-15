@@ -13,7 +13,6 @@ use sqlx::types::Json;
 use sqlx::Row;
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::try_join;
-use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -275,7 +274,7 @@ impl TokenManagementController {
                 .bind(account_id)
                 .bind(pagination.limit)
                 .bind(offset)
-                .fetch_all(self.db.get_read_pool())
+                .fetch_all(self.db.get_read_pool()),
         );
 
         // 두 번째 비동기 작업: 총 카운트 가져오기
@@ -293,13 +292,13 @@ impl TokenManagementController {
             Duration::from_millis(500),
             sqlx::query(count_query)
                 .bind(account_id)
-                .fetch_one(self.db.get_read_pool())
+                .fetch_one(self.db.get_read_pool()),
         );
 
         // 두 작업을 병렬로 실행
-        let (token_result, count_result) = try_join!(tokens_future, count_future);
-        let token_result = token_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let (token_result, count_result) = try_join!(tokens_future, count_future)?;
+        let token_result = token_result.map_err(|_| anyhow!("Query timeout after 500ms"))?;
+        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))?;
         let total_count = count_result.get::<i64, _>("count");
 
         let positions = token_result
@@ -381,7 +380,7 @@ impl TokenManagementController {
                 .bind(account_id)
                 .bind(pagination.limit)
                 .bind(offset)
-                .fetch_all(self.db.get_read_pool())
+                .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -415,11 +414,11 @@ impl TokenManagementController {
                     "#,
                 account_id
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        
+
         let total_count = total_count.count.unwrap_or(0);
 
         Ok(HoldingTokenManagementResponse {
@@ -485,7 +484,7 @@ impl TokenManagementController {
                 .bind(now)
                 .bind(pagination.limit)
                 .bind(offset)
-                .fetch_all(self.db.get_read_pool())
+                .fetch_all(self.db.get_read_pool()),
         );
 
         let count_query = r#"
@@ -503,12 +502,12 @@ impl TokenManagementController {
             sqlx::query(count_query)
                 .bind(account_id)
                 .bind(now)
-                .fetch_one(self.db.get_read_pool())
+                .fetch_one(self.db.get_read_pool()),
         );
 
-        let (count_result, token_locks) = try_join!(count_future, token_lock_future);
-        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        let token_locks = token_locks.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let (count_result, token_locks) = try_join!(count_future, token_lock_future)?;
+        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))?;
+        let token_locks = token_locks.map_err(|_| anyhow!("Query timeout after 500ms"))?;
         let total_count = count_result.get::<i64, _>("count");
 
         let token_locks = token_locks
@@ -594,7 +593,7 @@ impl TokenManagementController {
                 .bind(now)
                 .bind(pagination.limit)
                 .bind(offset)
-                .fetch_all(self.db.get_read_pool())
+                .fetch_all(self.db.get_read_pool()),
         );
 
         let withdrawable_lock_count_query = r#"
@@ -612,13 +611,14 @@ impl TokenManagementController {
             sqlx::query(withdrawable_lock_count_query)
                 .bind(account_id)
                 .bind(now)
-                .fetch_one(self.db.get_read_pool())
+                .fetch_one(self.db.get_read_pool()),
         );
 
         let (count_result, withdrawable_locks_raw) =
-            try_join!(count_future, withdrawable_lock_future);
-        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        let withdrawable_locks_raw = withdrawable_locks_raw.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+            try_join!(count_future, withdrawable_lock_future)?;
+        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))?;
+        let withdrawable_locks_raw =
+            withdrawable_locks_raw.map_err(|_| anyhow!("Query timeout after 500ms"))?;
         let total_count = count_result.get::<i64, _>("count");
 
         // JSON 데이터를 파싱하고 구조체로 변환
@@ -732,7 +732,7 @@ impl TokenManagementController {
         // 쿼리 실행
         let rows = tokio::time::timeout(
             Duration::from_millis(500),
-            query_builder.fetch_all(self.db.get_read_pool())
+            query_builder.fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -753,7 +753,7 @@ impl TokenManagementController {
                 let transaction_hash: String = row.try_get("transaction_hash").unwrap();
                 let x_handle: Option<String> = row.try_get("x_handle").unwrap();
                 let x_image_uri: Option<String> = row.try_get("x_image_uri").unwrap();
-                let is_blue_label: Option<bool> = row.try_get("is_blue_label").unwrap();
+                let _is_blue_label: Option<bool> = row.try_get("is_blue_label").unwrap();
 
                 ManagementHistory {
                     account_info: AccountInfo {
@@ -873,7 +873,7 @@ impl TokenManagementController {
 
         let row = tokio::time::timeout(
             Duration::from_millis(500),
-            query_builder.fetch_one(self.db.get_read_pool())
+            query_builder.fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -892,7 +892,7 @@ impl TokenManagementController {
             Duration::from_millis(500),
             sqlx::query(&query)
                 .bind(token_id)
-                .fetch_optional(self.db.get_read_pool())
+                .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -914,7 +914,7 @@ impl TokenManagementController {
             Duration::from_millis(500),
             sqlx::query(query)
                 .bind(token_id)
-                .fetch_optional(self.db.get_read_pool())
+                .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;

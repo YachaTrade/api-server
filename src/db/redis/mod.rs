@@ -43,8 +43,8 @@ pub struct RedisDatabase {
     pool: deadpool_redis::Pool, // 연결 풀 추가
 }
 impl RedisDatabase {
-    pub async fn new_session_pool() -> Self {
-        let url = env::var("SESSION_REDIS_URL").expect("SESSION_REDIS_URL must be set");
+    pub async fn new() -> Self {
+        let url = env::var("REDIS_URL").expect("SESSION_REDIS_URL must be set");
         let mut cfg = Config::from_url(url);
 
         cfg.pool = Some(PoolConfig {

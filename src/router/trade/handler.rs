@@ -62,7 +62,7 @@ pub async fn get_swap_history(
     })?;
 
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_token_swap_history(&token_id, &query)
         .await
     {
@@ -81,7 +81,7 @@ pub async fn get_swap_history(
         })?;
 
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_token_swap_history(&token_id, &response, &query)
         .await
     {
@@ -122,7 +122,7 @@ pub async fn get_holder(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_token_holder_response(&token_id, &params)
         .await
     {
@@ -139,7 +139,7 @@ pub async fn get_holder(
             AppError::InternalError(err.to_string())
         })?;
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_token_holder_response(&token_id, &response, &params)
         .await
     {
@@ -221,7 +221,7 @@ pub async fn get_chart(
     })?;
 
     let chart_controller = ChartController::new(state.postgres.clone());
-    if let Ok(cached_response) = state.trade_redis.get_chart_response(&token, &query).await {
+    if let Ok(cached_response) = state.redis.get_chart_response(&token, &query).await {
         return Ok(Json(cached_response));
     }
     let chart_response = chart_controller
@@ -233,7 +233,7 @@ pub async fn get_chart(
         })?;
 
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_chart_response(&token, &query, &chart_response)
         .await
     {
@@ -304,7 +304,7 @@ pub async fn get_management_history(
     Path(token): Path<String>,
 ) -> AppJsonResult<ManagementHistoryResponse> {
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_token_management_history(&token, &query)
         .await
     {
@@ -322,7 +322,7 @@ pub async fn get_management_history(
             AppError::InternalError(format!("Failed to get management history: {}", err))
         })?;
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_token_management_history(&token, &query, &response)
         .await
     {
