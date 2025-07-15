@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT COUNT(*) as count\n            FROM hype_token h\n            ",
+  "query": "\n                SELECT COUNT(*) as count\n                FROM hype_token h\n                ",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       null
     ]
   },
-  "hash": "941055e8ae2fe1ba0499f59bd6834772ab973347044769cfd95878ff725bbb0f"
+  "hash": "22a47c41ee88ae10b3b9c2a58b596acbf760f0126c8c851d63b35182bfd784e7"
 }

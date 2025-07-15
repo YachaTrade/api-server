@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT COALESCE(COUNT(*)::bigint, 0) as count\n            FROM token t\n            WHERE t.creator = $1\n            ",
+  "query": "\n                SELECT COALESCE(COUNT(*)::bigint, 0) as count\n                FROM balance b\n                WHERE b.account_id = $1 AND b.balance > 0\n                ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "0a4ec8440eddd1460396bf17461ebeac82b8cb563dba1c39223824879f2a08d4"
+  "hash": "6fef295cef6862d8f834f277d00fb818d7510fc04855f1a005e454062e286ba3"
 }

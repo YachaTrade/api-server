@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE account\n            SET following_count = GREATEST(following_count - 1, 0)\n            WHERE account_id = $1\n            RETURNING account_id, nickname, image_uri, follower_count, following_count\n            ",
+  "query": "\n                UPDATE account\n                SET following_count = GREATEST(following_count - 1, 0)\n                WHERE account_id = $1\n                RETURNING account_id, nickname, image_uri, follower_count, following_count\n                ",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "832fd4a19c4978c9260089342b34b57e50926d00d00bca66b8ac3851a002d027"
+  "hash": "9cd79db789844417db493b6827cdbecad33b91455db255c938c3792649e10f58"
 }

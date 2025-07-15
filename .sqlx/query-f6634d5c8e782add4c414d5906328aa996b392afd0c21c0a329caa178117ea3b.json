@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT \n                        COUNT(*)\n                    FROM \n                        balance \n                    WHERE \n                        account_id = $1\n                        AND balance > 0\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f6634d5c8e782add4c414d5906328aa996b392afd0c21c0a329caa178117ea3b"
+}

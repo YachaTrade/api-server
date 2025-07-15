@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT \n                    COUNT(*)\n                FROM chart\n                WHERE token_id = $1\n                    AND interval_type = $2\n                    AND time_stamp <= $3\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int2",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c00ebf142b8478d0133062bcaaa9085fc97058db25335ddf431cde9d6a350e9c"
+}

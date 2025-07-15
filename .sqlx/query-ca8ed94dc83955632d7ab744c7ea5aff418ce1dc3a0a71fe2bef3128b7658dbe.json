@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                market_type,\n                token_id,\n                pool_id,\n                price,\n                latest_trade_at,\n                created_at\n            FROM market\n            WHERE token_id = $1\n            ",
+  "query": "\n                SELECT \n                    market_type,\n                    token_id,\n                    pool_id,\n                    price,\n                    latest_trade_at,\n                    created_at\n                FROM market\n                WHERE token_id = $1\n                ",
   "describe": {
     "columns": [
       {
@@ -48,5 +48,5 @@
       false
     ]
   },
-  "hash": "5fb72176feb068afd0cb398cc1cc6166a5679140f88878f200e2d8d5c2b67153"
+  "hash": "ca8ed94dc83955632d7ab744c7ea5aff418ce1dc3a0a71fe2bef3128b7658dbe"
 }
