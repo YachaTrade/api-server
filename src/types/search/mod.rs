@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -81,63 +82,69 @@ impl SearchController {
 
         let (token_result, account_result) = tokio::join!(
             // 토큰 검색
-            sqlx::query!(
-                r#"
-                SELECT 
-                    t.token_id, t.name, t.symbol, t.image_uri,
-                    t.created_at, t.total_supply, m.market_type, m.price
-                FROM token t
-                JOIN market m ON t.token_id = m.token_id
-                
-                WHERE 
-                   -- 정확한 매칭 (최우선, 가장 빠름)
-                    LOWER(t.token_id) = LOWER($1)
-                    OR LOWER(t.name) = LOWER($1)
-                    OR LOWER(t.symbol) = LOWER($1)
-                    -- Trigram 유사도 매칭 (느리지만 유연함)
-                    OR LOWER(t.token_id) % LOWER($1)
-                    OR LOWER(t.name) % LOWER($1)
-                    OR LOWER(t.symbol) % LOWER($1)
-                ORDER BY 
-                    CASE 
-                        WHEN LOWER(t.name) = LOWER($1) OR LOWER(t.symbol) = LOWER($1) THEN 0
-                        ELSE 1
-                    END,
-                    m.price DESC
-                LIMIT 50
-                "#,
-                query
-            )
-            .fetch_all(pool),
+            tokio::time::timeout(
+                Duration::from_millis(500),
+                sqlx::query!(
+                    r#"
+                    SELECT 
+                        t.token_id, t.name, t.symbol, t.image_uri,
+                        t.created_at, t.total_supply, m.market_type, m.price
+                    FROM token t
+                    JOIN market m ON t.token_id = m.token_id
+                    
+                    WHERE 
+                       -- 정확한 매칭 (최우선, 가장 빠름)
+                        LOWER(t.token_id) = LOWER($1)
+                        OR LOWER(t.name) = LOWER($1)
+                        OR LOWER(t.symbol) = LOWER($1)
+                        -- Trigram 유사도 매칭 (느리지만 유연함)
+                        OR LOWER(t.token_id) % LOWER($1)
+                        OR LOWER(t.name) % LOWER($1)
+                        OR LOWER(t.symbol) % LOWER($1)
+                    ORDER BY 
+                        CASE 
+                            WHEN LOWER(t.name) = LOWER($1) OR LOWER(t.symbol) = LOWER($1) THEN 0
+                            ELSE 1
+                        END,
+                        m.price DESC
+                    LIMIT 50
+                    "#,
+                    query
+                )
+                .fetch_all(pool)
+            ),
             // 계정 기본 정보
-            sqlx::query_as::<_, SearchAccountRow>(
-                r#"
-                SELECT a.account_id, nickname, image_uri, follower_count, following_count,
-                ax.x_handle,
-                ax.x_image_uri,
-                ax.is_blue_label
-                FROM account a
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                WHERE 
-                    LOWER(a.nickname) = LOWER($1)
-                    OR LOWER(a.account_id) = LOWER($1)
-                    OR LOWER(a.nickname) % LOWER($1)
-                    OR LOWER(a.account_id) % LOWER($1)
-                ORDER BY 
-                    CASE 
-                        WHEN LOWER(a.nickname) = LOWER($1) OR LOWER(a.account_id) = LOWER($1) THEN 0
-                        ELSE 1
-                    END,
-                    follower_count DESC
-                LIMIT 5
-                "#
+            tokio::time::timeout(
+                Duration::from_millis(500),
+                sqlx::query_as::<_, SearchAccountRow>(
+                    r#"
+                    SELECT a.account_id, nickname, image_uri, follower_count, following_count,
+                    ax.x_handle,
+                    ax.x_image_uri,
+                    ax.is_blue_label
+                    FROM account a
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    WHERE 
+                        LOWER(a.nickname) = LOWER($1)
+                        OR LOWER(a.account_id) = LOWER($1)
+                        OR LOWER(a.nickname) % LOWER($1)
+                        OR LOWER(a.account_id) % LOWER($1)
+                    ORDER BY 
+                        CASE 
+                            WHEN LOWER(a.nickname) = LOWER($1) OR LOWER(a.account_id) = LOWER($1) THEN 0
+                            ELSE 1
+                        END,
+                        follower_count DESC
+                    LIMIT 5
+                    "#
+                )
+                .bind(query)
+                .fetch_all(pool)
             )
-            .bind(query)
-            .fetch_all(pool)
         );
 
-        let token_records = token_result?;
-        let account_records = account_result?;
+        let token_records = token_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let account_records = account_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         let tokens_vec: Vec<SearchToken> = token_records
             .into_iter()

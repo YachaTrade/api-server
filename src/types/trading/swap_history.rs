@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -8,7 +8,7 @@ use crate::{
     },
     utils::valid_evm_address,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
@@ -149,18 +149,22 @@ impl SwapController {
     }
 
     pub async fn get_total_count_by_account(&self, account_id: &str) -> Result<i64> {
-        let count = sqlx::query!(
-            r#"
-            SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM swap s
-            WHERE s.account_id = $1
-            "#,
-            account_id
+        let count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT COALESCE(COUNT(*)::bigint, 0) as count
+                FROM swap s
+                WHERE s.account_id = $1
+                "#,
+                account_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let count = count.count.unwrap_or(0);
 
         Ok(count)
     }
@@ -171,32 +175,36 @@ impl SwapController {
     ) -> Result<PositionSwapResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
-        let swaps = sqlx::query!(
-            r#"
-            SELECT 
-                s.account_id,
-                s.token_id,
-                t.symbol as token_symbol,
-                t.image_uri as token_image,
-                t.name as token_name,
-                s.is_buy,
-                s.native_amount,
-                s.token_amount,
-                s.created_at,
-                s.transaction_hash
-            FROM swap s
-            JOIN token t ON s.token_id = t.token_id
-            WHERE s.account_id = $1
-            ORDER BY s.created_at DESC
-            LIMIT $2
-            OFFSET $3
-            "#,
-            account_id,
-            pagination.limit as i64,
-            offset
+        let swaps = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT 
+                    s.account_id,
+                    s.token_id,
+                    t.symbol as token_symbol,
+                    t.image_uri as token_image,
+                    t.name as token_name,
+                    s.is_buy,
+                    s.native_amount,
+                    s.token_amount,
+                    s.created_at,
+                    s.transaction_hash
+                FROM swap s
+                JOIN token t ON s.token_id = t.token_id
+                WHERE s.account_id = $1
+                ORDER BY s.created_at DESC
+                LIMIT $2
+                OFFSET $3
+                "#,
+                account_id,
+                pagination.limit as i64,
+                offset
+            )
+            .fetch_all(self.db.get_read_pool())
         )
-        .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         let total_count = if swaps.is_empty() {
             0
@@ -297,7 +305,12 @@ impl SwapController {
         }
 
         // 쿼리 실행
-        let rows = query_builder.fetch_all(self.db.get_read_pool()).await?;
+        let rows = tokio::time::timeout(
+            Duration::from_millis(500),
+            query_builder.fetch_all(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         // 결과 변환 (기존과 동일)
         let swaps: Vec<TokenSwap> = rows
@@ -424,7 +437,12 @@ impl SwapController {
             query_builder = query_builder.bind(account_id);
         }
 
-        let row = query_builder.fetch_one(self.db.get_read_pool()).await?;
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            query_builder.fetch_one(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
     }
@@ -435,10 +453,14 @@ impl SwapController {
             column
         );
 
-        let row = sqlx::query(&query)
-            .bind(token_id)
-            .fetch_optional(self.db.get_read_pool())
-            .await?;
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query(&query)
+                .bind(token_id)
+                .fetch_optional(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
     }

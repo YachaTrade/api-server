@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -24,17 +25,21 @@ impl PriceController {
         PriceController { db }
     }
     pub async fn get_price(&self, token: &str) -> Result<PriceResponse> {
-        let price = sqlx::query!(
-            r#"
-            SELECT 
-                COALESCE(m.price, 0)::numeric as "price!"
-            FROM market m
-            WHERE m.token_id = $1
-            "#,
-            token
+        let price = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT 
+                    COALESCE(m.price, 0)::numeric as "price!"
+                FROM market m
+                WHERE m.token_id = $1
+                "#,
+                token
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         Ok(PriceResponse {
             price: price.price,

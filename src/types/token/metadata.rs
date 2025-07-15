@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -29,13 +30,17 @@ impl TokenMetadataController {
         TokenMetadataController { db }
     }
     pub async fn get_token_metadata(&self, token_id: &str) -> Result<TokenMetadataResponse> {
-        let token = sqlx::query_as!(
-            TokenMetadata,
-            "SELECT token_id, name, symbol, image_uri FROM token WHERE token_id = $1",
-            token_id
+        let token = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as!(
+                TokenMetadata,
+                "SELECT token_id, name, symbol, image_uri FROM token WHERE token_id = $1",
+                token_id
+            )
+            .fetch_one(&*self.db.get_read_pool())
         )
-        .fetch_one(&*self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         Ok(TokenMetadataResponse {
             token_metadata: token,
         })

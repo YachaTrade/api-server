@@ -1,7 +1,7 @@
 use crate::db::postgres::PostgresDatabase;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -54,7 +54,7 @@ impl WalletController {
         account_id: String,
         wallet: Wallet,
     ) -> Result<AccountWalletResponse> {
-        sqlx::query!(
+        let query = sqlx::query!(
             r#"
             INSERT INTO account_wallet (account_id, wallet)
             VALUES ($1, $2)
@@ -65,15 +65,18 @@ impl WalletController {
             account_id,
             wallet.to_string()
         )
-        .fetch_one(self.db.get_write_pool())
+        .fetch_one(self.db.get_write_pool());
+        
+        tokio::time::timeout(Duration::from_millis(500), query)
         .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
 
         Ok(AccountWalletResponse { account_id, wallet })
     }
 
     pub async fn get_wallet(&self, account_id: String) -> Result<AccountWalletResponse> {
-        let record = sqlx::query!(
+        let query = sqlx::query!(
             r#"
             SELECT account_id, wallet
             FROM account_wallet
@@ -81,8 +84,11 @@ impl WalletController {
             "#,
             account_id
         )
-        .fetch_one(self.db.get_read_pool())
+        .fetch_one(self.db.get_read_pool());
+        
+        let record = tokio::time::timeout(Duration::from_millis(500), query)
         .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to get wallet: {}", err))?;
 
         let wallet = match record.wallet.as_str() {

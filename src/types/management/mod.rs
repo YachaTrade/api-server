@@ -6,12 +6,12 @@ use crate::{
     },
     utils::valid_evm_address,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::types::Json;
 use sqlx::Row;
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::try_join;
 use tracing::info;
 use utoipa::ToSchema;
@@ -269,11 +269,14 @@ impl TokenManagementController {
         );
 
         // 첫 번째 비동기 작업: 토큰 데이터 가져오기
-        let tokens_future = sqlx::query_as::<_, DevPositionRaw>(&query)
-            .bind(account_id)
-            .bind(pagination.limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool());
+        let tokens_future = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, DevPositionRaw>(&query)
+                .bind(account_id)
+                .bind(pagination.limit)
+                .bind(offset)
+                .fetch_all(self.db.get_read_pool())
+        );
 
         // 두 번째 비동기 작업: 총 카운트 가져오기
         let count_query = r#"
@@ -286,12 +289,17 @@ impl TokenManagementController {
                 t.is_listing = true
         "#;
 
-        let count_future = sqlx::query(count_query)
-            .bind(account_id)
-            .fetch_one(self.db.get_read_pool());
+        let count_future = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query(count_query)
+                .bind(account_id)
+                .fetch_one(self.db.get_read_pool())
+        );
 
         // 두 작업을 병렬로 실행
-        let (token_result, count_result) = try_join!(tokens_future, count_future)?;
+        let (token_result, count_result) = try_join!(tokens_future, count_future);
+        let token_result = token_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let total_count = count_result.get::<i64, _>("count");
 
         let positions = token_result
@@ -367,12 +375,16 @@ impl TokenManagementController {
             pagination.direction
         );
 
-        let rows = sqlx::query_as::<_, HoldingTokenManagementRaw>(&query)
-            .bind(account_id)
-            .bind(pagination.limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool())
-            .await?;
+        let rows = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, HoldingTokenManagementRaw>(&query)
+                .bind(account_id)
+                .bind(pagination.limit)
+                .bind(offset)
+                .fetch_all(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         let managements = rows
             .into_iter()
@@ -389,22 +401,26 @@ impl TokenManagementController {
             })
             .collect();
 
-        let total_count = sqlx::query!(
-            r#"
-                SELECT 
-                    COUNT(*)
-                FROM 
-                    balance 
-                WHERE 
-                    account_id = $1
-                    AND balance > 0
-                "#,
-            account_id
+        let total_count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                    SELECT 
+                        COUNT(*)
+                    FROM 
+                        balance 
+                    WHERE 
+                        account_id = $1
+                        AND balance > 0
+                    "#,
+                account_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let total_count = total_count.count.unwrap_or(0);
 
         Ok(HoldingTokenManagementResponse {
             managements,
@@ -462,12 +478,15 @@ impl TokenManagementController {
 
         let now = chrono::Utc::now().timestamp();
 
-        let token_lock_future = sqlx::query_as::<_, TokenLockInfoRaw>(&query)
-            .bind(account_id)
-            .bind(now)
-            .bind(pagination.limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool());
+        let token_lock_future = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, TokenLockInfoRaw>(&query)
+                .bind(account_id)
+                .bind(now)
+                .bind(pagination.limit)
+                .bind(offset)
+                .fetch_all(self.db.get_read_pool())
+        );
 
         let count_query = r#"
             SELECT 
@@ -479,12 +498,17 @@ impl TokenManagementController {
                 AND unlock_at > $2
             "#;
 
-        let count_future = sqlx::query(count_query)
-            .bind(account_id)
-            .bind(now)
-            .fetch_one(self.db.get_read_pool());
+        let count_future = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query(count_query)
+                .bind(account_id)
+                .bind(now)
+                .fetch_one(self.db.get_read_pool())
+        );
 
-        let (count_result, token_locks) = try_join!(count_future, token_lock_future)?;
+        let (count_result, token_locks) = try_join!(count_future, token_lock_future);
+        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let token_locks = token_locks.map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let total_count = count_result.get::<i64, _>("count");
 
         let token_locks = token_locks
@@ -563,13 +587,15 @@ impl TokenManagementController {
 
         let now = chrono::Utc::now().timestamp();
 
-        let withdrawable_lock_future =
+        let withdrawable_lock_future = tokio::time::timeout(
+            Duration::from_millis(500),
             sqlx::query_as::<_, WithdrawableLockRaw>(&withdrawable_lock_query)
                 .bind(account_id)
                 .bind(now)
                 .bind(pagination.limit)
                 .bind(offset)
-                .fetch_all(self.db.get_read_pool());
+                .fetch_all(self.db.get_read_pool())
+        );
 
         let withdrawable_lock_count_query = r#"
             SELECT 
@@ -581,13 +607,18 @@ impl TokenManagementController {
                 AND unlock_at <= $2
             "#;
 
-        let count_future = sqlx::query(withdrawable_lock_count_query)
-            .bind(account_id)
-            .bind(now)
-            .fetch_one(self.db.get_read_pool());
+        let count_future = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query(withdrawable_lock_count_query)
+                .bind(account_id)
+                .bind(now)
+                .fetch_one(self.db.get_read_pool())
+        );
 
         let (count_result, withdrawable_locks_raw) =
-            try_join!(count_future, withdrawable_lock_future)?;
+            try_join!(count_future, withdrawable_lock_future);
+        let count_result = count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let withdrawable_locks_raw = withdrawable_locks_raw.map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let total_count = count_result.get::<i64, _>("count");
 
         // JSON 데이터를 파싱하고 구조체로 변환
@@ -699,7 +730,12 @@ impl TokenManagementController {
         }
 
         // 쿼리 실행
-        let rows = query_builder.fetch_all(self.db.get_read_pool()).await?;
+        let rows = tokio::time::timeout(
+            Duration::from_millis(500),
+            query_builder.fetch_all(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         // 결과 변환 (기존과 동일)
         let histories: Vec<ManagementHistory> = rows
@@ -835,7 +871,12 @@ impl TokenManagementController {
             query_builder = query_builder.bind(account_id);
         }
 
-        let row = query_builder.fetch_one(self.db.get_read_pool()).await?;
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            query_builder.fetch_one(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
     }
@@ -847,10 +888,14 @@ impl TokenManagementController {
             column
         );
 
-        let row = sqlx::query(&query)
-            .bind(token_id)
-            .fetch_optional(self.db.get_read_pool())
-            .await?;
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query(&query)
+                .bind(token_id)
+                .fetch_optional(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
     }
@@ -865,10 +910,14 @@ impl TokenManagementController {
         WHERE token_id = $1
         "#;
 
-        let row = sqlx::query(query)
-            .bind(token_id)
-            .fetch_optional(self.db.get_read_pool())
-            .await?;
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query(query)
+                .bind(token_id)
+                .fetch_optional(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
     }

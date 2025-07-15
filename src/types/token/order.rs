@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -157,11 +158,15 @@ impl OrderController {
                     order_direction
                 );
 
-                sqlx::query_as::<_, OrderTokenRaw>(&query)
-                    .bind(pagination.limit)
-                    .bind(offset)
-                    .fetch_all(&*self.db.get_read_pool())
-                    .await?
+                tokio::time::timeout(
+                    Duration::from_millis(500),
+                    sqlx::query_as::<_, OrderTokenRaw>(&query)
+                        .bind(pagination.limit)
+                        .bind(offset)
+                        .fetch_all(&*self.db.get_read_pool())
+                )
+                .await
+                .map_err(|_| anyhow!("Query timeout after 500ms"))??
             }
             TokenOrderType::LatestTrade => {
                 let query = format!(
@@ -189,11 +194,15 @@ impl OrderController {
                     order_direction
                 );
 
-                sqlx::query_as::<_, OrderTokenRaw>(&query)
-                    .bind(pagination.limit)
-                    .bind(offset)
-                    .fetch_all(&*self.db.get_read_pool())
-                    .await?
+                tokio::time::timeout(
+                    Duration::from_millis(500),
+                    sqlx::query_as::<_, OrderTokenRaw>(&query)
+                        .bind(pagination.limit)
+                        .bind(offset)
+                        .fetch_all(&*self.db.get_read_pool())
+                )
+                .await
+                .map_err(|_| anyhow!("Query timeout after 500ms"))??
             }
             TokenOrderType::MarketCap => {
                 let query = format!(
@@ -225,11 +234,15 @@ impl OrderController {
                     order_direction, order_direction
                 );
 
-                sqlx::query_as::<_, OrderTokenRaw>(&query)
-                    .bind(pagination.limit)
-                    .bind(offset)
-                    .fetch_all(&*self.db.get_read_pool())
-                    .await?
+                tokio::time::timeout(
+                    Duration::from_millis(500),
+                    sqlx::query_as::<_, OrderTokenRaw>(&query)
+                        .bind(pagination.limit)
+                        .bind(offset)
+                        .fetch_all(&*self.db.get_read_pool())
+                )
+                .await
+                .map_err(|_| anyhow!("Query timeout after 500ms"))??
             }
         };
 
@@ -238,54 +251,62 @@ impl OrderController {
     }
 
     pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
-        let row = sqlx::query_as::<_, OrderTokenRaw>(
-            r#"
-            SELECT 
-                t.token_id,
-                a.account_id,
-                a.nickname,
-                a.image_uri as account_image_uri,
-                a.follower_count,
-                a.following_count,
-                t.name,
-                t.symbol,
-                t.image_uri as token_image_uri,
-                t.description,
-                t.total_supply as total_supply,
-                COALESCE(m.price, '0') as price,
-                COALESCE(m.reserve_token, '0') as reserve_token,
-                TRUE as is_king,
-                k.created_at as is_king_created_at,
-                m.market_type,
-                t.created_at,
-                k.created_at::FLOAT8 as score,
-                ax.x_handle,
-                ax.x_image_uri,
-                ax.is_blue_label
-            FROM king k
-            JOIN token t ON t.token_id = k.token_id
-            JOIN account a ON t.creator = a.account_id
-            LEFT JOIN account_x ax ON t.creator = ax.account_id
-            LEFT JOIN market m ON t.token_id = m.token_id
-            WHERE k.created_at = (SELECT MAX(created_at) FROM king)
-            "#,
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, OrderTokenRaw>(
+                r#"
+                SELECT 
+                    t.token_id,
+                    a.account_id,
+                    a.nickname,
+                    a.image_uri as account_image_uri,
+                    a.follower_count,
+                    a.following_count,
+                    t.name,
+                    t.symbol,
+                    t.image_uri as token_image_uri,
+                    t.description,
+                    t.total_supply as total_supply,
+                    COALESCE(m.price, '0') as price,
+                    COALESCE(m.reserve_token, '0') as reserve_token,
+                    TRUE as is_king,
+                    k.created_at as is_king_created_at,
+                    m.market_type,
+                    t.created_at,
+                    k.created_at::FLOAT8 as score,
+                    ax.x_handle,
+                    ax.x_image_uri,
+                    ax.is_blue_label
+                FROM king k
+                JOIN token t ON t.token_id = k.token_id
+                JOIN account a ON t.creator = a.account_id
+                LEFT JOIN account_x ax ON t.creator = ax.account_id
+                LEFT JOIN market m ON t.token_id = m.token_id
+                WHERE k.created_at = (SELECT MAX(created_at) FROM king)
+                "#,
+            )
+            .fetch_optional(self.db.get_read_pool())
         )
-        .fetch_optional(self.db.get_read_pool())
         .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
         //
         Ok(row.map(OrderToken::from))
     }
 
     pub async fn get_total_count(&self) -> Result<i64> {
-        let row = sqlx::query!(
-            r#"
-            SELECT total_count
-            FROM token_count
-            "#,
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT total_count
+                FROM token_count
+                "#,
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
         .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|e| anyhow!("Failed to get token count: {}", e))?;
 
         Ok(row.total_count)

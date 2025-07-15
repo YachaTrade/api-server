@@ -3,6 +3,7 @@ pub mod hype;
 pub mod metadata;
 pub mod order;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
@@ -74,42 +75,46 @@ impl TokenController {
     }
     pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
         // Using query_as instead of query! to automatically map to the TokenRow struct
-        let row = sqlx::query_as::<_, TokenRow>(
-            r#"
-                SELECT 
-                    t.token_id,
-                    t.name,
-                    t.symbol,
-                    t.description,
-                    t.twitter,
-                    t.telegram,
-                    t.website,
-                    t.image_uri,
-                    t.is_listing,
-                    t.total_supply,
-                    m.price,
-                    t.created_at,
-                    t.transaction_hash,
-                    COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
-                    k.created_at as is_king_created_at,
-                    t.creator,
-                    a.nickname as creator_nickname,
-                    a.image_uri as creator_image_uri,
-                    a.follower_count as creator_follower_count, 
-                    a.following_count as creator_following_count,
-                    ax.x_handle,
-                    ax.x_image_uri,
-                FROM token t
-                LEFT JOIN king k ON t.token_id = k.token_id
-                LEFT JOIN account_x ax ON t.creator = ax.account_id
-                JOIN market m ON t.token_id = m.token_id
-                JOIN account a ON t.creator = a.account_id
-                WHERE t.token_id = $1
-            "#,
+        let row = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, TokenRow>(
+                r#"
+                    SELECT 
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.image_uri,
+                        t.is_listing,
+                        t.total_supply,
+                        m.price,
+                        t.created_at,
+                        t.transaction_hash,
+                        COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
+                        k.created_at as is_king_created_at,
+                        t.creator,
+                        a.nickname as creator_nickname,
+                        a.image_uri as creator_image_uri,
+                        a.follower_count as creator_follower_count, 
+                        a.following_count as creator_following_count,
+                        ax.x_handle,
+                        ax.x_image_uri
+                    FROM token t
+                    LEFT JOIN king k ON t.token_id = k.token_id
+                    LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    JOIN market m ON t.token_id = m.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    WHERE t.token_id = $1
+                "#,
+            )
+            .bind(token_id)
+            .fetch_one(self.db.get_read_pool())
         )
-        .bind(token_id)
-        .fetch_one(self.db.get_read_pool())
         .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to get token: {}", err))?;
 
         let token = TokenWithAccountInfo {
