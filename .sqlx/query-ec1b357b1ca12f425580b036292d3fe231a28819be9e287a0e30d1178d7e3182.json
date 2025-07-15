@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                s.account_id,\n                s.token_id,\n                t.symbol as token_symbol,\n                t.image_uri as token_image,\n                t.name as token_name,\n                s.is_buy,\n                s.native_amount,\n                s.token_amount,\n                s.created_at,\n                s.transaction_hash\n            FROM swap s\n            JOIN token t ON s.token_id = t.token_id\n            WHERE s.account_id = $1\n            ORDER BY s.created_at DESC\n            LIMIT $2\n            OFFSET $3\n            ",
+  "query": "\n                SELECT \n                    s.account_id,\n                    s.token_id,\n                    t.symbol as token_symbol,\n                    t.image_uri as token_image,\n                    t.name as token_name,\n                    s.is_buy,\n                    s.native_amount,\n                    s.token_amount,\n                    s.created_at,\n                    s.transaction_hash\n                FROM swap s\n                JOIN token t ON s.token_id = t.token_id\n                WHERE s.account_id = $1\n                ORDER BY s.created_at DESC\n                LIMIT $2\n                OFFSET $3\n                ",
   "describe": {
     "columns": [
       {
@@ -74,5 +74,5 @@
       false
     ]
   },
-  "hash": "70300ded144e4097d31ddcc26bc826e4dbbca27e77ea58012eccac2965f628a0"
+  "hash": "ec1b357b1ca12f425580b036292d3fe231a28819be9e287a0e30d1178d7e3182"
 }

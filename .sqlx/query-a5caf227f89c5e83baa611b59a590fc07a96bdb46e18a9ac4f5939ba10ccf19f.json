@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE account\n            SET follower_count = follower_count + 1\n            WHERE account_id = $1\n            RETURNING account_id, nickname, image_uri, follower_count, following_count\n            ",
+  "query": "\n                UPDATE account\n                SET follower_count = follower_count + 1\n                WHERE account_id = $1\n                RETURNING account_id, nickname, image_uri, follower_count, following_count\n                ",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "b199a27d9d2a8875ff2f97fb1aad65e77c26c9bfcaf1212128a03f29794ccf79"
+  "hash": "a5caf227f89c5e83baa611b59a590fc07a96bdb46e18a9ac4f5939ba10ccf19f"
 }
