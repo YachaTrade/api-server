@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -7,7 +8,7 @@ use crate::{
         pagination::PaginationParams,
     },
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
@@ -79,18 +80,22 @@ impl PositionController {
     }
 
     pub async fn get_total_count_by_token_holder(&self, token_id: &str) -> Result<i64> {
-        let count = sqlx::query!(
-            r#"
-            SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM balance b
-            WHERE b.token_id = $1 AND b.balance > 0
-            "#,
-            token_id
+        let count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT COALESCE(COUNT(*)::bigint, 0) as count
+                FROM balance b
+                WHERE b.token_id = $1 AND b.balance > 0
+                "#,
+                token_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let count = count.count.unwrap_or(0);
 
         Ok(count)
     }
@@ -101,49 +106,58 @@ impl PositionController {
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        let record = sqlx::query_as::<_, TokenHolderRow>(
-            r#"
-            SELECT 
-                b.balance as current_token_amount,
-                a.account_id,
-                a.nickname,
-                a.image_uri,
-                a.follower_count,
-                a.following_count,
-                ax.x_handle,
-                ax.x_image_uri,
-                ax.is_blue_label
-            FROM balance b
-            JOIN account a ON b.account_id = a.account_id
-            LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            WHERE b.token_id = $1 AND b.balance > 0
-            ORDER BY b.balance DESC
-            OFFSET $2 LIMIT $3
-            "#,
+        let record = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, TokenHolderRow>(
+                r#"
+                SELECT 
+                    b.balance as current_token_amount,
+                    a.account_id,
+                    a.nickname,
+                    a.image_uri,
+                    a.follower_count,
+                    a.following_count,
+                    ax.x_handle,
+                    ax.x_image_uri,
+                    ax.is_blue_label
+                FROM balance b
+                JOIN account a ON b.account_id = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                WHERE b.token_id = $1 AND b.balance > 0
+                ORDER BY b.balance DESC
+                OFFSET $2 LIMIT $3
+                "#,
+            )
+            .bind(token_id)
+            .bind(offset)
+            .bind(pagination.limit as i64)
+            .fetch_all(self.db.get_read_pool())
         )
-        .bind(token_id)
-        .bind(offset)
-        .bind(pagination.limit as i64)
-        .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let total_count = if record.is_empty() {
             0
         } else {
             self.get_total_count_by_token_holder(token_id).await?
         };
 
-        let token_creator = sqlx::query!(
-            r#"
-            SELECT 
-                t.creator as "creator!"
-            FROM token t
-            WHERE t.token_id = $1   
-            "#,
-            token_id
+        let token_creator = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT 
+                    t.creator as "creator!"
+                FROM token t
+                WHERE t.token_id = $1   
+                "#,
+                token_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .creator;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let token_creator = token_creator.creator;
 
         let holders = record
             .into_iter()
@@ -172,18 +186,22 @@ impl PositionController {
     }
 
     pub async fn get_total_count_by_hold_token(&self, account_id: &str) -> Result<i64> {
-        let count = sqlx::query!(
-            r#"
-            SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM balance b
-            WHERE b.account_id = $1 AND b.balance > 0
-            "#,
-            account_id
+        let count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT COALESCE(COUNT(*)::bigint, 0) as count
+                FROM balance b
+                WHERE b.account_id = $1 AND b.balance > 0
+                "#,
+                account_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let count = count.count.unwrap_or(0);
 
         Ok(count)
     }
@@ -202,27 +220,31 @@ impl PositionController {
             pub balance: String,
         }
 
-        let record = sqlx::query_as::<_, HoldTokenRow>(
-            r#"
-            SELECT 
-                t.token_id,
-                t.name,
-                t.symbol,
-                t.image_uri,
-                b.balance
-            FROM token t
-            JOIN balance b ON t.token_id = b.token_id
-            JOIN market m ON t.token_id = m.token_id
-            WHERE b.account_id = $1 AND b.balance > 0
-            ORDER BY (b.balance * m.price) DESC
-            LIMIT $2 OFFSET $3
-            "#,
+        let record = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, HoldTokenRow>(
+                r#"
+                SELECT 
+                    t.token_id,
+                    t.name,
+                    t.symbol,
+                    t.image_uri,
+                    b.balance
+                FROM token t
+                JOIN balance b ON t.token_id = b.token_id
+                JOIN market m ON t.token_id = m.token_id
+                WHERE b.account_id = $1 AND b.balance > 0
+                ORDER BY (b.balance * m.price) DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(account_id)
+            .bind(pagination.limit)
+            .bind(offset)
+            .fetch_all(self.db.get_read_pool())
         )
-        .bind(account_id)
-        .bind(pagination.limit)
-        .bind(offset)
-        .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         let total_count = if record.is_empty() {
             0

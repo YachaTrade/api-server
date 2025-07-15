@@ -1,6 +1,6 @@
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -55,23 +55,27 @@ impl MarketController {
     }
 
     pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
-        let market = sqlx::query_as!(
-            MarketRaw,
-            r#"
-            SELECT 
-                market_type,
-                token_id,
-                pool_id,
-                price,
-                latest_trade_at,
-                created_at
-            FROM market
-            WHERE token_id = $1
-            "#,
-            token_id
+        let market = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as!(
+                MarketRaw,
+                r#"
+                SELECT 
+                    market_type,
+                    token_id,
+                    pool_id,
+                    price,
+                    latest_trade_at,
+                    created_at
+                FROM market
+                WHERE token_id = $1
+                "#,
+                token_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         Ok(Market::from(market))
     }

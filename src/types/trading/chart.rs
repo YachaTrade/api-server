@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
@@ -113,21 +114,25 @@ impl ChartController {
     }
     pub async fn get_total_count(&self, token_id: &str, interval: ChartInterval) -> Result<i64> {
         let chart_interval: i16 = interval.into();
-        let count = sqlx::query!(
-            r#"
-            SELECT 
-                COUNT(*)
-            FROM chart
-            WHERE token_id = $1
-                AND interval_type = $2
-            "#,
-            token_id,
-            chart_interval
+        let count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT 
+                    COUNT(*)
+                FROM chart
+                WHERE token_id = $1
+                    AND interval_type = $2
+                "#,
+                token_id,
+                chart_interval
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let count = count.count.unwrap_or(0);
 
         Ok(count)
     }
@@ -145,23 +150,27 @@ impl ChartController {
         }
 
         let chart_interval: i16 = interval.into();
-        let count = sqlx::query!(
-            r#"
-            SELECT 
-                COUNT(*)
-            FROM chart
-            WHERE token_id = $1
-                AND interval_type = $2
-                AND time_stamp <= $3
-            "#,
-            token_id,
-            chart_interval,
-            base_timestamp
+        let count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT 
+                    COUNT(*)
+                FROM chart
+                WHERE token_id = $1
+                    AND interval_type = $2
+                    AND time_stamp <= $3
+                "#,
+                token_id,
+                chart_interval,
+                base_timestamp
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let count = count.count.unwrap_or(0);
 
         Ok(count)
     }
@@ -202,12 +211,16 @@ impl ChartController {
             time_condition
         );
 
-        let charts = sqlx::query_as::<_, Chart>(&query)
-            .bind(token_id)
-            .bind(chart_interval)
-            .fetch_all(self.db.get_read_pool())
-            .await
-            .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
+        let charts = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query_as::<_, Chart>(&query)
+                .bind(token_id)
+                .bind(chart_interval)
+                .fetch_all(self.db.get_read_pool())
+        )
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
 
         // let total_count = if charts.is_empty() {
         //     0

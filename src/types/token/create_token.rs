@@ -1,10 +1,11 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::{
     db::postgres::PostgresDatabase,
     types::common::{info::TokenInfo, pagination::PaginationParams},
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -37,18 +38,22 @@ impl TokenCreatedController {
     }
 
     pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
-        let count = sqlx::query!(
-            r#"
-            SELECT COALESCE(COUNT(*)::bigint, 0) as count
-            FROM token t
-            WHERE t.creator = $1
-            "#,
-            account_id
+        let count = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                SELECT COALESCE(COUNT(*)::bigint, 0) as count
+                FROM token t
+                WHERE t.creator = $1
+                "#,
+                account_id
+            )
+            .fetch_one(self.db.get_read_pool())
         )
-        .fetch_one(self.db.get_read_pool())
-        .await?
-        .count
-        .unwrap_or(0);
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let count = count.count.unwrap_or(0);
 
         Ok(count)
     }
@@ -60,50 +65,54 @@ impl TokenCreatedController {
     ) -> Result<TokenCreatedResponse> {
         // Query tokens created by the account with their market and position information
         let offset = (pagination.page - 1) * pagination.limit;
-        let tokens = sqlx::query!(
-            r#"
-            WITH created_tokens AS (
+        let tokens = tokio::time::timeout(
+            Duration::from_millis(500),
+            sqlx::query!(
+                r#"
+                WITH created_tokens AS (
+                    SELECT 
+                        t.token_id,
+                        t.symbol,
+                        t.image_uri,
+                        t.name,
+                        t.total_supply,
+                        t.description,
+                        t.created_at,
+                        t.creator,
+                        t.is_listing,
+                        COALESCE(m.price, 0) as price,
+                        COALESCE(b.balance, 0) as current_amount,
+                        COALESCE(m.price * b.balance, 0) as current_value
+                    FROM token t
+                    LEFT JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
+                    WHERE t.creator = $1
+                )
                 SELECT 
-                    t.token_id,
-                    t.symbol,
-                    t.image_uri,
-                    t.name,
-                    t.total_supply,
-                    t.description,
-                    t.created_at,
-                    t.creator,
-                    t.is_listing,
-                    COALESCE(m.price, 0) as price,
-                    COALESCE(b.balance, 0) as current_amount,
-                    COALESCE(m.price * b.balance, 0) as current_value
-                FROM token t
-                LEFT JOIN market m ON t.token_id = m.token_id
-                LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
-                WHERE t.creator = $1
+                    token_id,
+                    symbol,
+                    image_uri,
+                    name,
+                    is_listing as "is_listing!",
+                    created_at,
+                    COALESCE(price::TEXT, '0') as "price!",
+                    total_supply as "total_supply!",
+                    COALESCE(price * total_supply, 0) as "market_cap!",
+                    COALESCE(current_amount, 0) as "current_amount!",
+                    description as "description?: String"
+                FROM created_tokens
+                ORDER BY current_value DESC
+                LIMIT $2
+                OFFSET $3
+                "#,
+                account_id,
+                pagination.limit as i64,
+                offset
             )
-            SELECT 
-                token_id,
-                symbol,
-                image_uri,
-                name,
-                is_listing as "is_listing!",
-                created_at,
-                COALESCE(price::TEXT, '0') as "price!",
-                total_supply as "total_supply!",
-                COALESCE(price * total_supply, 0) as "market_cap!",
-                COALESCE(current_amount, 0) as "current_amount!",
-                description as "description?: String"
-            FROM created_tokens
-            ORDER BY current_value DESC
-            LIMIT $2
-            OFFSET $3
-            "#,
-            account_id,
-            pagination.limit as i64,
-            offset
+            .fetch_all(self.db.get_read_pool())
         )
-        .fetch_all(self.db.get_read_pool())
-        .await?;
+        .await
+        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         // Convert query results to TokenCreated structs
         let tokens: Vec<TokenCreated> = tokens
