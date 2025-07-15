@@ -66,7 +66,7 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
         // 읽기 작업을 위해 더 많은 연결 허용, 여전히 PgBouncer 고려
-        .max_connections(1000)
+        .max_connections(50)
         // 즉시 읽기 작업을 위한 충분한 최소 연결 유지
         .min_connections(10)
         
