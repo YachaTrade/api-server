@@ -45,11 +45,7 @@ pub async fn search(
     }
 
     // 캐시된 결과에서 페이지네이션
-    if let Ok(Some(cached_response)) = state
-        .trade_redis
-        .get_search_response(&name, pagination)
-        .await
-    {
+    if let Ok(Some(cached_response)) = state.redis.get_search_response(&name, pagination).await {
         debug!("Cache hit for search query: {}", name);
         return Ok(Json(cached_response));
     }
@@ -64,11 +60,7 @@ pub async fn search(
         })?;
 
     // 결과를 캐시에 저장
-    if let Err(err) = state
-        .trade_redis
-        .set_search_response(&name, &response)
-        .await
-    {
+    if let Err(err) = state.redis.set_search_response(&name, &response).await {
         warn!("Failed to cache search response: {}", err);
     }
 

@@ -6,7 +6,7 @@ use crate::{
         common::{identifier::Identifier, pagination::PaginationParams},
         token::create_token::{TokenCreatedController, TokenCreatedResponse},
         trading::{
-            position::{HoldTokenResponse, PositionController, PositionResponse},
+            position::{HoldTokenResponse, PositionController},
             swap_history::{PositionSwapResponse, SwapController},
         },
     },
@@ -91,7 +91,7 @@ pub async fn get_hold_token(
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_account_hold_token(&account_id, &query)
         .await
     {
@@ -118,7 +118,7 @@ pub async fn get_hold_token(
         account_id, response
     );
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_account_hold_token(&account_id, &query, &response)
         .await
     {
@@ -156,7 +156,7 @@ pub async fn get_token_created(
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_account_token_created(&account_id, &pagination)
         .await
     {
@@ -178,7 +178,7 @@ pub async fn get_token_created(
         account_id, response
     );
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_account_token_created(&account_id, &pagination, &response)
         .await
     {

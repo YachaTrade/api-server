@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     Extension, Json,
 };
 
@@ -47,7 +47,7 @@ pub async fn get_dev_positions(
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<DevPositionsResponse> {
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_dev_positions(&session_address, &query)
         .await
     {
@@ -63,7 +63,7 @@ pub async fn get_dev_positions(
         })?;
 
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_dev_positions(&session_address, &query, &dev_position)
         .await
     {
@@ -103,7 +103,7 @@ pub async fn get_holding_token_management(
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<HoldingTokenManagementResponse> {
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_holding_token_management(&session_address, &query)
         .await
     {
@@ -119,7 +119,7 @@ pub async fn get_holding_token_management(
         })?;
 
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_holding_token_management(&session_address, &query, &management_position)
         .await
     {
@@ -159,7 +159,7 @@ pub async fn get_account_locks(
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<TokenLockResponse> {
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_account_locks(&session_address, &query)
         .await
     {
@@ -175,7 +175,7 @@ pub async fn get_account_locks(
         })?;
 
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_account_locks(&session_address, &query, &account_locks)
         .await
     {
@@ -215,7 +215,7 @@ pub async fn get_account_withdrawable_lock(
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<WithdrawableLockResponse> {
     if let Ok(cached_response) = state
-        .trade_redis
+        .redis
         .get_account_withdrawable_lock(&session_address, &query)
         .await
     {
@@ -231,7 +231,7 @@ pub async fn get_account_withdrawable_lock(
         })?;
 
     if let Err(err) = state
-        .trade_redis
+        .redis
         .set_account_withdrawable_lock(&session_address, &query, &account_withdrawable_lock)
         .await
     {

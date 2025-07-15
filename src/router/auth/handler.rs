@@ -1,10 +1,8 @@
 use std::env;
 use std::str::FromStr;
 
-use alloy::primitives::{keccak256, Bytes};
-use alloy::providers::{Provider, ProviderBuilder};
-use alloy::sol;
-use alloy::{primitives::Address, signers::Signature};
+use alloy::primitives::Address;
+use alloy::signers::Signature;
 use anyhow::Result;
 use axum::http::header::{HeaderValue, SET_COOKIE};
 use axum::{
@@ -19,7 +17,6 @@ use tower_cookies::Cookie;
 
 use tracing::{error, info, instrument};
 
-use url::Url;
 use uuid::Uuid;
 
 use crate::types::account::{Account, AccountController};
@@ -81,7 +78,7 @@ pub async fn auth_nonce(
         payload.address, domain, chain_id, nonce, issued_at
     );
     if let Err(err) = state
-        .session_redis
+        .redis
         .set_sign_message(&payload.address, &message)
         .await
     {
@@ -136,7 +133,7 @@ pub async fn auth_session(
     let message = payload.nonce;
 
     let address = verify_wallet(&payload.signature, &message).await?;
-    let redis = state.session_redis.clone();
+    let redis = state.redis.clone();
 
     info!("Message for address {}: {}", address, message);
 
@@ -271,7 +268,7 @@ pub async fn auth_delete_session(
     let time_start = std::time::Instant::now();
     // 병렬로 Redis와 PostgreSQL에서 세션 정보 삭제
     let postgres_clone = state.postgres.clone();
-    let redis_clone = state.session_redis.clone();
+    let redis_clone = state.redis.clone();
     let session_controller = SessionController::new(postgres_clone);
     let start_time = std::time::Instant::now();
     let (redis_result, postgres_result) = tokio::join!(

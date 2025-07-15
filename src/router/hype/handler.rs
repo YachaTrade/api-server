@@ -36,7 +36,7 @@ pub async fn get_hype_token(
     Query(pagination): Query<PaginationParams>,
 ) -> AppJsonResult<HypeTokenResponse> {
     info!("Get Hype Token: pagination: {:?}", pagination);
-    if let Ok(cached_response) = state.trade_redis.get_hype_token_response(&pagination).await {
+    if let Ok(cached_response) = state.redis.get_hype_token_response(&pagination).await {
         return Ok(Json(cached_response));
     }
     info!("Get Hype Token: pagination: {:?}, cache miss", pagination);
@@ -50,7 +50,7 @@ pub async fn get_hype_token(
             AppError::InternalError(error_msg)
         })?;
     if let Err(e) = state
-        .trade_redis
+        .redis
         .set_hype_token_response(&pagination, &response)
         .await
     {
