@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
@@ -127,11 +127,11 @@ impl ChartController {
                 token_id,
                 chart_interval
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        
+
         let count = count.count.unwrap_or(0);
 
         Ok(count)
@@ -165,11 +165,11 @@ impl ChartController {
                 chart_interval,
                 base_timestamp
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        
+
         let count = count.count.unwrap_or(0);
 
         Ok(count)
@@ -216,7 +216,7 @@ impl ChartController {
             sqlx::query_as::<_, Chart>(&query)
                 .bind(token_id)
                 .bind(chart_interval)
-                .fetch_all(self.db.get_read_pool())
+                .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?

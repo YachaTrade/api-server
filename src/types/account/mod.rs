@@ -2,11 +2,11 @@ pub mod wallet;
 pub mod x;
 use std::{env, sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
+use sqlx::{Postgres, QueryBuilder, Row, postgres::PgRow};
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -80,7 +80,7 @@ impl Account {
     }
 }
 #[derive(sqlx::FromRow)]
-struct AccountRow {
+struct AccountRaw {
     account_id: String,
     nickname: String,
     image_uri: String,
@@ -92,7 +92,7 @@ struct AccountRow {
     is_blue_label: Option<bool>,
 }
 #[derive(sqlx::FromRow)]
-struct AccountMutualRow {
+struct AccountMutualRaw {
     account_id: String,
     nickname: String,
     image_uri: String,
@@ -131,11 +131,11 @@ impl AccountController {
             account.following_count,
         )
         .fetch_optional(self.db.get_write_pool());
-        
+
         tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
         Ok(self.get_account(&account.account_id).await?)
     }
@@ -205,7 +205,7 @@ impl AccountController {
                 })
             })
             .fetch_one(self.db.get_write_pool()); // 풀에서 커넥션 얻기
-            
+
         let updated_account = tokio::time::timeout(Duration::from_millis(500), update_query)
             .await
             .map_err(|_| anyhow!("Query timeout after 500ms"))?
@@ -215,7 +215,7 @@ impl AccountController {
     }
 
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
-        let query = sqlx::query_as::<_, AccountRow>(
+        let query = sqlx::query_as::<_, AccountRaw>(
             r#"
             SELECT a.account_id,
             a.nickname,
@@ -233,11 +233,11 @@ impl AccountController {
         )
         .bind(account_id)
         .fetch_one(self.db.get_read_pool());
-        
+
         let row = tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
 
         Ok(Account {
             account_id: row.account_id,
@@ -271,7 +271,7 @@ impl AccountController {
             Identifier::Nickname(nick) => nick,
         };
 
-        let query = sqlx::query_as::<_, AccountMutualRow>(
+        let query = sqlx::query_as::<_, AccountMutualRaw>(
             r#"
             WITH target_account AS (
                 SELECT 
@@ -359,11 +359,11 @@ impl AccountController {
         .bind(id_value)
         .bind(&request_account_id)
         .fetch_one(self.db.get_read_pool());
-        
+
         let result = tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to get account with mutual. Reason: {:?}", err))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Failed to get account with mutual. Reason: {:?}", err))?;
 
         let mutual = if request_account_id.is_some() {
             Some(Mutual {

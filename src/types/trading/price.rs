@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -36,7 +36,7 @@ impl PriceController {
                 "#,
                 token
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
