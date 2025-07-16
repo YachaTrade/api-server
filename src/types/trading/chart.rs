@@ -23,6 +23,34 @@ pub struct Chart {
     pub time_stamp: i64,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct GetBarsRequest {
+    #[serde(default = "default_resolution")]
+    pub resolution: String, // 타임프레임 (1, 5, 15, 30, 60, D, W, M)
+    pub from: i64, // 시작 타임스탬프 (초 단위)
+    pub to: i64,   // 끝 타임스탬프 (초 단위)
+    #[serde(default = "default_countback")]
+    pub countback: Option<i32>, // 반환할 최대 캔들 수
+}
+fn default_resolution() -> String {
+    "5".to_string()
+}
+
+fn default_countback() -> Option<i32> {
+    Some(500)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BarResponse {
+    pub t: Vec<i64>,    // 타임스탬프 배열 (초 단위)
+    pub c: Vec<String>, // 종가 배열 (문자열로 반환)
+    pub o: Vec<String>, // 시가 배열 (문자열로 반환)
+    pub h: Vec<String>, // 고가 배열 (문자열로 반환)
+    pub l: Vec<String>, // 저가 배열 (문자열로 반환)
+    pub v: Vec<String>, // 거래량 배열 (문자열로 반환)
+    pub s: String,      // 상태 코드 ("ok" 또는 "error" 또는 "no_data")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ChartInterval {
     Minute1 = 1,
@@ -112,83 +140,28 @@ impl ChartController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         ChartController { db }
     }
-    pub async fn get_total_count(&self, token_id: &str, interval: ChartInterval) -> Result<i64> {
-        let chart_interval: i16 = interval.into();
-        let count = tokio::time::timeout(
-            Duration::from_millis(500),
-            sqlx::query!(
-                r#"
-                SELECT 
-                    COUNT(*)
-                FROM chart
-                WHERE token_id = $1
-                    AND interval_type = $2
-                "#,
-                token_id,
-                chart_interval
-            )
-            .fetch_one(self.db.get_read_pool()),
-        )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
-
-        let count = count.count.unwrap_or(0);
-
-        Ok(count)
-    }
-
-    // Get count of chart data with timestamps less than the given base_timestamp
-    pub async fn get_total_count_before_timestamp(
+    pub async fn get_prices(
         &self,
         token_id: &str,
-        interval: ChartInterval,
-        base_timestamp: i64,
-    ) -> Result<i64> {
-        // If base_timestamp is 0 or negative, return total count
-        if base_timestamp <= 0 {
-            return self.get_total_count(token_id, interval).await;
-        }
-
-        let chart_interval: i16 = interval.into();
-        let count = tokio::time::timeout(
-            Duration::from_millis(500),
-            sqlx::query!(
-                r#"
-                SELECT 
-                    COUNT(*)
-                FROM chart
-                WHERE token_id = $1
-                    AND interval_type = $2
-                    AND time_stamp <= $3
-                "#,
-                token_id,
-                chart_interval,
-                base_timestamp
-            )
-            .fetch_one(self.db.get_read_pool()),
-        )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
-
-        let count = count.count.unwrap_or(0);
-
-        Ok(count)
-    }
-
-    pub async fn get_chart(
-        &self,
-        token_id: &str,
-        interval: ChartInterval,
-        base_timestamp: i64,
-    ) -> Result<ChartResponse> {
-        let chart_interval: i16 = interval.into();
-
-        // Use base_timestamp as a filter condition if provided
-        let time_condition = if base_timestamp > 0 {
-            format!("AND ch.time_stamp <= {}\n", base_timestamp)
-        } else {
-            String::new()
+        request: &GetBarsRequest,
+    ) -> Result<BarResponse> {
+        // resolution을 ChartInterval로 변환
+        let interval = match request.resolution.as_str() {
+            "1" => ChartInterval::Minute1,
+            "5" => ChartInterval::Minute5,
+            "15" => ChartInterval::Minute15,
+            "30" => ChartInterval::Minute30,
+            "60" | "1H" => ChartInterval::Hour1,
+            "4H" => ChartInterval::Hour4,
+            "D" => ChartInterval::Day1,
+            "W" => ChartInterval::Week1,
+            _ => return Err(anyhow!("Invalid resolution: {}", request.resolution)),
         };
+
+        let chart_interval: i16 = interval.into();
+
+        // countback이 제공되었다면 사용, 아니면 기본값 500
+        let limit = request.countback.unwrap_or(500);
 
         let query = format!(
             r#"
@@ -201,42 +174,63 @@ impl ChartController {
                 low_price,
                 volume,
                 time_stamp
-            FROM chart ch
-            WHERE ch.token_id = $1
-            AND ch.interval_type = $2
-            {}
-            ORDER BY ch.time_stamp DESC
-            LIMIT 500
-            "#,
-            time_condition
+            FROM chart
+            WHERE token_id = $1
+            AND interval_type = $2
+            AND time_stamp >= $3
+            AND time_stamp <= $4
+            ORDER BY time_stamp ASC
+            LIMIT $5
+            "#
         );
 
-        let charts = tokio::time::timeout(
-            Duration::from_millis(500),
-            sqlx::query_as::<_, Chart>(&query)
-                .bind(token_id)
-                .bind(chart_interval)
-                .fetch_all(self.db.get_read_pool()),
-        )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
+        let charts = sqlx::query_as::<_, Chart>(&query)
+            .bind(token_id)
+            .bind(chart_interval)
+            .bind(request.from)
+            .bind(request.to)
+            .bind(limit as i32)
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
 
-        // let total_count = if charts.is_empty() {
-        //     0
-        // } else {
-        //     // Get count of data with timestamps less than or equal to base_timestamp
-        //     self.get_total_count_before_timestamp(token_id, interval, base_timestamp)
-        //         .await?
-        // };
+        if charts.is_empty() {
+            return Ok(BarResponse {
+                t: vec![],
+                c: vec![],
+                o: vec![],
+                h: vec![],
+                l: vec![],
+                v: vec![],
+                s: "no_data".to_string(),
+            });
+        }
 
-        // Return the chart data without unnecessary transformation
-        Ok(ChartResponse {
-            data: charts,
-            token_id: token_id.to_string(),
-            interval: ChartInterval::i16_to_string(chart_interval)?,
-            base_timestamp,
-            // total_count,
+        // 차트 데이터를 BarData 형식으로 변환
+        let mut t = Vec::with_capacity(charts.len());
+        let mut c = Vec::with_capacity(charts.len());
+        let mut o = Vec::with_capacity(charts.len());
+        let mut h = Vec::with_capacity(charts.len());
+        let mut l = Vec::with_capacity(charts.len());
+        let mut v = Vec::with_capacity(charts.len());
+
+        for chart in charts {
+            t.push(chart.time_stamp);
+            c.push(chart.close_price.to_string());
+            o.push(chart.open_price.to_string());
+            h.push(chart.high_price.to_string());
+            l.push(chart.low_price.to_string());
+            v.push(chart.volume.to_string());
+        }
+
+        Ok(BarResponse {
+            t,
+            c,
+            o,
+            h,
+            l,
+            v,
+            s: "ok".to_string(),
         })
     }
 }

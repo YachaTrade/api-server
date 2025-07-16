@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 
 use tracing::{error, info, instrument, warn};
@@ -14,7 +14,10 @@ use crate::{
             ManagementHistoryQuery, ManagementHistoryResponse, TokenManagementController,
         },
         trading::{
-            chart::{ChartController, ChartInterval, ChartQuery, ChartResponse},
+            chart::{
+                BarResponse, ChartController, ChartInterval, ChartQuery, ChartResponse,
+                GetBarsRequest,
+            },
             market::{Market, MarketController},
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
@@ -61,11 +64,7 @@ pub async fn get_swap_history(
         AppError::BadRequest(e)
     })?;
 
-    if let Ok(cached_response) = state
-        .redis
-        .get_token_swap_history(&token_id, &query)
-        .await
-    {
+    if let Ok(cached_response) = state.redis.get_token_swap_history(&token_id, &query).await {
         return Ok(Json(cached_response));
     }
 
@@ -197,53 +196,66 @@ pub async fn get_market(
 #[utoipa::path(
     get,
     path = TradePath::GetChart.docs_str(),
+    params(
+        ("token_address" = String, Path, description = "Token address"),
+        ("resolution" = String, Query, description = "Chart resolution (1, 5, 15, 30, 60/1H,4H, D, W)"),
+        ("from" = i64, Query, description = "Start timestamp (seconds)"),
+        ("to" = i64, Query, description = "End timestamp (seconds)"),
+        ("countback" = Option<i32>, Query, description = "Maximum number of candles to return (default: 500)")
+    ),
     responses(
-        (status = 200, description = "Success", body = ChartResponse),
-        (status = 404, description = "Chart not found"),
+        (status = 200, description = "Success", body = BarResponse),
+        (status = 400, description = "Invalid token address or request parameters"),
+        (status = 404, description = "Token not found"),
         (status = 500, description = "Internal server error")
     ),
-    params(
-        ("token" = String, Path, description = "Token ID"),
-        ("interval" = String, Query, description = "Chart interval (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)"),
-        ("base_timestamp" = i64, Query, description = "Base timestamp")
-    ),
-    tag = "Trade",
+    tag = "Trade"
 )]
-#[instrument(skip(state))]
-pub async fn get_chart(
+pub async fn get_prices(
     State(state): State<AppState>,
-    Path(token): Path<String>,
-    Query(query): Query<ChartQuery>,
-) -> AppJsonResult<ChartResponse> {
-    let chart_interval = ChartInterval::from_str(&query.interval).map_err(|err| {
-        error!("Invalid chart interval: {}", err);
-        AppError::BadRequest(format!("Invalid chart interval: {}", err))
-    })?;
+    Path(token_address): Path<String>,
+    Query(query): Query<GetBarsRequest>,
+) -> AppJsonResult<BarResponse> {
+    if !valid_evm_address(&token_address) {
+        error!("Invalid token address format: {}", token_address);
+        return Err(AppError::BadRequest("Invalid token address".to_string()));
+    }
+
+    // 캐시에서 먼저 데이터 조회
+    let cache_result = state.redis.get_prices(&token_address, &query).await;
+
+    if let Ok(Some(cached_data)) = cache_result {
+        info!(
+            "Cache hit for bar data: {} (resolution: {})",
+            token_address, query.resolution
+        );
+        return Ok(Json(cached_data));
+    }
 
     let chart_controller = ChartController::new(state.postgres.clone());
-    if let Ok(cached_response) = state.redis.get_chart_response(&token, &query).await {
-        return Ok(Json(cached_response));
-    }
-    let chart_response = chart_controller
-        .get_chart(&token, chart_interval, query.base_timestamp)
+
+    // 요청에서 필요한 매개변수 추출
+    let token_id = token_address;
+
+    // 차트 데이터 가져오기
+    let bar_data = chart_controller
+        .get_prices(&token_id, &query)
         .await
         .map_err(|err| {
-            error!("Failed to get chart: token: {}, error: {}", token, err);
-            AppError::InternalError(format!("Failed to get chart: {}", err))
+            let err_msg = format!(
+                "Failed to get price chart data: token_id: {}, error: {}",
+                token_id, err
+            );
+            error!("{}", err_msg);
+            AppError::InternalError(err_msg)
         })?;
 
-    if let Err(err) = state
-        .redis
-        .set_chart_response(&token, &query, &chart_response)
-        .await
-    {
-        warn!("Failed to set chart cache: {}", err);
+    // 조회 결과를 캐시에 저장
+    if let Err(err) = state.redis.set_prices(&token_id, &query, &bar_data).await {
+        error!("Failed to cache bar data response: {}", err);
     }
-    info!(
-        "Get Chart: token: {}, response: {:?}",
-        token, chart_response
-    );
-    Ok(Json(chart_response))
+
+    Ok(Json(bar_data))
 }
 
 ///Get price for a token

@@ -1,8 +1,8 @@
 use std::env;
 
 use deadpool_redis::{
-    redis::{pipe, AsyncCommands},
     Config, PoolConfig, Runtime,
+    redis::{AsyncCommands, pipe},
 };
 
 use tracing::{debug, info};
@@ -11,7 +11,7 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
+        CHART_EXPIRATION, GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
         GET_DEV_POSITIONS_EXPIRATION, GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION,
         GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
         GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION, HOLD_TOKEN_EXPIRATION,
@@ -25,14 +25,14 @@ use crate::{
         },
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
         token::{
+            TokenResponse,
             create_token::TokenCreatedResponse,
             hype::HypeTokenResponse,
             metadata::TokenMetadataResponse,
             order::{OrderMessage, TokenOrderType},
-            TokenResponse,
         },
         trading::{
-            chart::{ChartQuery, ChartResponse},
+            chart::{BarResponse, ChartQuery, ChartResponse, GetBarsRequest},
             position::{HoldTokenResponse, TokenHolderResponse},
             swap_history::{SwapQuery, TokenSwapResponse},
         },
@@ -753,6 +753,47 @@ impl RedisDatabase {
         let key = format!("token:{}:management_history:query:{:?}", token_id, query);
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION)
+            .await?;
+        Ok(())
+    }
+}
+
+impl RedisDatabase {
+    pub async fn get_prices(
+        &self,
+        token_id: &str,
+        request: &GetBarsRequest,
+    ) -> Result<Option<BarResponse>> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "token:{}:chart:resolution:{}:from:{}_to:{}",
+            token_id, request.resolution, request.from, request.to
+        );
+        let data: Option<String> = conn.get(&key).await?;
+
+        match data {
+            Some(json) => {
+                let bar_data = serde_json::from_str::<BarResponse>(&json)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize BarResponse: {}", e))?;
+                Ok(Some(bar_data))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn set_prices(
+        &self,
+        token_id: &str,
+        request: &GetBarsRequest,
+        bar_data: &BarResponse,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "token:{}:chart:resolution:{}:from:{}_to:{}",
+            token_id, request.resolution, request.from, request.to
+        );
+        let json = serde_json::to_string(bar_data)?;
+        conn.pset_ex::<String, String, ()>(key, json, *CHART_EXPIRATION)
             .await?;
         Ok(())
     }
