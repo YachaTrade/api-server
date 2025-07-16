@@ -5,7 +5,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     types::common::{info::AccountInfo, pagination::PaginationParams},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 
 use serde::{Deserialize, Serialize};
@@ -42,7 +42,6 @@ pub struct OrderTokenInfo {
     pub reserve_token: BigDecimal,
     pub created_at: i64,
     pub market_type: String,
-    pub is_king: bool,
     pub score: f64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -60,7 +59,6 @@ pub struct OrderTokenRaw {
     pub total_supply: BigDecimal,
     pub price: BigDecimal,
     pub reserve_token: BigDecimal,
-    pub is_king: bool,
     pub market_type: String,
     pub created_at: i64,
     pub score: f64,
@@ -86,7 +84,6 @@ impl From<OrderTokenRaw> for OrderToken {
                 reserve_token: row.reserve_token,
                 created_at: row.created_at,
                 market_type: row.market_type,
-                is_king: row.is_king,
                 score: row.score,
             },
             account_info: AccountInfo {
@@ -142,7 +139,6 @@ impl OrderController {
                         t.total_supply as total_supply,
                         COALESCE(m.price, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
-                        COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
@@ -151,7 +147,6 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
                     LEFT JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -163,7 +158,7 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRaw>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool())
+                        .fetch_all(&*self.db.get_read_pool()),
                 )
                 .await
                 .map_err(|_| anyhow!("Query timeout after 500ms"))??
@@ -178,7 +173,6 @@ impl OrderController {
                         t.total_supply as total_supply,
                         COALESCE(m.price, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
-                        COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
@@ -187,7 +181,6 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
-                    LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -199,7 +192,7 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRaw>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool())
+                        .fetch_all(&*self.db.get_read_pool()),
                 )
                 .await
                 .map_err(|_| anyhow!("Query timeout after 500ms"))??
@@ -214,7 +207,6 @@ impl OrderController {
                         t.total_supply as total_supply,
                         COALESCE(m.price, '0') as price,
                         COALESCE(m.reserve_token, '0') as reserve_token,
-                        COALESCE(k.token_id IS NOT NULL, false) as is_king,
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
@@ -228,7 +220,6 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
-                    LEFT JOIN king k ON t.token_id = k.token_id
                     ORDER BY m.price {}
                     "#,
                     order_direction, order_direction
@@ -239,7 +230,7 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRaw>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool())
+                        .fetch_all(&*self.db.get_read_pool()),
                 )
                 .await
                 .map_err(|_| anyhow!("Query timeout after 500ms"))??
@@ -269,8 +260,6 @@ impl OrderController {
                     t.total_supply as total_supply,
                     COALESCE(m.price, '0') as price,
                     COALESCE(m.reserve_token, '0') as reserve_token,
-                    TRUE as is_king,
-                    k.created_at as is_king_created_at,
                     m.market_type,
                     t.created_at,
                     k.created_at::FLOAT8 as score,
@@ -285,7 +274,7 @@ impl OrderController {
                 WHERE k.created_at = (SELECT MAX(created_at) FROM king)
                 "#,
             )
-            .fetch_optional(self.db.get_read_pool())
+            .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
@@ -303,7 +292,7 @@ impl OrderController {
                 FROM token_count
                 "#,
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
