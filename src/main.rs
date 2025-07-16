@@ -59,7 +59,7 @@ use clap::Parser;
         // ----------------Trade----------------
         router::trade::handler::get_swap_history,
         router::trade::handler::get_market,
-        router::trade::handler::get_chart,
+        router::trade::handler::get_prices,
         router::trade::handler::get_price,
         router::trade::handler::get_holder,
         router::trade::handler::get_management_history,
@@ -154,6 +154,8 @@ use clap::Parser;
             types::trading::swap_history::TokenSwapResponse,
             types::trading::market::Market,
             types::trading::price::PriceResponse,
+            types::trading::chart::BarResponse,
+            types::trading::chart::GetBarsRequest,
 
 
             //Search

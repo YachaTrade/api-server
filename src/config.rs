@@ -21,7 +21,7 @@ lazy_static! {
     pub static ref GET_TOKEN_METADATA_EXPIRATION:u64 = 43_200_000; // 12 hours in milliseconds
     pub static ref GET_HYPE_TOKEN_RESPONSE_EXPIRATION: u64 = 10_000; // 10 seconds in milliseconds
 
-
+    pub static ref CHART_EXPIRATION:u64 = 5_000; // 5 seconds in milliseconds
 
 
 
