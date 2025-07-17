@@ -1,10 +1,11 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::db::postgres::PostgresDatabase;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use tracing::info;
 
 use super::account::Account;
 
@@ -51,6 +52,8 @@ impl SessionController {
     }
 
     pub async fn set_session(&self, session_id: &str, address: &str) -> Result<()> {
+        let start_time = Instant::now();
+        
         // 기존 세션 삭제 및 새 세션 삽입
         tokio::time::timeout(
             Duration::from_millis(500),
@@ -69,10 +72,15 @@ impl SessionController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
+        let elapsed = start_time.elapsed();
+        info!("set_session completed in {:?} for address: {}", elapsed, address);
+
         Ok(())
     }
 
     pub async fn get_address_by_session_id(&self, session_id: &str) -> Result<String> {
+        let start_time = Instant::now();
+        
         let session = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -85,10 +93,16 @@ impl SessionController {
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_address_by_session_id completed in {:?} for session_id: {}", elapsed, session_id);
+        
         Ok(session.account_id)
     }
 
     pub async fn delete_session_by_address(&self, address: &str) -> Result<()> {
+        let start_time = Instant::now();
+        
         tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -102,10 +116,15 @@ impl SessionController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
+        let elapsed = start_time.elapsed();
+        info!("delete_session_by_address completed in {:?} for address: {}", elapsed, address);
+
         Ok(())
     }
 
     pub async fn delete_session_by_id(&self, session_id: &str) -> Result<()> {
+        let start_time = Instant::now();
+        
         tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -118,6 +137,9 @@ impl SessionController {
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+
+        let elapsed = start_time.elapsed();
+        info!("delete_session_by_id completed in {:?} for session_id: {}", elapsed, session_id);
 
         Ok(())
     }

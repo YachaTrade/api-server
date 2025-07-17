@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -145,6 +145,7 @@ impl ChartController {
         token_id: &str,
         request: &GetBarsRequest,
     ) -> Result<BarResponse> {
+        let start_time = Instant::now();
         // resolution을 ChartInterval로 변환
         let interval = match request.resolution.as_str() {
             "1" => ChartInterval::Minute1,
@@ -223,6 +224,8 @@ impl ChartController {
             v.push(chart.volume.to_string());
         }
 
+        let elapsed = start_time.elapsed();
+        info!("get_prices completed in {:?} for token_id: {}, resolution: {}, from: {}, to: {}", elapsed, token_id, request.resolution, request.from, request.to);
         Ok(BarResponse {
             t,
             c,

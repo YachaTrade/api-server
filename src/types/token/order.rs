@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -10,7 +10,7 @@ use bigdecimal::BigDecimal;
 
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-
+use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -126,6 +126,7 @@ impl OrderController {
         order_by: TokenOrderType,
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
+        let start_time = Instant::now();
         let offset = (pagination.page.abs() - 1) * pagination.limit;
         let order_direction = &pagination.direction;
         let order_token_raw = match order_by {
@@ -238,10 +239,13 @@ impl OrderController {
         };
 
         let tokens: Vec<OrderToken> = order_token_raw.into_iter().map(OrderToken::from).collect();
+        let elapsed = start_time.elapsed();
+        info!("get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {}", elapsed, order_by.as_str(), pagination.page, pagination.limit);
         Ok(tokens)
     }
 
     pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
+        let start_time = Instant::now();
         let row = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query_as::<_, OrderTokenRaw>(
@@ -280,10 +284,13 @@ impl OrderController {
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
         //
+        let elapsed = start_time.elapsed();
+        info!("get_latest_king_of_the_hill completed in {:?}", elapsed);
         Ok(row.map(OrderToken::from))
     }
 
     pub async fn get_total_count(&self) -> Result<i64> {
+        let start_time = Instant::now();
         let row = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -298,6 +305,8 @@ impl OrderController {
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|e| anyhow!("Failed to get token count: {}", e))?;
 
+        let elapsed = start_time.elapsed();
+        info!("get_total_count completed in {:?}", elapsed);
         Ok(row.total_count)
     }
 }

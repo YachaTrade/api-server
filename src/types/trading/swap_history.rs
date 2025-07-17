@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -13,6 +13,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
 use sqlx::Row;
+use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
@@ -149,6 +150,7 @@ impl SwapController {
     }
 
     pub async fn get_total_count_by_account(&self, account_id: &str) -> Result<i64> {
+        let start_time = Instant::now();
         let count = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -166,6 +168,8 @@ impl SwapController {
         
         let count = count.count.unwrap_or(0);
 
+        let elapsed = start_time.elapsed();
+        info!("get_total_count_by_account completed in {:?} for account_id: {}", elapsed, account_id);
         Ok(count)
     }
     pub async fn get_swaps_by_account(
@@ -173,6 +177,7 @@ impl SwapController {
         account_id: &str,
         pagination: PaginationParams,
     ) -> Result<PositionSwapResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
         let swaps = tokio::time::timeout(
@@ -230,6 +235,8 @@ impl SwapController {
             })
             .collect();
 
+        let elapsed = start_time.elapsed();
+        info!("get_swaps_by_account completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(PositionSwapResponse { swaps, total_count })
     }
 
@@ -238,6 +245,7 @@ impl SwapController {
         token_id: &str,
         query: &SwapQuery,
     ) -> Result<TokenSwapResponse> {
+        let start_time = Instant::now();
         let offset = (query.page - 1) * query.limit;
 
         // 파라미터 카운터로 순서 관리
@@ -364,6 +372,8 @@ impl SwapController {
                 .await?
         };
 
+        let elapsed = start_time.elapsed();
+        info!("get_swaps_by_token completed in {:?} for token_id: {}, page: {}, limit: {}", elapsed, token_id, query.page, query.limit);
         Ok(TokenSwapResponse { swaps, total_count })
     }
 

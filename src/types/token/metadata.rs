@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use tracing::info;
 
 use crate::db::postgres::PostgresDatabase;
 
@@ -30,6 +31,8 @@ impl TokenMetadataController {
         TokenMetadataController { db }
     }
     pub async fn get_token_metadata(&self, token_id: &str) -> Result<TokenMetadataResponse> {
+        let start_time = Instant::now();
+        
         let token = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query_as!(
@@ -41,6 +44,10 @@ impl TokenMetadataController {
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+
+        let elapsed = start_time.elapsed();
+        info!("get_token_metadata completed in {:?} for token_id: {}", elapsed, token_id);
+
         Ok(TokenMetadataResponse {
             token_metadata: token,
         })

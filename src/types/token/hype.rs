@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
@@ -72,6 +72,7 @@ impl HypeTokenController {
     }
 
     pub async fn get_hype_token(&self, pagination: &PaginationParams) -> Result<HypeTokenResponse> {
+        let start_time = Instant::now();
         info!("Get Hype Token start");
         // 현재 시간 타임스탬프 (초 단위) 구하기
         let current_time = SystemTime::now()
@@ -223,6 +224,8 @@ impl HypeTokenController {
             })
             .collect::<Vec<HypeToken>>();
 
+        let elapsed = start_time.elapsed();
+        info!("get_hype_token completed in {:?} for page: {}, limit: {}", elapsed, pagination.page, pagination.limit);
         Ok(HypeTokenResponse {
             tokens,
             total_count,

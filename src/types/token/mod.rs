@@ -3,11 +3,12 @@ pub mod hype;
 pub mod metadata;
 pub mod order;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -74,6 +75,7 @@ impl TokenController {
         TokenController { db }
     }
     pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
+        let start_time = Instant::now();
         // Using query_as instead of query! to automatically map to the TokenRow struct
         let row = tokio::time::timeout(
             Duration::from_millis(500),
@@ -149,6 +151,8 @@ impl TokenController {
             price: row.price,
         };
         let response = TokenResponse { token };
+        let elapsed = start_time.elapsed();
+        info!("get_token completed in {:?} for token_id: {}", elapsed, token_id);
         Ok(response)
     }
 }

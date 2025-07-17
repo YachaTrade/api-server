@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -64,6 +65,7 @@ impl SearchController {
     }
 
     pub async fn search(&self, query: &str) -> Result<SearchResponse> {
+        let start_time = Instant::now();
         let pool = self.db.get_read_pool();
 
         if query.trim().is_empty() {
@@ -180,6 +182,8 @@ impl SearchController {
             })
             .collect();
 
+        let elapsed = start_time.elapsed();
+        info!("search completed in {:?} for query: {}", elapsed, query);
         Ok(SearchResponse {
             tokens: SearchTokenResponse {
                 total_count: tokens_vec.len() as i64,

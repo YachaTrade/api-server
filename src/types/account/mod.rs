@@ -1,6 +1,6 @@
 pub mod wallet;
 pub mod x;
-use std::{env, sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::{Duration, Instant}};
 
 use anyhow::{Result, anyhow};
 
@@ -8,6 +8,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder, Row, postgres::PgRow};
 use utoipa::ToSchema;
+use tracing::{info, warn};
 
 use crate::db::postgres::PostgresDatabase;
 
@@ -115,6 +116,9 @@ impl AccountController {
     }
 
     pub async fn upsert_account(&self, account: Account) -> Result<Account> {
+        let start_time = Instant::now();
+        info!("Starting upsert_account query for account_id: {}", account.account_id);
+        
         let query = sqlx::query!(
             r#"
             INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)
@@ -132,10 +136,17 @@ impl AccountController {
         )
         .fetch_optional(self.db.get_write_pool());
 
-        tokio::time::timeout(Duration::from_millis(500), query)
+        let result = tokio::time::timeout(Duration::from_millis(500), query)
             .await
             .map_err(|_| anyhow!("Query timeout after 500ms"))?
             .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
+
+        let elapsed = start_time.elapsed();
+        info!("upsert_account query completed in {:?} for account_id: {}", elapsed, account.account_id);
+        
+        if elapsed > Duration::from_millis(100) {
+            warn!("upsert_account query slow performance: {:?} for account_id: {}", elapsed, account.account_id);
+        }
 
         Ok(self.get_account(&account.account_id).await?)
     }
@@ -211,10 +222,15 @@ impl AccountController {
             .map_err(|_| anyhow!("Query timeout after 500ms"))?
             .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
 
+        let elapsed = start_time.elapsed();
+        info!("update_account completed in {:?} for address: {}", elapsed, address);
+
         Ok(updated_account)
     }
 
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
+        let start_time = Instant::now();
+        
         let query = sqlx::query_as::<_, AccountRaw>(
             r#"
             SELECT a.account_id,
@@ -239,7 +255,7 @@ impl AccountController {
             .map_err(|_| anyhow!("Query timeout after 500ms"))?
             .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
 
-        Ok(Account {
+        let account = Account {
             account_id: row.account_id,
             nickname: match &row.x_handle {
                 Some(handle) if !handle.is_empty() => handle.clone(),
@@ -253,7 +269,12 @@ impl AccountController {
             follower_count: row.follower_count,
             following_count: row.following_count,
             mutual: None,
-        })
+        };
+
+        let elapsed = start_time.elapsed();
+        info!("get_account completed in {:?} for account_id: {}", elapsed, account_id);
+
+        Ok(account)
     }
 
     pub async fn get_account_with_mutual(
@@ -261,6 +282,8 @@ impl AccountController {
         identifier: &Identifier,
         request_account_id: Option<String>,
     ) -> Result<Account> {
+        let start_time = Instant::now();
+        
         let id_type = match identifier {
             Identifier::Address(_) => "account_id",
             Identifier::Nickname(_) => "nickname",
@@ -376,7 +399,7 @@ impl AccountController {
             None
         };
 
-        Ok(Account {
+        let account = Account {
             account_id: result.account_id,
             nickname: match &result.x_handle {
                 Some(handle) if !handle.is_empty() => handle.clone(),
@@ -390,6 +413,11 @@ impl AccountController {
             follower_count: result.follower_count,
             following_count: result.following_count,
             mutual,
-        })
+        };
+
+        let elapsed = start_time.elapsed();
+        info!("get_account_with_mutual completed in {:?} for identifier: {:?}", elapsed, id_value);
+
+        Ok(account)
     }
 }

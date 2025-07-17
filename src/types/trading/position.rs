@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -13,6 +13,7 @@ use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tracing::info;
 use utoipa::ToSchema;
 
 /// Position information for a token held by a profile
@@ -80,6 +81,7 @@ impl PositionController {
     }
 
     pub async fn get_total_count_by_token_holder(&self, token_id: &str) -> Result<i64> {
+        let start_time = Instant::now();
         let count = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -97,6 +99,8 @@ impl PositionController {
         
         let count = count.count.unwrap_or(0);
 
+        let elapsed = start_time.elapsed();
+        info!("get_total_count_by_token_holder completed in {:?} for token_id: {}", elapsed, token_id);
         Ok(count)
     }
 
@@ -105,6 +109,7 @@ impl PositionController {
         token_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
         let record = tokio::time::timeout(
             Duration::from_millis(500),
@@ -179,6 +184,8 @@ impl PositionController {
                 },
             })
             .collect();
+        let elapsed = start_time.elapsed();
+        info!("get_holders_by_token completed in {:?} for token_id: {}, page: {}, limit: {}", elapsed, token_id, pagination.page, pagination.limit);
         Ok(TokenHolderResponse {
             holders,
             total_count,
@@ -186,6 +193,7 @@ impl PositionController {
     }
 
     pub async fn get_total_count_by_hold_token(&self, account_id: &str) -> Result<i64> {
+        let start_time = Instant::now();
         let count = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -203,6 +211,8 @@ impl PositionController {
         
         let count = count.count.unwrap_or(0);
 
+        let elapsed = start_time.elapsed();
+        info!("get_total_count_by_hold_token completed in {:?} for account_id: {}", elapsed, account_id);
         Ok(count)
     }
     pub async fn get_hold_token_by_account(
@@ -210,6 +220,7 @@ impl PositionController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HoldTokenResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
         #[derive(sqlx::FromRow)]
         pub struct HoldTokenRow {
@@ -264,6 +275,8 @@ impl PositionController {
                 balance: row.balance,
             })
             .collect();
+        let elapsed = start_time.elapsed();
+        info!("get_hold_token_by_account completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(HoldTokenResponse {
             tokens,
             total_count,

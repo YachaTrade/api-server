@@ -1,9 +1,10 @@
-use std::{env, sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::{Duration, Instant}};
 
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -55,6 +56,7 @@ impl MarketController {
     }
 
     pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
+        let start_time = Instant::now();
         let market = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query_as!(
@@ -77,6 +79,8 @@ impl MarketController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
+        let elapsed = start_time.elapsed();
+        info!("get_market_by_token completed in {:?} for token_id: {}", elapsed, token_id);
         Ok(Market::from(market))
     }
 }
