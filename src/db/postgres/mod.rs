@@ -13,18 +13,44 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
     let primary_db_url =
         env::var("PRIMARY_DATABASE_URL").expect("PRIMARY_DATABASE_URL must be set");
 
+    // 환경변수에서 연결 풀 설정 읽기
+    let max_connections = env::var("PG_PRIMARY_MAX_CONNECTIONS")
+        .unwrap_or_else(|_| "50".to_string())
+        .parse::<u32>()
+        .unwrap_or(50);
+    let min_connections = env::var("PG_PRIMARY_MIN_CONNECTIONS")
+        .unwrap_or_else(|_| "5".to_string())
+        .parse::<u32>()
+        .unwrap_or(5);
+    let max_lifetime_secs = env::var("PG_PRIMARY_MAX_LIFETIME_SECS")
+        .unwrap_or_else(|_| "600".to_string())
+        .parse::<u64>()
+        .unwrap_or(600);
+    let acquire_timeout_secs = env::var("PG_PRIMARY_ACQUIRE_TIMEOUT_SECS")
+        .unwrap_or_else(|_| "15".to_string())
+        .parse::<u64>()
+        .unwrap_or(15);
+    let idle_timeout_secs = env::var("PG_PRIMARY_IDLE_TIMEOUT_SECS")
+        .unwrap_or_else(|_| "60".to_string())
+        .parse::<u64>()
+        .unwrap_or(60);
+    let statement_cache_capacity = env::var("PG_PRIMARY_STATEMENT_CACHE_CAPACITY")
+        .unwrap_or_else(|_| "1000".to_string())
+        .parse::<usize>()
+        .unwrap_or(1000);
+
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
         // PgBouncer가 이미 연결 풀링을 처리하므로 최대 연결 수를 낮게 설정
-        .max_connections(50)
+        .max_connections(max_connections)
         // 콜드 스타트 방지를 위해 최소 연결 수 유지
-        .min_connections(5)
+        .min_connections(min_connections)
         // Neon 서버리스 환경에 맞는 짧은 연결 수명
-        .max_lifetime(Duration::from_secs(10 * 60))
+        .max_lifetime(Duration::from_secs(max_lifetime_secs))
         // PgBouncer가 빠르게 연결을 제공하므로 짧은 획득 타임아웃 설정
-        .acquire_timeout(Duration::from_secs(15))
+        .acquire_timeout(Duration::from_secs(acquire_timeout_secs))
         // 서버리스 환경에서 리소스 해제를 위한 적극적인 유휴 타임아웃
-        .idle_timeout(Duration::from_secs(60))
+        .idle_timeout(Duration::from_secs(idle_timeout_secs))
         // PgBouncer가 연결 테스트를 처리하므로 생략
         .test_before_acquire(false)
         // 연결 초기화 - PgBouncer에 최적화된 최소 설정
@@ -49,7 +75,7 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
                 .expect("Invalid primary database URL")
                 .application_name("nads-pump-writer")
                 // PgBouncer 트랜잭션 풀링 모드를 위한 더 큰 문장 캐시
-                .statement_cache_capacity(1000),
+                .statement_cache_capacity(statement_cache_capacity),
         )
         .await
         .expect("Failed to connect to primary database");
@@ -63,19 +89,45 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
     let replica_db_url =
         env::var("REPLICA_DATABASE_URL").expect("REPLICA_DATABASE_URL must be set");
 
+    // 환경변수에서 연결 풀 설정 읽기
+    let max_connections = env::var("PG_REPLICA_MAX_CONNECTIONS")
+        .unwrap_or_else(|_| "50".to_string())
+        .parse::<u32>()
+        .unwrap_or(50);
+    let min_connections = env::var("PG_REPLICA_MIN_CONNECTIONS")
+        .unwrap_or_else(|_| "10".to_string())
+        .parse::<u32>()
+        .unwrap_or(10);
+    let max_lifetime_secs = env::var("PG_REPLICA_MAX_LIFETIME_SECS")
+        .unwrap_or_else(|_| "600".to_string())
+        .parse::<u64>()
+        .unwrap_or(600);
+    let acquire_timeout_secs = env::var("PG_REPLICA_ACQUIRE_TIMEOUT_SECS")
+        .unwrap_or_else(|_| "15".to_string())
+        .parse::<u64>()
+        .unwrap_or(15);
+    let idle_timeout_secs = env::var("PG_REPLICA_IDLE_TIMEOUT_SECS")
+        .unwrap_or_else(|_| "60".to_string())
+        .parse::<u64>()
+        .unwrap_or(60);
+    let statement_cache_capacity = env::var("PG_REPLICA_STATEMENT_CACHE_CAPACITY")
+        .unwrap_or_else(|_| "2000".to_string())
+        .parse::<usize>()
+        .unwrap_or(2000);
+
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
         // 읽기 작업을 위해 더 많은 연결 허용, 여전히 PgBouncer 고려
-        .max_connections(50)
+        .max_connections(max_connections)
         // 즉시 읽기 작업을 위한 충분한 최소 연결 유지
-        .min_connections(10)
+        .min_connections(min_connections)
         
         // Neon 서버리스 환경에 맞는 짧은 수명
-        .max_lifetime(Duration::from_secs(10 * 60))
+        .max_lifetime(Duration::from_secs(max_lifetime_secs))
         // PgBouncer가 빠르게 응답해야 하므로 짧은 획득 타임아웃
-        .acquire_timeout(Duration::from_secs(15))
+        .acquire_timeout(Duration::from_secs(acquire_timeout_secs))
         // 서버리스 환경에서 리소스 해제를 위한 적극적인 유휴 타임아웃
-        .idle_timeout(Duration::from_secs(60))
+        .idle_timeout(Duration::from_secs(idle_timeout_secs))
         // PgBouncer가 연결 상태를 관리하므로 테스트 생략
         .test_before_acquire(false)
         // 읽기 작업에 최적화된 연결 초기화
@@ -103,7 +155,7 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
                 .expect("Invalid replica database URL")
                 .application_name("nads-pump-reader")
                 // PgBouncer 환경에서 읽기 작업을 위한 더 큰 문장 캐시
-                .statement_cache_capacity(2000),
+                .statement_cache_capacity(statement_cache_capacity),
         )
         .await
         .expect("Failed to connect to replica database");

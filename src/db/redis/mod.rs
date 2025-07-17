@@ -47,31 +47,30 @@ impl RedisDatabase {
         let url = env::var("REDIS_URL").expect("SESSION_REDIS_URL must be set");
         let mut cfg = Config::from_url(url);
 
+        // 환경변수에서 Redis 풀 설정 읽기
+        let max_size = env::var("REDIS_POOL_MAX_SIZE")
+            .unwrap_or_else(|_| "100".to_string())
+            .parse::<usize>()
+            .unwrap_or(100);
+        let wait_timeout_secs = env::var("REDIS_POOL_WAIT_TIMEOUT_SECS")
+            .unwrap_or_else(|_| "5".to_string())
+            .parse::<u64>()
+            .unwrap_or(5);
+        let create_timeout_secs = env::var("REDIS_POOL_CREATE_TIMEOUT_SECS")
+            .unwrap_or_else(|_| "2".to_string())
+            .parse::<u64>()
+            .unwrap_or(2);
+        let recycle_timeout_secs = env::var("REDIS_POOL_RECYCLE_TIMEOUT_SECS")
+            .unwrap_or_else(|_| "1".to_string())
+            .parse::<u64>()
+            .unwrap_or(1);
+
         cfg.pool = Some(PoolConfig {
-            max_size: 100, // 최대 연결 수 증가
+            max_size, // 최대 연결 수 증가
             timeouts: deadpool_redis::Timeouts {
-                wait: Some(std::time::Duration::from_secs(5)),
-                create: Some(std::time::Duration::from_secs(2)),
-                recycle: Some(std::time::Duration::from_secs(1)),
-            },
-            queue_mode: deadpool::managed::QueueMode::Fifo,
-        });
-
-        let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
-
-        RedisDatabase { pool }
-    }
-
-    pub async fn new_trade_pool() -> Self {
-        let url = env::var("TRADE_REDIS_URL").expect("TRADE_REDIS_URL must be set");
-        let mut cfg = Config::from_url(url);
-
-        cfg.pool = Some(PoolConfig {
-            max_size: 100, // 최대 연결 수 증가
-            timeouts: deadpool_redis::Timeouts {
-                wait: Some(std::time::Duration::from_secs(5)),
-                create: Some(std::time::Duration::from_secs(2)),
-                recycle: Some(std::time::Duration::from_secs(1)),
+                wait: Some(std::time::Duration::from_secs(wait_timeout_secs)),
+                create: Some(std::time::Duration::from_secs(create_timeout_secs)),
+                recycle: Some(std::time::Duration::from_secs(recycle_timeout_secs)),
             },
             queue_mode: deadpool::managed::QueueMode::Fifo,
         });
