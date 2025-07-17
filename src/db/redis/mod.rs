@@ -44,26 +44,27 @@ pub struct RedisDatabase {
 }
 impl RedisDatabase {
     pub async fn new() -> Self {
-        let url = env::var("REDIS_URL").expect("SESSION_REDIS_URL must be set");
+        let url = env::var("REDIS_URL")
+            .unwrap_or_else(|_| panic!("REDIS_URL must be set in environment variables"));
         let mut cfg = Config::from_url(url);
 
         // 환경변수에서 Redis 풀 설정 읽기
         let max_size = env::var("REDIS_POOL_MAX_SIZE")
-            .unwrap_or_else(|_| "100".to_string())
+            .expect("REDIS_POOL_MAX_SIZE must be set")
             .parse::<usize>()
-            .unwrap_or(100);
+            .expect("REDIS_POOL_MAX_SIZE must be a valid usize");
         let wait_timeout_secs = env::var("REDIS_POOL_WAIT_TIMEOUT_SECS")
-            .unwrap_or_else(|_| "5".to_string())
+            .expect("REDIS_POOL_WAIT_TIMEOUT_SECS must be set")
             .parse::<u64>()
-            .unwrap_or(5);
+            .expect("REDIS_POOL_WAIT_TIMEOUT_SECS must be a valid u64");
         let create_timeout_secs = env::var("REDIS_POOL_CREATE_TIMEOUT_SECS")
-            .unwrap_or_else(|_| "2".to_string())
+            .expect("REDIS_POOL_CREATE_TIMEOUT_SECS must be set")
             .parse::<u64>()
-            .unwrap_or(2);
+            .expect("REDIS_POOL_CREATE_TIMEOUT_SECS must be a valid u64");
         let recycle_timeout_secs = env::var("REDIS_POOL_RECYCLE_TIMEOUT_SECS")
-            .unwrap_or_else(|_| "1".to_string())
+            .expect("REDIS_POOL_RECYCLE_TIMEOUT_SECS must be set")
             .parse::<u64>()
-            .unwrap_or(1);
+            .expect("REDIS_POOL_RECYCLE_TIMEOUT_SECS must be a valid u64");
 
         cfg.pool = Some(PoolConfig {
             max_size, // 최대 연결 수 증가

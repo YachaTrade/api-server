@@ -10,34 +10,34 @@ pub struct PostgresDatabase {
 
 async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
     use sqlx::postgres::PgPoolOptions;
-    let primary_db_url =
-        env::var("PRIMARY_DATABASE_URL").expect("PRIMARY_DATABASE_URL must be set");
+    let primary_db_url = env::var("PRIMARY_DATABASE_URL")
+        .unwrap_or_else(|_| panic!("PRIMARY_DATABASE_URL must be set in environment variables"));
 
     // 환경변수에서 연결 풀 설정 읽기
     let max_connections = env::var("PG_PRIMARY_MAX_CONNECTIONS")
-        .unwrap_or_else(|_| "50".to_string())
+        .expect("PG_PRIMARY_MAX_CONNECTIONS must be set")
         .parse::<u32>()
-        .unwrap_or(50);
+        .expect("PG_PRIMARY_MAX_CONNECTIONS must be a valid u32");
     let min_connections = env::var("PG_PRIMARY_MIN_CONNECTIONS")
-        .unwrap_or_else(|_| "5".to_string())
+        .expect("PG_PRIMARY_MIN_CONNECTIONS must be set")
         .parse::<u32>()
-        .unwrap_or(5);
+        .expect("PG_PRIMARY_MIN_CONNECTIONS must be a valid u32");
     let max_lifetime_secs = env::var("PG_PRIMARY_MAX_LIFETIME_SECS")
-        .unwrap_or_else(|_| "600".to_string())
+        .expect("PG_PRIMARY_MAX_LIFETIME_SECS must be set")
         .parse::<u64>()
-        .unwrap_or(600);
+        .expect("PG_PRIMARY_MAX_LIFETIME_SECS must be a valid u64");
     let acquire_timeout_secs = env::var("PG_PRIMARY_ACQUIRE_TIMEOUT_SECS")
-        .unwrap_or_else(|_| "15".to_string())
+        .expect("PG_PRIMARY_ACQUIRE_TIMEOUT_SECS must be set")
         .parse::<u64>()
-        .unwrap_or(15);
+        .expect("PG_PRIMARY_ACQUIRE_TIMEOUT_SECS must be a valid u64");
     let idle_timeout_secs = env::var("PG_PRIMARY_IDLE_TIMEOUT_SECS")
-        .unwrap_or_else(|_| "60".to_string())
+        .expect("PG_PRIMARY_IDLE_TIMEOUT_SECS must be set")
         .parse::<u64>()
-        .unwrap_or(60);
+        .expect("PG_PRIMARY_IDLE_TIMEOUT_SECS must be a valid u64");
     let statement_cache_capacity = env::var("PG_PRIMARY_STATEMENT_CACHE_CAPACITY")
-        .unwrap_or_else(|_| "1000".to_string())
+        .expect("PG_PRIMARY_STATEMENT_CACHE_CAPACITY must be set")
         .parse::<usize>()
-        .unwrap_or(1000);
+        .expect("PG_PRIMARY_STATEMENT_CACHE_CAPACITY must be a valid usize");
 
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
@@ -72,13 +72,13 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
         // 더 상세한 연결 설정을 위해 PgConnectOptions 사용
         .connect_with(
             sqlx::postgres::PgConnectOptions::from_str(&primary_db_url)
-                .expect("Invalid primary database URL")
+                .unwrap_or_else(|_| panic!("Invalid PRIMARY_DATABASE_URL format"))
                 .application_name("nads-pump-writer")
                 // PgBouncer 트랜잭션 풀링 모드를 위한 더 큰 문장 캐시
                 .statement_cache_capacity(statement_cache_capacity),
         )
         .await
-        .expect("Failed to connect to primary database");
+        .unwrap_or_else(|err| panic!("Failed to connect to primary PostgreSQL database: {}", err));
 
     info!("Neon PostgreSQL 프라이머리 풀이 PgBouncer 최적화 설정으로 초기화되었습니다");
     pool
@@ -86,34 +86,34 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
 
 async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
     use sqlx::postgres::PgPoolOptions;
-    let replica_db_url =
-        env::var("REPLICA_DATABASE_URL").expect("REPLICA_DATABASE_URL must be set");
+    let replica_db_url = env::var("REPLICA_DATABASE_URL")
+        .unwrap_or_else(|_| panic!("REPLICA_DATABASE_URL must be set in environment variables"));
 
     // 환경변수에서 연결 풀 설정 읽기
     let max_connections = env::var("PG_REPLICA_MAX_CONNECTIONS")
-        .unwrap_or_else(|_| "50".to_string())
+        .expect("PG_REPLICA_MAX_CONNECTIONS must be set")
         .parse::<u32>()
-        .unwrap_or(50);
+        .expect("PG_REPLICA_MAX_CONNECTIONS must be a valid u32");
     let min_connections = env::var("PG_REPLICA_MIN_CONNECTIONS")
-        .unwrap_or_else(|_| "10".to_string())
+        .expect("PG_REPLICA_MIN_CONNECTIONS must be set")
         .parse::<u32>()
-        .unwrap_or(10);
+        .expect("PG_REPLICA_MIN_CONNECTIONS must be a valid u32");
     let max_lifetime_secs = env::var("PG_REPLICA_MAX_LIFETIME_SECS")
-        .unwrap_or_else(|_| "600".to_string())
+        .expect("PG_REPLICA_MAX_LIFETIME_SECS must be set")
         .parse::<u64>()
-        .unwrap_or(600);
+        .expect("PG_REPLICA_MAX_LIFETIME_SECS must be a valid u64");
     let acquire_timeout_secs = env::var("PG_REPLICA_ACQUIRE_TIMEOUT_SECS")
-        .unwrap_or_else(|_| "15".to_string())
+        .expect("PG_REPLICA_ACQUIRE_TIMEOUT_SECS must be set")
         .parse::<u64>()
-        .unwrap_or(15);
+        .expect("PG_REPLICA_ACQUIRE_TIMEOUT_SECS must be a valid u64");
     let idle_timeout_secs = env::var("PG_REPLICA_IDLE_TIMEOUT_SECS")
-        .unwrap_or_else(|_| "60".to_string())
+        .expect("PG_REPLICA_IDLE_TIMEOUT_SECS must be set")
         .parse::<u64>()
-        .unwrap_or(60);
+        .expect("PG_REPLICA_IDLE_TIMEOUT_SECS must be a valid u64");
     let statement_cache_capacity = env::var("PG_REPLICA_STATEMENT_CACHE_CAPACITY")
-        .unwrap_or_else(|_| "2000".to_string())
+        .expect("PG_REPLICA_STATEMENT_CACHE_CAPACITY must be set")
         .parse::<usize>()
-        .unwrap_or(2000);
+        .expect("PG_REPLICA_STATEMENT_CACHE_CAPACITY must be a valid usize");
 
     let pool = PgPoolOptions::new()
         // Neon과 PgBouncer 트랜잭션 풀링 모드에 최적화
@@ -152,13 +152,13 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
         // 더 상세한 연결 설정을 위해 PgConnectOptions 사용
         .connect_with(
             sqlx::postgres::PgConnectOptions::from_str(&replica_db_url)
-                .expect("Invalid replica database URL")
+                .unwrap_or_else(|_| panic!("Invalid REPLICA_DATABASE_URL format"))
                 .application_name("nads-pump-reader")
                 // PgBouncer 환경에서 읽기 작업을 위한 더 큰 문장 캐시
                 .statement_cache_capacity(statement_cache_capacity),
         )
         .await
-        .expect("Failed to connect to replica database");
+        .unwrap_or_else(|err| panic!("Failed to connect to replica PostgreSQL database: {}", err));
 
     info!("Neon PostgreSQL 복제본 풀이 PgBouncer 최적화 설정으로 초기화되었습니다");
     pool
