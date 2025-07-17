@@ -1,8 +1,9 @@
 use crate::db::postgres::PostgresDatabase;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::{Duration, Instant}};
 use utoipa::ToSchema;
+use tracing::info;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "UPPERCASE")]
@@ -54,6 +55,8 @@ impl WalletController {
         account_id: String,
         wallet: Wallet,
     ) -> Result<AccountWalletResponse> {
+        let start_time = Instant::now();
+        
         let query = sqlx::query!(
             r#"
             INSERT INTO account_wallet (account_id, wallet)
@@ -72,10 +75,15 @@ impl WalletController {
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
 
+        let elapsed = start_time.elapsed();
+        info!("register_wallet completed in {:?} for account_id: {}", elapsed, account_id);
+
         Ok(AccountWalletResponse { account_id, wallet })
     }
 
     pub async fn get_wallet(&self, account_id: String) -> Result<AccountWalletResponse> {
+        let start_time = Instant::now();
+        
         let query = sqlx::query!(
             r#"
             SELECT account_id, wallet
@@ -103,6 +111,9 @@ impl WalletController {
             account_id: record.account_id,
             wallet,
         };
+
+        let elapsed = start_time.elapsed();
+        info!("get_wallet completed in {:?} for account_id: {}", elapsed, account_id);
 
         Ok(response)
     }

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -9,6 +9,7 @@ use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreatedResponse {
@@ -38,6 +39,8 @@ impl TokenCreatedController {
     }
 
     pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
+        let start_time = Instant::now();
+        
         let count = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -54,6 +57,8 @@ impl TokenCreatedController {
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         
         let count = count.count.unwrap_or(0);
+        let elapsed = start_time.elapsed();
+        info!("get_total_count completed in {:?} for account_id: {}", elapsed, account_id);
 
         Ok(count)
     }
@@ -63,6 +68,8 @@ impl TokenCreatedController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenCreatedResponse> {
+        let start_time = Instant::now();
+        
         // Query tokens created by the account with their market and position information
         let offset = (pagination.page - 1) * pagination.limit;
         let tokens = tokio::time::timeout(
@@ -135,6 +142,9 @@ impl TokenCreatedController {
             .collect();
 
         let total_count = self.get_total_count(account_id).await?;
+
+        let elapsed = start_time.elapsed();
+        info!("get_tokens_created completed in {:?} for account_id: {}", elapsed, account_id);
 
         Ok(TokenCreatedResponse {
             tokens,

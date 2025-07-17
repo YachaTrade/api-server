@@ -11,8 +11,9 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::types::Json;
 use sqlx::Row;
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
 use tokio::try_join;
+use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -223,6 +224,7 @@ impl TokenManagementController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<DevPositionsResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
         #[derive(sqlx::FromRow)]
@@ -323,6 +325,8 @@ impl TokenManagementController {
             })
             .collect();
 
+        let elapsed = start_time.elapsed();
+        info!("get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(DevPositionsResponse {
             positions,
             total_count,
@@ -334,6 +338,7 @@ impl TokenManagementController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HoldingTokenManagementResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
         #[derive(sqlx::FromRow)]
@@ -421,6 +426,8 @@ impl TokenManagementController {
 
         let total_count = total_count.count.unwrap_or(0);
 
+        let elapsed = start_time.elapsed();
+        info!("get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(HoldingTokenManagementResponse {
             managements,
             total_count,
@@ -432,6 +439,7 @@ impl TokenManagementController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenLockResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
         let query = format!(
@@ -527,6 +535,8 @@ impl TokenManagementController {
             })
             .collect();
 
+        let elapsed = start_time.elapsed();
+        info!("get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(TokenLockResponse {
             token_locks,
             total_count,
@@ -538,6 +548,7 @@ impl TokenManagementController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<WithdrawableLockResponse> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
         let withdrawable_lock_query = format!(
@@ -650,6 +661,8 @@ impl TokenManagementController {
             })
             .collect();
 
+        let elapsed = start_time.elapsed();
+        info!("get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(WithdrawableLockResponse {
             withdrawable_locks,
             total_count,
@@ -661,6 +674,7 @@ impl TokenManagementController {
         token_id: &str,
         query: &ManagementHistoryQuery,
     ) -> Result<ManagementHistoryResponse> {
+        let start_time = Instant::now();
         let offset = (query.page - 1) * query.limit;
 
         // 파라미터 카운터로 순서 관리
@@ -787,6 +801,8 @@ impl TokenManagementController {
                 .await?
         };
 
+        let elapsed = start_time.elapsed();
+        info!("get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}", elapsed, token_id, query.page, query.limit);
         Ok(ManagementHistoryResponse {
             histories,
             total_count,

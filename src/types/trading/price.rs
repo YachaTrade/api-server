@@ -1,10 +1,11 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tracing::info;
 use utoipa::ToSchema;
 
 use crate::db::postgres::PostgresDatabase;
@@ -25,6 +26,7 @@ impl PriceController {
         PriceController { db }
     }
     pub async fn get_price(&self, token: &str) -> Result<PriceResponse> {
+        let start_time = Instant::now();
         let price = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -41,6 +43,8 @@ impl PriceController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
+        let elapsed = start_time.elapsed();
+        info!("get_price completed in {:?} for token: {}", elapsed, token);
         Ok(PriceResponse {
             price: price.price,
             token_address: token.to_string(),

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -8,6 +8,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tracing::info;
 use utoipa::ToSchema;
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateFollowRequest {
@@ -59,6 +60,7 @@ impl FollowController {
         is_following: bool,
         pagination: PaginationParams,
     ) -> Result<Vec<Follow>> {
+        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
         let follows = tokio::time::timeout(
@@ -107,6 +109,8 @@ impl FollowController {
             })
             .collect();
 
+        let elapsed = start_time.elapsed();
+        info!("get_follows completed in {:?} for account_id: {}, is_following: {}", elapsed, account_id, is_following);
         Ok(follows)
     }
 
@@ -115,6 +119,7 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
+        let start_time = Instant::now();
         let mut tx = self.db.get_write_pool().begin().await?;
 
         self.insert_follow(&mut tx, &follower, &following).await?;
@@ -154,6 +159,8 @@ impl FollowController {
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         tx.commit().await?;
+        let elapsed = start_time.elapsed();
+        info!("add_follow completed in {:?} for follower: {}, following: {}", elapsed, follower.account_id, following.account_id);
         Ok((follower, following))
     }
 
@@ -162,6 +169,7 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
+        let start_time = Instant::now();
         let mut tx = self.db.get_write_pool().begin().await?;
 
         self.delete_follow(&mut tx, &follower, &following).await?;
@@ -202,10 +210,13 @@ impl FollowController {
         .map_err(|err| anyhow!("Failed to remove follow\n Reason :{err}"))?;
 
         tx.commit().await?;
+        let elapsed = start_time.elapsed();
+        info!("remove_follow completed in {:?} for follower: {}, following: {}", elapsed, follower.account_id, following.account_id);
         Ok((follower, following))
     }
 
     pub async fn check_follow(&self, follower: String, following: String) -> Result<bool> {
+        let start_time = Instant::now();
         let result = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query!(
@@ -223,6 +234,8 @@ impl FollowController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
+        let elapsed = start_time.elapsed();
+        info!("check_follow completed in {:?} for follower: {}, following: {}", elapsed, follower, following);
         Ok(result.exists.unwrap_or(false))
     }
 

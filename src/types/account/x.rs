@@ -1,9 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use crate::{db::postgres::PostgresDatabase, types::common::info::XInfo};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use tracing::info;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectXRequest {
@@ -67,6 +68,8 @@ impl AccountXController {
         account_id: &str,
         req: ConnectXRequest,
     ) -> Result<ConnectedXAccountResponse> {
+        let start_time = Instant::now();
+        
         let query = sqlx::query!(
             r#"
             INSERT INTO account_x (account_id, x_handle, x_image_uri, is_blue_label)
@@ -84,12 +87,18 @@ impl AccountXController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to connect x\n Reason :{err}"))?;
-        Ok(ConnectedXAccountResponse {
+
+        let response = ConnectedXAccountResponse {
             account_id: record.account_id,
             x_handle: record.x_handle,
             x_image_uri: record.x_image_uri,
             is_blue_label: record.is_blue_label,
-        })
+        };
+
+        let elapsed = start_time.elapsed();
+        info!("connect_x completed in {:?} for account_id: {}", elapsed, account_id);
+
+        Ok(response)
     }
 
     pub async fn disconnect_x(
@@ -97,6 +106,8 @@ impl AccountXController {
         account_id: String,
         x_handle: String,
     ) -> Result<DisconnectedXAccountResponse> {
+        let start_time = Instant::now();
+        
         // 먼저 해당 X 핸들이 존재하는지 확인
         let query = sqlx::query!(
             "SELECT 1 as exists FROM account_x WHERE account_id = $1 AND x_handle = $2",
@@ -131,6 +142,9 @@ impl AccountXController {
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
 
+        let elapsed = start_time.elapsed();
+        info!("disconnect_x completed in {:?} for account_id: {}", elapsed, account_id);
+
         Ok(DisconnectedXAccountResponse {
             account_id,
             x_handle,
@@ -138,6 +152,8 @@ impl AccountXController {
     }
 
     pub async fn get_x_handle(&self, account_id: String) -> Result<GetXHandleResponse> {
+        let start_time = Instant::now();
+        
         let query = sqlx::query_as!(
             XInfo,
             r#"
@@ -153,6 +169,9 @@ impl AccountXController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
+
+        let elapsed = start_time.elapsed();
+        info!("get_x_handle completed in {:?} for account_id: {}", elapsed, account_id);
 
         Ok(GetXHandleResponse { account_id, x_info })
     }
