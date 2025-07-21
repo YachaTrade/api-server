@@ -27,7 +27,7 @@ pub struct Chart {
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct GetBarsRequest {
     #[serde(default = "default_resolution")]
-    pub resolution: String, // 타임프레임 (1, 5, 15, 30, 60, D, W, M)
+    pub resolution: String, // 타임프레임 (1, 5, 15, 30, 60, 1H, 4H, D, W, M)
     pub from: i64, // 시작 타임스탬프 (초 단위)
     pub to: i64,   // 끝 타임스탬프 (초 단위)
     #[serde(default = "default_countback")]
@@ -59,8 +59,8 @@ fn resolution_to_interval_type(resolution: &str) -> Result<&'static str> {
         "5" => Ok("5"),
         "15" => Ok("15"),
         "30" => Ok("30"),
-        "60" | "1H" => Ok("60"),
-        "240" | "4H" => Ok("D"), // Using 'D' for 4H as closest match
+        "60" | "1H" => Ok("1H"),
+        "4H" => Ok("4H"),
         "D" | "1D" => Ok("D"),
         "W" | "1W" => Ok("W"),
         "M" | "1M" => Ok("M"),
