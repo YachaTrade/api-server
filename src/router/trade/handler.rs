@@ -195,7 +195,7 @@ pub async fn get_market(
     path = TradePath::GetChart.docs_str(),
     params(
         ("token_id" = String, Path, description = "Token ID"),
-        ("resolution" = String, Query, description = "Chart resolution (1, 5, 15, 30, 60, 1H, 4H, D, W, M)"),
+        ("resolution" = String, Query, description = "Chart resolution (1, 5, 15, 30, 60/1H, 4H, D, W, M)"),
         ("from" = i64, Query, description = "Start timestamp (seconds)"),
         ("to" = i64, Query, description = "End timestamp (seconds)"),
         ("countback" = Option<i32>, Query, description = "Maximum number of candles to return (default: 500)")
