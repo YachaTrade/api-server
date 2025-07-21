@@ -23,6 +23,7 @@ use crate::{
             DevPositionsResponse, HoldingTokenManagementResponse, ManagementHistoryQuery,
             ManagementHistoryResponse, TokenLockResponse, WithdrawableLockResponse,
         },
+        new_content::NewContentResponse,
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
         token::{
             TokenResponse,
@@ -794,6 +795,25 @@ impl RedisDatabase {
         );
         let json = serde_json::to_string(bar_data)?;
         conn.pset_ex::<String, String, ()>(key, json, *CHART_EXPIRATION)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_new_content(&self) -> Result<NewContentResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = "new_content:latest";
+        let response_json: String = conn.get(key).await?;
+        info!("Get New Content from cache: {:?}", response_json);
+        let response: NewContentResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
+    }
+
+    pub async fn set_new_content(&self, response: &NewContentResponse) -> Result<()> {
+        info!("Set New Content cache: {:?}", response);
+        let mut conn = self.pool.get().await?;
+        let key = "new_content:latest";
+        let json = serde_json::to_string(response)?;
+        conn.pset_ex::<String, String, ()>(key.to_string(), json, 1000) // 1 second
             .await?;
         Ok(())
     }
