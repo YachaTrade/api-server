@@ -6,14 +6,14 @@ use alloy::signers::Signature;
 use anyhow::Result;
 use axum::http::header::{HeaderValue, SET_COOKIE};
 use axum::{
+    Extension, Json,
     extract::State,
     http::{Response, StatusCode},
     response::IntoResponse,
-    Extension, Json,
 };
-use base64::{prelude::BASE64_STANDARD, Engine};
-use tower_cookies::cookie::time::Duration;
+use base64::{Engine, prelude::BASE64_STANDARD};
 use tower_cookies::Cookie;
+use tower_cookies::cookie::time::Duration;
 
 use tracing::{error, info, instrument};
 
@@ -222,9 +222,9 @@ pub async fn auth_session(
             );
             AppError::InternalError(err.to_string())
         })?;
-
+    let cookie_name = env::var("COOKIE_NAME").unwrap();
     // 쿠키 설정
-    let mut cookie = Cookie::new("api-session", session_id);
+    let mut cookie = Cookie::new(cookie_name, session_id);
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");
@@ -309,7 +309,8 @@ pub async fn auth_delete_session(
     })?;
 
     // Remove session cookie by setting its expiry to a past date
-    let mut cookie = Cookie::new("api-session", "");
+    let cookie_name = env::var("COOKIE_NAME").unwrap_or_else(|_| "api-session".to_string());
+    let mut cookie = Cookie::new(cookie_name, "");
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");
@@ -353,69 +354,6 @@ fn generate_session_id(address: &str, message: &str) -> String {
     // Base64로 인코딩
     BASE64_STANDARD.encode(combined.as_bytes())[..32].to_string()
 }
-
-// async fn verify_wallet_address(
-//     wallet_address: Option<String>,
-//     nonce: &str,
-//     signature: &String,
-// ) -> Result<String> {
-//     match wallet_address {
-//         Some(wallet_address) => verify_smart_wallet(&wallet_address, nonce, &signature).await,
-//         None => verify_regular_wallet(signature, nonce),
-//     }
-// }
-// async fn verify_smart_wallet(
-//     wallet_address: &str,
-//     nonce: &str,
-//     signature_str: &str,
-// ) -> Result<String> {
-//     sol! {
-//         #[allow(missing_docs)]
-//         #[sol(rpc)]
-//         interface IEIP1271 {
-//             function isValidSignature(bytes32 hash, bytes signature) external view returns (bytes4);
-//         }
-//     }
-
-//     // Setup RPC provider
-//     let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
-//     let provider = ProviderBuilder::new().on_http(Url::parse(&rpc_url).expect("URL must be valid"));
-
-//     // Hash the nonce for verification
-//     let hash = keccak256(nonce.as_bytes());
-
-//     // Parse signature
-//     let signature_bytes = Bytes::from_str(signature_str).map_err(|err| {
-//         error!("Invalid signature format: {}", err);
-//         anyhow::anyhow!("Invalid signature format {}", err)
-//     })?;
-
-//     // Create smart wallet interface
-//     let wallet = wallet_address.parse().map_err(|err| {
-//         error!("Invalid wallet address: {}", err);
-//         anyhow::anyhow!("Invalid wallet address {}", err)
-//     })?;
-//     let smart_wallet = IEIP1271::new(wallet, provider);
-
-//     // Verify signature with EIP-1271
-//     let magic_value: [u8; 4] = [0x16, 0x26, 0xba, 0x7e]; // EIP-1271 magic value
-//     let return_magic_number = smart_wallet
-//         .isValidSignature(hash, signature_bytes)
-//         .call()
-//         .await
-//         .map_err(|err| {
-//             error!("Failed to verify signature: {}", err);
-//             anyhow::anyhow!("Failed to verify signature {}", err)
-//         })?
-//         ._0;
-
-//     if return_magic_number != magic_value {
-//         error!("Invalid signature: magic value mismatch");
-//         return Err(anyhow::anyhow!("Invalid signature magic value mismatch"));
-//     }
-
-//     Ok(wallet_address.to_string())
-// }
 
 async fn verify_wallet(signature: &String, message: &str) -> Result<String> {
     let signature = Signature::from_str(signature).map_err(|err| {

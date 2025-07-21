@@ -9,6 +9,7 @@ use axum::{
     middleware::Next,
 };
 use tower_cookies::Cookies;
+use std::env;
 
 pub async fn authenticate_user(
     State(state): State<AppState>,
@@ -16,7 +17,8 @@ pub async fn authenticate_user(
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
-    let session_key = match cookies.get("api-session") {
+    let cookie_name = env::var("COOKIE_NAME").unwrap_or_else(|_| "api-session".to_string());
+    let session_key = match cookies.get(&cookie_name) {
         Some(cookie) => cookie.value().to_string(),
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),
     };
