@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,6 @@ use crate::types::common::info::{AccountInfoWithX, TokenInfoWithDescription, XIn
 use crate::types::common::pagination::PaginationParams;
 use crate::{
     db::postgres::PostgresDatabase, types::common::info::AccountInfo,
-    types::trading::chart::ChartInterval,
 };
 
 // 홀더 응답을 위한 구조체
@@ -83,9 +82,8 @@ impl HypeTokenController {
         // 24시간 전 타임스탬프 계산
         let day_ago_timestamp = current_time - (24 * 60 * 60);
 
-        // 1시간 간격(Hour1) 차트 간격 설정
-        let chart_interval = ChartInterval::Minute1;
-        let interval_type: i16 = chart_interval.into();
+        // 1분 간격 차트 데이터 사용
+        let interval_type = "1";
 
         // 페이지네이션 계산
         let offset = (pagination.page - 1) * pagination.limit;
@@ -157,7 +155,7 @@ impl HypeTokenController {
                 FROM hype_token h
                 "#
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         );
 
         // 두 쿼리를 병렬로 실행
@@ -165,7 +163,9 @@ impl HypeTokenController {
 
         // 결과 처리
         let token_records = records_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        let total_count = total_count_result.map_err(|_| anyhow!("Query timeout after 500ms"))??.unwrap_or(0) as u64;
+        let total_count = total_count_result
+            .map_err(|_| anyhow!("Query timeout after 500ms"))??
+            .unwrap_or(0) as u64;
 
         // 결과 매핑
         let tokens = token_records
@@ -225,7 +225,10 @@ impl HypeTokenController {
             .collect::<Vec<HypeToken>>();
 
         let elapsed = start_time.elapsed();
-        info!("get_hype_token completed in {:?} for page: {}, limit: {}", elapsed, pagination.page, pagination.limit);
+        info!(
+            "get_hype_token completed in {:?} for page: {}, limit: {}",
+            elapsed, pagination.page, pagination.limit
+        );
         Ok(HypeTokenResponse {
             tokens,
             total_count,

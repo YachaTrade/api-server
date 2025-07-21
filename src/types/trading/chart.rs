@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use tracing::info;
 use utoipa::ToSchema;
 
@@ -12,7 +13,7 @@ use crate::db::postgres::PostgresDatabase;
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Chart {
     #[serde(skip_serializing)]
-    pub interval_type: i16,
+    pub interval_type: String,
     #[serde(skip_serializing)]
     pub token_id: String,
     pub open_price: BigDecimal,
@@ -51,69 +52,19 @@ pub struct BarResponse {
     pub s: String,      // 상태 코드 ("ok" 또는 "error" 또는 "no_data")
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ChartInterval {
-    Minute1 = 1,
-    Minute5 = 2,
-    Minute15 = 3,
-    Minute30 = 4,
-    Hour1 = 5,
-    Hour4 = 6,
-    Day1 = 7,
-    Week1 = 8,
-}
-
-impl ChartInterval {
-    pub fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "1m" => Ok(Self::Minute1),
-            "5m" => Ok(Self::Minute5),
-            "15m" => Ok(Self::Minute15),
-            "30m" => Ok(Self::Minute30),
-            "1h" => Ok(Self::Hour1),
-            "4h" => Ok(Self::Hour4),
-            "1d" => Ok(Self::Day1),
-            "1w" => Ok(Self::Week1),
-            _ => Err(anyhow!("Invalid interval: {}", s)),
-        }
-    }
-
-    pub fn to_str(&self) -> &'static str {
-        match self {
-            Self::Minute1 => "1m",
-            Self::Minute5 => "5m",
-            Self::Minute15 => "15m",
-            Self::Minute30 => "30m",
-            Self::Hour1 => "1h",
-            Self::Hour4 => "4h",
-            Self::Day1 => "1d",
-            Self::Week1 => "1w",
-        }
-    }
-
-    pub fn from_i16(value: i16) -> Result<Self> {
-        match value {
-            1 => Ok(Self::Minute1),
-            2 => Ok(Self::Minute5),
-            3 => Ok(Self::Minute15),
-            4 => Ok(Self::Minute30),
-            5 => Ok(Self::Hour1),
-            6 => Ok(Self::Hour4),
-            7 => Ok(Self::Day1),
-            8 => Ok(Self::Week1),
-            _ => Err(anyhow!("Invalid interval value: {}", value)),
-        }
-    }
-
-    // i16 -> str 직접 변환 메서드
-    pub fn i16_to_string(value: i16) -> Result<String> {
-        Self::from_i16(value).map(|interval| interval.to_str().to_string())
-    }
-}
-
-impl From<ChartInterval> for i16 {
-    fn from(interval: ChartInterval) -> i16 {
-        interval as i16
+// Helper function to convert resolution to DB interval_type
+fn resolution_to_interval_type(resolution: &str) -> Result<&'static str> {
+    match resolution {
+        "1" => Ok("1"),
+        "5" => Ok("5"),
+        "15" => Ok("15"),
+        "30" => Ok("30"),
+        "60" | "1H" => Ok("60"),
+        "240" | "4H" => Ok("D"), // Using 'D' for 4H as closest match
+        "D" | "1D" => Ok("D"),
+        "W" | "1W" => Ok("W"),
+        "M" | "1M" => Ok("M"),
+        _ => Err(anyhow!("Invalid resolution: {}", resolution)),
     }
 }
 
@@ -146,26 +97,17 @@ impl ChartController {
         request: &GetBarsRequest,
     ) -> Result<BarResponse> {
         let start_time = Instant::now();
-        // resolution을 ChartInterval로 변환
-        let interval = match request.resolution.as_str() {
-            "1" => ChartInterval::Minute1,
-            "5" => ChartInterval::Minute5,
-            "15" => ChartInterval::Minute15,
-            "30" => ChartInterval::Minute30,
-            "60" | "1H" => ChartInterval::Hour1,
-            "4H" => ChartInterval::Hour4,
-            "D" => ChartInterval::Day1,
-            "W" => ChartInterval::Week1,
-            _ => return Err(anyhow!("Invalid resolution: {}", request.resolution)),
-        };
-
-        let chart_interval: i16 = interval.into();
+        // resolution을 DB interval_type으로 변환
+        let interval_type = resolution_to_interval_type(&request.resolution)?;
 
         // countback이 제공되었다면 사용, 아니면 기본값 500
-        let limit = request.countback.unwrap_or(500);
+        // countback이 0이면 기본값 사용
+        let limit = match request.countback {
+            Some(0) | None => 500,
+            Some(count) => count,
+        };
 
-        let query = format!(
-            r#"
+        let query = r#"
             SELECT 
                 interval_type,
                 token_id,                           
@@ -182,12 +124,11 @@ impl ChartController {
             AND time_stamp <= $4
             ORDER BY time_stamp ASC
             LIMIT $5
-            "#
-        );
+        "#;
 
         let charts = sqlx::query_as::<_, Chart>(&query)
             .bind(token_id)
-            .bind(chart_interval)
+            .bind(interval_type)
             .bind(request.from)
             .bind(request.to)
             .bind(limit as i32)
@@ -225,7 +166,10 @@ impl ChartController {
         }
 
         let elapsed = start_time.elapsed();
-        info!("get_prices completed in {:?} for token_id: {}, resolution: {}, from: {}, to: {}", elapsed, token_id, request.resolution, request.from, request.to);
+        info!(
+            "get_prices completed in {:?} for token_id: {}, resolution: {}, from: {}, to: {}",
+            elapsed, token_id, request.resolution, request.from, request.to
+        );
         Ok(BarResponse {
             t,
             c,

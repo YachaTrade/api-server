@@ -14,10 +14,7 @@ use crate::{
             ManagementHistoryQuery, ManagementHistoryResponse, TokenManagementController,
         },
         trading::{
-            chart::{
-                BarResponse, ChartController, ChartInterval, ChartQuery, ChartResponse,
-                GetBarsRequest,
-            },
+            chart::{BarResponse, ChartController, GetBarsRequest},
             market::{Market, MarketController},
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
@@ -197,7 +194,7 @@ pub async fn get_market(
     get,
     path = TradePath::GetChart.docs_str(),
     params(
-        ("token_address" = String, Path, description = "Token address"),
+        ("token_id" = String, Path, description = "Token ID"),
         ("resolution" = String, Query, description = "Chart resolution (1, 5, 15, 30, 60/1H,4H, D, W)"),
         ("from" = i64, Query, description = "Start timestamp (seconds)"),
         ("to" = i64, Query, description = "End timestamp (seconds)"),
@@ -213,21 +210,21 @@ pub async fn get_market(
 )]
 pub async fn get_prices(
     State(state): State<AppState>,
-    Path(token_address): Path<String>,
+    Path(token_id): Path<String>,
     Query(query): Query<GetBarsRequest>,
 ) -> AppJsonResult<BarResponse> {
-    if !valid_evm_address(&token_address) {
-        error!("Invalid token address format: {}", token_address);
-        return Err(AppError::BadRequest("Invalid token address".to_string()));
+    if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
+        return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
     // 캐시에서 먼저 데이터 조회
-    let cache_result = state.redis.get_prices(&token_address, &query).await;
+    let cache_result = state.redis.get_prices(&token_id, &query).await;
 
     if let Ok(Some(cached_data)) = cache_result {
         info!(
             "Cache hit for bar data: {} (resolution: {})",
-            token_address, query.resolution
+            token_id, query.resolution
         );
         return Ok(Json(cached_data));
     }
@@ -235,7 +232,7 @@ pub async fn get_prices(
     let chart_controller = ChartController::new(state.postgres.clone());
 
     // 요청에서 필요한 매개변수 추출
-    let token_id = token_address;
+    let token_id = token_id;
 
     // 차트 데이터 가져오기
     let bar_data = chart_controller
