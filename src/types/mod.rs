@@ -5,6 +5,7 @@ pub mod account;
 pub mod bot;
 
 pub mod management;
+pub mod new_content;
 
 pub mod search;
 pub mod social;

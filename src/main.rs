@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, follow, hype, management, order, profile, search, token, trade},
+    router::{self, account, auth, bot, follow, hype, management, new_content, order, profile, search, token, trade},
     state::AppState,
     types,
 };
@@ -86,6 +86,9 @@ use clap::Parser;
         router::management::handler::get_holding_token_management,
         router::management::handler::get_account_locks,
         router::management::handler::get_account_withdrawable_lock,
+
+        // ----------------New Content----------------
+        router::new_content::handler::get_new_content,
 
     ),
     components(
@@ -188,6 +191,11 @@ use clap::Parser;
            types::management::ManagementHistoryResponse,
            types::management::ManagementHistory,
            types::management::ManagementHistoryQuery,
+
+           // New Content
+           types::new_content::NewContentResponse,
+           types::new_content::NewSwapMessage,
+           types::new_content::NewTokenMessage,
            
         )
     ),
@@ -202,6 +210,7 @@ use clap::Parser;
         (name="Hype",description="Hype Token endpoints"),
         (name="Bot",description="Bot endpoints"),
         (name="Token Management",description="Token Management endpoints"),
+        (name="New Content",description="New Content endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -237,15 +246,7 @@ async fn main() -> Result<()> {
     info!("Server will start on {}:{}", ip, port);
 
     let app_state = AppState::new().await;
-    let _governor_conf = Arc::new(
-        GovernorConfigBuilder::default()
-            .per_second(100)
-            .burst_size(10)
-            .use_headers()
-            .key_extractor(SmartIpKeyExtractor)
-            .finish()
-            .unwrap(),
-    );
+  
 
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new().route("/", get(|| async { "Hello, World!" }));
@@ -266,6 +267,7 @@ async fn main() -> Result<()> {
         .merge(management::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
+        .merge(new_content::router())
 
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
