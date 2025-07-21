@@ -6,12 +6,16 @@ use crate::{
     },
     utils::valid_evm_address,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
-use sqlx::types::Json;
 use sqlx::Row;
-use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
+use sqlx::types::Json;
+use std::{
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::try_join;
 use tracing::info;
 use utoipa::ToSchema;
@@ -326,7 +330,10 @@ impl TokenManagementController {
             .collect();
 
         let elapsed = start_time.elapsed();
-        info!("get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
+        info!(
+            "get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
         Ok(DevPositionsResponse {
             positions,
             total_count,
@@ -427,7 +434,10 @@ impl TokenManagementController {
         let total_count = total_count.count.unwrap_or(0);
 
         let elapsed = start_time.elapsed();
-        info!("get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
+        info!(
+            "get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
         Ok(HoldingTokenManagementResponse {
             managements,
             total_count,
@@ -536,7 +546,10 @@ impl TokenManagementController {
             .collect();
 
         let elapsed = start_time.elapsed();
-        info!("get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
+        info!(
+            "get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
         Ok(TokenLockResponse {
             token_locks,
             total_count,
@@ -662,7 +675,10 @@ impl TokenManagementController {
             .collect();
 
         let elapsed = start_time.elapsed();
-        info!("get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
+        info!(
+            "get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
         Ok(WithdrawableLockResponse {
             withdrawable_locks,
             total_count,
@@ -802,7 +818,10 @@ impl TokenManagementController {
         };
 
         let elapsed = start_time.elapsed();
-        info!("get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}", elapsed, token_id, query.page, query.limit);
+        info!(
+            "get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}",
+            elapsed, token_id, query.page, query.limit
+        );
         Ok(ManagementHistoryResponse {
             histories,
             total_count,
@@ -900,7 +919,7 @@ impl TokenManagementController {
     // 캐시된 특정 활동 타입 카운트 조회
     async fn get_cached_count(&self, token_id: &str, column: &str) -> Result<i64> {
         let query = format!(
-            "SELECT {} as count FROM token_management_listory_count WHERE token_id = $1",
+            "SELECT {} as count FROM token_management_history_count WHERE token_id = $1",
             column
         );
 
@@ -922,7 +941,7 @@ impl TokenManagementController {
         let query = r#"
         SELECT 
             total_count as count 
-        FROM token_management_listory_count 
+        FROM token_management_history_count 
         WHERE token_id = $1
         "#;
 
