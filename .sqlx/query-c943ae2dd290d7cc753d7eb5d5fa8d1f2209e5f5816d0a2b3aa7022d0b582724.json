@@ -91,7 +91,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int2",
+        "Text",
         "Int8",
         "Int8",
         "Int8"
