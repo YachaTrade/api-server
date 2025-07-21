@@ -5,7 +5,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     types::common::{info::AccountInfo, pagination::PaginationParams},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use tracing::info;
@@ -91,7 +91,7 @@ impl FollowController {
                 pagination.limit as i64,
                 offset
             )
-            .fetch_all(self.db.get_read_pool())
+            .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -110,7 +110,10 @@ impl FollowController {
             .collect();
 
         let elapsed = start_time.elapsed();
-        info!("get_follows completed in {:?} for account_id: {}, is_following: {}", elapsed, account_id, is_following);
+        info!(
+            "get_follows completed in {:?} for account_id: {}, is_following: {}",
+            elapsed, account_id, is_following
+        );
         Ok(follows)
     }
 
@@ -136,7 +139,7 @@ impl FollowController {
                 "#,
                 follower,
             )
-            .fetch_one(tx.as_mut())
+            .fetch_one(tx.as_mut()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -153,14 +156,17 @@ impl FollowController {
                 "#,
                 following,
             )
-            .fetch_one(tx.as_mut())
+            .fetch_one(tx.as_mut()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         tx.commit().await?;
         let elapsed = start_time.elapsed();
-        info!("add_follow completed in {:?} for follower: {}, following: {}", elapsed, follower.account_id, following.account_id);
+        info!(
+            "add_follow completed in {:?} for follower: {}, following: {}",
+            elapsed, follower.account_id, following.account_id
+        );
         Ok((follower, following))
     }
 
@@ -186,7 +192,7 @@ impl FollowController {
                 "#,
                 follower
             )
-            .fetch_one(tx.as_mut())
+            .fetch_one(tx.as_mut()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -203,7 +209,7 @@ impl FollowController {
                 "#,
                 following
             )
-            .fetch_one(tx.as_mut())
+            .fetch_one(tx.as_mut()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
@@ -211,7 +217,10 @@ impl FollowController {
 
         tx.commit().await?;
         let elapsed = start_time.elapsed();
-        info!("remove_follow completed in {:?} for follower: {}, following: {}", elapsed, follower.account_id, following.account_id);
+        info!(
+            "remove_follow completed in {:?} for follower: {}, following: {}",
+            elapsed, follower.account_id, following.account_id
+        );
         Ok((follower, following))
     }
 
@@ -229,13 +238,16 @@ impl FollowController {
                 follower,
                 following
             )
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         let elapsed = start_time.elapsed();
-        info!("check_follow completed in {:?} for follower: {}, following: {}", elapsed, follower, following);
+        info!(
+            "check_follow completed in {:?} for follower: {}, following: {}",
+            elapsed, follower, following
+        );
         Ok(result.exists.unwrap_or(false))
     }
 
@@ -251,11 +263,12 @@ impl FollowController {
                 r#"
                 INSERT INTO follow (follower_id, following_id)
                 VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
                 "#,
                 follower,
                 following
             )
-            .execute(tx)
+            .execute(tx),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
@@ -280,7 +293,7 @@ impl FollowController {
                 follower,
                 following
             )
-            .execute(tx.as_mut())
+            .execute(tx.as_mut()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
