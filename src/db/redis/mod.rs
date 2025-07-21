@@ -11,11 +11,11 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        CHART_EXPIRATION, GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
+        GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
         GET_DEV_POSITIONS_EXPIRATION, GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION,
         GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
-        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION, HOLD_TOKEN_EXPIRATION,
-        MESSAGE_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_EXPIRATION,
+        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION,
+        NEW_CONTENT_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     types::{
         common::pagination::PaginationParams,
@@ -33,7 +33,7 @@ use crate::{
             order::{OrderMessage, TokenOrderType},
         },
         trading::{
-            chart::{BarResponse, ChartQuery, ChartResponse, GetBarsRequest},
+            chart::{BarResponse, GetBarsRequest},
             position::{HoldTokenResponse, TokenHolderResponse},
             swap_history::{SwapQuery, TokenSwapResponse},
         },
@@ -90,7 +90,7 @@ impl RedisDatabase {
 
         let key = format!("session:{}:message", address);
 
-        conn.set_ex::<String, String, ()>(key, message.to_string(), *MESSAGE_EXPIRATION)
+        conn.pset_ex::<String, String, ()>(key, message.to_string(), *MESSAGE_EXPIRATION)
             .await?;
 
         Ok(())
@@ -127,9 +127,9 @@ impl RedisDatabase {
         let mut conn = self.pool.get().await?;
 
         let key = format!("session:{}:id", session_id);
-        conn.set_ex::<_, _, ()>(key, address, expiration).await?;
+        conn.pset_ex::<_, _, ()>(key, address, expiration).await?;
         debug!(
-            "Session set: {} -> {} (expires in {}s)",
+            "Session set: {} -> {} (expires in {}ms)",
             session_id, address, expiration
         );
         Ok(())
@@ -306,106 +306,6 @@ impl RedisDatabase {
     }
 }
 
-//Token Page
-impl RedisDatabase {
-    pub async fn set_token_swap_history(
-        &self,
-        token_id: &str,
-        response: &TokenSwapResponse,
-        swap_query: &SwapQuery,
-    ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
-        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
-        let history_json = serde_json::to_string(response)?;
-        //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
-            .await?;
-        debug!("Token swap history set for token {:?}", token_id);
-        Ok(())
-    }
-
-    pub async fn get_token_swap_history(
-        &self,
-        token_id: &str,
-        swap_query: &SwapQuery,
-    ) -> Result<TokenSwapResponse> {
-        let mut conn = self.pool.get().await?;
-        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
-        let history_json: String = conn.get(key).await?;
-        let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
-        debug!("Token swap history retrieved for token {:?}", token_id);
-        Ok(history)
-    }
-
-    pub async fn set_token_holder_response(
-        &self,
-        token_id: &str,
-        response: &TokenHolderResponse,
-        pagination: &PaginationParams,
-    ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
-        let key = format!(
-            "token:{}:holder:{}:{}",
-            token_id, pagination.limit, pagination.page
-        );
-        let history_json = serde_json::to_string(response)?;
-        //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
-            .await?;
-        debug!("Token holder set for token {:?}", token_id);
-        Ok(())
-    }
-    pub async fn get_token_holder_response(
-        &self,
-        token_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<TokenHolderResponse> {
-        let mut conn = self.pool.get().await?;
-        let key = format!(
-            "token:{}:holder:{}:{}",
-            token_id, pagination.limit, pagination.page
-        );
-        let history_json: String = conn.get(key).await?;
-        let history: TokenHolderResponse = serde_json::from_str(&history_json)?;
-        debug!("Token holder retrieved for token {:?}", token_id);
-        Ok(history)
-    }
-
-    pub async fn set_chart_response(
-        &self,
-        token_id: &str,
-        query: &ChartQuery,
-        response: &ChartResponse,
-    ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
-        let key = format!(
-            "token:{}:chart:interval:{}:base_timestamp:{}",
-            token_id, query.interval, query.base_timestamp
-        );
-        let history_json = serde_json::to_string(response)?;
-        //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_EXPIRATION)
-            .await?;
-        debug!("Token chart set for token {:?}", token_id);
-        Ok(())
-    }
-    pub async fn get_chart_response(
-        &self,
-        token_id: &str,
-        query: &ChartQuery,
-    ) -> Result<ChartResponse> {
-        let mut conn = self.pool.get().await?;
-        let key = format!(
-            "token:{}:chart:interval:{}:base_timestamp:{}",
-            token_id, query.interval, query.base_timestamp
-        );
-        let history_json: String = conn.get(key).await?;
-        let history: ChartResponse = serde_json::from_str(&history_json)?;
-        debug!("Token chart retrieved for token {:?}", token_id);
-        Ok(history)
-    }
-}
-
 impl RedisDatabase {
     pub async fn get_account_hold_token(
         &self,
@@ -434,7 +334,7 @@ impl RedisDatabase {
         );
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, response_json, *HOLD_TOKEN_EXPIRATION)
+        conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
             .await?;
         debug!("Position set for address {:?}", address);
         Ok(())
@@ -453,7 +353,7 @@ impl RedisDatabase {
         );
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_EXPIRATION)
+        conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
             .await?;
         debug!("Token set for address {:?}", address);
         Ok(())
@@ -759,7 +659,70 @@ impl RedisDatabase {
     }
 }
 
+//Token Page
 impl RedisDatabase {
+    pub async fn set_token_swap_history(
+        &self,
+        token_id: &str,
+        response: &TokenSwapResponse,
+        swap_query: &SwapQuery,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
+        let history_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
+            .await?;
+        debug!("Token swap history set for token {:?}", token_id);
+        Ok(())
+    }
+
+    pub async fn get_token_swap_history(
+        &self,
+        token_id: &str,
+        swap_query: &SwapQuery,
+    ) -> Result<TokenSwapResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
+        let history_json: String = conn.get(key).await?;
+        let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
+        debug!("Token swap history retrieved for token {:?}", token_id);
+        Ok(history)
+    }
+
+    pub async fn set_token_holder_response(
+        &self,
+        token_id: &str,
+        response: &TokenHolderResponse,
+        pagination: &PaginationParams,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "token:{}:holder:{}:{}",
+            token_id, pagination.limit, pagination.page
+        );
+        let history_json = serde_json::to_string(response)?;
+        //pset is miliseconds
+        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
+            .await?;
+        debug!("Token holder set for token {:?}", token_id);
+        Ok(())
+    }
+    pub async fn get_token_holder_response(
+        &self,
+        token_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenHolderResponse> {
+        let mut conn = self.pool.get().await?;
+        let key = format!(
+            "token:{}:holder:{}:{}",
+            token_id, pagination.limit, pagination.page
+        );
+        let history_json: String = conn.get(key).await?;
+        let history: TokenHolderResponse = serde_json::from_str(&history_json)?;
+        debug!("Token holder retrieved for token {:?}", token_id);
+        Ok(history)
+    }
     pub async fn get_prices(
         &self,
         token_id: &str,
@@ -794,11 +757,14 @@ impl RedisDatabase {
             token_id, request.resolution, request.from, request.to
         );
         let json = serde_json::to_string(bar_data)?;
-        conn.pset_ex::<String, String, ()>(key, json, *CHART_EXPIRATION)
+        conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
             .await?;
         Ok(())
     }
+}
 
+//New Content
+impl RedisDatabase {
     pub async fn get_new_content(&self) -> Result<NewContentResponse> {
         let mut conn = self.pool.get().await?;
         let key = "new_content:latest";
@@ -813,7 +779,7 @@ impl RedisDatabase {
         let mut conn = self.pool.get().await?;
         let key = "new_content:latest";
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key.to_string(), json, 1000) // 1 second
+        conn.pset_ex::<String, String, ()>(key.to_string(), json, *NEW_CONTENT_EXPIRATION)
             .await?;
         Ok(())
     }
