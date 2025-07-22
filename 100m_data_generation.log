@@ -1,0 +1,54 @@
+Timing is on.
+Starting 100M record generation...
+WARNING: This will take several hours!
+
+SET
+Time: 0.174 ms
+psql:scripts/generate_100m_data.sql:11: ERROR:  unrecognized configuration parameter "checkpoint_segments"
+Time: 0.195 ms
+psql:scripts/generate_100m_data.sql:12: ERROR:  parameter "wal_buffers" cannot be changed without restarting the server
+Time: 0.163 ms
+Current data counts:
+ table_name | row_count 
+------------+-----------
+ account    |     10000
+ token      |      1000
+ swap       |      1000
+(3 rows)
+
+Time: 7.871 ms
+psql:scripts/generate_100m_data.sql:54: NOTICE:  Current account count: 10000
+psql:scripts/generate_100m_data.sql:54: NOTICE:  Generating 990000 more accounts...
+psql:scripts/generate_100m_data.sql:54: NOTICE:  Generated 510000 accounts so far
+DO
+Time: 47843.442 ms (00:47.843)
+psql:scripts/generate_100m_data.sql:98: NOTICE:  Current token count: 1000
+psql:scripts/generate_100m_data.sql:98: NOTICE:  Generating 99000 more tokens...
+psql:scripts/generate_100m_data.sql:98: NOTICE:  Generated 51000 tokens so far
+DO
+Time: 48233.353 ms (00:48.233)
+Starting 100M swap generation...
+This is the time-consuming part - estimated 2-4 hours
+SELECT 50000
+Time: 33.142 ms
+SELECT 100000
+Time: 26.885 ms
+CREATE INDEX
+Time: 13.035 ms
+CREATE INDEX
+Time: 15.026 ms
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Current swap count: 1000
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Available tokens: 50000, accounts: 100000
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Need to generate 999 batches of 100000 swaps each
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Batch 10/999 completed. Total swaps: 1001000. Batch time: 00:00:19.028847. Total time: 00:05:54.759445
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Batch 20/999 completed. Total swaps: 2001000. Batch time: 00:00:30.263407. Total time: 00:10:38.222576
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Batch 30/999 completed. Total swaps: 3001000. Batch time: 00:00:41.027262. Total time: 00:16:55.889941
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Batch 40/999 completed. Total swaps: 4001000. Batch time: 00:00:43.085556. Total time: 00:23:43.684554
+psql:scripts/generate_100m_data.sql:180: NOTICE:  Batch 50/999 completed. Total swaps: 5001000. Batch time: 00:01:20.931688. Total time: 00:47:24.080468
+psql:scripts/generate_100m_data.sql:180: WARNING:  terminating connection because of crash of another server process
+DETAIL:  The postmaster has commanded this server process to roll back the current transaction and exit, because another server process exited abnormally and possibly corrupted shared memory.
+HINT:  In a moment you should be able to reconnect to the database and repeat your command.
+psql:scripts/generate_100m_data.sql:180: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+psql:scripts/generate_100m_data.sql:180: error: connection to server was lost

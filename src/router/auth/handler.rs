@@ -151,8 +151,22 @@ pub async fn auth_session(
 
     let session_id = generate_session_id(address.as_str(), message.as_str());
 
-    // 병렬로 Redis 작업 실행
+    // 먼저 계정 업서트를 수행하여 외래 키 제약 조건 위반을 방지
+    let postgres = state.postgres.clone();
+    let account_controller = AccountController::new(postgres.clone());
+    let account = Account::new(address.clone());
+    let account = account_controller
+        .upsert_account(account)
+        .await
+        .map_err(|err| {
+            error!(
+                "Failed to upsert account: address: {}, error: {}",
+                address, err
+            );
+            AppError::InternalError(err.to_string())
+        })?;
 
+    // 병렬로 Redis 작업과 PostgreSQL 세션 생성 실행
     let (del_nonce_result, set_sign_message_result, postgres_set_sign_message_result) = tokio::join!(
         {
             let start = std::time::Instant::now();
@@ -208,20 +222,6 @@ pub async fn auth_session(
         AppError::InternalError(err.to_string())
     })?;
 
-    // 이전 작업들이 모두 성공한 후 계정 업서트 수행
-    let postgres = state.postgres.clone();
-    let account_controller = AccountController::new(postgres.clone());
-    let account = Account::new(address.clone());
-    let account = account_controller
-        .upsert_account(account)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to upsert account: address: {}, error: {}",
-                address, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
     let cookie_name = env::var("COOKIE_NAME").unwrap();
     // 쿠키 설정
     let mut cookie = Cookie::new(cookie_name, session_id);

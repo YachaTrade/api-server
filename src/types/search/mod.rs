@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -145,7 +145,8 @@ impl SearchController {
         );
 
         let token_records = token_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        let account_records = account_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let account_records =
+            account_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
         let tokens_vec: Vec<SearchToken> = token_records
             .into_iter()
