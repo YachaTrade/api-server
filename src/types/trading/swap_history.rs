@@ -35,7 +35,6 @@ pub struct PositionSwapResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TokenSwap {
-    pub swap_id: i32,
     pub account_info: AccountInfo,
     pub is_buy: bool,
     pub native_amount: BigDecimal,
@@ -252,7 +251,6 @@ impl SwapController {
         let mut param_count = 1;
         let mut query_sql = r#"
         SELECT 
-            s.swap_id,
             s.token_id,
             s.is_buy,
             s.native_amount,
@@ -303,13 +301,13 @@ impl SwapController {
         query_builder = query_builder.bind(token_id);
 
         // 조건부 파라미터 바인딩 (순서 보장)
+        if let Some(account_id) = &query.account_id {
+            query_builder = query_builder.bind(account_id);
+        }
+        
         if let Some(min_vol) = &query.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
-        }
-
-        if let Some(account_id) = &query.account_id {
-            query_builder = query_builder.bind(account_id);
         }
 
         // 쿼리 실행
@@ -324,7 +322,6 @@ impl SwapController {
         let swaps: Vec<TokenSwap> = rows
             .into_iter()
             .map(|row| {
-                let swap_id: i32 = row.try_get("swap_id").unwrap();
                 let account_id: String = row.try_get("account_id").unwrap();
                 let account_nickname: String = row.try_get("account_nickname").unwrap();
                 let account_image: String = row.try_get("account_image").unwrap();
@@ -340,7 +337,6 @@ impl SwapController {
                 let _is_blue_label: Option<bool> = row.try_get("is_blue_label").unwrap();
 
                 TokenSwap {
-                    swap_id,
                     account_info: AccountInfo {
                         account_id,
                         nickname: if x_handle.is_some() {
@@ -412,15 +408,15 @@ impl SwapController {
 
         param_count += 1; // token_id는 $1
 
-        // Add volume filters
-        if let Some(_) = &query_params.min_volume {
-            query.push_str(&format!(" AND s.native_amount >= ${}", param_count));
-            param_count += 1;
-        }
-
         // Add own trades filter
         if let Some(_) = &query_params.account_id {
             query.push_str(&format!(" AND s.account_id = ${}", param_count));
+            param_count += 1;
+        }
+
+        // Add volume filters
+        if let Some(_) = &query_params.min_volume {
+            query.push_str(&format!(" AND s.native_amount >= ${}", param_count));
             param_count += 1;
         }
 
@@ -438,13 +434,13 @@ impl SwapController {
         query_builder = query_builder.bind(token_id);
 
         // 조건부 파라미터 바인딩 (순서 보장)
+        if let Some(account_id) = &query_params.account_id {
+            query_builder = query_builder.bind(account_id);
+        }
+        
         if let Some(min_vol) = &query_params.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
-        }
-
-        if let Some(account_id) = &query_params.account_id {
-            query_builder = query_builder.bind(account_id);
         }
 
         let row = tokio::time::timeout(
