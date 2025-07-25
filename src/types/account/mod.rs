@@ -261,7 +261,7 @@ impl AccountController {
             ax.is_blue_label
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            WHERE LOWER(a.account_id) = LOWER($1)
+            WHERE a.account_id = $1
             "#,
         )
         .bind(account_id)
