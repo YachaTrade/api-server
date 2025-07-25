@@ -122,11 +122,11 @@ impl ChartController {
             AND interval_type = $2
             AND time_stamp >= $3
             AND time_stamp <= $4
-            ORDER BY time_stamp ASC
+            ORDER BY time_stamp DESC
             LIMIT $5
         "#;
 
-        let charts = sqlx::query_as::<_, Chart>(&query)
+        let mut charts = sqlx::query_as::<_, Chart>(&query)
             .bind(token_id)
             .bind(interval_type)
             .bind(request.from)
@@ -135,6 +135,9 @@ impl ChartController {
             .fetch_all(self.db.get_read_pool())
             .await
             .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
+
+        // DESC로 가져온 데이터를 reverse하여 ASC 순서로 만듦
+        charts.reverse();
 
         if charts.is_empty() {
             return Ok(BarResponse {
