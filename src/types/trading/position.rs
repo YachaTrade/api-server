@@ -228,7 +228,7 @@ impl PositionController {
             pub name: String,
             pub symbol: String,
             pub image_uri: String,
-            pub balance: String,
+            pub balance: BigDecimal,
         }
 
         let record = tokio::time::timeout(
@@ -272,7 +272,7 @@ impl PositionController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                 },
-                balance: row.balance,
+                balance: row.balance.to_string(),
             })
             .collect();
         let elapsed = start_time.elapsed();
