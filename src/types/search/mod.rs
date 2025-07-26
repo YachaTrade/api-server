@@ -150,7 +150,7 @@ impl SearchController {
                     SELECT 
                         account_id, nickname, image_uri, 
                         follower_count, following_count,
-                        x_handle, x_image_uri, is_blue_label
+                        x_handle, x_image_uri, is_blue_label, total_value
                     FROM account_values
                     ORDER BY 
                         total_value DESC
