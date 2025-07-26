@@ -36,11 +36,13 @@ struct SearchAccountRow {
     x_handle: Option<String>,
     x_image_uri: Option<String>,
     is_blue_label: Option<bool>,
+    total_value: BigDecimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchAccount {
     pub account_info: AccountInfo,
+    pub total_value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -114,28 +116,44 @@ impl SearchController {
                 )
                 .fetch_all(pool)
             ),
-            // 계정 기본 정보
+            // 계정 기본 정보 (balance * price로 정렬)
             tokio::time::timeout(
                 Duration::from_millis(500),
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
-                    SELECT a.account_id, nickname, image_uri, follower_count, following_count,
-                    ax.x_handle,
-                    ax.x_image_uri,
-                    ax.is_blue_label
-                    FROM account a
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    WHERE 
-                        LOWER(a.nickname) = LOWER($1)
-                        OR LOWER(a.account_id) = LOWER($1)
-                        OR LOWER(a.nickname) % LOWER($1)
-                        OR LOWER(a.account_id) % LOWER($1)
+                    WITH account_values AS (
+                        SELECT 
+                            a.account_id,
+                            a.nickname,
+                            a.image_uri,
+                            a.follower_count,
+                            a.following_count,
+                            ax.x_handle,
+                            ax.x_image_uri,
+                            ax.is_blue_label,
+                            COALESCE(SUM(b.balance * m.price), 0) as total_value
+                        FROM account a
+                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                        LEFT JOIN balance b ON a.account_id = b.account_id
+                        LEFT JOIN market m ON b.token_id = m.token_id
+                        WHERE 
+                            LOWER(a.nickname) = LOWER($1)
+                            OR LOWER(a.account_id) = LOWER($1)
+                            OR LOWER(a.nickname) % LOWER($1)
+                            OR LOWER(a.account_id) % LOWER($1)
+                            OR LOWER(ax.x_handle) % LOWER($1)
+                        GROUP BY 
+                            a.account_id, a.nickname, a.image_uri, 
+                            a.follower_count, a.following_count,
+                            ax.x_handle, ax.x_image_uri, ax.is_blue_label
+                    )
+                    SELECT 
+                        account_id, nickname, image_uri, 
+                        follower_count, following_count,
+                        x_handle, x_image_uri, is_blue_label
+                    FROM account_values
                     ORDER BY 
-                        CASE 
-                            WHEN LOWER(a.nickname) = LOWER($1) OR LOWER(a.account_id) = LOWER($1) THEN 0
-                            ELSE 1
-                        END,
-                        follower_count DESC
+                        total_value DESC
                     LIMIT 5
                     "#
                 )
@@ -180,6 +198,7 @@ impl SearchController {
                     follower_count: row.follower_count,
                     following_count: row.following_count,
                 },
+                total_value: row.total_value.to_string(),
             })
             .collect();
 
