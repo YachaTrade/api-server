@@ -138,8 +138,8 @@ impl OrderController {
                         a.nickname, a.image_uri as account_image_uri, t.name, t.symbol, 
                         t.image_uri as token_image_uri, t.description, 
                         t.total_supply as total_supply,
-                        COALESCE(m.price, '0') as price,
-                        COALESCE(m.reserve_token, '0') as reserve_token,
+                        m.price,
+                        m.reserve_token,
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
@@ -147,7 +147,7 @@ impl OrderController {
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
-                    LEFT JOIN market m ON t.token_id = m.token_id
+                    INNER JOIN market m ON t.token_id = m.token_id
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -172,8 +172,8 @@ impl OrderController {
                         a.follower_count, a.following_count, t.name, t.symbol,
                         t.image_uri as token_image_uri, t.description,
                         t.total_supply as total_supply,
-                        COALESCE(m.price, '0') as price,
-                        COALESCE(m.reserve_token, '0') as reserve_token,
+                        m.price,
+                        m.reserve_token,
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
@@ -206,8 +206,8 @@ impl OrderController {
                         a.follower_count, a.following_count, t.name, t.symbol,
                         t.image_uri as token_image_uri, t.description,
                         t.total_supply as total_supply,
-                        COALESCE(m.price, '0') as price,
-                        COALESCE(m.reserve_token, '0') as reserve_token,
+                        m.price,
+                        m.reserve_token,
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
@@ -240,7 +240,13 @@ impl OrderController {
 
         let tokens: Vec<OrderToken> = order_token_raw.into_iter().map(OrderToken::from).collect();
         let elapsed = start_time.elapsed();
-        info!("get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {}", elapsed, order_by.as_str(), pagination.page, pagination.limit);
+        info!(
+            "get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {}",
+            elapsed,
+            order_by.as_str(),
+            pagination.page,
+            pagination.limit
+        );
         Ok(tokens)
     }
 
