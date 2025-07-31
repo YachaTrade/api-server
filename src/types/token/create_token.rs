@@ -100,7 +100,7 @@ impl TokenCreatedController {
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
             let account_id = account_id.to_string();
-            let pagination = pagination.clone();
+            let pagination = pagination;
             async move {
                 let controller = TokenCreatedController::new(db);
                 controller.fetch_tokens_created(&account_id, &pagination).await

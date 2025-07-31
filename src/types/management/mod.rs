@@ -248,7 +248,7 @@ impl TokenManagementController {
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
             let account_id = account_id.to_string();
-            let pagination = pagination.clone();
+            let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
                 controller.fetch_dev_positions(&account_id, &pagination).await
@@ -395,7 +395,7 @@ impl TokenManagementController {
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
             let account_id = account_id.to_string();
-            let pagination = pagination.clone();
+            let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
                 controller.fetch_holding_token_management(&account_id, &pagination).await
@@ -529,7 +529,7 @@ impl TokenManagementController {
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
             let account_id = account_id.to_string();
-            let pagination = pagination.clone();
+            let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
                 controller.fetch_account_locks(&account_id, &pagination).await
@@ -671,7 +671,7 @@ impl TokenManagementController {
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
             let account_id = account_id.to_string();
-            let pagination = pagination.clone();
+            let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
                 controller.fetch_account_withdrawable_lock(&account_id, &pagination).await

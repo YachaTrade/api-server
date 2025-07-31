@@ -83,7 +83,7 @@ impl HypeTokenController {
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
-            let pagination = pagination.clone();
+            let pagination = pagination;
             async move {
                 let controller = HypeTokenController::new(db);
                 controller.fetch_hype_token(&pagination).await
@@ -204,8 +204,7 @@ impl HypeTokenController {
         let token_records = records_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let total_count = total_count_result
             .map_err(|_| anyhow!("Query timeout after 500ms"))??
-            .count
-            .unwrap_or(0) as u64;
+            .count as u64;
 
         // 결과 매핑
         let tokens = token_records
