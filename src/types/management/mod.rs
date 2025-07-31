@@ -3,8 +3,13 @@ use crate::{
     types::common::{
         info::{AccountInfo, TokenInfo},
         pagination::PaginationParams,
+        CountRow,
     },
-    utils::valid_evm_address,
+    utils::{
+        valid_evm_address,
+        single_flight::{with_cache, GLOBAL_CACHE},
+    },
+    cache_key,
 };
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
@@ -229,10 +234,45 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<DevPositionsResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "dev_positions",
+            account_id,
+            pagination.page,
+            pagination.limit,
+            pagination.direction
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            let pagination = pagination.clone();
+            async move {
+                let controller = TokenManagementController::new(db);
+                controller.fetch_dev_positions(&account_id, &pagination).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
+        Ok(response)
+    }
+    
+    async fn fetch_dev_positions(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<DevPositionsResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         #[derive(sqlx::FromRow)]
-        pub struct DevPositionRaw {
+        pub struct DevPositionRow {
             pub token_id: String,
             pub name: String,
             pub symbol: String,
@@ -276,7 +316,7 @@ impl TokenManagementController {
         // 첫 번째 비동기 작업: 토큰 데이터 가져오기
         let tokens_future = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as::<_, DevPositionRaw>(&query)
+            sqlx::query_as::<_, DevPositionRow>(&query)
                 .bind(account_id)
                 .bind(pagination.limit)
                 .bind(offset)
@@ -329,11 +369,6 @@ impl TokenManagementController {
             })
             .collect();
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
         Ok(DevPositionsResponse {
             positions,
             total_count,
@@ -346,10 +381,45 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<HoldingTokenManagementResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "holding_token_management",
+            account_id,
+            pagination.page,
+            pagination.limit,
+            pagination.direction
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            let pagination = pagination.clone();
+            async move {
+                let controller = TokenManagementController::new(db);
+                controller.fetch_holding_token_management(&account_id, &pagination).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
+        Ok(response)
+    }
+    
+    async fn fetch_holding_token_management(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<HoldingTokenManagementResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         #[derive(sqlx::FromRow)]
-        struct HoldingTokenManagementRaw {
+        struct HoldingTokenManagementRow {
             token_id: String,
             name: String,
             symbol: String,
@@ -388,7 +458,7 @@ impl TokenManagementController {
 
         let rows = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as::<_, HoldingTokenManagementRaw>(&query)
+            sqlx::query_as::<_, HoldingTokenManagementRow>(&query)
                 .bind(account_id)
                 .bind(pagination.limit)
                 .bind(offset)
@@ -414,30 +484,25 @@ impl TokenManagementController {
 
         let total_count = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
                     SELECT 
-                        COUNT(*)
+                        COUNT(*) as count
                     FROM 
                         balance 
                     WHERE 
                         account_id = $1
                         AND balance > 0
                     "#,
-                account_id
             )
+            .bind(account_id)
             .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
-        let total_count = total_count.count.unwrap_or(0);
+        let total_count = total_count.count;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
         Ok(HoldingTokenManagementResponse {
             managements,
             total_count,
@@ -450,6 +515,41 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<TokenLockResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "account_locks",
+            account_id,
+            pagination.page,
+            pagination.limit,
+            pagination.direction
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            let pagination = pagination.clone();
+            async move {
+                let controller = TokenManagementController::new(db);
+                controller.fetch_account_locks(&account_id, &pagination).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
+        Ok(response)
+    }
+    
+    async fn fetch_account_locks(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenLockResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         let query = format!(
@@ -481,7 +581,7 @@ impl TokenManagementController {
 
         /// Represents token lock information with related token details
         #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-        pub struct TokenLockInfoRaw {
+        pub struct TokenLockInfoRow {
             pub token_id: String,
             pub name: String,
             pub symbol: String,
@@ -497,7 +597,7 @@ impl TokenManagementController {
 
         let token_lock_future = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as::<_, TokenLockInfoRaw>(&query)
+            sqlx::query_as::<_, TokenLockInfoRow>(&query)
                 .bind(account_id)
                 .bind(now)
                 .bind(pagination.limit)
@@ -545,11 +645,6 @@ impl TokenManagementController {
             })
             .collect();
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
         Ok(TokenLockResponse {
             token_locks,
             total_count,
@@ -562,6 +657,41 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<WithdrawableLockResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "account_withdrawable_lock",
+            account_id,
+            pagination.page,
+            pagination.limit,
+            pagination.direction
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            let pagination = pagination.clone();
+            async move {
+                let controller = TokenManagementController::new(db);
+                controller.fetch_account_withdrawable_lock(&account_id, &pagination).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
+        Ok(response)
+    }
+    
+    async fn fetch_account_withdrawable_lock(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<WithdrawableLockResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         let withdrawable_lock_query = format!(
@@ -598,7 +728,7 @@ impl TokenManagementController {
 
         // 여기서 구조체 정의를 쿼리 결과와 일치하도록 수정
         #[derive(Debug, sqlx::FromRow)]
-        struct WithdrawableLockRaw {
+        struct WithdrawableLockRow {
             token_id: String,
             name: String,
             symbol: String,
@@ -612,7 +742,7 @@ impl TokenManagementController {
 
         let withdrawable_lock_future = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as::<_, WithdrawableLockRaw>(&withdrawable_lock_query)
+            sqlx::query_as::<_, WithdrawableLockRow>(&withdrawable_lock_query)
                 .bind(account_id)
                 .bind(now)
                 .bind(pagination.limit)
@@ -674,11 +804,6 @@ impl TokenManagementController {
             })
             .collect();
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
         Ok(WithdrawableLockResponse {
             withdrawable_locks,
             total_count,
@@ -691,6 +816,44 @@ impl TokenManagementController {
         query: &ManagementHistoryQuery,
     ) -> Result<ManagementHistoryResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "management_history",
+            token_id,
+            query.page,
+            query.limit,
+            query.direction,
+            query.activity_type,
+            query.min_volume.as_ref().unwrap_or(&"".to_string()),
+            query.account_id.as_ref().unwrap_or(&"".to_string())
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let token_id = token_id.to_string();
+            let query = query.clone();
+            async move {
+                let controller = TokenManagementController::new(db);
+                controller.fetch_management_history(&token_id, &query).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}",
+            elapsed, token_id, query.page, query.limit
+        );
+        Ok(response)
+    }
+    
+    async fn fetch_management_history(
+        &self,
+        token_id: &str,
+        query: &ManagementHistoryQuery,
+    ) -> Result<ManagementHistoryResponse> {
         let offset = (query.page - 1) * query.limit;
 
         // 파라미터 카운터로 순서 관리
@@ -817,11 +980,6 @@ impl TokenManagementController {
                 .await?
         };
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}",
-            elapsed, token_id, query.page, query.limit
-        );
         Ok(ManagementHistoryResponse {
             histories,
             total_count,

@@ -5,8 +5,13 @@ use crate::{
     types::common::{
         info::{AccountInfo, TokenInfo},
         pagination::PaginationParams,
+        CountRow,
     },
-    utils::valid_evm_address,
+    utils::{
+        valid_evm_address,
+        single_flight::{with_cache, GLOBAL_CACHE},
+    },
+    cache_key,
 };
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
@@ -27,7 +32,7 @@ pub struct PositionSwap {
     pub transaction_hash: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PositionSwapResponse {
     pub swaps: Vec<PositionSwap>,
     pub total_count: i64,
@@ -150,26 +155,40 @@ impl SwapController {
 
     pub async fn get_total_count_by_account(&self, account_id: &str) -> Result<i64> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!("swap_count_by_account", account_id);
+        
+        // Single Flight Pattern 적용
+        let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_total_count_by_account(account_id).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_total_count_by_account completed in {:?} for account_id: {}", elapsed, account_id);
+        Ok(count)
+    }
+    
+    async fn fetch_total_count_by_account(&self, account_id: &str) -> Result<i64> {
+        // account_swap_count 테이블 사용으로 최적화
         let count = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
-                SELECT COALESCE(COUNT(*)::bigint, 0) as count
-                FROM swap s
-                WHERE s.account_id = $1
+                SELECT COALESCE(total_count, 0) as count
+                FROM account_swap_count
+                WHERE account_id = $1
                 "#,
-                account_id
             )
-            .fetch_one(self.db.get_read_pool())
+            .bind(account_id)
+            .fetch_optional(self.db.get_read_pool())
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         
-        let count = count.count.unwrap_or(0);
-
-        let elapsed = start_time.elapsed();
-        info!("get_total_count_by_account completed in {:?} for account_id: {}", elapsed, account_id);
-        Ok(count)
+        // 레코드가 없으면 0 반환
+        Ok(count.map(|c| c.count).unwrap_or(0))
     }
     pub async fn get_swaps_by_account(
         &self,
@@ -177,34 +196,83 @@ impl SwapController {
         pagination: PaginationParams,
     ) -> Result<PositionSwapResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "swaps_by_account",
+            account_id,
+            pagination.page,
+            pagination.limit
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_swaps_by_account(account_id, pagination).await
+        })
+        .await?;
+        
+        Ok(response)
+    }
+    
+    async fn fetch_swaps_by_account(
+        &self,
+        account_id: &str,
+        pagination: PaginationParams,
+    ) -> Result<PositionSwapResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
+        #[derive(FromRow)]
+        struct SwapRow {
+            account_id: String,
+            token_id: String,
+            token_symbol: String,
+            token_image: String,
+            token_name: String,
+            is_buy: bool,
+            native_amount: BigDecimal,
+            token_amount: BigDecimal,
+            created_at: i64,
+            transaction_hash: String,
+        }
+
+        // CTE를 사용한 최적화
         let swaps = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, SwapRow>(
                 r#"
+                WITH recent_swaps AS (
+                    SELECT 
+                        s.account_id,
+                        s.token_id,
+                        s.is_buy,
+                        s.native_amount,
+                        s.token_amount,
+                        s.created_at,
+                        s.transaction_hash
+                    FROM swap s
+                    WHERE s.account_id = $1
+                    ORDER BY s.created_at DESC
+                    LIMIT $2
+                    OFFSET $3
+                )
                 SELECT 
-                    s.account_id,
-                    s.token_id,
+                    rs.account_id,
+                    rs.token_id,
                     t.symbol as token_symbol,
                     t.image_uri as token_image,
                     t.name as token_name,
-                    s.is_buy,
-                    s.native_amount,
-                    s.token_amount,
-                    s.created_at,
-                    s.transaction_hash
-                FROM swap s
-                JOIN token t ON s.token_id = t.token_id
-                WHERE s.account_id = $1
-                ORDER BY s.created_at DESC
-                LIMIT $2
-                OFFSET $3
+                    rs.is_buy,
+                    rs.native_amount,
+                    rs.token_amount,
+                    rs.created_at,
+                    rs.transaction_hash
+                FROM recent_swaps rs
+                JOIN token t ON rs.token_id = t.token_id
                 "#,
-                account_id,
-                pagination.limit as i64,
-                offset
             )
+            .bind(account_id)
+            .bind(pagination.limit as i64)
+            .bind(offset)
             .fetch_all(self.db.get_read_pool())
         )
         .await
@@ -234,8 +302,6 @@ impl SwapController {
             })
             .collect();
 
-        let elapsed = start_time.elapsed();
-        info!("get_swaps_by_account completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
         Ok(PositionSwapResponse { swaps, total_count })
     }
 
@@ -267,7 +333,12 @@ impl SwapController {
             ax.is_blue_label
         FROM swap s
         JOIN account a ON s.account_id = a.account_id
-        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+        LEFT JOIN LATERAL (
+            SELECT x_handle, x_image_uri, is_blue_label 
+            FROM account_x 
+            WHERE account_id = a.account_id 
+            LIMIT 1
+        ) ax ON true
         WHERE s.token_id = $1"#
             .to_string();
 

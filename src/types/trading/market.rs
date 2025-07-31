@@ -7,10 +7,14 @@ use sqlx::FromRow;
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct MarketRaw {
+pub struct MarketRow {
     pub market_type: String,
     pub token_id: String,
     pub pool_id: Option<String>,
@@ -28,8 +32,8 @@ pub struct Market {
     pub created_at: i64,
 }
 
-impl From<MarketRaw> for Market {
-    fn from(raw: MarketRaw) -> Self {
+impl From<MarketRow> for Market {
+    fn from(raw: MarketRow) -> Self {
         let mut market = Market {
             market_type: raw.market_type,
             token_id: raw.token_id,
@@ -57,10 +61,25 @@ impl MarketController {
 
     pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!("market", token_id);
+        
+        // Single Flight Pattern 적용
+        let market = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_market_by_token(token_id).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_market_by_token completed in {:?} for token_id: {}", elapsed, token_id);
+        Ok(market)
+    }
+    
+    async fn fetch_market_by_token(&self, token_id: &str) -> Result<Market> {
         let market = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as!(
-                MarketRaw,
+            sqlx::query_as::<_, MarketRow>(
                 r#"
                 SELECT 
                     market_type,
@@ -72,15 +91,13 @@ impl MarketController {
                 FROM market
                 WHERE token_id = $1
                 "#,
-                token_id
             )
+            .bind(token_id)
             .fetch_one(self.db.get_read_pool())
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
 
-        let elapsed = start_time.elapsed();
-        info!("get_market_by_token completed in {:?} for token_id: {}", elapsed, token_id);
         Ok(Market::from(market))
     }
 }

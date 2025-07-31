@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
-    types::common::{info::AccountInfo, pagination::PaginationParams},
+    types::common::{info::AccountInfo, pagination::PaginationParams, CountRow},
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
 };
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
@@ -13,12 +15,12 @@ use sqlx::FromRow;
 use tracing::info;
 use utoipa::ToSchema;
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TokenOrderType {
     MarketCap,    // price * reserve_token
     CreationTime, // created_at
-    LatestTrade,  //
+    LatestTrade,  // market latest_trade_at
 }
 
 impl TokenOrderType {
@@ -45,7 +47,7 @@ pub struct OrderTokenInfo {
     pub score: f64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct OrderTokenRaw {
+pub struct OrderTokenRow {
     pub token_id: String,
     pub account_id: String,
     pub nickname: String,
@@ -71,8 +73,8 @@ pub struct OrderToken {
     pub token_info: OrderTokenInfo,
     pub account_info: AccountInfo,
 }
-impl From<OrderTokenRaw> for OrderToken {
-    fn from(row: OrderTokenRaw) -> Self {
+impl From<OrderTokenRow> for OrderToken {
+    fn from(row: OrderTokenRow) -> Self {
         OrderToken {
             token_info: OrderTokenInfo {
                 token_id: row.token_id,
@@ -127,6 +129,44 @@ impl OrderController {
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "order_tokens",
+            order_by.as_str(),
+            pagination.direction,
+            pagination.page,
+            pagination.limit
+        );
+        
+        // 모든 캐시는 1초로 통일 (Redis와 동일)
+        let cache = &GLOBAL_CACHE.cache;
+        
+        // Single Flight Pattern: 동일한 요청은 하나의 Future를 공유
+        let order_by_clone = order_by.clone();
+        let tokens = with_cache(cache, &cache_key, || async move {
+            self.fetch_order_tokens(order_by_clone, pagination).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {} (cache_key: {})",
+            elapsed,
+            order_by.as_str(),
+            pagination.page,
+            pagination.limit,
+            cache_key
+        );
+        
+        Ok(tokens)
+    }
+    
+    async fn fetch_order_tokens(
+        &self,
+        order_by: TokenOrderType,
+        pagination: &PaginationParams,
+    ) -> Result<Vec<OrderToken>> {
         let offset = (pagination.page.abs() - 1) * pagination.limit;
         let order_direction = &pagination.direction;
         let order_token_raw = match order_by {
@@ -156,7 +196,7 @@ impl OrderController {
 
                 tokio::time::timeout(
                     Duration::from_millis(500),
-                    sqlx::query_as::<_, OrderTokenRaw>(&query)
+                    sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
                         .fetch_all(&*self.db.get_read_pool()),
@@ -190,7 +230,7 @@ impl OrderController {
 
                 tokio::time::timeout(
                     Duration::from_millis(500),
-                    sqlx::query_as::<_, OrderTokenRaw>(&query)
+                    sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
                         .fetch_all(&*self.db.get_read_pool()),
@@ -228,7 +268,7 @@ impl OrderController {
 
                 tokio::time::timeout(
                     Duration::from_millis(500),
-                    sqlx::query_as::<_, OrderTokenRaw>(&query)
+                    sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
                         .fetch_all(&*self.db.get_read_pool()),
@@ -239,22 +279,29 @@ impl OrderController {
         };
 
         let tokens: Vec<OrderToken> = order_token_raw.into_iter().map(OrderToken::from).collect();
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {}",
-            elapsed,
-            order_by.as_str(),
-            pagination.page,
-            pagination.limit
-        );
         Ok(tokens)
     }
 
     pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
         let start_time = Instant::now();
+        
+        let cache_key = "king_of_the_hill:latest";
+        
+        // Single Flight Pattern: 동일한 요청은 하나의 Future를 공유
+        let king = with_cache(&GLOBAL_CACHE.cache, cache_key, || async {
+            self.fetch_latest_king_of_the_hill().await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_latest_king_of_the_hill completed in {:?}", elapsed);
+        Ok(king)
+    }
+    
+    async fn fetch_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
         let row = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as::<_, OrderTokenRaw>(
+            sqlx::query_as::<_, OrderTokenRow>(
                 r#"
                 SELECT 
                     t.token_id,
@@ -289,9 +336,7 @@ impl OrderController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
-        //
-        let elapsed = start_time.elapsed();
-        info!("get_latest_king_of_the_hill completed in {:?}", elapsed);
+        
         Ok(row.map(OrderToken::from))
     }
 
@@ -299,9 +344,9 @@ impl OrderController {
         let start_time = Instant::now();
         let row = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
-                SELECT total_count
+                SELECT total_count as count
                 FROM token_count
                 "#,
             )
@@ -313,6 +358,6 @@ impl OrderController {
 
         let elapsed = start_time.elapsed();
         info!("get_total_count completed in {:?}", elapsed);
-        Ok(row.total_count)
+        Ok(row.count)
     }
 }

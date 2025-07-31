@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
-    types::common::{info::TokenInfo, pagination::PaginationParams},
+    types::common::{info::TokenInfo, pagination::PaginationParams, CountRow},
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
 };
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
@@ -11,13 +13,13 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use tracing::info;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreatedResponse {
     pub tokens: Vec<TokenCreated>,
     pub total_count: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreated {
     pub token: TokenInfo,
     pub is_listing: bool,
@@ -41,26 +43,42 @@ impl TokenCreatedController {
     pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
         let start_time = Instant::now();
         
+        // 캐시 키 생성
+        let cache_key = cache_key!("token_created_count", account_id);
+        
+        // Single Flight Pattern 적용
+        let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            async move {
+                let controller = TokenCreatedController::new(db);
+                controller.fetch_total_count(&account_id).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_total_count completed in {:?} for account_id: {}", elapsed, account_id);
+        Ok(count)
+    }
+    
+    async fn fetch_total_count(&self, account_id: &str) -> Result<i64> {
         let count = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(COUNT(*)::bigint, 0) as count
                 FROM token t
                 WHERE t.creator = $1
                 "#,
-                account_id
             )
+            .bind(account_id)
             .fetch_one(self.db.get_read_pool())
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         
-        let count = count.count.unwrap_or(0);
-        let elapsed = start_time.elapsed();
-        info!("get_total_count completed in {:?} for account_id: {}", elapsed, account_id);
-
-        Ok(count)
+        Ok(count.count)
     }
 
     pub async fn get_tokens_created(
@@ -70,11 +88,56 @@ impl TokenCreatedController {
     ) -> Result<TokenCreatedResponse> {
         let start_time = Instant::now();
         
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "tokens_created",
+            account_id,
+            pagination.page,
+            pagination.limit
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            let pagination = pagination.clone();
+            async move {
+                let controller = TokenCreatedController::new(db);
+                controller.fetch_tokens_created(&account_id, &pagination).await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_tokens_created completed in {:?} for account_id: {}", elapsed, account_id);
+        Ok(response)
+    }
+    
+    async fn fetch_tokens_created(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenCreatedResponse> {
         // Query tokens created by the account with their market and position information
         let offset = (pagination.page - 1) * pagination.limit;
+        #[derive(sqlx::FromRow)]
+        struct TokenCreatedRow {
+            token_id: String,
+            symbol: String,
+            image_uri: String,
+            name: String,
+            is_listing: bool,
+            created_at: i64,
+            price: String,
+            total_supply: BigDecimal,
+            market_cap: BigDecimal,
+            current_amount: BigDecimal,
+            description: Option<String>,
+        }
+
         let tokens = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, TokenCreatedRow>(
                 r#"
                 WITH created_tokens AS (
                     SELECT 
@@ -100,22 +163,22 @@ impl TokenCreatedController {
                     symbol,
                     image_uri,
                     name,
-                    is_listing as "is_listing!",
+                    is_listing,
                     created_at,
-                    COALESCE(price::TEXT, '0') as "price!",
-                    total_supply as "total_supply!",
-                    COALESCE(price * total_supply, 0) as "market_cap!",
-                    COALESCE(current_amount, 0) as "current_amount!",
-                    description as "description?: String"
+                    COALESCE(price::TEXT, '0') as price,
+                    total_supply,
+                    COALESCE(price * total_supply, 0) as market_cap,
+                    COALESCE(current_amount, 0) as current_amount,
+                    description
                 FROM created_tokens
                 ORDER BY current_value DESC
                 LIMIT $2
                 OFFSET $3
                 "#,
-                account_id,
-                pagination.limit as i64,
-                offset
             )
+            .bind(account_id)
+            .bind(pagination.limit as i64)
+            .bind(offset)
             .fetch_all(self.db.get_read_pool())
         )
         .await
@@ -141,10 +204,7 @@ impl TokenCreatedController {
             })
             .collect();
 
-        let total_count = self.get_total_count(account_id).await?;
-
-        let elapsed = start_time.elapsed();
-        info!("get_tokens_created completed in {:?} for account_id: {}", elapsed, account_id);
+        let total_count = self.fetch_total_count(account_id).await?;
 
         Ok(TokenCreatedResponse {
             tokens,

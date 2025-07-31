@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
-    types::common::{info::AccountInfo, pagination::PaginationParams},
+    types::common::{info::AccountInfo, pagination::PaginationParams, ExistsRow},
 };
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -65,7 +65,7 @@ impl FollowController {
 
         let follows = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 SELECT 
                     a.account_id,
@@ -86,11 +86,11 @@ impl FollowController {
                 LIMIT $3
                 OFFSET $4
                 "#,
-                account_id,
-                is_following,
-                pagination.limit as i64,
-                offset
             )
+            .bind(account_id)
+            .bind(is_following)
+            .bind(pagination.limit as i64)
+            .bind(offset)
             .fetch_all(self.db.get_read_pool()),
         )
         .await
@@ -98,14 +98,8 @@ impl FollowController {
 
         let follows = follows
             .into_iter()
-            .map(|row| Follow {
-                account: AccountInfo {
-                    account_id: row.account_id,
-                    nickname: row.nickname,
-                    image_uri: row.image_uri,
-                    follower_count: row.follower_count,
-                    following_count: row.following_count,
-                },
+            .map(|account| Follow {
+                account,
             })
             .collect();
 
@@ -129,16 +123,15 @@ impl FollowController {
 
         let follower = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as!(
-                AccountInfo,
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
                 SET following_count = following_count + 1
                 WHERE account_id = $1
                 RETURNING account_id, nickname, image_uri, follower_count, following_count
                 "#,
-                follower,
             )
+            .bind(&follower)
             .fetch_one(tx.as_mut()),
         )
         .await
@@ -146,16 +139,15 @@ impl FollowController {
 
         let following = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as!(
-                AccountInfo,
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
                 SET follower_count = follower_count + 1
                 WHERE account_id = $1
                 RETURNING account_id, nickname, image_uri, follower_count, following_count
                 "#,
-                following,
             )
+            .bind(&following)
             .fetch_one(tx.as_mut()),
         )
         .await
@@ -182,16 +174,15 @@ impl FollowController {
 
         let follower = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as!(
-                AccountInfo,
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
                 SET following_count = GREATEST(following_count - 1, 0)
                 WHERE account_id = $1
                 RETURNING account_id, nickname, image_uri, follower_count, following_count
                 "#,
-                follower
             )
+            .bind(&follower)
             .fetch_one(tx.as_mut()),
         )
         .await
@@ -199,14 +190,15 @@ impl FollowController {
 
         let following = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as!(
-                AccountInfo,
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
                 SET follower_count = GREATEST(follower_count - 1, 0)
                 WHERE account_id = $1
                 RETURNING account_id, nickname, image_uri, follower_count, following_count
                 "#,
+            )
+            .bind(&
                 following
             )
             .fetch_one(tx.as_mut()),
@@ -228,16 +220,16 @@ impl FollowController {
         let start_time = Instant::now();
         let result = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, ExistsRow>(
                 r#"
                 SELECT EXISTS (
                     SELECT 1 FROM follow 
                     WHERE follower_id = $1 AND following_id = $2
                 ) as exists
                 "#,
-                follower,
-                following
             )
+            .bind(&follower)
+            .bind(&following)
             .fetch_one(self.db.get_read_pool()),
         )
         .await
@@ -248,7 +240,7 @@ impl FollowController {
             "check_follow completed in {:?} for follower: {}, following: {}",
             elapsed, follower, following
         );
-        Ok(result.exists.unwrap_or(false))
+        Ok(result.exists)
     }
 
     async fn insert_follow(
@@ -259,15 +251,15 @@ impl FollowController {
     ) -> Result<()> {
         tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 INSERT INTO follow (follower_id, following_id)
                 VALUES ($1, $2)
                 ON CONFLICT DO NOTHING
                 "#,
-                follower,
-                following
             )
+            .bind(follower)
+            .bind(following)
             .execute(tx),
         )
         .await
@@ -285,14 +277,14 @@ impl FollowController {
     ) -> Result<()> {
         tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 DELETE FROM follow
                 WHERE follower_id = $1 AND following_id = $2
                 "#,
-                follower,
-                following
             )
+            .bind(follower)
+            .bind(following)
             .execute(tx.as_mut()),
         )
         .await
