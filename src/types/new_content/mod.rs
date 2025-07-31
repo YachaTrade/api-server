@@ -362,9 +362,9 @@ impl NewContentController {
         info!("Starting fetch_new_content");
 
         let (new_buy, new_sell, new_token) = tokio::try_join!(
-            self.fetch_latest_new_buy(),
-            self.fetch_latest_new_sell(),
-            self.fetch_latest_new_token()
+            self.get_latest_new_buy(),
+            self.get_latest_new_sell(),
+            self.get_latest_new_token()
         )?;
 
         let response = NewContentResponse {
