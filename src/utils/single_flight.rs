@@ -53,7 +53,7 @@ pub static GLOBAL_CACHE: Lazy<GlobalCache> = Lazy::new(|| GlobalCache {
 /// # 타입 매개변수
 ///
 /// - `K`: 캐시 키 타입 (문자열로 변환 가능해야 함)
-/// - `V`: 저장할 값의 타입 (직렬화/역직렬화 가능해야 함)
+/// - `V`: 저장할 값의 타입 (JSON 직렬화/역직렬화 가능해야 함)
 /// - `F`: DB에서 데이터를 가져오는 비동기 함수
 /// - `Fut`: F가 반환하는 Future 타입
 pub async fn with_cache<K, V, F, Fut>(
@@ -80,8 +80,9 @@ where
             // DB에서 실제 데이터 가져오기
             let value = fetch_fn().await?;
 
-            // 데이터를 바이트로 직렬화 (캐시에 저장하기 위해)
-            let bytes = bincode::serialize(&value)?;
+            // 데이터를 JSON으로 직렬화 (캐시에 저장하기 위해)
+            let json_string = serde_json::to_string(&value)?;
+            let bytes = json_string.into_bytes();
 
             // Arc로 감싸서 여러 스레드가 안전하게 공유
             Ok::<_, anyhow::Error>(Arc::new(bytes))
@@ -95,7 +96,9 @@ where
     };
 
     // 4단계: 바이트를 원래 타입으로 역직렬화
-    let value = bincode::deserialize(&cached_bytes)
+    let json_string = String::from_utf8(cached_bytes.to_vec())
+        .map_err(|e| anyhow::anyhow!("UTF-8 conversion failed: {}", e))?;
+    let value = serde_json::from_str(&json_string)
         .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?;
 
     Ok(value)
