@@ -1,0 +1,2900 @@
+test_db.sh: line 5: export: `#': not a valid identifier
+test_db.sh: line 5: export: `10': not a valid identifier
+test_db.sh: line 5: export: `#': not a valid identifier
+test_db.sh: line 5: export: `10': not a valid identifier
+test_db.sh: line 5: export: `=': not a valid identifier
+test_db.sh: line 5: export: `https://d1469zz8b08zl.cloudfront.net/profile/default_profile_1.png': not a valid identifier
+test_db.sh: line 5: export: `=': not a valid identifier
+test_db.sh: line 5: export: `https://d1469zz8b08zl.cloudfront.net/profile/default_profile_2.png': not a valid identifier
+test_db.sh: line 5: export: `=': not a valid identifier
+test_db.sh: line 5: export: `https://d1469zz8b08zl.cloudfront.net/profile/default_profile_3.png': not a valid identifier
+test_db.sh: line 5: export: `=': not a valid identifier
+test_db.sh: line 5: export: `https://d1469zz8b08zl.cloudfront.net/profile/default_profile_4.png': not a valid identifier
+test_db.sh: line 5: export: `=': not a valid identifier
+test_db.sh: line 5: export: `https://d1469zz8b08zl.cloudfront.net/profile/default_profile_5.png': not a valid identifier
+[1;33mStarting database dummy data generation...[0m
+[1;33mUsing database URL from .env[0m
+[1;33mCleaning existing data...[0m
+NOTICE:  truncate cascades to table "hype_token"
+NOTICE:  truncate cascades to table "token_holder_count"
+TRUNCATE TABLE
+[1;33mGenerating 10 million accounts...[0m
+[0;32mGenerating accounts 1 to 100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 100001 to 200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 200001 to 300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 300001 to 400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 400001 to 500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 500001 to 600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 600001 to 700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 700001 to 800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 800001 to 900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 900001 to 1000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1000001 to 1100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1100001 to 1200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1200001 to 1300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1300001 to 1400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1400001 to 1500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1500001 to 1600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1600001 to 1700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1700001 to 1800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1800001 to 1900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 1900001 to 2000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2000001 to 2100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2100001 to 2200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2200001 to 2300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2300001 to 2400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2400001 to 2500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2500001 to 2600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2600001 to 2700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2700001 to 2800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2800001 to 2900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 2900001 to 3000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3000001 to 3100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3100001 to 3200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3200001 to 3300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3300001 to 3400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3400001 to 3500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3500001 to 3600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3600001 to 3700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3700001 to 3800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3800001 to 3900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 3900001 to 4000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4000001 to 4100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4100001 to 4200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4200001 to 4300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4300001 to 4400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4400001 to 4500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4500001 to 4600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4600001 to 4700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4700001 to 4800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4800001 to 4900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 4900001 to 5000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5000001 to 5100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5100001 to 5200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5200001 to 5300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5300001 to 5400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5400001 to 5500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5500001 to 5600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5600001 to 5700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5700001 to 5800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5800001 to 5900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 5900001 to 6000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6000001 to 6100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6100001 to 6200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6200001 to 6300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6300001 to 6400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6400001 to 6500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6500001 to 6600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6600001 to 6700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6700001 to 6800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6800001 to 6900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 6900001 to 7000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7000001 to 7100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7100001 to 7200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7200001 to 7300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7300001 to 7400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7400001 to 7500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7500001 to 7600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7600001 to 7700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7700001 to 7800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7800001 to 7900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 7900001 to 8000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8000001 to 8100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8100001 to 8200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8200001 to 8300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8300001 to 8400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8400001 to 8500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8500001 to 8600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8600001 to 8700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8700001 to 8800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8800001 to 8900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 8900001 to 9000000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9000001 to 9100000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9100001 to 9200000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9200001 to 9300000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9300001 to 9400000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9400001 to 9500000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9500001 to 9600000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9600001 to 9700000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9700001 to 9800000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9800001 to 9900000...[0m
+INSERT 0 100000
+[0;32mGenerating accounts 9900001 to 10000000...[0m
+INSERT 0 100000
+[0;32mAccount generation completed![0m
+[1;33mGenerating account sessions...[0m
+[0;32mGenerating sessions 1 to 100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 100001 to 200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 200001 to 300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 300001 to 400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 400001 to 500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 500001 to 600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 600001 to 700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 700001 to 800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 800001 to 900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 900001 to 1000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1000001 to 1100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1100001 to 1200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1200001 to 1300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1300001 to 1400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1400001 to 1500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1500001 to 1600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1600001 to 1700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1700001 to 1800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1800001 to 1900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 1900001 to 2000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2000001 to 2100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2100001 to 2200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2200001 to 2300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2300001 to 2400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2400001 to 2500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2500001 to 2600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2600001 to 2700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2700001 to 2800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2800001 to 2900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 2900001 to 3000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3000001 to 3100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3100001 to 3200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3200001 to 3300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3300001 to 3400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3400001 to 3500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3500001 to 3600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3600001 to 3700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3700001 to 3800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3800001 to 3900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 3900001 to 4000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4000001 to 4100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4100001 to 4200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4200001 to 4300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4300001 to 4400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4400001 to 4500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4500001 to 4600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4600001 to 4700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4700001 to 4800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4800001 to 4900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 4900001 to 5000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5000001 to 5100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5100001 to 5200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5200001 to 5300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5300001 to 5400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5400001 to 5500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5500001 to 5600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5600001 to 5700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5700001 to 5800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5800001 to 5900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 5900001 to 6000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6000001 to 6100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6100001 to 6200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6200001 to 6300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6300001 to 6400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6400001 to 6500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6500001 to 6600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6600001 to 6700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6700001 to 6800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6800001 to 6900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 6900001 to 7000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7000001 to 7100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7100001 to 7200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7200001 to 7300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7300001 to 7400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7400001 to 7500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7500001 to 7600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7600001 to 7700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7700001 to 7800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7800001 to 7900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 7900001 to 8000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8000001 to 8100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8100001 to 8200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8200001 to 8300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8300001 to 8400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8400001 to 8500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8500001 to 8600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8600001 to 8700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8700001 to 8800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8800001 to 8900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 8900001 to 9000000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9000001 to 9100000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9100001 to 9200000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9200001 to 9300000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9300001 to 9400000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9400001 to 9500000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9500001 to 9600000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9600001 to 9700000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9700001 to 9800000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9800001 to 9900000...[0m
+INSERT 0 100000
+[0;32mGenerating sessions 9900001 to 10000000...[0m
+INSERT 0 100000
+[0;32mAccount session generation completed![0m
+[1;33mGenerating account X profiles...[0m
+[0;32mGenerating X profiles 1 to 100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 100001 to 200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 200001 to 300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 300001 to 400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 400001 to 500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 500001 to 600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 600001 to 700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 700001 to 800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 800001 to 900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 900001 to 1000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1000001 to 1100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1100001 to 1200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1200001 to 1300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1300001 to 1400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1400001 to 1500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1500001 to 1600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1600001 to 1700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1700001 to 1800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1800001 to 1900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 1900001 to 2000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2000001 to 2100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2100001 to 2200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2200001 to 2300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2300001 to 2400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2400001 to 2500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2500001 to 2600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2600001 to 2700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2700001 to 2800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2800001 to 2900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 2900001 to 3000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3000001 to 3100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3100001 to 3200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3200001 to 3300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3300001 to 3400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3400001 to 3500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3500001 to 3600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3600001 to 3700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3700001 to 3800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3800001 to 3900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 3900001 to 4000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4000001 to 4100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4100001 to 4200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4200001 to 4300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4300001 to 4400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4400001 to 4500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4500001 to 4600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4600001 to 4700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4700001 to 4800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4800001 to 4900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 4900001 to 5000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5000001 to 5100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5100001 to 5200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5200001 to 5300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5300001 to 5400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5400001 to 5500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5500001 to 5600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5600001 to 5700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5700001 to 5800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5800001 to 5900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 5900001 to 6000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6000001 to 6100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6100001 to 6200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6200001 to 6300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6300001 to 6400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6400001 to 6500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6500001 to 6600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6600001 to 6700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6700001 to 6800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6800001 to 6900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 6900001 to 7000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7000001 to 7100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7100001 to 7200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7200001 to 7300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7300001 to 7400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7400001 to 7500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7500001 to 7600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7600001 to 7700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7700001 to 7800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7800001 to 7900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 7900001 to 8000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8000001 to 8100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8100001 to 8200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8200001 to 8300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8300001 to 8400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8400001 to 8500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8500001 to 8600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8600001 to 8700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8700001 to 8800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8800001 to 8900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 8900001 to 9000000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9000001 to 9100000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9100001 to 9200000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9200001 to 9300000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9300001 to 9400000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9400001 to 9500000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9500001 to 9600000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9600001 to 9700000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9700001 to 9800000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9800001 to 9900000...[0m
+INSERT 0 100000
+[0;32mGenerating X profiles 9900001 to 10000000...[0m
+INSERT 0 100000
+[0;32mAccount X profile generation completed![0m
+[1;33mGenerating tokens (10,000 per account for first 1,000 accounts)...[0m
+[0;32mGenerating tokens for account 1...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 2...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 3...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 4...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 5...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 6...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 7...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 8...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 9...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 10...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 11...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 12...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 13...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 14...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 15...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 16...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 17...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 18...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 19...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 20...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 21...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 22...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 23...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 24...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 25...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 26...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 27...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 28...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 29...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 30...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 31...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 32...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 33...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 34...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 35...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 36...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 37...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 38...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 39...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 40...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 41...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 42...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 43...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 44...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 45...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 46...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 47...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 48...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 49...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 50...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 51...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 52...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 53...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 54...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 55...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 56...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 57...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 58...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 59...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 60...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 61...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 62...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 63...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 64...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 65...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 66...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 67...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 68...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 69...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 70...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 71...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 72...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 73...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 74...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 75...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 76...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 77...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 78...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 79...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 80...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 81...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 82...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 83...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 84...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 85...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 86...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 87...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 88...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 89...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 90...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 91...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 92...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 93...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 94...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 95...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 96...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 97...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 98...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 99...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 100...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 101...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 102...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 103...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 104...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 105...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 106...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 107...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 108...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 109...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 110...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 111...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 112...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 113...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 114...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 115...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 116...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 117...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 118...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 119...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 120...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 121...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 122...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 123...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 124...[0m
+INSERT 0 0
+[0;32mGenerating tokens for account 125...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 126...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 127...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 128...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 129...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 130...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 131...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 132...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000132) is not present in table "account".
+[0;32mGenerating tokens for account 133...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000133) is not present in table "account".
+[0;32mGenerating tokens for account 134...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000134) is not present in table "account".
+[0;32mGenerating tokens for account 135...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000135) is not present in table "account".
+[0;32mGenerating tokens for account 136...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000136) is not present in table "account".
+[0;32mGenerating tokens for account 137...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000137) is not present in table "account".
+[0;32mGenerating tokens for account 138...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000138) is not present in table "account".
+[0;32mGenerating tokens for account 139...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000139) is not present in table "account".
+[0;32mGenerating tokens for account 140...[0m
+ERROR:  insert or update on table "token" violates foreign key constraint "token_creator_fkey"
+DETAIL:  Key (creator)=(0xAccount000000000000000000000000000000140) is not present in table "account".
+[0;32mGenerating tokens for account 141...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 142...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 143...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 144...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 145...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 146...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 147...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 148...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 149...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 150...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 151...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 152...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 153...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 154...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 155...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 156...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 157...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 158...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 159...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 160...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 161...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 162...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 163...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 164...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 165...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 166...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 167...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 168...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 169...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 170...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 171...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 172...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 173...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 174...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 175...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 176...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 177...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 178...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 179...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 180...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 181...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 182...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 183...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 184...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 185...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 186...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 187...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 188...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 189...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 190...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 191...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 192...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 193...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 194...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 195...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 196...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 197...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 198...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 199...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 200...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 201...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 202...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 203...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 204...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 205...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 206...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 207...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 208...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 209...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 210...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 211...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 212...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 213...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 214...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 215...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 216...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 217...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 218...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 219...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 220...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 221...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 222...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 223...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 224...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 225...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 226...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 227...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 228...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 229...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 230...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 231...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 232...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 233...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 234...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 235...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 236...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 237...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 238...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 239...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 240...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 241...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 242...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 243...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 244...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 245...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 246...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 247...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 248...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 249...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 250...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 251...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 252...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 253...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 254...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 255...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 256...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 257...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 258...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 259...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 260...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 261...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 262...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 263...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 264...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 265...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 266...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 267...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 268...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 269...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 270...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 271...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 272...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 273...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 274...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 275...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 276...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 277...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 278...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 279...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 280...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 281...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 282...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 283...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 284...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 285...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 286...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 287...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 288...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 289...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 290...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 291...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 292...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 293...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 294...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 295...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 296...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 297...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 298...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 299...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 300...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 301...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 302...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 303...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 304...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 305...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 306...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 307...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 308...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 309...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 310...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 311...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 312...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 313...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 314...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 315...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 316...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 317...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 318...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 319...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 320...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 321...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 322...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 323...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 324...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 325...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 326...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 327...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 328...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 329...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 330...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 331...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 332...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 333...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 334...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 335...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 336...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 337...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 338...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 339...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 340...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 341...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 342...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 343...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 344...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 345...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 346...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 347...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 348...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 349...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 350...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 351...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 352...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 353...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 354...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 355...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 356...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 357...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 358...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 359...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 360...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 361...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 362...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 363...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 364...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 365...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 366...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 367...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 368...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 369...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 370...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 371...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 372...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 373...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 374...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 375...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 376...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 377...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 378...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 379...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 380...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 381...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 382...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 383...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 384...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 385...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 386...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 387...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 388...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 389...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 390...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 391...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 392...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 393...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 394...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 395...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 396...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 397...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 398...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 399...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 400...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 401...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 402...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 403...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 404...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 405...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 406...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 407...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 408...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 409...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 410...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 411...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 412...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 413...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 414...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 415...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 416...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 417...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 418...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 419...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 420...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 421...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 422...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 423...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 424...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 425...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 426...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 427...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 428...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 429...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 430...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 431...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 432...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 433...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 434...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 435...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 436...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 437...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 438...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 439...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 440...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 441...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 442...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 443...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 444...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 445...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 446...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 447...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 448...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 449...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 450...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 451...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 452...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 453...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 454...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 455...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 456...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 457...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 458...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 459...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 460...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 461...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 462...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 463...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 464...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 465...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 466...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 467...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 468...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 469...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 470...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 471...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 472...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 473...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 474...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 475...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 476...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 477...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 478...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 479...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 480...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 481...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 482...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 483...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 484...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 485...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 486...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 487...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 488...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 489...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 490...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 491...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 492...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 493...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 494...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 495...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 496...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 497...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 498...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 499...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 500...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 501...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 502...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 503...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 504...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 505...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 506...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 507...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 508...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 509...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 510...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 511...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 512...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 513...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 514...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 515...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 516...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 517...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 518...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 519...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 520...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 521...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 522...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 523...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 524...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 525...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 526...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 527...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 528...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 529...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 530...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 531...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 532...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 533...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 534...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 535...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 536...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 537...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 538...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 539...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 540...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 541...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 542...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 543...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 544...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 545...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 546...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 547...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 548...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 549...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 550...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 551...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 552...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 553...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 554...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 555...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 556...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 557...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 558...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 559...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 560...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 561...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 562...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 563...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 564...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 565...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 566...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 567...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 568...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 569...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 570...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 571...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 572...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 573...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 574...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 575...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 576...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 577...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 578...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 579...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 580...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 581...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 582...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 583...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 584...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 585...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 586...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 587...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 588...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 589...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 590...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 591...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 592...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 593...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 594...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 595...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 596...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 597...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 598...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 599...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 600...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 601...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 602...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 603...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 604...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 605...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 606...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 607...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 608...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 609...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 610...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 611...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 612...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 613...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 614...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 615...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 616...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 617...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 618...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 619...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 620...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 621...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 622...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 623...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 624...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 625...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 626...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 627...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 628...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 629...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 630...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 631...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 632...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 633...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 634...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 635...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 636...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 637...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 638...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 639...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 640...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 641...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 642...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 643...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 644...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 645...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 646...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 647...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 648...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 649...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 650...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 651...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 652...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 653...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 654...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 655...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 656...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 657...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 658...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 659...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 660...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 661...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 662...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 663...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 664...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 665...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 666...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 667...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 668...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 669...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 670...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 671...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 672...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 673...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 674...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 675...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 676...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 677...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 678...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 679...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 680...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 681...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 682...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 683...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 684...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 685...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 686...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 687...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 688...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 689...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 690...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 691...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 692...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 693...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 694...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 695...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 696...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 697...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 698...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 699...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 700...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 701...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 702...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 703...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 704...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 705...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 706...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 707...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 708...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 709...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 710...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 711...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 712...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 713...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 714...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 715...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 716...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 717...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 718...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 719...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 720...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 721...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 722...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 723...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 724...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 725...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 726...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 727...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 728...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 729...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 730...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 731...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 732...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 733...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 734...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 735...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 736...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 737...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 738...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 739...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 740...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 741...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 742...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 743...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 744...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 745...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 746...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 747...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 748...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 749...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 750...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 751...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 752...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 753...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 754...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 755...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 756...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 757...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 758...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 759...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 760...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 761...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 762...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 763...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 764...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 765...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 766...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 767...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 768...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 769...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 770...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 771...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 772...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 773...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 774...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 775...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 776...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 777...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 778...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 779...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 780...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 781...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 782...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 783...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 784...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 785...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 786...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 787...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 788...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 789...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 790...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 791...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 792...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 793...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 794...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 795...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 796...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 797...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 798...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 799...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 800...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 801...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 802...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 803...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 804...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 805...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 806...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 807...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 808...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 809...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 810...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 811...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 812...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 813...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 814...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 815...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 816...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 817...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 818...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 819...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 820...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 821...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 822...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 823...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 824...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 825...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 826...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 827...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 828...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 829...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 830...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 831...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 832...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 833...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 834...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 835...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 836...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 837...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 838...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 839...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 840...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 841...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 842...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 843...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 844...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 845...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 846...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 847...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 848...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 849...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 850...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 851...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 852...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 853...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 854...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 855...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 856...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 857...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 858...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 859...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 860...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 861...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 862...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 863...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 864...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 865...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 866...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 867...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 868...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 869...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 870...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 871...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 872...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 873...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 874...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 875...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 876...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 877...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 878...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 879...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 880...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 881...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 882...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 883...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 884...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 885...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 886...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 887...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 888...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 889...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 890...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 891...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 892...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 893...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 894...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 895...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 896...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 897...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 898...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 899...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 900...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 901...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 902...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 903...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 904...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 905...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 906...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 907...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 908...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 909...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 910...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 911...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 912...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 913...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 914...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 915...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 916...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 917...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 918...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 919...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 920...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 921...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 922...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 923...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 924...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 925...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 926...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 927...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 928...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 929...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 930...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 931...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 932...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 933...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 934...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 935...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 936...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 937...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 938...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 939...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 940...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 941...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 942...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 943...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 944...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 945...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 946...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 947...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 948...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 949...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 950...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 951...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 952...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 953...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 954...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 955...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 956...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 957...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 958...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 959...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 960...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 961...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 962...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 963...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 964...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 965...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 966...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 967...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 968...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 969...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 970...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 971...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 972...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 973...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 974...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 975...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 976...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 977...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 978...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 979...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 980...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 981...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 982...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 983...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 984...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 985...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 986...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 987...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 988...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 989...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 990...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 991...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 992...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 993...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 994...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 995...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 996...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 997...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 998...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 999...[0m
+INSERT 0 10000
+[0;32mGenerating tokens for account 1000...[0m
+INSERT 0 10000
+[0;32mToken generation completed![0m
+[1;33mUpdating token count...[0m
+INSERT 0 1
+UPDATE 1
+[1;33mGenerating king entries (realistic: one king per hour)...[0m
+ERROR:  insert or update on table "king" violates foreign key constraint "king_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000001365306) is not present in table "token".
+[0;32mKing entries generation completed![0m
+[1;33mGenerating markets for all tokens...[0m
+[0;32mGenerating markets for tokens 1 to 100000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000000001) is not present in table "token".
+[0;32mGenerating markets for tokens 100001 to 200000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000100001) is not present in table "token".
+[0;32mGenerating markets for tokens 200001 to 300000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000200001) is not present in table "token".
+[0;32mGenerating markets for tokens 300001 to 400000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000300001) is not present in table "token".
+[0;32mGenerating markets for tokens 400001 to 500000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000400001) is not present in table "token".
+[0;32mGenerating markets for tokens 500001 to 600000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000500001) is not present in table "token".
+[0;32mGenerating markets for tokens 600001 to 700000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000600001) is not present in table "token".
+[0;32mGenerating markets for tokens 700001 to 800000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000700001) is not present in table "token".
+[0;32mGenerating markets for tokens 800001 to 900000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000800001) is not present in table "token".
+[0;32mGenerating markets for tokens 900001 to 1000000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000000900001) is not present in table "token".
+[0;32mGenerating markets for tokens 1000001 to 1100000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000001000001) is not present in table "token".
+[0;32mGenerating markets for tokens 1100001 to 1200000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000001100001) is not present in table "token".
+[0;32mGenerating markets for tokens 1200001 to 1300000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000001200001) is not present in table "token".
+[0;32mGenerating markets for tokens 1300001 to 1400000...[0m
+ERROR:  insert or update on table "market" violates foreign key constraint "market_token_id_fkey"
+DETAIL:  Key (token_id)=(0xToken00000000000000000000000000001300001) is not present in table "token".
+[0;32mGenerating markets for tokens 1400001 to 1500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 1500001 to 1600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 1600001 to 1700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 1700001 to 1800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 1800001 to 1900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 1900001 to 2000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2000001 to 2100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2100001 to 2200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2200001 to 2300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2300001 to 2400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2400001 to 2500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2500001 to 2600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2600001 to 2700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2700001 to 2800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2800001 to 2900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 2900001 to 3000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3000001 to 3100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3100001 to 3200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3200001 to 3300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3300001 to 3400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3400001 to 3500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3500001 to 3600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3600001 to 3700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3700001 to 3800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3800001 to 3900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 3900001 to 4000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4000001 to 4100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4100001 to 4200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4200001 to 4300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4300001 to 4400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4400001 to 4500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4500001 to 4600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4600001 to 4700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4700001 to 4800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4800001 to 4900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 4900001 to 5000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5000001 to 5100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5100001 to 5200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5200001 to 5300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5300001 to 5400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5400001 to 5500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5500001 to 5600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5600001 to 5700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5700001 to 5800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5800001 to 5900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 5900001 to 6000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6000001 to 6100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6100001 to 6200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6200001 to 6300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6300001 to 6400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6400001 to 6500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6500001 to 6600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6600001 to 6700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6700001 to 6800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6800001 to 6900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 6900001 to 7000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7000001 to 7100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7100001 to 7200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7200001 to 7300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7300001 to 7400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7400001 to 7500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7500001 to 7600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7600001 to 7700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7700001 to 7800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7800001 to 7900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 7900001 to 8000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8000001 to 8100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8100001 to 8200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8200001 to 8300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8300001 to 8400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8400001 to 8500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8500001 to 8600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8600001 to 8700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8700001 to 8800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8800001 to 8900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 8900001 to 9000000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9000001 to 9100000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9100001 to 9200000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9200001 to 9300000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9300001 to 9400000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9400001 to 9500000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9500001 to 9600000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9600001 to 9700000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9700001 to 9800000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9800001 to 9900000...[0m
+INSERT 0 100000
+[0;32mGenerating markets for tokens 9900001 to 10000000...[0m
+INSERT 0 100000
+[0;32mMarket generation completed![0m
+[1;33mGenerating balances...[0m
+[0;32mGenerating 1,000,000 balances for token 1...[0m
+[0;32mGenerating balances 1 to 100000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 100001 to 200000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 200001 to 300000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 300001 to 400000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 400001 to 500000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 500001 to 600000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 600001 to 700000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 700001 to 800000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 800001 to 900000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating balances 900001 to 1000000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating 10,000 balances for account 1 with balance >= 1e18...[0m
+INSERT 0 10000
+[0;32mBalance generation completed![0m
+[1;33mGenerating swaps...[0m
+[0;32mGenerating 1,000,000 swaps for token 1...[0m
+[0;32mGenerating swaps 1 to 100000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating swaps 100001 to 200000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating swaps 200001 to 300000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating swaps 300001 to 400000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating swaps 400001 to 500000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating swaps 500001 to 600000 for token 1...[0m
+INSERT 0 100000
+[0;32mGenerating swaps 600001 to 700000 for token 1...[0m

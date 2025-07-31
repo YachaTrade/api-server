@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    types::common::{info::AccountInfo, pagination::PaginationParams, CountRow},
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    types::common::{CountRow, info::AccountInfo, pagination::PaginationParams},
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
@@ -41,7 +41,7 @@ pub struct OrderTokenInfo {
     pub image_uri: String,
     pub description: String,
     pub market_cap: String,
-    pub reserve_token: BigDecimal,
+    pub reserve_token: String,
     pub created_at: i64,
     pub market_type: String,
     pub score: f64,
@@ -83,7 +83,7 @@ impl From<OrderTokenRow> for OrderToken {
                 image_uri: row.token_image_uri,
                 description: row.description.unwrap_or_default(),
                 market_cap: (row.total_supply * row.price).to_string(),
-                reserve_token: row.reserve_token,
+                reserve_token: row.reserve_token.to_string(),
                 created_at: row.created_at,
                 market_type: row.market_type,
                 score: row.score,
@@ -129,7 +129,7 @@ impl OrderController {
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "order_tokens",
@@ -138,17 +138,17 @@ impl OrderController {
             pagination.page,
             pagination.limit
         );
-        
+
         // 모든 캐시는 1초로 통일 (Redis와 동일)
         let cache = &GLOBAL_CACHE.cache;
-        
+
         // Single Flight Pattern: 동일한 요청은 하나의 Future를 공유
         let order_by_clone = order_by.clone();
         let tokens = with_cache(cache, &cache_key, || async move {
             self.fetch_order_tokens(order_by_clone, pagination).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!(
             "get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {} (cache_key: {})",
@@ -158,10 +158,10 @@ impl OrderController {
             pagination.limit,
             cache_key
         );
-        
+
         Ok(tokens)
     }
-    
+
     async fn fetch_order_tokens(
         &self,
         order_by: TokenOrderType,
@@ -284,20 +284,20 @@ impl OrderController {
 
     pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
         let start_time = Instant::now();
-        
+
         let cache_key = "king_of_the_hill:latest";
-        
+
         // Single Flight Pattern: 동일한 요청은 하나의 Future를 공유
         let king = with_cache(&GLOBAL_CACHE.cache, cache_key, || async {
             self.fetch_latest_king_of_the_hill().await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("get_latest_king_of_the_hill completed in {:?}", elapsed);
         Ok(king)
     }
-    
+
     async fn fetch_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
         let row = tokio::time::timeout(
             Duration::from_millis(500),
@@ -336,7 +336,7 @@ impl OrderController {
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))?
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
-        
+
         Ok(row.map(OrderToken::from))
     }
 
