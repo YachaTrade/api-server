@@ -25,7 +25,7 @@ pub struct GlobalCache {
 /// 모든 스레드에서 안전하게 공유됩니다.
 pub static GLOBAL_CACHE: Lazy<GlobalCache> = Lazy::new(|| GlobalCache {
     cache: Cache::builder()
-        .time_to_live(Duration::from_secs(1)) // 1초 후 자동 만료 (Redis와 동일)
+        .time_to_live(Duration::from_millis(500)) // 1초 후 자동 만료 (Redis와 동일)
         .max_capacity(20_000) // 충분한 용량 확보
         .build(),
 });
