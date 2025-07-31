@@ -240,7 +240,7 @@ impl FollowController {
             "check_follow completed in {:?} for follower: {}, following: {}",
             elapsed, follower, following
         );
-        Ok(result.exists)
+        Ok(result.exists.is_some())
     }
 
     async fn insert_follow(
