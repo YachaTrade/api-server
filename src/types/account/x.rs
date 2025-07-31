@@ -3,6 +3,7 @@ use std::{sync::Arc, time::{Duration, Instant}};
 use crate::{db::postgres::PostgresDatabase, types::common::info::XInfo};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use utoipa::ToSchema;
 use tracing::info;
 
@@ -49,6 +50,19 @@ pub struct DisconnectedXAccountResponse {
     pub x_handle: String,
 }
 
+#[derive(Debug, FromRow)]
+struct XAccountRow {
+    account_id: String,
+    x_handle: String,
+    x_image_uri: String,
+    is_blue_label: bool,
+}
+
+#[derive(Debug, FromRow)]
+struct ExistsRow {
+    exists: i32,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct GetXHandleResponse {
     pub account_id: String,
@@ -70,17 +84,17 @@ impl AccountXController {
     ) -> Result<ConnectedXAccountResponse> {
         let start_time = Instant::now();
         
-        let query = sqlx::query!(
+        let query = sqlx::query_as::<_, XAccountRow>(
             r#"
             INSERT INTO account_x (account_id, x_handle, x_image_uri, is_blue_label)
             VALUES ($1, $2, $3, $4)
             RETURNING *
             "#,
-            account_id,
-            req.x_handle,
-            req.x_image_uri,
-            req.is_blue_label
         )
+        .bind(&account_id)
+        .bind(&req.x_handle)
+        .bind(&req.x_image_uri)
+        .bind(req.is_blue_label)
         .fetch_one(self.db.get_write_pool());
         
         let record = tokio::time::timeout(Duration::from_millis(500), query)
@@ -109,11 +123,11 @@ impl AccountXController {
         let start_time = Instant::now();
         
         // 먼저 해당 X 핸들이 존재하는지 확인
-        let query = sqlx::query!(
+        let query = sqlx::query_as::<_, ExistsRow>(
             "SELECT 1 as exists FROM account_x WHERE account_id = $1 AND x_handle = $2",
-            account_id,
-            x_handle
         )
+        .bind(&account_id)
+        .bind(&x_handle)
         .fetch_optional(self.db.get_read_pool());
         
         let exists = tokio::time::timeout(Duration::from_millis(500), query)
@@ -127,14 +141,14 @@ impl AccountXController {
         }
 
         // 존재하면 삭제 진행
-        let query = sqlx::query!(
+        let query = sqlx::query(
             r#"
             DELETE FROM account_x
             WHERE account_id = $1 AND x_handle = $2
             "#,
-            account_id,
-            x_handle
         )
+        .bind(&account_id)
+        .bind(&x_handle)
         .execute(self.db.get_write_pool());
         
         tokio::time::timeout(Duration::from_millis(500), query)
@@ -154,15 +168,14 @@ impl AccountXController {
     pub async fn get_x_handle(&self, account_id: String) -> Result<GetXHandleResponse> {
         let start_time = Instant::now();
         
-        let query = sqlx::query_as!(
-            XInfo,
+        let query = sqlx::query_as::<_, XInfo>(
             r#"
             SELECT x_handle, x_image_uri, is_blue_label
             FROM account_x
             WHERE account_id = $1
             "#,
-            account_id
         )
+        .bind(&account_id)
         .fetch_one(self.db.get_read_pool());
         
         let x_info: XInfo = tokio::time::timeout(Duration::from_millis(500), query)

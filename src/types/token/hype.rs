@@ -8,10 +8,14 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
+use crate::types::common::CountRow;
 use crate::types::common::info::{AccountInfoWithX, TokenInfoWithDescription, XInfo};
 use crate::types::common::pagination::PaginationParams;
 use crate::{
-    db::postgres::PostgresDatabase, types::common::info::AccountInfo,
+    cache_key,
+    db::postgres::PostgresDatabase,
+    types::common::info::AccountInfo,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 // 홀더 응답을 위한 구조체
@@ -22,7 +26,7 @@ pub struct TokenHolderResponse {
 }
 
 // 데이터베이스 쿼리 결과를 담을 구조체
-#[derive(Debug)]
+#[derive(Debug, sqlx::FromRow)]
 struct HypeTokenRecord {
     token_id: String,
     name: String,
@@ -43,20 +47,20 @@ struct HypeTokenRecord {
     day_ago_price: Option<BigDecimal>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeInfo {
     pub holder_count: u64,
     pub price_increate_rate: BigDecimal,
     pub market_cap: BigDecimal,
 }
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
     pub token_info: TokenInfoWithDescription,
     pub account_info: AccountInfoWithX,
     pub hype_info: HypeInfo,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeTokenResponse {
     pub tokens: Vec<HypeToken>,
     pub total_count: u64,
@@ -72,6 +76,30 @@ impl HypeTokenController {
 
     pub async fn get_hype_token(&self, pagination: &PaginationParams) -> Result<HypeTokenResponse> {
         let start_time = Instant::now();
+
+        // 캐시 키 생성
+        let cache_key = cache_key!("hype_token", pagination.page, pagination.limit);
+
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let pagination = pagination.clone();
+            async move {
+                let controller = HypeTokenController::new(db);
+                controller.fetch_hype_token(&pagination).await
+            }
+        })
+        .await?;
+
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_hype_token completed in {:?} for page: {}, limit: {}",
+            elapsed, pagination.page, pagination.limit
+        );
+        Ok(response)
+    }
+
+    async fn fetch_hype_token(&self, pagination: &PaginationParams) -> Result<HypeTokenResponse> {
         info!("Get Hype Token start");
         // 현재 시간 타임스탬프 (초 단위) 구하기
         let current_time = SystemTime::now()
@@ -88,10 +116,10 @@ impl HypeTokenController {
         // 페이지네이션 계산
         let offset = (pagination.page - 1) * pagination.limit;
 
-        // 데이터 조회 Future
+        // 데이터 조회 Future - 최적화된 버전
         let records_future = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_as!(HypeTokenRecord,
+            sqlx::query_as::<_, HypeTokenRecord>(
                 r#"
                 SELECT 
                     h.token_id,
@@ -107,53 +135,64 @@ impl HypeTokenController {
                     x.x_handle as x_handle,
                     x.x_image_uri as x_image_uri,
                     x.is_blue_label as is_blue_label,
-                    -- 홀더 수 계산 - 기존 인덱스 활용 (idx_position_token_is_active)
-                    (SELECT COUNT(*) FROM balance b WHERE b.token_id = h.token_id  AND b.balance > 0) as holder_count,
+                    -- holder_count 테이블 사용으로 최적화
+                    COALESCE(thc.holder_count, 0) as holder_count,
                     -- 시가총액 계산 (가격 * 총 공급량)
                     COALESCE(m.price * t.total_supply, 0) as market_cap,
                     -- 현재 가격
                     m.price as current_price,
-                    -- 24시간 전 가격 (24시간 전 데이터가 없으면 가장 오래된 데이터 사용)
-                    COALESCE(
-                        (SELECT c.close_price 
-                         FROM chart c 
-                         WHERE c.token_id = h.token_id 
-                           AND c.interval_type = $1 
-                           AND c.time_stamp <= $2 
-                         ORDER BY c.time_stamp DESC 
-                         LIMIT 1),
-                        (SELECT c.close_price 
-                         FROM chart c 
-                         WHERE c.token_id = h.token_id 
-                           AND c.interval_type = $1 
-                         ORDER BY c.time_stamp ASC 
-                         LIMIT 1)
-                    ) as day_ago_price
+                    -- 24시간 전 가격 최적화 (LATERAL JOIN 사용)
+                    chart_price.day_ago_price
                 FROM hype_token h
-                -- 필요한 테이블만 먼저 조인 (최소 필수 조인 먼저 수행)
                 JOIN token t ON h.token_id = t.token_id
                 JOIN market m ON h.token_id = m.token_id
                 JOIN account a ON t.creator = a.account_id
-                LEFT JOIN account_x x ON a.account_id = x.account_id
+                LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
+                -- LATERAL JOIN으로 account_x 최적화 - 필요한 레코드만 조회
+                LEFT JOIN LATERAL (
+                    SELECT x_handle, x_image_uri, is_blue_label 
+                    FROM account_x 
+                    WHERE account_id = a.account_id 
+                    LIMIT 1
+                ) x ON true
+                -- 차트 가격 최적화 - COALESCE 패턴을 LATERAL JOIN으로 변경
+                LEFT JOIN LATERAL (
+                    SELECT 
+                        COALESCE(
+                            (SELECT close_price 
+                             FROM chart c 
+                             WHERE c.token_id = h.token_id 
+                               AND c.interval_type = $1 
+                               AND c.time_stamp <= $2 
+                             ORDER BY c.time_stamp DESC 
+                             LIMIT 1),
+                            (SELECT close_price 
+                             FROM chart c 
+                             WHERE c.token_id = h.token_id 
+                               AND c.interval_type = $1 
+                             ORDER BY c.time_stamp ASC 
+                             LIMIT 1)
+                        ) as day_ago_price
+                ) chart_price ON true
                 ORDER BY m.price DESC NULLS LAST
                 LIMIT $3 OFFSET $4
                 "#,
-                interval_type,
-                day_ago_timestamp,
-                pagination.limit,
-                offset
             )
+            .bind(interval_type)
+            .bind(day_ago_timestamp)
+            .bind(pagination.limit)
+            .bind(offset)
             .fetch_all(self.db.get_read_pool())
         );
 
         // 총 개수 조회 Future - 캐싱 가능한 데이터, 필요한 경우 별도 테이블에 저장할 수 있음
         let total_count_future = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query_scalar!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COUNT(*) as count
                 FROM hype_token h
-                "#
+                "#,
             )
             .fetch_one(self.db.get_read_pool()),
         );
@@ -165,6 +204,7 @@ impl HypeTokenController {
         let token_records = records_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
         let total_count = total_count_result
             .map_err(|_| anyhow!("Query timeout after 500ms"))??
+            .count
             .unwrap_or(0) as u64;
 
         // 결과 매핑
@@ -224,11 +264,6 @@ impl HypeTokenController {
             })
             .collect::<Vec<HypeToken>>();
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_token completed in {:?} for page: {}, limit: {}",
-            elapsed, pagination.page, pagination.limit
-        );
         Ok(HypeTokenResponse {
             tokens,
             total_count,

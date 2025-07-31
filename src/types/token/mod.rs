@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
+};
 
 use super::common::info::AccountInfo;
 
@@ -62,7 +66,7 @@ pub struct TokenWithAccountInfo {
     pub price: BigDecimal,
     pub market_cap: String,
 }
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenResponse {
     pub token: TokenWithAccountInfo,
 }
@@ -76,40 +80,85 @@ impl TokenController {
     }
     pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!("token", token_id);
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_token(token_id).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_token completed in {:?} for token_id: {}", elapsed, token_id);
+        Ok(response)
+    }
+    
+    async fn fetch_token(&self, token_id: &str) -> Result<TokenResponse> {
         // Using query_as instead of query! to automatically map to the TokenRow struct
         let row = tokio::time::timeout(
             Duration::from_millis(500),
             sqlx::query_as::<_, TokenRow>(
                 r#"
+                    WITH token_info AS (
+                        SELECT 
+                            t.token_id,
+                            t.name,
+                            t.symbol,
+                            t.description,
+                            t.twitter,
+                            t.telegram,
+                            t.website,
+                            t.image_uri,
+                            t.is_listing,
+                            t.total_supply,
+                            m.price,
+                            t.created_at,
+                            t.transaction_hash,
+                            COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
+                            k.created_at as is_king_created_at,
+                            t.creator,
+                            a.nickname as creator_nickname,
+                            a.image_uri as creator_image_uri,
+                            a.follower_count as creator_follower_count, 
+                            a.following_count as creator_following_count
+                        FROM token t
+                        LEFT JOIN king k ON t.token_id = k.token_id
+                        JOIN market m ON t.token_id = m.token_id
+                        JOIN account a ON t.creator = a.account_id
+                        WHERE t.token_id = $1
+                    )
                     SELECT 
-                        t.token_id,
-                        t.name,
-                        t.symbol,
-                        t.description,
-                        t.twitter,
-                        t.telegram,
-                        t.website,
-                        t.image_uri,
-                        t.is_listing,
-                        t.total_supply,
-                        m.price,
-                        t.created_at,
-                        t.transaction_hash,
-                        COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
-                        k.created_at as is_king_created_at,
-                        t.creator,
-                        a.nickname as creator_nickname,
-                        a.image_uri as creator_image_uri,
-                        a.follower_count as creator_follower_count, 
-                        a.following_count as creator_following_count,
+                        ti.token_id,
+                        ti.name,
+                        ti.symbol,
+                        ti.description,
+                        ti.twitter,
+                        ti.telegram,
+                        ti.website,
+                        ti.image_uri,
+                        ti.is_listing,
+                        ti.total_supply,
+                        ti.price,
+                        ti.created_at,
+                        ti.transaction_hash,
+                        ti.is_king,
+                        ti.is_king_created_at,
+                        ti.creator,
+                        ti.creator_nickname,
+                        ti.creator_image_uri,
+                        ti.creator_follower_count,
+                        ti.creator_following_count,
                         ax.x_handle,
                         ax.x_image_uri
-                    FROM token t
-                    LEFT JOIN king k ON t.token_id = k.token_id
-                    LEFT JOIN account_x ax ON t.creator = ax.account_id
-                    JOIN market m ON t.token_id = m.token_id
-                    JOIN account a ON t.creator = a.account_id
-                    WHERE t.token_id = $1
+                    FROM token_info ti
+                    LEFT JOIN LATERAL (
+                        SELECT x_handle, x_image_uri 
+                        FROM account_x 
+                        WHERE account_id = ti.creator 
+                        LIMIT 1
+                    ) ax ON true
                 "#,
             )
             .bind(token_id)
@@ -151,8 +200,6 @@ impl TokenController {
             price: row.price,
         };
         let response = TokenResponse { token };
-        let elapsed = start_time.elapsed();
-        info!("get_token completed in {:?} for token_id: {}", elapsed, token_id);
         Ok(response)
     }
 }

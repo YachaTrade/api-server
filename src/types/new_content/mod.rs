@@ -13,6 +13,8 @@ use utoipa::ToSchema;
 use crate::{
     db::postgres::PostgresDatabase,
     types::common::info::{AccountInfo, TokenInfo},
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -47,7 +49,32 @@ impl NewContentController {
 
     pub async fn get_latest_new_buy(&self) -> Result<Option<NewSwapMessage>> {
         let start_time = Instant::now();
-        info!("Starting get_latest_new_buy query");
+        
+        // 캐시 키 생성
+        let cache_key = "new_content:latest_buy";
+        
+        // Single Flight Pattern 적용
+        let result = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = NewContentController::new(db);
+                controller.fetch_latest_new_buy().await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_latest_new_buy completed in {:?}", elapsed);
+        
+        if elapsed > Duration::from_millis(100) {
+            tracing::warn!("get_latest_new_buy slow performance: {:?}", elapsed);
+        }
+        
+        Ok(result)
+    }
+    
+    async fn fetch_latest_new_buy(&self) -> Result<Option<NewSwapMessage>> {
+        info!("Starting fetch_latest_new_buy query");
 
 
         let query = r#"
@@ -115,20 +142,37 @@ impl NewContentController {
             amount: row.get("native_amount"),
         });
 
-
-        let elapsed = start_time.elapsed();
-        info!("get_latest_new_buy completed in {:?}", elapsed);
-
-        if elapsed > Duration::from_millis(100) {
-            tracing::warn!("get_latest_new_buy slow performance: {:?}", elapsed);
-        }
-
         Ok(result)
     }
 
     pub async fn get_latest_new_sell(&self) -> Result<Option<NewSwapMessage>> {
         let start_time = Instant::now();
-        info!("Starting get_latest_new_sell query");
+        
+        // 캐시 키 생성
+        let cache_key = "new_content:latest_sell";
+        
+        // Single Flight Pattern 적용
+        let result = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = NewContentController::new(db);
+                controller.fetch_latest_new_sell().await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_latest_new_sell completed in {:?}", elapsed);
+        
+        if elapsed > Duration::from_millis(100) {
+            tracing::warn!("get_latest_new_sell slow performance: {:?}", elapsed);
+        }
+        
+        Ok(result)
+    }
+    
+    async fn fetch_latest_new_sell(&self) -> Result<Option<NewSwapMessage>> {
+        info!("Starting fetch_latest_new_sell query");
 
 
         let query = r#"
@@ -196,20 +240,37 @@ impl NewContentController {
             amount: row.get("native_amount"),
         });
 
-
-        let elapsed = start_time.elapsed();
-        info!("get_latest_new_sell completed in {:?}", elapsed);
-
-        if elapsed > Duration::from_millis(100) {
-            tracing::warn!("get_latest_new_sell slow performance: {:?}", elapsed);
-        }
-
         Ok(result)
     }
 
     pub async fn get_latest_new_token(&self) -> Result<Option<NewTokenMessage>> {
         let start_time = Instant::now();
-        info!("Starting get_latest_new_token query");
+        
+        // 캐시 키 생성
+        let cache_key = "new_content:latest_token";
+        
+        // Single Flight Pattern 적용
+        let result = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = NewContentController::new(db);
+                controller.fetch_latest_new_token().await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_latest_new_token completed in {:?}", elapsed);
+        
+        if elapsed > Duration::from_millis(100) {
+            tracing::warn!("get_latest_new_token slow performance: {:?}", elapsed);
+        }
+        
+        Ok(result)
+    }
+    
+    async fn fetch_latest_new_token(&self) -> Result<Option<NewTokenMessage>> {
+        info!("Starting fetch_latest_new_token query");
 
 
         let query = r#"
@@ -272,25 +333,38 @@ impl NewContentController {
             },
         });
 
-
-        let elapsed = start_time.elapsed();
-        info!("get_latest_new_token completed in {:?}", elapsed);
-
-        if elapsed > Duration::from_millis(100) {
-            tracing::warn!("get_latest_new_token slow performance: {:?}", elapsed);
-        }
-
         Ok(result)
     }
 
     pub async fn get_new_content(&self) -> Result<NewContentResponse> {
         let start_time = Instant::now();
-        info!("Starting get_new_content");
+        
+        // 캐시 키 생성
+        let cache_key = "new_content:all";
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = NewContentController::new(db);
+                controller.fetch_new_content().await
+            }
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_new_content completed in {:?}", elapsed);
+        
+        Ok(response)
+    }
+    
+    async fn fetch_new_content(&self) -> Result<NewContentResponse> {
+        info!("Starting fetch_new_content");
 
         let (new_buy, new_sell, new_token) = tokio::try_join!(
-            self.get_latest_new_buy(),
-            self.get_latest_new_sell(),
-            self.get_latest_new_token()
+            self.fetch_latest_new_buy(),
+            self.fetch_latest_new_sell(),
+            self.fetch_latest_new_token()
         )?;
 
         let response = NewContentResponse {
@@ -298,9 +372,6 @@ impl NewContentController {
             new_sell,
             new_token,
         };
-
-        let elapsed = start_time.elapsed();
-        info!("get_new_content completed in {:?}", elapsed);
 
         Ok(response)
     }

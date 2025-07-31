@@ -1,6 +1,7 @@
 use crate::db::postgres::PostgresDatabase;
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -47,6 +48,12 @@ pub struct AccountWalletResponse {
     pub wallet: Wallet,
 }
 
+#[derive(Debug, FromRow)]
+struct WalletRow {
+    account_id: String,
+    wallet: String,
+}
+
 pub struct WalletController {
     db: Arc<PostgresDatabase>,
 }
@@ -63,7 +70,7 @@ impl WalletController {
     ) -> Result<AccountWalletResponse> {
         let start_time = Instant::now();
 
-        let query = sqlx::query!(
+        let query = sqlx::query_as::<_, WalletRow>(
             r#"
             INSERT INTO account_wallet (account_id, wallet)
             VALUES ($1, $2)
@@ -71,9 +78,9 @@ impl WalletController {
             SET wallet = EXCLUDED.wallet
             RETURNING account_id, wallet
             "#,
-            account_id,
-            wallet.to_string()
         )
+        .bind(&account_id)
+        .bind(wallet.to_string())
         .fetch_one(self.db.get_write_pool());
 
         tokio::time::timeout(Duration::from_millis(500), query)
@@ -93,14 +100,14 @@ impl WalletController {
     pub async fn get_wallet(&self, account_id: String) -> Result<AccountWalletResponse> {
         let start_time = Instant::now();
 
-        let query = sqlx::query!(
+        let query = sqlx::query_as::<_, WalletRow>(
             r#"
             SELECT account_id, wallet
             FROM account_wallet
             WHERE account_id = $1
             "#,
-            account_id
         )
+        .bind(&account_id)
         .fetch_one(self.db.get_read_pool());
 
         let record = tokio::time::timeout(Duration::from_millis(500), query)

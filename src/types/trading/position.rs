@@ -6,7 +6,10 @@ use crate::{
     types::common::{
         info::{AccountInfo, MarketInfo, PositionInfo, PositionTokenInfo, TokenInfo},
         pagination::PaginationParams,
+        CountRow,
     },
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
 };
 use anyhow::{anyhow, Result};
 
@@ -82,26 +85,40 @@ impl PositionController {
 
     pub async fn get_total_count_by_token_holder(&self, token_id: &str) -> Result<i64> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!("token_holder_count", token_id);
+        
+        // Single Flight Pattern 적용
+        let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_token_holder_count(token_id).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_total_count_by_token_holder completed in {:?} for token_id: {}", elapsed, token_id);
+        Ok(count)
+    }
+    
+    async fn fetch_token_holder_count(&self, token_id: &str) -> Result<i64> {
+        // token_holder_count 테이블 사용으로 최적화
         let count = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
-                SELECT COALESCE(COUNT(*)::bigint, 0) as count
-                FROM balance b
-                WHERE b.token_id = $1 AND b.balance > 0
+                SELECT COALESCE(holder_count, 0) as count
+                FROM token_holder_count
+                WHERE token_id = $1
                 "#,
-                token_id
             )
-            .fetch_one(self.db.get_read_pool())
+            .bind(token_id)
+            .fetch_optional(self.db.get_read_pool())
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         
-        let count = count.count.unwrap_or(0);
-
-        let elapsed = start_time.elapsed();
-        info!("get_total_count_by_token_holder completed in {:?} for token_id: {}", elapsed, token_id);
-        Ok(count)
+        // 레코드가 없으면 0 반환
+        Ok(count.map(|c| c.count).unwrap_or(0))
     }
 
     pub async fn get_holders_by_token(
@@ -110,6 +127,29 @@ impl PositionController {
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "token_holders",
+            token_id,
+            pagination.page,
+            pagination.limit
+        );
+        
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_holders_by_token(token_id, pagination).await
+        })
+        .await?;
+        
+        Ok(response)
+    }
+    
+    async fn fetch_holders_by_token(
+        &self,
+        token_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
         let record = tokio::time::timeout(
             Duration::from_millis(500),
@@ -146,17 +186,22 @@ impl PositionController {
             self.get_total_count_by_token_holder(token_id).await?
         };
 
+        #[derive(FromRow)]
+        struct CreatorRow {
+            creator: String,
+        }
+
         let token_creator = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CreatorRow>(
                 r#"
                 SELECT 
-                    t.creator as "creator!"
+                    t.creator
                 FROM token t
                 WHERE t.token_id = $1   
                 "#,
-                token_id
             )
+            .bind(token_id)
             .fetch_one(self.db.get_read_pool())
         )
         .await
@@ -184,8 +229,6 @@ impl PositionController {
                 },
             })
             .collect();
-        let elapsed = start_time.elapsed();
-        info!("get_holders_by_token completed in {:?} for token_id: {}, page: {}, limit: {}", elapsed, token_id, pagination.page, pagination.limit);
         Ok(TokenHolderResponse {
             holders,
             total_count,
@@ -196,20 +239,20 @@ impl PositionController {
         let start_time = Instant::now();
         let count = tokio::time::timeout(
             Duration::from_millis(500),
-            sqlx::query!(
+            sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(COUNT(*)::bigint, 0) as count
                 FROM balance b
                 WHERE b.account_id = $1 AND b.balance > 0
                 "#,
-                account_id
             )
+            .bind(account_id)
             .fetch_one(self.db.get_read_pool())
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
         
-        let count = count.count.unwrap_or(0);
+        let count = count.count;
 
         let elapsed = start_time.elapsed();
         info!("get_total_count_by_hold_token completed in {:?} for account_id: {}", elapsed, account_id);

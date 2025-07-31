@@ -14,7 +14,11 @@ use sqlx::{Postgres, QueryBuilder, Row, postgres::PgRow};
 use tracing::{info, warn};
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
+};
 
 use super::common::identifier::Identifier;
 
@@ -41,7 +45,7 @@ pub struct RequestAccountIdParam {
     pub request_account_id: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MutualFriend {
     pub account_id: String,
     pub nickname: String,
@@ -50,13 +54,13 @@ pub struct MutualFriend {
     pub following_count: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Mutual {
     pub mutual_friends: Option<Vec<MutualFriend>>,
     pub mutual_friends_count: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Account {
     pub account_id: String,
     pub nickname: String,
@@ -85,7 +89,7 @@ impl Account {
     }
 }
 #[derive(sqlx::FromRow)]
-struct AccountRaw {
+struct AccountRow {
     account_id: String,
     nickname: String,
     image_uri: String,
@@ -97,7 +101,7 @@ struct AccountRaw {
     is_blue_label: Option<bool>,
 }
 #[derive(sqlx::FromRow)]
-struct AccountMutualRaw {
+struct AccountMutualRow {
     account_id: String,
     nickname: String,
     image_uri: String,
@@ -126,21 +130,21 @@ impl AccountController {
             account.account_id
         );
 
-        let query = sqlx::query!(
+        let query = sqlx::query_as::<_, AccountRow>(
             r#"
             INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (account_id) 
             DO NOTHING
-            RETURNING *
+            RETURNING account_id, nickname, image_uri, bio, follower_count, following_count, NULL as x_handle, NULL as x_image_uri, NULL as is_blue_label
             "#,
-            account.account_id,
-            account.image_uri,
-            account.nickname,
-            account.bio,
-            account.follower_count,
-            account.following_count,
         )
+        .bind(&account.account_id)
+        .bind(&account.image_uri)
+        .bind(&account.nickname)
+        .bind(&account.bio)
+        .bind(account.follower_count)
+        .bind(account.following_count)
         .fetch_optional(self.db.get_write_pool());
 
         let result = tokio::time::timeout(Duration::from_millis(500), query)
@@ -247,8 +251,24 @@ impl AccountController {
 
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!("account", account_id);
+        
+        // Single Flight Pattern 적용
+        let account = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_account(account_id).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!("get_account completed in {:?} for account_id: {}", elapsed, account_id);
+        Ok(account)
+    }
+    
+    async fn fetch_account(&self, account_id: &str) -> Result<Account> {
 
-        let query = sqlx::query_as::<_, AccountRaw>(
+        let query = sqlx::query_as::<_, AccountRow>(
             r#"
             SELECT a.account_id,
             a.nickname,
@@ -288,12 +308,6 @@ impl AccountController {
             mutual: None,
         };
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_account completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
-
         Ok(account)
     }
 
@@ -314,7 +328,7 @@ impl AccountController {
             Identifier::Nickname(nick) => nick,
         };
 
-        let query = sqlx::query_as::<_, AccountMutualRaw>(
+        let query = sqlx::query_as::<_, AccountMutualRow>(
             r#"
             WITH target_account AS (
                 SELECT 

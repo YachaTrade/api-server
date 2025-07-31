@@ -19,7 +19,7 @@ pub struct TokenInfoWithDescription {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct AccountInfo {
     pub account_id: String,
     pub nickname: String,
@@ -28,22 +28,6 @@ pub struct AccountInfo {
     pub follower_count: i32,
     #[serde(default)]
     pub following_count: i32,
-}
-
-impl<'r> sqlx::decode::Decode<'r, sqlx::Postgres> for AccountInfo {
-    fn decode(
-        value: sqlx::postgres::PgValueRef<'r>,
-    ) -> Result<Self, Box<dyn std::error::Error + 'static + Send + Sync>> {
-        let value =
-            <sqlx::types::Json<Self> as sqlx::decode::Decode<sqlx::Postgres>>::decode(value)?;
-        Ok(value.0)
-    }
-}
-
-impl sqlx::Type<sqlx::Postgres> for AccountInfo {
-    fn type_info() -> sqlx::postgres::PgTypeInfo {
-        sqlx::postgres::PgTypeInfo::with_name("JSONB")
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

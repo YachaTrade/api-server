@@ -33,6 +33,11 @@ aws-sdk-cloudfront = "1.55.0"
 #ASYNC
 tokio = { version = "1.38.0", features = ["full"] }
 
+#CACHE
+moka = { version = "0.12", features = ["future"] }
+once_cell = "1.19"
+bincode = "1.3"
+
 #SERVER
 axum = { version = "0.7.5", features = ["multipart", "macros"] }
 tower-http = { version = "0.5.2", features = ["full"] }

@@ -8,7 +8,11 @@ use sqlx::Row;
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    cache_key,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Chart {
@@ -97,6 +101,36 @@ impl ChartController {
         request: &GetBarsRequest,
     ) -> Result<BarResponse> {
         let start_time = Instant::now();
+        
+        // 캐시 키 생성
+        let cache_key = cache_key!(
+            "chart",
+            token_id,
+            &request.resolution,
+            request.from,
+            request.to,
+            request.countback
+        );
+        
+        // Single Flight Pattern 적용
+        let result = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
+            self.fetch_chart_data(token_id, request).await
+        })
+        .await?;
+        
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_prices completed in {:?} for token_id: {}, resolution: {}, from: {}, to: {}",
+            elapsed, token_id, request.resolution, request.from, request.to
+        );
+        Ok(result)
+    }
+    
+    async fn fetch_chart_data(
+        &self,
+        token_id: &str,
+        request: &GetBarsRequest,
+    ) -> Result<BarResponse> {
         // resolution을 DB interval_type으로 변환
         let interval_type = resolution_to_interval_type(&request.resolution)?;
 
@@ -168,11 +202,6 @@ impl ChartController {
             v.push(chart.volume.to_string());
         }
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_prices completed in {:?} for token_id: {}, resolution: {}, from: {}, to: {}",
-            elapsed, token_id, request.resolution, request.from, request.to
-        );
         Ok(BarResponse {
             t,
             c,
