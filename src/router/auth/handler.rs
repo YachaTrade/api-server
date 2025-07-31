@@ -230,6 +230,7 @@ pub async fn auth_session(
     cookie.set_path("/");
     cookie.set_same_site(tower_cookies::cookie::SameSite::None);
     cookie.set_max_age(Duration::days(7));
+    cookie.partitioned();
 
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
