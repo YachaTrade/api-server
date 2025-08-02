@@ -228,9 +228,9 @@ pub async fn auth_session(
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");
-    cookie.set_same_site(tower_cookies::cookie::SameSite::None);
-    cookie.set_max_age(Duration::days(7));
-    cookie.partitioned();
+    cookie.set_domain(".nad.fun");
+    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    cookie.set_max_age(Duration::hours(24));
 
     let body = Json(AuthSessionResponse { account });
     let response = Response::builder()
