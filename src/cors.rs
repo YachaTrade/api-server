@@ -1,7 +1,6 @@
 use axum::http::{
-    self,
+    self, HeaderValue,
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
-    HeaderValue,
 };
 use std::{env, time::Duration};
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -19,7 +18,7 @@ pub fn get_cors() -> CorsLayer {
     // to the `origins` array.
     let environment = env::var("ENVIRONMENT").expect("ENVIRONMENT must be set");
     {
-        if environment == "development" {
+        if environment == "DEV" {
             let allow_cors_port = env::var("ALLOW_CORS_PORT").expect("ALLOW_CORS_PORT must be set");
             if let Ok(localhost_origin) = format!("http://localhost:{}", allow_cors_port).parse() {
                 origins.push(localhost_origin);
