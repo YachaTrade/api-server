@@ -228,8 +228,17 @@ pub async fn auth_session(
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");
-    cookie.set_domain(".nad.fun");
-    cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+
+    // 환경에 따른 쿠키 설정
+    let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "DEV".to_string());
+    if environment == "LIVE" {
+        cookie.set_domain(".nad.fun");
+        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    } else {
+        // DEV 환경
+        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
+    }
+
     cookie.set_max_age(Duration::hours(24));
 
     let body = Json(AuthSessionResponse { account });
@@ -315,9 +324,18 @@ pub async fn auth_delete_session(
     cookie.set_http_only(true);
     cookie.set_secure(true);
     cookie.set_path("/");
-    cookie.set_same_site(tower_cookies::cookie::SameSite::None);
+
+    // 환경에 따른 쿠키 설정
+    let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "DEV".to_string());
+    if environment == "LIVE" {
+        cookie.set_domain(".nad.fun");
+        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
+    } else {
+        // DEV 환경
+        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
+    }
+
     cookie.set_max_age(Duration::ZERO);
-    cookie.partitioned();
 
     let mut response = StatusCode::OK.into_response();
     response.headers_mut().insert(
