@@ -86,14 +86,14 @@ impl MarketController {
             sqlx::query_as::<_, MarketRow>(
                 r#"
                 SELECT 
-                    market_type,
-                    token_id,
-                    pool_id,
-                    price,
+                    m.market_type,
+                    m.token_id,
+                    m.pool_id,
+                    m.price,
                     t.total_supply
-                FROM market
-                JOIN token t ON market.token_id = t.token_id
-                WHERE token_id = $1
+                FROM market m
+                JOIN token t ON m.token_id = t.token_id
+                WHERE m.token_id = $1
                 "#,
             )
             .bind(token_id)
