@@ -1,6 +1,10 @@
-use std::{env, sync::Arc, time::{Duration, Instant}};
+use std::{
+    env,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -8,9 +12,9 @@ use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
@@ -19,17 +23,15 @@ pub struct MarketRow {
     pub token_id: String,
     pub pool_id: Option<String>,
     pub price: BigDecimal,
-    pub latest_trade_at: i64,
-    pub created_at: i64,
+    pub total_supply: BigDecimal,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Market {
     pub market_type: String,
     pub token_id: String,
     pub market_id: Option<String>,
-    pub price: BigDecimal,
-    pub latest_trade_at: i64,
-    pub created_at: i64,
+    pub price: String,
+    pub total_supply: String,
 }
 
 impl From<MarketRow> for Market {
@@ -38,9 +40,8 @@ impl From<MarketRow> for Market {
             market_type: raw.market_type,
             token_id: raw.token_id,
             market_id: raw.pool_id,
-            price: raw.price,
-            latest_trade_at: raw.latest_trade_at,
-            created_at: raw.created_at,
+            price: raw.price.to_string(),
+            total_supply: raw.total_supply.to_string(),
         };
 
         if market.market_type == "CURVE" {
@@ -61,21 +62,24 @@ impl MarketController {
 
     pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("market", token_id);
-        
+
         // Single Flight Pattern 적용
         let market = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_market_by_token(token_id).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_market_by_token completed in {:?} for token_id: {}", elapsed, token_id);
+        info!(
+            "get_market_by_token completed in {:?} for token_id: {}",
+            elapsed, token_id
+        );
         Ok(market)
     }
-    
+
     async fn fetch_market_by_token(&self, token_id: &str) -> Result<Market> {
         let market = tokio::time::timeout(
             Duration::from_millis(500),
@@ -86,14 +90,14 @@ impl MarketController {
                     token_id,
                     pool_id,
                     price,
-                    latest_trade_at,
-                    created_at
+                    t.total_supply
                 FROM market
+                JOIN token t ON market.token_id = t.token_id
                 WHERE token_id = $1
                 "#,
             )
             .bind(token_id)
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
