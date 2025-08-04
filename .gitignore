@@ -1,6 +1,6 @@
 /target
 .env*
-scripts/
+script/
 logs/
 
 
