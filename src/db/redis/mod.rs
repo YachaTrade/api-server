@@ -34,6 +34,7 @@ use crate::{
         },
         trading::{
             chart::{BarResponse, GetBarsRequest},
+            market::Market,
             position::{HoldTokenResponse, TokenHolderResponse},
             swap_history::{SwapQuery, TokenSwapResponse},
         },
@@ -457,6 +458,9 @@ impl RedisDatabase {
     }
 }
 
+// Market cache methods
+impl RedisDatabase {}
+
 //@@@@@@@@@@@Treasury@@@@@@@@@@@@@@@@@@@@@@@
 
 impl RedisDatabase {
@@ -760,6 +764,23 @@ impl RedisDatabase {
         conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
             .await?;
         Ok(())
+    }
+
+    pub async fn set_market(&self, token_id: &str, response: &Market) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("market:{}", token_id);
+        let json = serde_json::to_string(response)?;
+        conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_market(&self, token_id: &str) -> Result<Market> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("market:{}", token_id);
+        let response_json: String = conn.get(key).await?;
+        let response: Market = serde_json::from_str(&response_json)?;
+        Ok(response)
     }
 }
 
