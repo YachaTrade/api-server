@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::{Duration, Instant}};
 
-use crate::{db::postgres::PostgresDatabase, types::common::info::XInfo};
+use crate::{db::postgres::PostgresDatabase, types::common::{info::XInfo, ExistsRow}};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -58,10 +58,6 @@ struct XAccountRow {
     is_blue_label: bool,
 }
 
-#[derive(Debug, FromRow)]
-struct ExistsRow {
-    exists: i32,
-}
 
 #[derive(Serialize, ToSchema)]
 pub struct GetXHandleResponse {
@@ -124,7 +120,7 @@ impl AccountXController {
         
         // 먼저 해당 X 핸들이 존재하는지 확인
         let query = sqlx::query_as::<_, ExistsRow>(
-            "SELECT 1 as exists FROM account_x WHERE account_id = $1 AND x_handle = $2",
+            "SELECT EXISTS(SELECT 1 FROM account_x WHERE account_id = $1 AND x_handle = $2) as exists",
         )
         .bind(&account_id)
         .bind(&x_handle)

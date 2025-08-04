@@ -11,7 +11,7 @@ pub struct CountRow {
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ExistsRow {
-    pub exists: Option<i32>,
+    pub exists: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
