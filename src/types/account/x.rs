@@ -1,11 +1,17 @@
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use crate::{db::postgres::PostgresDatabase, types::common::{info::XInfo, ExistsRow}};
-use anyhow::{anyhow, Result};
+use crate::{
+    db::postgres::PostgresDatabase,
+    types::common::{ExistsRow, info::XInfo},
+};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use utoipa::ToSchema;
 use tracing::info;
+use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectXRequest {
@@ -20,8 +26,8 @@ impl ConnectXRequest {
             return Err(anyhow!("X handle must start with @"));
         }
 
-        if self.x_handle.len() > 15 {
-            return Err(anyhow!("X handle must be 15 characters or less"));
+        if self.x_handle.len() > 16 {
+            return Err(anyhow!("X handle must be 16 characters or less"));
         }
 
         // x_image_uri 검증
@@ -58,7 +64,6 @@ struct XAccountRow {
     is_blue_label: bool,
 }
 
-
 #[derive(Serialize, ToSchema)]
 pub struct GetXHandleResponse {
     pub account_id: String,
@@ -79,7 +84,7 @@ impl AccountXController {
         req: ConnectXRequest,
     ) -> Result<ConnectedXAccountResponse> {
         let start_time = Instant::now();
-        
+
         let query = sqlx::query_as::<_, XAccountRow>(
             r#"
             INSERT INTO account_x (account_id, x_handle, x_image_uri, is_blue_label)
@@ -92,11 +97,11 @@ impl AccountXController {
         .bind(&req.x_image_uri)
         .bind(req.is_blue_label)
         .fetch_one(self.db.get_write_pool());
-        
+
         let record = tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to connect x\n Reason :{err}"))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Failed to connect x\n Reason :{err}"))?;
 
         let response = ConnectedXAccountResponse {
             account_id: record.account_id,
@@ -106,7 +111,10 @@ impl AccountXController {
         };
 
         let elapsed = start_time.elapsed();
-        info!("connect_x completed in {:?} for account_id: {}", elapsed, account_id);
+        info!(
+            "connect_x completed in {:?} for account_id: {}",
+            elapsed, account_id
+        );
 
         Ok(response)
     }
@@ -117,7 +125,7 @@ impl AccountXController {
         x_handle: String,
     ) -> Result<DisconnectedXAccountResponse> {
         let start_time = Instant::now();
-        
+
         // 먼저 해당 X 핸들이 존재하는지 확인
         let query = sqlx::query_as::<_, ExistsRow>(
             "SELECT EXISTS(SELECT 1 FROM account_x WHERE account_id = $1 AND x_handle = $2) as exists",
@@ -125,11 +133,11 @@ impl AccountXController {
         .bind(&account_id)
         .bind(&x_handle)
         .fetch_optional(self.db.get_read_pool());
-        
+
         let exists = tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to check if x handle exists\n Reason :{err}"))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Failed to check if x handle exists\n Reason :{err}"))?;
 
         // 존재하지 않으면 NotFound 오류 반환
         if exists.is_none() {
@@ -146,14 +154,17 @@ impl AccountXController {
         .bind(&account_id)
         .bind(&x_handle)
         .execute(self.db.get_write_pool());
-        
+
         tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
-        info!("disconnect_x completed in {:?} for account_id: {}", elapsed, account_id);
+        info!(
+            "disconnect_x completed in {:?} for account_id: {}",
+            elapsed, account_id
+        );
 
         Ok(DisconnectedXAccountResponse {
             account_id,
@@ -163,7 +174,7 @@ impl AccountXController {
 
     pub async fn get_x_handle(&self, account_id: String) -> Result<GetXHandleResponse> {
         let start_time = Instant::now();
-        
+
         let query = sqlx::query_as::<_, XInfo>(
             r#"
             SELECT x_handle, x_image_uri, is_blue_label
@@ -173,14 +184,17 @@ impl AccountXController {
         )
         .bind(&account_id)
         .fetch_one(self.db.get_read_pool());
-        
+
         let x_info: XInfo = tokio::time::timeout(Duration::from_millis(500), query)
-        .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
-        .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
+            .await
+            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
-        info!("get_x_handle completed in {:?} for account_id: {}", elapsed, account_id);
+        info!(
+            "get_x_handle completed in {:?} for account_id: {}",
+            elapsed, account_id
+        );
 
         Ok(GetXHandleResponse { account_id, x_info })
     }
