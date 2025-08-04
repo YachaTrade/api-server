@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
-    types::common::{info::AccountInfo, pagination::PaginationParams, ExistsRow},
+    types::common::{ExistsRow, info::AccountInfo, pagination::PaginationParams},
 };
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -98,9 +98,7 @@ impl FollowController {
 
         let follows = follows
             .into_iter()
-            .map(|account| Follow {
-                account,
-            })
+            .map(|account| Follow { account })
             .collect();
 
         let elapsed = start_time.elapsed();
@@ -198,9 +196,7 @@ impl FollowController {
                 RETURNING account_id, nickname, image_uri, follower_count, following_count
                 "#,
             )
-            .bind(&
-                following
-            )
+            .bind(&following)
             .fetch_one(tx.as_mut()),
         )
         .await
@@ -240,7 +236,7 @@ impl FollowController {
             "check_follow completed in {:?} for follower: {}, following: {}",
             elapsed, follower, following
         );
-        Ok(result.exists.is_some())
+        Ok(result.exists)
     }
 
     async fn insert_follow(
