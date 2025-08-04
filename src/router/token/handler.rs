@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
 
 use tracing::{error, info, instrument};
@@ -10,8 +10,8 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::token::{
-        metadata::{TokenMetadataController, TokenMetadataResponse},
         TokenController, TokenResponse,
+        metadata::{TokenMetadataController, TokenMetadataResponse},
     },
     utils::valid_evm_address,
 };

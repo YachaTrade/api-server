@@ -172,6 +172,11 @@ pub async fn get_market(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
+    // Try to get from cache first
+    if let Ok(cached_response) = state.redis.get_market(&token_id).await {
+        return Ok(Json(cached_response));
+    }
+
     let response = MarketController::new(state.postgres.clone())
         .get_market_by_token(&token_id)
         .await
@@ -182,6 +187,12 @@ pub async fn get_market(
             );
             AppError::InternalError(err.to_string())
         })?;
+
+    // Cache the response
+    if let Err(e) = state.redis.set_market(&token_id, &response).await {
+        error!("Failed to set market cache: {}", e);
+    }
+
     info!(
         "Get Market Information: token_id: {}, response: {:?}",
         token_id, response
