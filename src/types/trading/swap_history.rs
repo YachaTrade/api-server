@@ -1,19 +1,23 @@
-use std::{str::FromStr, sync::Arc, time::{Duration, Instant}};
+use std::{
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::{
+    cache_key,
     db::postgres::PostgresDatabase,
     types::common::{
+        CountRow,
         info::{AccountInfo, TokenInfo},
         pagination::PaginationParams,
-        CountRow,
     },
     utils::{
+        single_flight::{GLOBAL_CACHE, with_cache},
         valid_evm_address,
-        single_flight::{with_cache, GLOBAL_CACHE},
     },
-    cache_key,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
@@ -155,21 +159,24 @@ impl SwapController {
 
     pub async fn get_total_count_by_account(&self, account_id: &str) -> Result<i64> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("swap_count_by_account", account_id);
-        
+
         // Single Flight Pattern 적용
         let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_total_count_by_account(account_id).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_account completed in {:?} for account_id: {}", elapsed, account_id);
+        info!(
+            "get_total_count_by_account completed in {:?} for account_id: {}",
+            elapsed, account_id
+        );
         Ok(count)
     }
-    
+
     async fn fetch_total_count_by_account(&self, account_id: &str) -> Result<i64> {
         // account_swap_count 테이블 사용으로 최적화
         let count = tokio::time::timeout(
@@ -182,11 +189,11 @@ impl SwapController {
                 "#,
             )
             .bind(account_id)
-            .fetch_optional(self.db.get_read_pool())
+            .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
-        
+
         // 레코드가 없으면 0 반환
         Ok(count.map(|c| c.count).unwrap_or(0))
     }
@@ -196,7 +203,7 @@ impl SwapController {
         pagination: PaginationParams,
     ) -> Result<PositionSwapResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "swaps_by_account",
@@ -204,16 +211,16 @@ impl SwapController {
             pagination.page,
             pagination.limit
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_swaps_by_account(account_id, pagination).await
         })
         .await?;
-        
+
         Ok(response)
     }
-    
+
     async fn fetch_swaps_by_account(
         &self,
         account_id: &str,
@@ -268,12 +275,13 @@ impl SwapController {
                     rs.transaction_hash
                 FROM recent_swaps rs
                 JOIN token t ON rs.token_id = t.token_id
+                ORDER BY rs.created_at DESC
                 "#,
             )
             .bind(account_id)
             .bind(pagination.limit as i64)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool())
+            .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -339,6 +347,7 @@ impl SwapController {
             WHERE account_id = a.account_id 
             LIMIT 1
         ) ax ON true
+       
         WHERE s.token_id = $1"#
             .to_string();
 
@@ -375,7 +384,7 @@ impl SwapController {
         if let Some(account_id) = &query.account_id {
             query_builder = query_builder.bind(account_id);
         }
-        
+
         if let Some(min_vol) = &query.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
@@ -384,7 +393,7 @@ impl SwapController {
         // 쿼리 실행
         let rows = tokio::time::timeout(
             Duration::from_millis(500),
-            query_builder.fetch_all(self.db.get_read_pool())
+            query_builder.fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -440,7 +449,10 @@ impl SwapController {
         };
 
         let elapsed = start_time.elapsed();
-        info!("get_swaps_by_token completed in {:?} for token_id: {}, page: {}, limit: {}", elapsed, token_id, query.page, query.limit);
+        info!(
+            "get_swaps_by_token completed in {:?} for token_id: {}, page: {}, limit: {}",
+            elapsed, token_id, query.page, query.limit
+        );
         Ok(TokenSwapResponse { swaps, total_count })
     }
 
@@ -508,7 +520,7 @@ impl SwapController {
         if let Some(account_id) = &query_params.account_id {
             query_builder = query_builder.bind(account_id);
         }
-        
+
         if let Some(min_vol) = &query_params.min_volume {
             let min_vol_decimal = BigDecimal::from_str(min_vol)?;
             query_builder = query_builder.bind(min_vol_decimal);
@@ -516,7 +528,7 @@ impl SwapController {
 
         let row = tokio::time::timeout(
             Duration::from_millis(500),
-            query_builder.fetch_one(self.db.get_read_pool())
+            query_builder.fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
@@ -534,7 +546,7 @@ impl SwapController {
             Duration::from_millis(500),
             sqlx::query(&query)
                 .bind(token_id)
-                .fetch_optional(self.db.get_read_pool())
+                .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 500ms"))??;
