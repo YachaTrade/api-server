@@ -248,9 +248,9 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|| "8000".to_string());
 
     info!("Server will start on {}:{}", ip, port);
-
+    
     let app_state = AppState::new().await;
-  
+    info!("app_state: {:?}", app_state);
 
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new()
