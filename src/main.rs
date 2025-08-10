@@ -250,7 +250,6 @@ async fn main() -> Result<()> {
     info!("Server will start on {}:{}", ip, port);
     
     let app_state = AppState::new().await;
-    info!("app_state: {:?}", app_state);
     
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new()
