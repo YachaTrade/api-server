@@ -44,8 +44,8 @@ COPY --from=builder /usr/src/app/target/release/api-server /app/api-server
 # Copy migrations
 COPY migrations /app/migrations
 
-# Copy ABI files if needed
-COPY abi /app/abi
+# Copy ABI files if needed (commented out as directory is empty)
+# COPY abi /app/abi
 
 # Expose ports
 EXPOSE 8000 8443
