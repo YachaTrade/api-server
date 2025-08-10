@@ -58,7 +58,7 @@ impl PriceController {
         }
 
         let price = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, PriceRow>(
                 r#"
                 SELECT 
@@ -71,7 +71,7 @@ impl PriceController {
             .fetch_one(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         Ok(PriceResponse {
             price: price.price,

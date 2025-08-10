@@ -62,7 +62,7 @@ impl SessionController {
 
         // 기존 세션 삭제 및 새 세션 삽입
         tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query(
                 r#"
                 INSERT INTO account_session (id, account_id)
@@ -76,7 +76,7 @@ impl SessionController {
             .execute(self.db.get_write_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
         info!(
@@ -91,7 +91,7 @@ impl SessionController {
         let start_time = Instant::now();
 
         let session = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, SessionRow>(
                 r#"
                 SELECT account_id FROM account_session WHERE id = $1
@@ -101,7 +101,7 @@ impl SessionController {
             .fetch_one(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
         info!(
@@ -116,7 +116,7 @@ impl SessionController {
         let start_time = Instant::now();
 
         tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query(
                 r#"
                 DELETE FROM account_session WHERE id = $1
@@ -126,7 +126,7 @@ impl SessionController {
             .execute(self.db.get_write_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
         info!(

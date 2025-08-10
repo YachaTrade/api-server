@@ -147,9 +147,9 @@ impl AccountController {
         .bind(account.following_count)
         .fetch_optional(self.db.get_write_pool());
 
-        let result = tokio::time::timeout(Duration::from_millis(500), query)
+        let result = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
         let elapsed = start_time.elapsed();
@@ -235,9 +235,9 @@ impl AccountController {
             })
             .fetch_one(self.db.get_write_pool()); // 풀에서 커넥션 얻기
 
-        let updated_account = tokio::time::timeout(Duration::from_millis(500), update_query)
+        let updated_account = tokio::time::timeout(Duration::from_millis(1000), update_query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
 
         let elapsed = start_time.elapsed();
@@ -287,9 +287,9 @@ impl AccountController {
         .bind(account_id)
         .fetch_one(self.db.get_read_pool());
 
-        let row = tokio::time::timeout(Duration::from_millis(500), query)
+        let row = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
 
         let account = Account {
@@ -417,9 +417,9 @@ impl AccountController {
         .bind(&request_account_id)
         .fetch_one(self.db.get_read_pool());
 
-        let result = tokio::time::timeout(Duration::from_millis(500), query)
+        let result = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to get account with mutual. Reason: {:?}", err))?;
 
         let mutual = if request_account_id.is_some() {

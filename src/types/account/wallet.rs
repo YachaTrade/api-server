@@ -83,9 +83,9 @@ impl WalletController {
         .bind(wallet.to_string())
         .fetch_one(self.db.get_write_pool());
 
-        tokio::time::timeout(Duration::from_millis(500), query)
+        tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
 
         let elapsed = start_time.elapsed();
@@ -110,9 +110,9 @@ impl WalletController {
         .bind(&account_id)
         .fetch_one(self.db.get_read_pool());
 
-        let record = tokio::time::timeout(Duration::from_millis(500), query)
+        let record = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to get wallet: {}", err))?;
 
         let wallet = match record.wallet.as_str() {

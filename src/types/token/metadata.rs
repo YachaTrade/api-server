@@ -61,7 +61,7 @@ impl TokenMetadataController {
     
     async fn fetch_token_metadata(&self, token_id: &str) -> Result<TokenMetadataResponse> {
         let token = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, TokenMetadata>(
                 "SELECT token_id, name, symbol, image_uri FROM token WHERE token_id = $1",
             )
@@ -69,7 +69,7 @@ impl TokenMetadataController {
             .fetch_one(&*self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         Ok(TokenMetadataResponse {
             token_metadata: token,

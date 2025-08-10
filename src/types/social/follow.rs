@@ -64,7 +64,7 @@ impl FollowController {
         let offset = (pagination.page - 1) * pagination.limit;
 
         let follows = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 SELECT 
@@ -94,7 +94,7 @@ impl FollowController {
             .fetch_all(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let follows = follows
             .into_iter()
@@ -120,7 +120,7 @@ impl FollowController {
         self.insert_follow(&mut tx, &follower, &following).await?;
 
         let follower = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
@@ -133,10 +133,10 @@ impl FollowController {
             .fetch_one(tx.as_mut()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let following = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
@@ -149,7 +149,7 @@ impl FollowController {
             .fetch_one(tx.as_mut()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         tx.commit().await?;
         let elapsed = start_time.elapsed();
@@ -171,7 +171,7 @@ impl FollowController {
         self.delete_follow(&mut tx, &follower, &following).await?;
 
         let follower = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
@@ -184,10 +184,10 @@ impl FollowController {
             .fetch_one(tx.as_mut()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let following = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 UPDATE account
@@ -200,7 +200,7 @@ impl FollowController {
             .fetch_one(tx.as_mut()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed to remove follow\n Reason :{err}"))?;
 
         tx.commit().await?;
@@ -215,7 +215,7 @@ impl FollowController {
     pub async fn check_follow(&self, follower: String, following: String) -> Result<bool> {
         let start_time = Instant::now();
         let result = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, ExistsRow>(
                 r#"
                 SELECT EXISTS (
@@ -229,7 +229,7 @@ impl FollowController {
             .fetch_one(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
         info!(
@@ -246,7 +246,7 @@ impl FollowController {
         following: &str,
     ) -> Result<()> {
         tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query(
                 r#"
                 INSERT INTO follow (follower_id, following_id)
@@ -259,7 +259,7 @@ impl FollowController {
             .execute(tx),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed to insert follow\n Reason :{err}"))?;
 
         Ok(())
@@ -272,7 +272,7 @@ impl FollowController {
         following: &str,
     ) -> Result<()> {
         tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query(
                 r#"
                 DELETE FROM follow
@@ -284,7 +284,7 @@ impl FollowController {
             .execute(tx.as_mut()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed delete follow\n Reason:{} ", err))?;
         Ok(())
     }

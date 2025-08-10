@@ -98,9 +98,9 @@ impl AccountXController {
         .bind(req.is_blue_label)
         .fetch_one(self.db.get_write_pool());
 
-        let record = tokio::time::timeout(Duration::from_millis(500), query)
+        let record = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to connect x\n Reason :{err}"))?;
 
         let response = ConnectedXAccountResponse {
@@ -134,9 +134,9 @@ impl AccountXController {
         .bind(&x_handle)
         .fetch_optional(self.db.get_read_pool());
 
-        let exists = tokio::time::timeout(Duration::from_millis(500), query)
+        let exists = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to check if x handle exists\n Reason :{err}"))?;
 
         // 존재하지 않으면 NotFound 오류 반환
@@ -155,9 +155,9 @@ impl AccountXController {
         .bind(&x_handle)
         .execute(self.db.get_write_pool());
 
-        tokio::time::timeout(Duration::from_millis(500), query)
+        tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
@@ -185,9 +185,9 @@ impl AccountXController {
         .bind(&account_id)
         .fetch_one(self.db.get_read_pool());
 
-        let x_info: XInfo = tokio::time::timeout(Duration::from_millis(500), query)
+        let x_info: XInfo = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
