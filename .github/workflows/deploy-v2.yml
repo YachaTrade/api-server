@@ -5,8 +5,8 @@ on:
     branches:
       - v2
     paths:
-      - 'api-server/**'
-      - '.github/workflows/deploy-v2-parallel.yml'
+      - '**'
+      - '.github/workflows/deploy-v2.yml'
 
 env:
   AWS_ACCOUNT_ID: 010928181973
@@ -58,8 +58,6 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: v2-${{ github.run_number }}-${{ github.sha }}
       run: |
-        cd api-server
-        
         # Build and push with buildx (supports caching)
         docker buildx build \
           --platform linux/amd64 \
