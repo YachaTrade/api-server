@@ -151,23 +151,20 @@ pub async fn auth_session(
 
     let session_id = generate_session_id(address.as_str(), message.as_str());
 
-    // 먼저 계정 업서트를 수행하여 외래 키 제약 조건 위반을 방지
-    let postgres = state.postgres.clone();
-    let account_controller = AccountController::new(postgres.clone());
-    let account = Account::new(address.clone());
-    let account = account_controller
-        .upsert_account(account)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to upsert account: address: {}, error: {}",
-                address, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-
-    // 병렬로 Redis 작업과 PostgreSQL 세션 생성 실행
-    let (del_nonce_result, set_sign_message_result, postgres_set_sign_message_result) = tokio::join!(
+    // 병렬로 모든 작업 실행
+    let (account_result, del_nonce_result, set_sign_message_result, postgres_set_sign_message_result) = tokio::join!(
+        {
+            let start = std::time::Instant::now();
+            let postgres = state.postgres.clone();
+            let account_controller = AccountController::new(postgres);
+            let account = Account::new(address.clone());
+            async move {
+                let result = account_controller.upsert_account(account).await;
+                let elapsed = start.elapsed();
+                info!("upsert_account elapsed: {:?}", elapsed);
+                result
+            }
+        },
         {
             let start = std::time::Instant::now();
             let result = redis.delete_sign_message(&address);
@@ -198,6 +195,14 @@ pub async fn auth_session(
     );
 
     // 각 결과 확인
+    let account = account_result.map_err(|err| {
+        error!(
+            "Failed to upsert account: address: {}, error: {}",
+            address, err
+        );
+        AppError::InternalError(err.to_string())
+    })?;
+
     del_nonce_result.map_err(|err| {
         error!(
             "Failed to delete nonce: address: {}, error: {}",
