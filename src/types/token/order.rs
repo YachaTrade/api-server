@@ -195,14 +195,14 @@ impl OrderController {
                 );
 
                 tokio::time::timeout(
-                    Duration::from_millis(500),
+                    Duration::from_millis(1000),
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
                         .fetch_all(&*self.db.get_read_pool()),
                 )
                 .await
-                .map_err(|_| anyhow!("Query timeout after 500ms"))??
+                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
             }
             TokenOrderType::LatestTrade => {
                 let query = format!(
@@ -229,14 +229,14 @@ impl OrderController {
                 );
 
                 tokio::time::timeout(
-                    Duration::from_millis(500),
+                    Duration::from_millis(1000),
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
                         .fetch_all(&*self.db.get_read_pool()),
                 )
                 .await
-                .map_err(|_| anyhow!("Query timeout after 500ms"))??
+                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
             }
             TokenOrderType::MarketCap => {
                 let query = format!(
@@ -267,14 +267,14 @@ impl OrderController {
                 );
 
                 tokio::time::timeout(
-                    Duration::from_millis(500),
+                    Duration::from_millis(1000),
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
                         .fetch_all(&*self.db.get_read_pool()),
                 )
                 .await
-                .map_err(|_| anyhow!("Query timeout after 500ms"))??
+                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
             }
         };
 
@@ -300,7 +300,7 @@ impl OrderController {
 
     async fn fetch_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
         let row = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, OrderTokenRow>(
                 r#"
                 SELECT 
@@ -334,7 +334,7 @@ impl OrderController {
             .fetch_optional(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
 
         Ok(row.map(OrderToken::from))
@@ -343,7 +343,7 @@ impl OrderController {
     pub async fn get_total_count(&self) -> Result<i64> {
         let start_time = Instant::now();
         let row = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT total_count as count
@@ -353,7 +353,7 @@ impl OrderController {
             .fetch_one(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|e| anyhow!("Failed to get token count: {}", e))?;
 
         let elapsed = start_time.elapsed();

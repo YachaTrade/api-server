@@ -98,7 +98,7 @@ impl TokenController {
     async fn fetch_token(&self, token_id: &str) -> Result<TokenResponse> {
         // Using query_as instead of query! to automatically map to the TokenRow struct
         let row = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, TokenRow>(
                 r#"
                     WITH token_info AS (
@@ -165,7 +165,7 @@ impl TokenController {
             .fetch_one(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))?
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed to get token: {}", err))?;
 
         let token = TokenWithAccountInfo {

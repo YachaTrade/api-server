@@ -82,7 +82,7 @@ impl MarketController {
 
     async fn fetch_market_by_token(&self, token_id: &str) -> Result<Market> {
         let market = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, MarketRow>(
                 r#"
                 SELECT 
@@ -100,7 +100,7 @@ impl MarketController {
             .fetch_one(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         Ok(Market::from(market))
     }

@@ -103,7 +103,7 @@ impl PositionController {
     async fn fetch_token_holder_count(&self, token_id: &str) -> Result<i64> {
         // token_holder_count 테이블 사용으로 최적화
         let count = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(holder_count, 0) as count
@@ -115,7 +115,7 @@ impl PositionController {
             .fetch_optional(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         
         // 레코드가 없으면 0 반환
         Ok(count.map(|c| c.count).unwrap_or(0))
@@ -152,7 +152,7 @@ impl PositionController {
     ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
         let record = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, TokenHolderRow>(
                 r#"
                 SELECT 
@@ -179,7 +179,7 @@ impl PositionController {
             .fetch_all(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         let total_count = if record.is_empty() {
             0
         } else {
@@ -192,7 +192,7 @@ impl PositionController {
         }
 
         let token_creator = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CreatorRow>(
                 r#"
                 SELECT 
@@ -205,7 +205,7 @@ impl PositionController {
             .fetch_one(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         
         let token_creator = token_creator.creator;
 
@@ -238,7 +238,7 @@ impl PositionController {
     pub async fn get_total_count_by_hold_token(&self, account_id: &str) -> Result<i64> {
         let start_time = Instant::now();
         let count = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(COUNT(*)::bigint, 0) as count
@@ -250,7 +250,7 @@ impl PositionController {
             .fetch_one(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         
         let count = count.count;
 
@@ -275,7 +275,7 @@ impl PositionController {
         }
 
         let record = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, HoldTokenRow>(
                 r#"
                 SELECT 
@@ -298,7 +298,7 @@ impl PositionController {
             .fetch_all(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let total_count = if record.is_empty() {
             0

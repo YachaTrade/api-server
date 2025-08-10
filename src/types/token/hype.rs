@@ -118,7 +118,7 @@ impl HypeTokenController {
 
         // 데이터 조회 Future - 최적화된 버전
         let records_future = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, HypeTokenRecord>(
                 r#"
                 SELECT 
@@ -187,7 +187,7 @@ impl HypeTokenController {
 
         // 총 개수 조회 Future - 캐싱 가능한 데이터, 필요한 경우 별도 테이블에 저장할 수 있음
         let total_count_future = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COUNT(*) as count
@@ -201,9 +201,9 @@ impl HypeTokenController {
         let (records_result, total_count_result) = tokio::join!(records_future, total_count_future);
 
         // 결과 처리
-        let token_records = records_result.map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        let token_records = records_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 500ms"))??
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
             .count as u64;
 
         // 결과 매핑

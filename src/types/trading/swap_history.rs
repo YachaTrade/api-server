@@ -180,7 +180,7 @@ impl SwapController {
     async fn fetch_total_count_by_account(&self, account_id: &str) -> Result<i64> {
         // account_swap_count 테이블 사용으로 최적화
         let count = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(total_count, 0) as count
@@ -192,7 +192,7 @@ impl SwapController {
             .fetch_optional(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         // 레코드가 없으면 0 반환
         Ok(count.map(|c| c.count).unwrap_or(0))
@@ -244,7 +244,7 @@ impl SwapController {
 
         // CTE를 사용한 최적화
         let swaps = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, SwapRow>(
                 r#"
                 WITH recent_swaps AS (
@@ -284,7 +284,7 @@ impl SwapController {
             .fetch_all(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let total_count = if swaps.is_empty() {
             0
@@ -392,11 +392,11 @@ impl SwapController {
 
         // 쿼리 실행
         let rows = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             query_builder.fetch_all(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         // 결과 변환 (기존과 동일)
         let swaps: Vec<TokenSwap> = rows
@@ -527,11 +527,11 @@ impl SwapController {
         }
 
         let row = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             query_builder.fetch_one(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
     }
@@ -543,13 +543,13 @@ impl SwapController {
         );
 
         let row = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query(&query)
                 .bind(token_id)
                 .fetch_optional(self.db.get_read_pool()),
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
     }

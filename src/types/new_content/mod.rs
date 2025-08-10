@@ -103,9 +103,9 @@ impl NewContentController {
 
         let query_future = sqlx::query(query).fetch_optional(self.db.get_read_pool());
 
-        let row_opt = tokio::time::timeout(Duration::from_millis(500), query_future)
+        let row_opt = tokio::time::timeout(Duration::from_millis(1000), query_future)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to get latest new buy: {}", err))?;
 
         let result = row_opt.map(|row| NewSwapMessage {
@@ -201,9 +201,9 @@ impl NewContentController {
 
         let query_future = sqlx::query(query).fetch_optional(self.db.get_read_pool());
 
-        let row_opt = tokio::time::timeout(Duration::from_millis(500), query_future)
+        let row_opt = tokio::time::timeout(Duration::from_millis(1000), query_future)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to get latest new sell: {}", err))?;
 
         let result = row_opt.map(|row| NewSwapMessage {
@@ -296,9 +296,9 @@ impl NewContentController {
 
         let query_future = sqlx::query(query).fetch_optional(self.db.get_read_pool());
 
-        let row_opt = tokio::time::timeout(Duration::from_millis(500), query_future)
+        let row_opt = tokio::time::timeout(Duration::from_millis(1000), query_future)
             .await
-            .map_err(|_| anyhow!("Query timeout after 500ms"))?
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
             .map_err(|err| anyhow!("Failed to get latest new token: {}", err))?;
 
         let result = row_opt.map(|row| NewTokenMessage {

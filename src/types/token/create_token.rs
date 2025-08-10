@@ -64,7 +64,7 @@ impl TokenCreatedController {
     
     async fn fetch_total_count(&self, account_id: &str) -> Result<i64> {
         let count = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(COUNT(*)::bigint, 0) as count
@@ -76,7 +76,7 @@ impl TokenCreatedController {
             .fetch_one(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         
         Ok(count.count)
     }
@@ -136,7 +136,7 @@ impl TokenCreatedController {
         }
 
         let tokens = tokio::time::timeout(
-            Duration::from_millis(500),
+            Duration::from_millis(1000),
             sqlx::query_as::<_, TokenCreatedRow>(
                 r#"
                 WITH created_tokens AS (
@@ -182,7 +182,7 @@ impl TokenCreatedController {
             .fetch_all(self.db.get_read_pool())
         )
         .await
-        .map_err(|_| anyhow!("Query timeout after 500ms"))??;
+        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         // Convert query results to TokenCreated structs
         let tokens: Vec<TokenCreated> = tokens
