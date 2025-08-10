@@ -1,5 +1,5 @@
 use sqlx::Executor;
-use std::{env, str::FromStr, time::Duration};
+use std::{env, error::Error, str::FromStr, time::Duration};
 use tracing::info;
 
 #[derive(Debug)]
@@ -52,23 +52,20 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
         // 서버리스 환경에서 리소스 해제를 위한 적극적인 유휴 타임아웃
         .idle_timeout(Duration::from_secs(idle_timeout_secs))
         // PgBouncer가 연결 테스트를 처리하므로 생략
-        .test_before_acquire(false)
-        // 연결 초기화 - PgBouncer에 최적화된 최소 설정
-        .after_connect(|conn, _meta| {
-            Box::pin(async move {
-                // TCP keepalive 설정 - Neon 서버리스 아키텍처에 중요
-                conn.execute("SET tcp_keepalives_idle = '15'").await?;
-                conn.execute("SET tcp_keepalives_interval = '5'").await?;
-                conn.execute("SET tcp_keepalives_count = '3'").await?;
-
-                // 장시간 실행 쿼리 방지를 위한 문장 타임아웃 설정
-                conn.execute("SET statement_timeout = '30s'").await?;
-                // PgBouncer에서 트랜잭션 내 유휴 연결 해제를 위해 중요
-                conn.execute("SET idle_in_transaction_session_timeout = '15s'")
-                    .await?;
-                Ok(())
-            })
-        })
+        // .test_before_acquire(true)
+        // 연결 초기화 - RDS Proxy 환경에서는 after_connect 설정 제거
+        // .after_connect(|conn, _meta| {
+        //     Box::pin(async move {
+        //         // TCP keepalive 설정 제거 - RDS Proxy가 연결 관리를 담당
+        //
+        //         // 장시간 실행 쿼리 방지를 위한 문장 타임아웃 설정
+        //         conn.execute("SET statement_timeout = '30s'").await?;
+        //         // PgBouncer에서 트랜잭션 내 유휴 연결 해제를 위해 중요
+        //         conn.execute("SET idle_in_transaction_session_timeout = '15s'")
+        //             .await?;
+        //         Ok(())
+        //     })
+        // })
         // 더 상세한 연결 설정을 위해 PgConnectOptions 사용
         .connect_with(
             sqlx::postgres::PgConnectOptions::from_str(&primary_db_url)
@@ -78,9 +75,14 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
                 .statement_cache_capacity(statement_cache_capacity),
         )
         .await
-        .unwrap_or_else(|err| panic!("Failed to connect to primary PostgreSQL database: {}", err));
+        .unwrap_or_else(|err| {
+            panic!(
+                "Failed to connect to primary PostgreSQL database: {:?}",
+                err.source()
+            )
+        });
 
-    info!("Neon PostgreSQL 프라이머리 풀이 PgBouncer 최적화 설정으로 초기화되었습니다");
+    info!("Successfully connected to primary PostgreSQL database");
     pool
 }
 
@@ -121,7 +123,6 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
         .max_connections(max_connections)
         // 즉시 읽기 작업을 위한 충분한 최소 연결 유지
         .min_connections(min_connections)
-        
         // Neon 서버리스 환경에 맞는 짧은 수명
         .max_lifetime(Duration::from_secs(max_lifetime_secs))
         // PgBouncer가 빠르게 응답해야 하므로 짧은 획득 타임아웃
@@ -129,26 +130,23 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
         // 서버리스 환경에서 리소스 해제를 위한 적극적인 유휴 타임아웃
         .idle_timeout(Duration::from_secs(idle_timeout_secs))
         // PgBouncer가 연결 상태를 관리하므로 테스트 생략
-        .test_before_acquire(false)
-        // 읽기 작업에 최적화된 연결 초기화
-        .after_connect(|conn, _meta| {
-            Box::pin(async move {
-                // Neon을 위한 TCP keepalive 설정
-                conn.execute("SET tcp_keepalives_idle = '15'").await?;
-                conn.execute("SET tcp_keepalives_interval = '5'").await?;
-                conn.execute("SET tcp_keepalives_count = '3'").await?;
-
-                // 읽기 작업을 위한 더 짧은 문장 타임아웃 설정
-                conn.execute("SET statement_timeout = '15s'").await?;
-                // PgBouncer에서 트랜잭션 내 유휴 연결 해제를 위해 중요
-                conn.execute("SET idle_in_transaction_session_timeout = '15s'")
-                    .await?;
-                // 복제본 연결에 읽기 전용 모드 강제 적용
-                conn.execute("SET default_transaction_read_only = 'on'")
-                    .await?;
-                Ok(())
-            })
-        })
+        // .test_before_acquire(true)
+        // 읽기 작업에 최적화된 연결 초기화 - RDS Proxy 환경에서는 after_connect 설정 제거
+        // .after_connect(|conn, _meta| {
+        //     Box::pin(async move {
+        //         // TCP keepalive 설정 제거 - RDS Proxy가 연결 관리를 담당
+        //
+        //         // 읽기 작업을 위한 더 짧은 문장 타임아웃 설정
+        //         conn.execute("SET statement_timeout = '15s'").await?;
+        //         // PgBouncer에서 트랜잭션 내 유휴 연결 해제를 위해 중요
+        //         conn.execute("SET idle_in_transaction_session_timeout = '15s'")
+        //             .await?;
+        //         // 복제본 연결에 읽기 전용 모드 강제 적용
+        //         conn.execute("SET default_transaction_read_only = 'on'")
+        //             .await?;
+        //         Ok(())
+        //     })
+        // })
         // 더 상세한 연결 설정을 위해 PgConnectOptions 사용
         .connect_with(
             sqlx::postgres::PgConnectOptions::from_str(&replica_db_url)
@@ -158,9 +156,14 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
                 .statement_cache_capacity(statement_cache_capacity),
         )
         .await
-        .unwrap_or_else(|err| panic!("Failed to connect to replica PostgreSQL database: {}", err));
+        .unwrap_or_else(|err| {
+            panic!(
+                "Failed to connect to replica PostgreSQL database: {:?}  ",
+                err.source()
+            )
+        });
 
-    info!("Neon PostgreSQL 복제본 풀이 PgBouncer 최적화 설정으로 초기화되었습니다");
+    info!("Successfully connected to replica PostgreSQL database");
     pool
 }
 
