@@ -251,7 +251,7 @@ async fn main() -> Result<()> {
     
     let app_state = AppState::new().await;
     info!("app_state: {:?}", app_state);
-    info!("github action test");
+    
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
