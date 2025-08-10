@@ -1,46 +1,54 @@
-# Builder stage
-FROM rust:latest as builder
+# Build stage
+FROM rustlang/rust:nightly-slim AS builder
 
-WORKDIR /app/api-server
+# Install required dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy only files needed for dependency resolution first
+# Create app directory
+WORKDIR /usr/src/app
+
+# Copy manifests
 COPY Cargo.toml Cargo.lock ./
 
-# Create a dummy main.rs to build dependencies
+# Build dependencies - this is the caching Docker layer!
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
     rm -rf src
 
-# Now copy the real source code
+# Copy source code
 COPY . .
 
-# Install sqlx-cli for database preparation
-RUN cargo install sqlx-cli --no-default-features --features native-tls,postgres
-
-# Build with offline mode
-ENV SQLX_OFFLINE=true
+# Build application
 RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
 
-WORKDIR /app/api-server
-
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    libpq5 \
     ca-certificates \
+    libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create directories
-RUN mkdir -p /run/api-server
+WORKDIR /app
 
-# Copy the binary and necessary files
-COPY --from=builder /app/api-server/target/release/api-server /run/api-server/
+# Copy the binary from builder
+COPY --from=builder /usr/src/app/target/release/api-server /app/api-server
 
+# Copy migrations
+COPY migrations /app/migrations
 
-# Set environment variables
-ENV RUST_LOG=info
+# Copy ABI files if needed
+COPY abi /app/abi
 
-CMD ["/run/api-server/api-server"]
+# Expose ports
+EXPOSE 8000 8443
+
+# Run the binary
+CMD ["./api-server"]

@@ -1,9 +1,7 @@
 use std::env;
+use std::sync::Arc;
 
-use deadpool_redis::{
-    Config, PoolConfig, Runtime,
-    redis::{AsyncCommands, pipe},
-};
+use redis::{AsyncCommands, Client, aio::ConnectionManager, pipe};
 
 use tracing::{debug, info};
 
@@ -42,52 +40,33 @@ use crate::{
 };
 
 pub struct RedisDatabase {
-    pool: deadpool_redis::Pool, // 연결 풀 추가
+    conn: Arc<ConnectionManager>,
 }
 impl RedisDatabase {
     pub async fn new() -> Self {
         let url = env::var("REDIS_URL")
             .unwrap_or_else(|_| panic!("REDIS_URL must be set in environment variables"));
-        let mut cfg = Config::from_url(url);
 
-        // 환경변수에서 Redis 풀 설정 읽기
-        let max_size = env::var("REDIS_POOL_MAX_SIZE")
-            .expect("REDIS_POOL_MAX_SIZE must be set")
-            .parse::<usize>()
-            .expect("REDIS_POOL_MAX_SIZE must be a valid usize");
-        let wait_timeout_secs = env::var("REDIS_POOL_WAIT_TIMEOUT_SECS")
-            .expect("REDIS_POOL_WAIT_TIMEOUT_SECS must be set")
-            .parse::<u64>()
-            .expect("REDIS_POOL_WAIT_TIMEOUT_SECS must be a valid u64");
-        let create_timeout_secs = env::var("REDIS_POOL_CREATE_TIMEOUT_SECS")
-            .expect("REDIS_POOL_CREATE_TIMEOUT_SECS must be set")
-            .parse::<u64>()
-            .expect("REDIS_POOL_CREATE_TIMEOUT_SECS must be a valid u64");
-        let recycle_timeout_secs = env::var("REDIS_POOL_RECYCLE_TIMEOUT_SECS")
-            .expect("REDIS_POOL_RECYCLE_TIMEOUT_SECS must be set")
-            .parse::<u64>()
-            .expect("REDIS_POOL_RECYCLE_TIMEOUT_SECS must be a valid u64");
+        // Create Redis client - will handle rediss:// URLs automatically with native TLS
+        let client = Client::open(url).expect("Failed to create Redis client");
 
-        cfg.pool = Some(PoolConfig {
-            max_size, // 최대 연결 수 증가
-            timeouts: deadpool_redis::Timeouts {
-                wait: Some(std::time::Duration::from_secs(wait_timeout_secs)),
-                create: Some(std::time::Duration::from_secs(create_timeout_secs)),
-                recycle: Some(std::time::Duration::from_secs(recycle_timeout_secs)),
-            },
-            queue_mode: deadpool::managed::QueueMode::Fifo,
-        });
+        // Create connection manager for automatic reconnection
+        let conn = ConnectionManager::new(client)
+            .await
+            .expect("Failed to create Redis connection manager");
 
-        let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+        info!("Redis connection established with ElastiCache");
 
-        RedisDatabase { pool }
+        RedisDatabase {
+            conn: Arc::new(conn),
+        }
     }
 
     //session
 
     //nonce -> address -> nonce
     pub async fn set_sign_message(&self, address: &str, message: &str) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
 
@@ -98,7 +77,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_sign_message(&self, address: &str) -> Result<String> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
         let message: Option<String> = conn.get(key).await?;
@@ -110,7 +89,7 @@ impl RedisDatabase {
     }
 
     pub async fn delete_sign_message(&self, address: &str) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
         conn.del::<_, ()>(key).await?;
@@ -125,7 +104,7 @@ impl RedisDatabase {
         address: &str,
         expiration: u64,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:id", session_id);
         conn.pset_ex::<_, _, ()>(key, address, expiration).await?;
@@ -137,7 +116,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_address_by_session(&self, session_id: &str) -> Result<String> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("session:{}:id", session_id);
         let address = conn.get::<_, String>(key).await?;
         debug!("Address for session {}: {:?}", session_id, address);
@@ -145,7 +124,7 @@ impl RedisDatabase {
     }
 
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("session:{}:id", session_id);
         conn.del::<_, ()>(key).await?;
         debug!("Session deleted: {}", session_id);
@@ -156,7 +135,7 @@ impl RedisDatabase {
 //search response
 impl RedisDatabase {
     pub async fn set_search_response(&self, query: &str, response: &SearchResponse) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let token_key = format!("search:{}:tokens", query);
         let account_key = format!("search:{}:accounts", query);
 
@@ -179,7 +158,7 @@ impl RedisDatabase {
         query: &str,
         pagination: PaginationParams,
     ) -> Result<Option<SearchResponse>> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let token_key = format!("search:{}:tokens", query);
         let account_key = format!("search:{}:accounts", query);
 
@@ -253,7 +232,7 @@ impl RedisDatabase {
         response: &OrderMessage,
         pagination: Option<&PaginationParams>,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
 
         // 페이지네이션 파라미터가 있는 경우 키에 포함
         let key = match pagination {
@@ -283,7 +262,7 @@ impl RedisDatabase {
         order_type: &TokenOrderType,
         pagination: Option<&PaginationParams>,
     ) -> Result<OrderMessage> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
 
         // 페이지네이션 파라미터가 있는 경우 키에 포함
         let key = match pagination {
@@ -313,7 +292,7 @@ impl RedisDatabase {
         address: &str,
         pagination: &PaginationParams,
     ) -> Result<HoldTokenResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hold_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
@@ -328,7 +307,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &HoldTokenResponse,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hold_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
@@ -347,7 +326,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &TokenCreatedResponse,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "create_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
@@ -364,7 +343,7 @@ impl RedisDatabase {
         address: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenCreatedResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "create_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
@@ -377,7 +356,7 @@ impl RedisDatabase {
 
 impl RedisDatabase {
     pub async fn set_token_response(&self, token_id: &str, response: &TokenResponse) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}", token_id);
 
         let json = serde_json::to_string(response)?;
@@ -388,7 +367,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_token_response(&self, token_id: &str) -> Result<TokenResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}", token_id);
 
         let token_json: String = conn.get(key).await?;
@@ -401,7 +380,7 @@ impl RedisDatabase {
         token_address: &str,
         response: &TokenMetadataResponse,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token_metadata:{}", token_address);
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
@@ -412,7 +391,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_token_metadata(&self, token_address: &str) -> Result<TokenMetadataResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token_metadata:{}", token_address);
         let response_json: String = conn.get(key).await?;
         let response: TokenMetadataResponse = serde_json::from_str(&response_json)?;
@@ -430,7 +409,7 @@ impl RedisDatabase {
             "Set Hype Token: pagination: {:?}, response: {:?}",
             pagination, response
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hype_token:page:{}:limit:{}",
             pagination.page, pagination.limit
@@ -446,7 +425,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
     ) -> Result<HypeTokenResponse> {
         info!("Get Hype Token: pagination: {:?}", pagination);
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hype_token:page:{}:limit:{}",
             pagination.page, pagination.limit
@@ -474,7 +453,7 @@ impl RedisDatabase {
             "Set Dev Positions: pagination: {:?}, response: {:?}",
             pagination, response
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "dev_positions:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -491,7 +470,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
     ) -> Result<DevPositionsResponse> {
         info!("Get Dev Positions: pagination: {:?}", pagination);
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "dev_positions:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -512,7 +491,7 @@ impl RedisDatabase {
             "Set Holding Token Treasury: pagination: {:?}, response: {:?}",
             pagination, response
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "holding_token_treasury:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -532,7 +511,7 @@ impl RedisDatabase {
             "Get Holding Token Token Management: pagination: {:?}",
             pagination
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "holding_token_management:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -552,7 +531,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
     ) -> Result<TokenLockResponse> {
         info!("Get Account Locks: pagination: {:?}", pagination);
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_locks:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -573,7 +552,7 @@ impl RedisDatabase {
             "Set Account Locks: pagination: {:?}, response: {:?}",
             pagination, response
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_locks:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -593,7 +572,7 @@ impl RedisDatabase {
             "Get Account Withdrawable Lock: pagination: {:?}",
             pagination
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_withdrawable_lock:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -617,7 +596,7 @@ impl RedisDatabase {
             "Set Account Withdrawable Lock: pagination: {:?}, response: {:?}",
             pagination, response
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_withdrawable_lock:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
@@ -633,7 +612,7 @@ impl RedisDatabase {
         token_id: &str,
         query: &ManagementHistoryQuery,
     ) -> Result<ManagementHistoryResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:management_history:query:{:?}", token_id, query);
         let response_json: String = conn.get(key).await?;
         info!(
@@ -654,7 +633,7 @@ impl RedisDatabase {
             "Set Token Management History: query: {:?}, response: {:?}",
             query, response
         );
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:management_history:query:{:?}", token_id, query);
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION)
@@ -671,7 +650,7 @@ impl RedisDatabase {
         response: &TokenSwapResponse,
         swap_query: &SwapQuery,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
@@ -686,7 +665,7 @@ impl RedisDatabase {
         token_id: &str,
         swap_query: &SwapQuery,
     ) -> Result<TokenSwapResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json: String = conn.get(key).await?;
         let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
@@ -700,7 +679,7 @@ impl RedisDatabase {
         response: &TokenHolderResponse,
         pagination: &PaginationParams,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
@@ -717,7 +696,7 @@ impl RedisDatabase {
         token_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
@@ -732,7 +711,7 @@ impl RedisDatabase {
         token_id: &str,
         request: &GetBarsRequest,
     ) -> Result<Option<BarResponse>> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:chart:resolution:{}:from:{}_to:{}",
             token_id, request.resolution, request.from, request.to
@@ -755,7 +734,7 @@ impl RedisDatabase {
         request: &GetBarsRequest,
         bar_data: &BarResponse,
     ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:chart:resolution:{}:from:{}_to:{}",
             token_id, request.resolution, request.from, request.to
@@ -767,7 +746,7 @@ impl RedisDatabase {
     }
 
     pub async fn set_market(&self, token_id: &str, response: &Market) -> Result<()> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
@@ -776,7 +755,7 @@ impl RedisDatabase {
     }
 
     pub async fn get_market(&self, token_id: &str) -> Result<Market> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let response_json: String = conn.get(key).await?;
         let response: Market = serde_json::from_str(&response_json)?;
@@ -787,7 +766,7 @@ impl RedisDatabase {
 //New Content
 impl RedisDatabase {
     pub async fn get_new_content(&self) -> Result<NewContentResponse> {
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = "new_content:latest";
         let response_json: String = conn.get(key).await?;
         info!("Get New Content from cache: {:?}", response_json);
@@ -797,7 +776,7 @@ impl RedisDatabase {
 
     pub async fn set_new_content(&self, response: &NewContentResponse) -> Result<()> {
         info!("Set New Content cache: {:?}", response);
-        let mut conn = self.pool.get().await?;
+        let mut conn = self.conn.as_ref().clone();
         let key = "new_content:latest";
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key.to_string(), json, *NEW_CONTENT_EXPIRATION)

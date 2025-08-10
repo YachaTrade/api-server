@@ -249,7 +249,9 @@ async fn main() -> Result<()> {
   
 
     let cookie_manager_layer = CookieManagerLayer::new();
-    let root = Router::new().route("/", get(|| async { "Hello, World!" }));
+    let root = Router::new()
+        .route("/", get(|| async { "Hello, World!" }))
+        .route("/health", get(health_check));
     let app = Router::new()
         .merge(root)
         .merge(auth::router(app_state.clone()))
@@ -299,6 +301,10 @@ async fn main() -> Result<()> {
 
 async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "nothing to see here")
+}
+
+async fn health_check() -> impl IntoResponse {
+    (StatusCode::OK, "OK")
 }
 
 async fn handle_timeout_error(
