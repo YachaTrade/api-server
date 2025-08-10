@@ -14,8 +14,12 @@ use anyhow::Result;
 use axum::{
     error_handling::HandleErrorLayer, http::{Method, StatusCode, Uri}, middleware as axum_middleware, response::IntoResponse, routing::get, BoxError, Router
 };
-use tower::ServiceBuilder;
+use tower::{ServiceBuilder, Service, timeout::TimeoutLayer};
 use tower_cookies::CookieManagerLayer;
+use std::task::{Context, Poll};
+use std::pin::Pin;
+use axum::http::Request;
+use std::future::Future;
 use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, 
 };
@@ -272,11 +276,7 @@ async fn main() -> Result<()> {
         .merge(new_content::router())
 
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .layer(
-            ServiceBuilder::new()
-                .layer(HandleErrorLayer::new(handle_timeout_error))
-                .timeout(Duration::from_millis(500)),
-        )
+        .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
         // .layer(GovernorLayer {
@@ -318,4 +318,21 @@ async fn handle_timeout_error(
         StatusCode::INTERNAL_SERVER_ERROR,
         format!("`{method} {uri}` failed with {err}"),
     )
+}
+
+// 메서드별 타임아웃 미들웨어
+async fn method_based_timeout(
+    method: Method,
+    req: Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> Result<axum::response::Response, StatusCode> {
+    let timeout_duration = match method {
+        Method::GET => Duration::from_millis(1000),
+        _ => Duration::from_millis(2000), // POST, PUT, DELETE 등은 3초
+    };
+    
+    match tokio::time::timeout(timeout_duration, next.run(req)).await {
+        Ok(response) => Ok(response),
+        Err(_) => Err(StatusCode::REQUEST_TIMEOUT),
+    }
 }
