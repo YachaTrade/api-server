@@ -247,7 +247,7 @@ async fn main() -> Result<()> {
         .or_else(|| std::env::var("HTTP_PORT").ok())
         .unwrap_or_else(|| "8000".to_string());
 
-    info!("Server will start on {}:{}", ip, port);
+    info!("Server will start on {}:{} - v2 deployment test", ip, port);
     
     let app_state = AppState::new().await;
     
