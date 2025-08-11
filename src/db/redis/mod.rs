@@ -749,7 +749,7 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
+        conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
             .await?;
         Ok(())
     }
