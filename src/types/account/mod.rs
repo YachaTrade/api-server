@@ -15,9 +15,9 @@ use tracing::{info, warn};
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 use super::common::identifier::Identifier;
@@ -165,7 +165,64 @@ impl AccountController {
             );
         }
 
-        Ok(self.get_account(&account.account_id).await?)
+        match result {
+            Some(row) => {
+                let account = Account {
+                    account_id: row.account_id,
+                    nickname: match &row.x_handle {
+                        Some(handle) if !handle.is_empty() => handle.clone(),
+                        _ => row.nickname,
+                    },
+                    image_uri: match &row.x_image_uri {
+                        Some(img) if !img.is_empty() => img.clone(),
+                        _ => row.image_uri,
+                    },
+                    bio: row.bio,
+                    follower_count: row.follower_count,
+                    following_count: row.following_count,
+                    mutual: None,
+                };
+                Ok(account)
+            }
+            None => {
+                // ON CONFLICT DO NOTHING으로 아무것도 반환되지 않았다면, 이미 존재하는 계정
+                // 이 경우에만 get_account 호출 (하지만 이미 존재하므로 순환 호출 없음)
+                let query = sqlx::query_as::<_, AccountRow>(
+                    r#"
+                    SELECT account_id, nickname, image_uri, bio, follower_count, following_count, NULL as x_handle, NULL as x_image_uri, NULL as is_blue_label
+                    FROM account 
+                    WHERE account_id = $1
+                    "#,
+                )
+                .bind(&account.account_id)
+                .fetch_one(self.db.get_read_pool());
+                let row = tokio::time::timeout(Duration::from_millis(1000), query)
+                    .await
+                    .map_err(|_| anyhow!("Query timeout after 1000ms"))?;
+                let row = match row {
+                    Ok(row) => row,
+                    Err(_) => {
+                        return Err(anyhow!("Account not found: {}", account.account_id));
+                    }
+                };
+                let account = Account {
+                    account_id: row.account_id,
+                    nickname: match &row.x_handle {
+                        Some(handle) if !handle.is_empty() => handle.clone(),
+                        _ => row.nickname,
+                    },
+                    image_uri: match &row.x_image_uri {
+                        Some(img) if !img.is_empty() => img.clone(),
+                        _ => row.image_uri,
+                    },
+                    bio: row.bio,
+                    follower_count: row.follower_count,
+                    following_count: row.following_count,
+                    mutual: None,
+                };
+                Ok(account)
+            }
+        }
     }
 
     pub async fn update_account(
@@ -251,23 +308,25 @@ impl AccountController {
 
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("account", account_id);
-        
+
         // Single Flight Pattern 적용
         let account = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_account(account_id).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_account completed in {:?} for account_id: {}", elapsed, account_id);
+        info!(
+            "get_account completed in {:?} for account_id: {}",
+            elapsed, account_id
+        );
         Ok(account)
     }
-    
-    async fn fetch_account(&self, account_id: &str) -> Result<Account> {
 
+    async fn fetch_account(&self, account_id: &str) -> Result<Account> {
         let query = sqlx::query_as::<_, AccountRow>(
             r#"
             SELECT a.account_id,
@@ -289,9 +348,18 @@ impl AccountController {
 
         let row = tokio::time::timeout(Duration::from_millis(1000), query)
             .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-            .map_err(|err| anyhow!("Fail get account Reason :{err} address: {}", err))?;
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?;
 
+        let row = match row {
+            Ok(row) => row,
+            Err(_) => {
+                let account = Account::new(account_id.to_string());
+                self.upsert_account(account.clone())
+                    .await
+                    .map_err(|err| anyhow!("Fail upsert account Reason :{err} address: {}", err))?;
+                return Ok(account);
+            }
+        };
         let account = Account {
             account_id: row.account_id,
             nickname: match &row.x_handle {

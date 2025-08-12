@@ -1,4 +1,4 @@
-use axum::{extract::State, Extension, Json};
+use axum::{Extension, Json, extract::State};
 
 use tracing::{instrument, warn};
 
@@ -6,12 +6,12 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::account::{
+        AccountController, AccountResponse, UpdateAccountRequest,
         wallet::{AccountWalletResponse, RegisterWalletRequest, WalletController},
         x::{
             AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest,
             DisconnectedXAccountResponse, GetXHandleResponse,
         },
-        AccountController, AccountResponse, UpdateAccountRequest,
     },
 };
 
