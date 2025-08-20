@@ -64,9 +64,11 @@ pub async fn update_account(
 
     // @ = x handle 전용
     if let Some(nickname) = &nickname {
-        if nickname.starts_with('@') {
-            warn!("Update account Error: Nickname cannot start with @");
-            return Err(AppError::BadRequest("Nickname cannot start with @".into()));
+        if nickname.starts_with('@') || nickname.starts_with('#') {
+            warn!("Update account Error: Nickname cannot start with @ or #");
+            return Err(AppError::BadRequest(
+                "Nickname cannot start with @ or #".into(),
+            ));
         }
     }
 
