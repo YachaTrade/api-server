@@ -180,13 +180,14 @@ impl OrderController {
                         t.total_supply as total_supply,
                         m.price,
                         m.reserve_token,
-                        ax.x_handle,
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
                         m.market_type, t.created_at, t.created_at::FLOAT8 as score
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     INNER JOIN market m ON t.token_id = m.token_id
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
@@ -214,7 +215,7 @@ impl OrderController {
                         t.total_supply as total_supply,
                         m.price,
                         m.reserve_token,
-                        ax.x_handle,
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
                         m.market_type, t.created_at, m.latest_trade_at::FLOAT8 as score
@@ -222,6 +223,7 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -248,7 +250,7 @@ impl OrderController {
                         t.total_supply as total_supply,
                         m.price,
                         m.reserve_token,
-                        ax.x_handle,
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
                         m.market_type, t.created_at, m.price::FLOAT8 as score
@@ -261,6 +263,7 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     ORDER BY m.price {}
                     "#,
                     order_direction, order_direction
@@ -320,13 +323,14 @@ impl OrderController {
                     m.market_type,
                     t.created_at,
                     k.created_at::FLOAT8 as score,
-                    ax.x_handle,
+                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                     ax.x_image_uri,
                     ax.is_blue_label
                 FROM king k
                 JOIN token t ON t.token_id = k.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON t.creator = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 LEFT JOIN market m ON t.token_id = m.token_id
                 WHERE k.created_at = (SELECT MAX(created_at) FROM king)
                 "#,

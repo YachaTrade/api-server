@@ -1,15 +1,15 @@
 use crate::{
+    cache_key,
     db::postgres::PostgresDatabase,
     types::common::{
+        CountRow,
         info::{AccountInfo, TokenInfo},
         pagination::PaginationParams,
-        CountRow,
     },
     utils::{
+        single_flight::{GLOBAL_CACHE, with_cache},
         valid_evm_address,
-        single_flight::{with_cache, GLOBAL_CACHE},
     },
-    cache_key,
 };
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
@@ -234,7 +234,7 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<DevPositionsResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "dev_positions",
@@ -243,7 +243,7 @@ impl TokenManagementController {
             pagination.limit,
             pagination.direction
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -251,11 +251,13 @@ impl TokenManagementController {
             let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
-                controller.fetch_dev_positions(&account_id, &pagination).await
+                controller
+                    .fetch_dev_positions(&account_id, &pagination)
+                    .await
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!(
             "get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}",
@@ -263,7 +265,7 @@ impl TokenManagementController {
         );
         Ok(response)
     }
-    
+
     async fn fetch_dev_positions(
         &self,
         account_id: &str,
@@ -381,7 +383,7 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<HoldingTokenManagementResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "holding_token_management",
@@ -390,7 +392,7 @@ impl TokenManagementController {
             pagination.limit,
             pagination.direction
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -398,11 +400,13 @@ impl TokenManagementController {
             let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
-                controller.fetch_holding_token_management(&account_id, &pagination).await
+                controller
+                    .fetch_holding_token_management(&account_id, &pagination)
+                    .await
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!(
             "get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}",
@@ -410,7 +414,7 @@ impl TokenManagementController {
         );
         Ok(response)
     }
-    
+
     async fn fetch_holding_token_management(
         &self,
         account_id: &str,
@@ -515,7 +519,7 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<TokenLockResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "account_locks",
@@ -524,7 +528,7 @@ impl TokenManagementController {
             pagination.limit,
             pagination.direction
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -532,11 +536,13 @@ impl TokenManagementController {
             let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
-                controller.fetch_account_locks(&account_id, &pagination).await
+                controller
+                    .fetch_account_locks(&account_id, &pagination)
+                    .await
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!(
             "get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}",
@@ -544,7 +550,7 @@ impl TokenManagementController {
         );
         Ok(response)
     }
-    
+
     async fn fetch_account_locks(
         &self,
         account_id: &str,
@@ -657,7 +663,7 @@ impl TokenManagementController {
         pagination: &PaginationParams,
     ) -> Result<WithdrawableLockResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "account_withdrawable_lock",
@@ -666,7 +672,7 @@ impl TokenManagementController {
             pagination.limit,
             pagination.direction
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -674,11 +680,13 @@ impl TokenManagementController {
             let pagination = pagination;
             async move {
                 let controller = TokenManagementController::new(db);
-                controller.fetch_account_withdrawable_lock(&account_id, &pagination).await
+                controller
+                    .fetch_account_withdrawable_lock(&account_id, &pagination)
+                    .await
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!(
             "get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}",
@@ -686,7 +694,7 @@ impl TokenManagementController {
         );
         Ok(response)
     }
-    
+
     async fn fetch_account_withdrawable_lock(
         &self,
         account_id: &str,
@@ -816,7 +824,7 @@ impl TokenManagementController {
         query: &ManagementHistoryQuery,
     ) -> Result<ManagementHistoryResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "management_history",
@@ -828,7 +836,7 @@ impl TokenManagementController {
             query.min_volume.as_ref().unwrap_or(&"".to_string()),
             query.account_id.as_ref().unwrap_or(&"".to_string())
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -840,7 +848,7 @@ impl TokenManagementController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!(
             "get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}",
@@ -848,7 +856,7 @@ impl TokenManagementController {
         );
         Ok(response)
     }
-    
+
     async fn fetch_management_history(
         &self,
         token_id: &str,
@@ -870,12 +878,13 @@ impl TokenManagementController {
             a.image_uri as account_image,
             a.follower_count,
             a.following_count,
-            ax.x_handle,
+            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
             ax.x_image_uri,
             ax.is_blue_label
         FROM token_management_history th
         JOIN account a ON th.account_id = a.account_id
         LEFT JOIN account_x ax ON a.account_id = ax.account_id
+        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
         LEFT JOIN token_management_total_lock ttl ON th.token_id = ttl.token_id
         WHERE th.token_id = $1"#
             .to_string();

@@ -335,11 +335,12 @@ impl AccountController {
             a.bio,
             a.follower_count,
             a.following_count,
-            ax.x_handle,
+            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
             ax.x_image_uri,
             ax.is_blue_label
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
+            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE a.account_id = $1
             "#,
         )
@@ -406,11 +407,12 @@ impl AccountController {
                     a.bio,
                     a.follower_count,
                     a.following_count,
-                    ax.x_handle,
+                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                     ax.x_image_uri,
                     ax.is_blue_label
                 FROM account a
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 WHERE CASE 
                     WHEN $1 = 'account_id' THEN a.account_id = $2
                     ELSE a.nickname = $2
@@ -423,7 +425,7 @@ impl AccountController {
                     a.image_uri,
                     a.follower_count,
                     a.following_count,
-                    ax.x_handle,
+                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                     ax.x_image_uri,
                     ax.is_blue_label,
                     COUNT(*) OVER() as total_count
@@ -431,6 +433,7 @@ impl AccountController {
                 JOIN follow f_other ON f.following_id = f_other.following_id
                 JOIN account a ON f.following_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 WHERE f.follower_id = $2 
                 AND f_other.follower_id = $3
                 LIMIT 3

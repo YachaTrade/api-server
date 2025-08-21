@@ -90,12 +90,13 @@ impl NewContentController {
                 t.image_uri as token_image_uri,
                 t.token_id as token_id,
                 a.account_id as account_id,
-                ax.x_handle,
+                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                 ax.x_image_uri
             FROM swap s
             JOIN account a ON s.account_id = a.account_id
             JOIN token t ON s.token_id = t.token_id
             LEFT JOIN account_x ax ON s.account_id = ax.account_id
+            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE s.is_buy = true
             ORDER BY s.created_at DESC
             LIMIT 1
@@ -188,12 +189,13 @@ impl NewContentController {
                 t.image_uri as token_image_uri,
                 t.token_id as token_id,
                 a.account_id as account_id,
-                ax.x_handle,
+                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                 ax.x_image_uri
             FROM swap s
             JOIN account a ON s.account_id = a.account_id
             JOIN token t ON s.token_id = t.token_id
             LEFT JOIN account_x ax ON s.account_id = ax.account_id
+            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE s.is_buy = false
             ORDER BY s.created_at DESC
             LIMIT 1
@@ -285,11 +287,12 @@ impl NewContentController {
                 a.account_id,
                 a.follower_count,
                 a.following_count,
-                ax.x_handle,
+                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                 ax.x_image_uri
             FROM token t
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON t.creator = ax.account_id
+            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             ORDER BY t.created_at DESC
             LIMIT 1
         "#;

@@ -342,9 +342,13 @@ impl SwapController {
         FROM swap s
         JOIN account a ON s.account_id = a.account_id
         LEFT JOIN LATERAL (
-            SELECT x_handle, x_image_uri, is_blue_label 
-            FROM account_x 
-            WHERE account_id = a.account_id 
+            SELECT 
+                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                x_image_uri, 
+                is_blue_label 
+            FROM account_x ax
+            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+            WHERE ax.account_id = a.account_id 
             LIMIT 1
         ) ax ON true
        

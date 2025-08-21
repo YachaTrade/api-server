@@ -2,16 +2,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::{
+    cache_key,
     db::postgres::PostgresDatabase,
     types::common::{
+        CountRow,
         info::{AccountInfo, MarketInfo, PositionInfo, PositionTokenInfo, TokenInfo},
         pagination::PaginationParams,
-        CountRow,
     },
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
-    cache_key,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
@@ -85,21 +85,24 @@ impl PositionController {
 
     pub async fn get_total_count_by_token_holder(&self, token_id: &str) -> Result<i64> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("token_holder_count", token_id);
-        
+
         // Single Flight Pattern 적용
         let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_token_holder_count(token_id).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_token_holder completed in {:?} for token_id: {}", elapsed, token_id);
+        info!(
+            "get_total_count_by_token_holder completed in {:?} for token_id: {}",
+            elapsed, token_id
+        );
         Ok(count)
     }
-    
+
     async fn fetch_token_holder_count(&self, token_id: &str) -> Result<i64> {
         // token_holder_count 테이블 사용으로 최적화
         let count = tokio::time::timeout(
@@ -112,11 +115,11 @@ impl PositionController {
                 "#,
             )
             .bind(token_id)
-            .fetch_optional(self.db.get_read_pool())
+            .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
-        
+
         // 레코드가 없으면 0 반환
         Ok(count.map(|c| c.count).unwrap_or(0))
     }
@@ -127,24 +130,25 @@ impl PositionController {
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
-        let cache_key = cache_key!(
-            "token_holders",
-            token_id,
-            pagination.page,
-            pagination.limit
-        );
-        
+        let cache_key = cache_key!("token_holders", token_id, pagination.page, pagination.limit);
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_holders_by_token(token_id, pagination).await
         })
         .await?;
-        
+
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_holders_by_token completed in {:?} for token_id: {}",
+            elapsed, token_id
+        );
+
         Ok(response)
     }
-    
+
     async fn fetch_holders_by_token(
         &self,
         token_id: &str,
@@ -162,12 +166,13 @@ impl PositionController {
                     a.image_uri,
                     a.follower_count,
                     a.following_count,
-                    ax.x_handle,
+                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                     ax.x_image_uri,
                     ax.is_blue_label
                 FROM balance b
                 JOIN account a ON b.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 WHERE b.token_id = $1 AND b.balance > 0
                 ORDER BY b.balance DESC
                 OFFSET $2 LIMIT $3
@@ -176,7 +181,7 @@ impl PositionController {
             .bind(token_id)
             .bind(offset)
             .bind(pagination.limit as i64)
-            .fetch_all(self.db.get_read_pool())
+            .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
@@ -202,11 +207,11 @@ impl PositionController {
                 "#,
             )
             .bind(token_id)
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
-        
+
         let token_creator = token_creator.creator;
 
         let holders = record
@@ -247,15 +252,18 @@ impl PositionController {
                 "#,
             )
             .bind(account_id)
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
-        
+
         let count = count.count;
 
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_hold_token completed in {:?} for account_id: {}", elapsed, account_id);
+        info!(
+            "get_total_count_by_hold_token completed in {:?} for account_id: {}",
+            elapsed, account_id
+        );
         Ok(count)
     }
     pub async fn get_hold_token_by_account(
@@ -295,7 +303,7 @@ impl PositionController {
             .bind(account_id)
             .bind(pagination.limit)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool())
+            .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
@@ -319,7 +327,10 @@ impl PositionController {
             })
             .collect();
         let elapsed = start_time.elapsed();
-        info!("get_hold_token_by_account completed in {:?} for account_id: {}, page: {}, limit: {}", elapsed, account_id, pagination.page, pagination.limit);
+        info!(
+            "get_hold_token_by_account completed in {:?} for account_id: {}, page: {}, limit: {}",
+            elapsed, account_id, pagination.page, pagination.limit
+        );
         Ok(HoldTokenResponse {
             tokens,
             total_count,

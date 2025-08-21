@@ -154,9 +154,12 @@ impl TokenController {
                         ax.x_image_uri
                     FROM token_info ti
                     LEFT JOIN LATERAL (
-                        SELECT x_handle, x_image_uri 
-                        FROM account_x 
-                        WHERE account_id = ti.creator 
+                        SELECT 
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                            ax.x_image_uri 
+                        FROM account_x ax
+                        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                        WHERE ax.account_id = ti.creator 
                         LIMIT 1
                     ) ax ON true
                 "#,
