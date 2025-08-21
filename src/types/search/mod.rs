@@ -1,6 +1,6 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-use std::collections::HashSet;
 
 use anyhow::Result;
 use bigdecimal::BigDecimal;
@@ -9,9 +9,9 @@ use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 use super::common::info::{AccountInfo, TokenInfo};
@@ -100,22 +100,22 @@ impl SearchController {
 
         // 캐시 키 생성
         let cache_key = cache_key!("search", query.trim().to_lowercase());
-        
+
         // Single Flight Pattern 적용
         let result = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_search_results(query).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("search completed in {:?} for query: {}", elapsed, query);
         Ok(result)
     }
-    
+
     async fn fetch_search_results(&self, query: &str) -> Result<SearchResponse> {
         // 검색 패턴 분석
         let search_pattern = self.analyze_search_pattern(query);
-        
+
         let (token_result, account_result) = tokio::join!(
             self.search_tokens_by_pattern(query, &search_pattern),
             self.search_accounts_by_pattern(query, &search_pattern)
@@ -175,30 +175,34 @@ impl SearchController {
     // 검색 패턴 분석
     fn analyze_search_pattern(&self, query: &str) -> SearchPattern {
         let trimmed_query = query.trim();
-        
+
         // @ 한들 패턴 (account_x에서 검색)
         if trimmed_query.starts_with('@') {
             return SearchPattern::TwitterHandle;
         }
-        
+
         // EVM 주소 패턴 (42자 0x로 시작)
         if trimmed_query.len() == 42 && trimmed_query.starts_with("0x") {
             return SearchPattern::EvmAddress;
         }
-        
+
         // 나머지는 모두 Trigram 검색
         SearchPattern::Universal
     }
 
     // 토큰 검색 (패턴별)
-    async fn search_tokens_by_pattern(&self, query: &str, pattern: &SearchPattern) -> Result<Vec<SearchTokenRow>> {
+    async fn search_tokens_by_pattern(
+        &self,
+        query: &str,
+        pattern: &SearchPattern,
+    ) -> Result<Vec<SearchTokenRow>> {
         let pool = self.db.get_read_pool();
-        
+
         match pattern {
             SearchPattern::TwitterHandle => {
                 // @ 한들은 토큰 검색에서 제외
                 Ok(vec![])
-            },
+            }
             SearchPattern::EvmAddress => {
                 // EVM 주소: 토큰 ID로 직접 검색 (Primary Key 접근)
                 sqlx::query_as::<_, SearchTokenRow>(
@@ -209,17 +213,17 @@ impl SearchController {
                     JOIN market m ON t.token_id = m.token_id
                     WHERE t.token_id = $1
                     LIMIT 1
-                    "#
+                    "#,
                 )
                 .bind(query)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
-            },
+            }
             SearchPattern::Universal => {
                 // 병렬 검색 전략: symbol과 name을 동시에 검색
                 let query_clone = query.to_string();
-                
+
                 // symbol과 name을 병렬로 검색
                 let (symbol_future, name_future) = (
                     sqlx::query_as::<_, SearchTokenRow>(
@@ -231,11 +235,10 @@ impl SearchController {
                         WHERE t.symbol LIKE $1 || '%'
                         ORDER BY t.symbol, m.price DESC
                         LIMIT 25
-                        "#
+                        "#,
                     )
                     .bind(&query)
                     .fetch_all(pool),
-                    
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
                         SELECT t.token_id, t.name, t.symbol, t.image_uri,
@@ -245,32 +248,32 @@ impl SearchController {
                         WHERE t.name LIKE $1 || '%'
                         ORDER BY t.name, m.price DESC
                         LIMIT 25
-                        "#
+                        "#,
                     )
                     .bind(&query_clone)
-                    .fetch_all(pool)
+                    .fetch_all(pool),
                 );
-                
+
                 // 두 결과를 동시에 기다림
                 let (symbol_results, name_results) = tokio::join!(symbol_future, name_future);
-                
+
                 let mut combined_results = Vec::new();
                 let mut seen_ids = std::collections::HashSet::new();
-                
+
                 // symbol 결과 추가 (중복 제거)
                 for token in symbol_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
                     if seen_ids.insert(token.token_id.clone()) {
                         combined_results.push(token);
                     }
                 }
-                
+
                 // name 결과 추가 (중복 제거)
                 for token in name_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
                     if seen_ids.insert(token.token_id.clone()) && combined_results.len() < 50 {
                         combined_results.push(token);
                     }
                 }
-                
+
                 // 최대 50개로 제한
                 combined_results.truncate(50);
                 Ok(combined_results)
@@ -279,20 +282,25 @@ impl SearchController {
     }
 
     // 계정 검색 (패턴별)
-    async fn search_accounts_by_pattern(&self, query: &str, pattern: &SearchPattern) -> Result<Vec<SearchAccountRow>> {
+    async fn search_accounts_by_pattern(
+        &self,
+        query: &str,
+        pattern: &SearchPattern,
+    ) -> Result<Vec<SearchAccountRow>> {
         let pool = self.db.get_read_pool();
-        
+
         match pattern {
             SearchPattern::TwitterHandle => {
                 // @ 한들 검색: 정확한 매칭 우선
                 let handle = query.trim_start_matches('@');
-                
+
                 // 먼저 정확한 매칭 시도
                 let exact_results = sqlx::query_as::<_, SearchAccountRow>(
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
                            ax.x_handle, ax.x_image_uri, ax.is_blue_label,
+                           av.x_handle as verified_x_handle,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -302,25 +310,27 @@ impl SearchController {
                            ), 0) as total_value
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE ax.x_handle = $1
                     LIMIT 20
-                    "#
+                    "#,
                 )
                 .bind(handle)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))?;
-                
+
                 if !exact_results.is_empty() {
                     return Ok(exact_results);
                 }
-                
+
                 // prefix 검색
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
                            ax.x_handle, ax.x_image_uri, ax.is_blue_label,
+                           av.x_handle as verified_x_handle,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -330,16 +340,17 @@ impl SearchController {
                            ), 0) as total_value
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE ax.x_handle LIKE $1 || '%'
                     ORDER BY ax.x_handle
                     LIMIT 20
-                    "#
+                    "#,
                 )
                 .bind(handle)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
-            },
+            }
             SearchPattern::EvmAddress => {
                 // EVM 주소: 계정 ID로 직접 검색 (Primary Key 접근)
                 sqlx::query_as::<_, SearchAccountRow>(
@@ -347,6 +358,7 @@ impl SearchController {
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
                            ax.x_handle, ax.x_image_uri, ax.is_blue_label,
+                           av.x_handle as verified_x_handle,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -356,15 +368,16 @@ impl SearchController {
                            ), 0) as total_value
                     FROM account a
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON a.account_id = av.account_id
                     WHERE a.account_id = $1
                     LIMIT 1
-                    "#
+                    "#,
                 )
                 .bind(query)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
-            },
+            }
             SearchPattern::Universal => {
                 // OR 조건으로 정확한 매칭과 prefix 동시 처리
                 sqlx::query_as::<_, SearchAccountRow>(
@@ -381,10 +394,11 @@ impl SearchController {
                            ), 0) as total_value
                     FROM account a
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON a.account_id = av.account_id
                     WHERE a.nickname = $1 OR a.nickname LIKE $1 || '%'
                     ORDER BY a.nickname, a.follower_count DESC
                     LIMIT 50
-                    "#
+                    "#,
                 )
                 .bind(query)
                 .fetch_all(pool)
@@ -398,7 +412,7 @@ impl SearchController {
 // 검색 패턴 enum
 #[derive(Debug, Clone)]
 enum SearchPattern {
-    EvmAddress,     // 42자 0x로 시작하는 EVM 주소 (Primary Key 직접 접근)
-    TwitterHandle,  // @로 시작하는 트위터 한들 (account_x 테이블에서 검색)
-    Universal,      // 일반 문자열 (Trigram 검색)
+    EvmAddress,    // 42자 0x로 시작하는 EVM 주소 (Primary Key 직접 접근)
+    TwitterHandle, // @로 시작하는 트위터 한들 (account_x 테이블에서 검색)
+    Universal,     // 일반 문자열 (Trigram 검색)
 }

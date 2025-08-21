@@ -150,9 +150,13 @@ impl HypeTokenController {
                 LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
                 -- LATERAL JOIN으로 account_x 최적화 - 필요한 레코드만 조회
                 LEFT JOIN LATERAL (
-                    SELECT x_handle, x_image_uri, is_blue_label 
-                    FROM account_x 
-                    WHERE account_id = a.account_id 
+                    SELECT 
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                        ax.x_image_uri, 
+                        ax.is_blue_label 
+                    FROM account_x ax
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    WHERE ax.account_id = a.account_id 
                     LIMIT 1
                 ) x ON true
                 -- 차트 가격 최적화 - COALESCE 패턴을 LATERAL JOIN으로 변경
