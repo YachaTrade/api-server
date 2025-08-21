@@ -299,8 +299,8 @@ impl SearchController {
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
-                           ax.x_handle, ax.x_image_uri, ax.is_blue_label,
-                           av.x_handle as verified_x_handle,
+                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                           ax.x_image_uri, ax.is_blue_label,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -329,8 +329,8 @@ impl SearchController {
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
-                           ax.x_handle, ax.x_image_uri, ax.is_blue_label,
-                           av.x_handle as verified_x_handle,
+                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                           ax.x_image_uri, ax.is_blue_label,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -357,8 +357,8 @@ impl SearchController {
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
-                           ax.x_handle, ax.x_image_uri, ax.is_blue_label,
-                           av.x_handle as verified_x_handle,
+                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                           ax.x_image_uri, ax.is_blue_label,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -368,7 +368,7 @@ impl SearchController {
                            ), 0) as total_value
                     FROM account a
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON a.account_id = av.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE a.account_id = $1
                     LIMIT 1
                     "#,
@@ -384,7 +384,8 @@ impl SearchController {
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
                            a.follower_count, a.following_count,
-                           ax.x_handle, ax.x_image_uri, ax.is_blue_label,
+                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                           ax.x_image_uri, ax.is_blue_label,
                            COALESCE((
                                SELECT SUM(b.balance * m.price)
                                FROM balance b
@@ -394,7 +395,7 @@ impl SearchController {
                            ), 0) as total_value
                     FROM account a
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON a.account_id = av.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE a.nickname = $1 OR a.nickname LIKE $1 || '%'
                     ORDER BY a.nickname, a.follower_count DESC
                     LIMIT 50
