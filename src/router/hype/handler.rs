@@ -35,11 +35,9 @@ pub async fn get_hype_token(
     State(state): State<AppState>,
     Query(pagination): Query<PaginationParams>,
 ) -> AppJsonResult<HypeTokenResponse> {
-    info!("Get Hype Token: pagination: {:?}", pagination);
     if let Ok(cached_response) = state.redis.get_hype_token_response(&pagination).await {
         return Ok(Json(cached_response));
     }
-    info!("Get Hype Token: pagination: {:?}, cache miss", pagination);
     let hype_token_controller = HypeTokenController::new(state.postgres.clone());
     let response = hype_token_controller
         .get_hype_token(&pagination)
@@ -56,10 +54,6 @@ pub async fn get_hype_token(
     {
         error!("Failed to set hype token response: {}", e);
     }
-    info!(
-        "Get Hype Token: pagination: {:?}, response: {:?}",
-        pagination, response
-    );
 
     Ok(Json(response))
 }

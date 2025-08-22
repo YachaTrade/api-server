@@ -58,7 +58,6 @@ pub async fn add_follow(
         .add_follow(follower, following)
         .await
         .map_err(|err| {
-            info!("Add Follow Error {:?}", err);
             AppError::BadRequest(err.to_string())
         })?;
 
@@ -105,7 +104,6 @@ pub async fn remove_follow(
         .remove_follow(follower, following)
         .await
         .map_err(|err| {
-            info!("Add Follow Error {:?}", err);
             AppError::BadRequest(err.to_string())
         })?;
 

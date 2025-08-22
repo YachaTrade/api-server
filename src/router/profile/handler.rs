@@ -58,10 +58,6 @@ pub async fn get_profile(
             );
             AppError::InternalError(err.to_string())
         })?;
-    info!(
-        "Get Profile: account_id :{} response :{:?}",
-        account_id, account
-    );
     Ok(Json(AccountResponse { account }))
 }
 
@@ -113,10 +109,6 @@ pub async fn get_hold_token(
             );
             AppError::InternalError(err.to_string())
         })?;
-    info!(
-        "Get Hold Token: account_id :{} response :{:?}",
-        account_id, response
-    );
     if let Err(err) = state
         .redis
         .set_account_hold_token(&account_id, &query, &response)
@@ -173,10 +165,6 @@ pub async fn get_token_created(
             );
             AppError::InternalError(err.to_string())
         })?;
-    info!(
-        "Get Token Created: account_id :{} response :{:?}",
-        account_id, response
-    );
     if let Err(err) = state
         .redis
         .set_account_token_created(&account_id, &pagination, &response)
@@ -226,9 +214,5 @@ pub async fn get_swap_history(
             );
             AppError::InternalError(err.to_string())
         })?;
-    info!(
-        "Get Swap History: account_id :{} response :{:?}",
-        account_id, response
-    );
     Ok(Json(response))
 }

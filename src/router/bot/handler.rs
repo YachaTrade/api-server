@@ -22,7 +22,6 @@ pub async fn set_metadata(
     let (mut metadata, image_file) = parse_multipart_data(&mut multipart).await?;
     let (image_data, image_content_type) = image_file;
     validate_content_type(&image_content_type);
-    info!("Metadata parse success {:#?}", metadata);
     // Generate unique ID for file names
 
     let unique_id = Uuid::new_v4().to_string();
@@ -37,7 +36,6 @@ pub async fn set_metadata(
     let (image_upload_url, image_url) = parse_upload_response(&image_upload_request_response)?;
     let (metadata_upload_url, metadata_url) = parse_upload_response(&metadata_upload_response)?;
     // Upload image and get image URL
-    info!("image url {}", image_url);
     metadata.image_uri = Some(image_url);
     let (image_upload_result, metadata_upload_result) = tokio::join!(
         upload_image_to_url(
