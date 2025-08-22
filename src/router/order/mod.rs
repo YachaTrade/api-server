@@ -2,7 +2,7 @@ pub mod handler;
 pub mod path;
 use crate::state::AppState;
 
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
 use path::OrderPath;
 
@@ -19,5 +19,9 @@ pub fn router() -> Router<AppState> {
         .route(
             OrderPath::LatestTrade.as_str(),
             get(handler::get_latest_trade_order),
+        )
+        .route(
+            OrderPath::Verified.as_str(),
+            get(handler::get_verified_order),
         )
 }

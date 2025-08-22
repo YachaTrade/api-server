@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Query, State},
     Json,
+    extract::{Query, State},
 };
 
 use tracing::{error, instrument, warn};
@@ -218,6 +218,69 @@ pub async fn get_latest_trade_order(
     )?;
     let response = OrderMessage {
         order_type: TokenOrderType::LatestTrade,
+        order_token: Some(order_tokens),
+        king_of_the_hill,
+        total_count,
+    };
+
+    // 결과를 캐시에 저장
+    if let Err(err) = state
+        .redis
+        .set_order_response(&TokenOrderType::LatestTrade, &response, Some(&query))
+        .await
+    {
+        warn!(
+            "Failed to set {:?} cache: {}",
+            TokenOrderType::LatestTrade,
+            err
+        );
+    }
+
+    Ok(Json(response))
+}
+
+pub async fn get_verified_order(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationParams>,
+) -> AppJsonResult<OrderMessage> {
+    // 캐시된 결과 확인
+    if let Ok(cached_response) = state
+        .redis
+        .get_order_response(&TokenOrderType::Verified, Some(&query))
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
+
+    let order_controller = OrderController::new(state.postgres.clone());
+    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
+        async {
+            order_controller
+                .get_order_tokens(TokenOrderType::Verified, &query)
+                .await
+                .map_err(|err| {
+                    error!("Failed to get order tokens: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
+        },
+        async {
+            order_controller
+                .get_latest_king_of_the_hill()
+                .await
+                .map_err(|err| {
+                    error!("Failed to get latest king of the hill: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
+        },
+        async {
+            order_controller.get_total_count().await.map_err(|err| {
+                error!("Failed to get total count: {}", err);
+                AppError::InternalError(err.to_string())
+            })
+        }
+    )?;
+    let response = OrderMessage {
+        order_type: TokenOrderType::Verified,
         order_token: Some(order_tokens),
         king_of_the_hill,
         total_count,
