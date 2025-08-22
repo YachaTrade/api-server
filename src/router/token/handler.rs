@@ -42,7 +42,6 @@ pub async fn get_token(
     if let Ok(cached_response) = state.redis.get_token_response(&token_id).await {
         return Ok(Json(cached_response));
     }
-    info!("Get token Request for token: {}", token_id);
     let token_controller = TokenController::new(state.postgres.clone());
     let response = token_controller.get_token(&token_id).await.map_err(|err| {
         error!(
@@ -54,10 +53,6 @@ pub async fn get_token(
     if let Err(e) = state.redis.set_token_response(&token_id, &response).await {
         error!("Failed to set token response: {}", e);
     }
-    info!(
-        "Get Token: token_id: {}, response: {:?}",
-        token_id, response
-    );
 
     Ok(Json(response))
 }
@@ -105,10 +100,6 @@ pub async fn get_token_metadata(
     {
         error!("Failed to set token metadata: {}", e);
     }
-    info!(
-        "Get Token Metadata: token_address: {}, response: {:?}",
-        token_address, response
-    );
 
     Ok(Json(response))
 }

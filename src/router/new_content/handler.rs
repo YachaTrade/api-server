@@ -21,7 +21,6 @@ use crate::{
 pub async fn get_new_content(State(state): State<AppState>) -> AppJsonResult<NewContentResponse> {
     // Try Redis cache first
     if let Ok(cached_response) = state.redis.get_new_content().await {
-        info!("get_new_content completed from cache");
         return Ok(Json(cached_response));
     }
 
@@ -37,6 +36,5 @@ pub async fn get_new_content(State(state): State<AppState>) -> AppJsonResult<New
         warn!("Failed to set new content cache: {}", err);
     }
 
-    info!("get_new_content completed and cached");
     Ok(Json(response))
 }

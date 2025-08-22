@@ -87,7 +87,6 @@ pub async fn auth_nonce(
     }
 
     let time_end = time_start.elapsed();
-    info!("auth_nonce time: {:?}ms", time_end.as_millis());
     Ok(Json(AuthNonceResponse { nonce: message }))
 }
 
@@ -135,14 +134,12 @@ pub async fn auth_session(
     let address = verify_wallet(&payload.signature, &message).await?;
     let redis = state.redis.clone();
 
-    info!("Message for address {}: {}", address, message);
 
     let sign_message = redis.get_sign_message(&address).await.map_err(|err| {
         error!("Failed to get nonce: address: {}, error: {}", address, err);
         AppError::RedisError(err.to_string())
     })?;
 
-    info!("Sign message for address {}: {}", address, sign_message);
 
     if message != sign_message {
         error!("Invalid nonce: address: {}, nonce: {}", address, message);
@@ -161,7 +158,6 @@ pub async fn auth_session(
             async move {
                 let result = account_controller.upsert_account(account).await;
                 let elapsed = start.elapsed();
-                info!("upsert_account elapsed: {:?}", elapsed);
                 result
             }
         },
@@ -169,14 +165,12 @@ pub async fn auth_session(
             let start = std::time::Instant::now();
             let result = redis.delete_sign_message(&address);
             let elapsed = start.elapsed();
-            info!("del_nonce elapsed: {:?}", elapsed);
             result
         },
         {
             let start = std::time::Instant::now();
             let result = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
             let elapsed = start.elapsed();
-            info!("set_session elapsed: {:?}", elapsed);
             result
         },
         {
@@ -188,7 +182,6 @@ pub async fn auth_session(
                 let session_controller = SessionController::new(postgres);
                 let result = session_controller.set_session(&session_id, &address).await;
                 let elapsed = start.elapsed();
-                info!("postgres_set_session elapsed: {:?}", elapsed);
                 result
             }
         }
@@ -254,10 +247,6 @@ pub async fn auth_session(
         )
         .body(body.into_response())
         .map_err(|e| AppError::InternalError(e.to_string()))?;
-    info!(
-        "auth session success {}ms",
-        time_start.elapsed().as_millis()
-    );
     Ok(response)
 }
 
@@ -291,14 +280,12 @@ pub async fn auth_delete_session(
             let start = std::time::Instant::now();
             let result = redis_clone.delete_session(&session_address);
             let elapsed = start.elapsed();
-            info!("Redis delete_session elapsed: {:?}", elapsed);
             result
         },
         {
             let start = std::time::Instant::now();
             let result = session_controller.delete_session_by_id(&session_address);
             let elapsed = start.elapsed();
-            info!("PostgreSQL delete_session elapsed: {:?}", elapsed);
             result
         }
     );
@@ -312,7 +299,6 @@ pub async fn auth_delete_session(
         AppError::InternalError(err.to_string())
     })?;
 
-    info!("Session deletion completed in {:?}", elapsed);
 
     // Redis 결과 처리
     redis_result.map_err(|err| {
@@ -347,10 +333,6 @@ pub async fn auth_delete_session(
         SET_COOKIE,
         HeaderValue::from_str(&cookie.to_string())
             .map_err(|err| AppError::InternalError(err.to_string()))?,
-    );
-    info!(
-        "Delete session success {}ms",
-        time_start.elapsed().as_millis()
     );
     Ok(response)
 }

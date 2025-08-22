@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query, State},
 };
 
-use tracing::{error, info, instrument, warn};
+use tracing::{error, instrument, warn};
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -84,10 +84,6 @@ pub async fn get_swap_history(
         warn!("Failed to set token swap history cache: {}", err);
     }
 
-    info!(
-        "Get Swap History: token_id: {:?}, filters: {:?}, response: {:?}",
-        token_id, query, response
-    );
     Ok(Json(response))
 }
 
@@ -141,10 +137,6 @@ pub async fn get_holder(
     {
         warn!("Failed to set token holder cache: {}", err);
     }
-    info!(
-        "Get Token Holders: token_id: {}, response: {:?}",
-        token_id, response
-    );
     Ok(Json(response))
 }
 
@@ -193,10 +185,6 @@ pub async fn get_market(
         error!("Failed to set market cache: {}", e);
     }
 
-    info!(
-        "Get Market Information: token_id: {}, response: {:?}",
-        token_id, response
-    );
     Ok(Json(response))
 }
 
@@ -233,10 +221,6 @@ pub async fn get_prices(
     let cache_result = state.redis.get_prices(&token_id, &query).await;
 
     if let Ok(Some(cached_data)) = cache_result {
-        info!(
-            "Cache hit for bar data: {} (resolution: {})",
-            token_id, query.resolution
-        );
         return Ok(Json(cached_data));
     }
 
@@ -290,10 +274,6 @@ pub async fn get_price(
         error!("Failed to get price: token: {}, error: {}", token, err);
         AppError::InternalError(format!("Failed to get price: {}", err))
     })?;
-    info!(
-        "Get Price: token: {}, response: {:?}",
-        token, price_response
-    );
     Ok(Json(price_response))
 }
 
@@ -348,9 +328,5 @@ pub async fn get_management_history(
     {
         warn!("Failed to set token management history cache: {}", err);
     }
-    info!(
-        "Get Management History: token: {}, response: {:?}",
-        token, response
-    );
     Ok(Json(response))
 }
