@@ -382,26 +382,6 @@ impl OrderController {
         Ok(row.map(OrderToken::from))
     }
 
-    pub async fn get_total_count(&self) -> Result<i64> {
-        let start_time = Instant::now();
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(
-                r#"
-                SELECT total_count as count
-                FROM token_count
-                "#,
-            )
-            .fetch_one(self.db.get_read_pool()),
-        )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-        .map_err(|e| anyhow!("Failed to get token count: {}", e))?;
-
-        let elapsed = start_time.elapsed();
-        info!("get_total_count completed in {:?}", elapsed);
-        Ok(row.count)
-    }
 
     pub async fn get_total_count_by_type(&self, order_type: &TokenOrderType) -> Result<i64> {
         let start_time = Instant::now();
