@@ -91,7 +91,7 @@ impl TokenController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_token completed in {:?} for token_id: {}", elapsed, token_id);
+        info!("get_token(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(response)
     }
     

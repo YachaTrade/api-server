@@ -102,10 +102,7 @@ impl FollowController {
             .collect();
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_follows completed in {:?} for account_id: {}, is_following: {}",
-            elapsed, account_id, is_following
-        );
+        info!("get_follows(account_id: {}, is_following: {}) completed in {:?}", account_id, is_following, elapsed);
         Ok(follows)
     }
 
@@ -153,10 +150,7 @@ impl FollowController {
 
         tx.commit().await?;
         let elapsed = start_time.elapsed();
-        info!(
-            "add_follow completed in {:?} for follower: {}, following: {}",
-            elapsed, follower.account_id, following.account_id
-        );
+        info!("add_follow(follower: {}, following: {}) completed in {:?}", follower.account_id, following.account_id, elapsed);
         Ok((follower, following))
     }
 
@@ -205,10 +199,7 @@ impl FollowController {
 
         tx.commit().await?;
         let elapsed = start_time.elapsed();
-        info!(
-            "remove_follow completed in {:?} for follower: {}, following: {}",
-            elapsed, follower.account_id, following.account_id
-        );
+        info!("remove_follow(follower: {}, following: {}) completed in {:?}", follower.account_id, following.account_id, elapsed);
         Ok((follower, following))
     }
 
@@ -232,10 +223,7 @@ impl FollowController {
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "check_follow completed in {:?} for follower: {}, following: {}",
-            elapsed, follower, following
-        );
+        info!("check_follow(follower: {}, following: {}) completed in {:?}", follower, following, elapsed);
         Ok(result.exists)
     }
 

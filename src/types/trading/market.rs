@@ -73,10 +73,7 @@ impl MarketController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_market_by_token completed in {:?} for token_id: {}",
-            elapsed, token_id
-        );
+        info!("get_market_by_token(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(market)
     }
 

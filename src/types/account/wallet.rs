@@ -89,10 +89,7 @@ impl WalletController {
             .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "register_wallet completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("register_wallet(account_id: {}, wallet: {:?}) completed in {:?}", account_id, wallet, elapsed);
 
         Ok(AccountWalletResponse { account_id, wallet })
     }
@@ -132,10 +129,7 @@ impl WalletController {
         };
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_wallet completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("get_wallet(account_id: {}) completed in {:?}", account_id, elapsed);
 
         Ok(response)
     }

@@ -58,7 +58,7 @@ impl TokenCreatedController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_total_count completed in {:?} for account_id: {}", elapsed, account_id);
+        info!("get_total_count(account_id: {}) completed in {:?}", account_id, elapsed);
         Ok(count)
     }
     
@@ -109,7 +109,7 @@ impl TokenCreatedController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_tokens_created completed in {:?} for account_id: {}", elapsed, account_id);
+        info!("get_tokens_created(account_id: {}) completed in {:?}", account_id, elapsed);
         Ok(response)
     }
     

@@ -96,10 +96,7 @@ impl PositionController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_token_holder completed in {:?} for token_id: {}",
-            elapsed, token_id
-        );
+        info!("get_total_count_by_token_holder(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(count)
     }
 
@@ -141,10 +138,7 @@ impl PositionController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_holders_by_token completed in {:?} for token_id: {}",
-            elapsed, token_id
-        );
+        info!("get_holders_by_token(token_id: {}) completed in {:?}", token_id, elapsed);
 
         Ok(response)
     }
@@ -260,10 +254,7 @@ impl PositionController {
         let count = count.count;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_hold_token completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("get_total_count_by_hold_token(account_id: {}) completed in {:?}", account_id, elapsed);
         Ok(count)
     }
     pub async fn get_hold_token_by_account(
@@ -327,10 +318,7 @@ impl PositionController {
             })
             .collect();
         let elapsed = start_time.elapsed();
-        info!(
-            "get_hold_token_by_account completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
+        info!("get_hold_token_by_account(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(HoldTokenResponse {
             tokens,
             total_count,

@@ -108,7 +108,7 @@ impl SearchController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("search completed in {:?} for query: {}", elapsed, query);
+        info!("search(query: {}) completed in {:?}", query, elapsed);
         Ok(result)
     }
 

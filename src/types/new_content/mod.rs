@@ -64,17 +64,16 @@ impl NewContentController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_latest_new_buy completed in {:?}", elapsed);
+        info!("get_latest_new_buy() completed in {:?}", elapsed);
         
         if elapsed > Duration::from_millis(100) {
-            tracing::warn!("get_latest_new_buy slow performance: {:?}", elapsed);
+            tracing::warn!("get_latest_new_buy() slow performance: {:?}", elapsed);
         }
         
         Ok(result)
     }
     
     async fn fetch_latest_new_buy(&self) -> Result<Option<NewSwapMessage>> {
-        info!("Starting fetch_latest_new_buy query");
 
 
         let query = r#"
@@ -163,17 +162,16 @@ impl NewContentController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_latest_new_sell completed in {:?}", elapsed);
+        info!("get_latest_new_sell() completed in {:?}", elapsed);
         
         if elapsed > Duration::from_millis(100) {
-            tracing::warn!("get_latest_new_sell slow performance: {:?}", elapsed);
+            tracing::warn!("get_latest_new_sell() slow performance: {:?}", elapsed);
         }
         
         Ok(result)
     }
     
     async fn fetch_latest_new_sell(&self) -> Result<Option<NewSwapMessage>> {
-        info!("Starting fetch_latest_new_sell query");
 
 
         let query = r#"
@@ -262,17 +260,16 @@ impl NewContentController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_latest_new_token completed in {:?}", elapsed);
+        info!("get_latest_new_token() completed in {:?}", elapsed);
         
         if elapsed > Duration::from_millis(100) {
-            tracing::warn!("get_latest_new_token slow performance: {:?}", elapsed);
+            tracing::warn!("get_latest_new_token() slow performance: {:?}", elapsed);
         }
         
         Ok(result)
     }
     
     async fn fetch_latest_new_token(&self) -> Result<Option<NewTokenMessage>> {
-        info!("Starting fetch_latest_new_token query");
 
 
         let query = r#"
@@ -356,13 +353,12 @@ impl NewContentController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_new_content completed in {:?}", elapsed);
+        info!("get_new_content() completed in {:?}", elapsed);
         
         Ok(response)
     }
     
     async fn fetch_new_content(&self) -> Result<NewContentResponse> {
-        info!("Starting fetch_new_content");
 
         let (new_buy, new_sell, new_token) = tokio::try_join!(
             self.get_latest_new_buy(),

@@ -79,10 +79,7 @@ impl SessionController {
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "set_session completed in {:?} for address: {}",
-            elapsed, address
-        );
+        info!("set_session(session_id: {}, address: {}) completed in {:?}", session_id, address, elapsed);
 
         Ok(())
     }
@@ -104,10 +101,7 @@ impl SessionController {
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_address_by_session_id completed in {:?} for session_id: {}",
-            elapsed, session_id
-        );
+        info!("get_address_by_session_id(session_id: {}) completed in {:?}", session_id, elapsed);
 
         Ok(session.account_id)
     }
@@ -129,10 +123,7 @@ impl SessionController {
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "delete_session_by_id completed in {:?} for session_id: {}",
-            elapsed, session_id
-        );
+        info!("delete_session_by_id(session_id: {}) completed in {:?}", session_id, elapsed);
 
         Ok(())
     }
