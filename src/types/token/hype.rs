@@ -92,15 +92,11 @@ impl HypeTokenController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_token completed in {:?} for page: {}, limit: {}",
-            elapsed, pagination.page, pagination.limit
-        );
+        info!("get_hype_token(page: {}, limit: {}) completed in {:?}", pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
 
     async fn fetch_hype_token(&self, pagination: &PaginationParams) -> Result<HypeTokenResponse> {
-        info!("Get Hype Token start");
         // 현재 시간 타임스탬프 (초 단위) 구하기
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)

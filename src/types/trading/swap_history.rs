@@ -170,10 +170,7 @@ impl SwapController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_account completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("get_total_count_by_account(account_id: {}) completed in {:?}", account_id, elapsed);
         Ok(count)
     }
 
@@ -453,10 +450,7 @@ impl SwapController {
         };
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_swaps_by_token completed in {:?} for token_id: {}, page: {}, limit: {}",
-            elapsed, token_id, query.page, query.limit
-        );
+        info!("get_swaps_by_token(token_id: {}, page: {}, limit: {}) completed in {:?}", token_id, query.page, query.limit, elapsed);
         Ok(TokenSwapResponse { swaps, total_count })
     }
 

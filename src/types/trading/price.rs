@@ -47,7 +47,7 @@ impl PriceController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!("get_price completed in {:?} for token: {}", elapsed, token);
+        info!("get_price(token: {}) completed in {:?}", token, elapsed);
         Ok(response)
     }
     

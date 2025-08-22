@@ -111,10 +111,7 @@ impl AccountXController {
         };
 
         let elapsed = start_time.elapsed();
-        info!(
-            "connect_x completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("connect_x(account_id: {}, x_handle: {}) completed in {:?}", account_id, req.x_handle, elapsed);
 
         Ok(response)
     }
@@ -166,10 +163,7 @@ impl AccountXController {
             .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "disconnect_x completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("disconnect_x(account_id: {}, x_handle: {}) completed in {:?}", account_id, x_handle, elapsed);
 
         Ok(DisconnectedXAccountResponse {
             account_id,
@@ -196,10 +190,7 @@ impl AccountXController {
             .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_x_handle completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("get_x_handle(account_id: {}) completed in {:?}", account_id, elapsed);
 
         Ok(GetXHandleResponse { account_id, x_info })
     }

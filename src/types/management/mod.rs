@@ -259,10 +259,7 @@ impl TokenManagementController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_dev_positions completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
+        info!("get_dev_positions(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
 
@@ -408,10 +405,7 @@ impl TokenManagementController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_holding_token_management completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
+        info!("get_holding_token_management(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
 
@@ -544,10 +538,7 @@ impl TokenManagementController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_account_locks completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
+        info!("get_account_locks(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
 
@@ -688,10 +679,7 @@ impl TokenManagementController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_account_withdrawable_lock completed in {:?} for account_id: {}, page: {}, limit: {}",
-            elapsed, account_id, pagination.page, pagination.limit
-        );
+        info!("get_account_withdrawable_lock(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
 
@@ -850,10 +838,7 @@ impl TokenManagementController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_management_history completed in {:?} for token_id: {}, page: {}, limit: {}",
-            elapsed, token_id, query.page, query.limit
-        );
+        info!("get_management_history(token_id: {}, page: {}, limit: {}) completed in {:?}", token_id, query.page, query.limit, elapsed);
         Ok(response)
     }
 

@@ -152,14 +152,7 @@ impl OrderController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_order_tokens completed in {:?} for order_by: {:?}, page: {}, limit: {} (cache_key: {})",
-            elapsed,
-            order_by.as_str(),
-            pagination.page,
-            pagination.limit,
-            cache_key
-        );
+        info!("get_order_tokens(order_by: {:?}, page: {}, limit: {}, direction: {}) completed in {:?}", order_by.as_str(), pagination.page, pagination.limit, pagination.direction, elapsed);
 
         Ok(tokens)
     }
@@ -335,7 +328,7 @@ impl OrderController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_latest_king_of_the_hill completed in {:?}", elapsed);
+        info!("get_latest_king_of_the_hill() completed in {:?}", elapsed);
         Ok(king)
     }
 
@@ -407,7 +400,7 @@ impl OrderController {
         .map_err(|e| anyhow!("Failed to get {} count: {}", log_type, e))?;
         
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_type ({}) completed in {:?}", log_type, elapsed);
+        info!("get_total_count_by_type(order_type: {:?}) completed in {:?}", order_type.as_str(), elapsed);
         Ok(row.count)
     }
 }

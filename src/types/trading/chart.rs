@@ -119,10 +119,7 @@ impl ChartController {
         .await?;
         
         let elapsed = start_time.elapsed();
-        info!(
-            "get_prices completed in {:?} for token_id: {}, resolution: {}, from: {}, to: {}",
-            elapsed, token_id, request.resolution, request.from, request.to
-        );
+        info!("get_prices(token_id: {}, resolution: {}, from: {}, to: {}) completed in {:?}", token_id, request.resolution, request.from, request.to, elapsed);
         Ok(result)
     }
     

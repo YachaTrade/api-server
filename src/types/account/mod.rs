@@ -125,10 +125,6 @@ impl AccountController {
 
     pub async fn upsert_account(&self, account: Account) -> Result<Account> {
         let start_time = Instant::now();
-        info!(
-            "Starting upsert_account query for account_id: {}",
-            account.account_id
-        );
 
         let query = sqlx::query_as::<_, AccountRow>(
             r#"
@@ -153,10 +149,7 @@ impl AccountController {
             .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "upsert_account query completed in {:?} for account_id: {}",
-            elapsed, account.account_id
-        );
+        info!("upsert_account(account_id: {}) completed in {:?}", account.account_id, elapsed);
 
         if elapsed > Duration::from_millis(100) {
             warn!(
@@ -298,10 +291,7 @@ impl AccountController {
             .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "update_account completed in {:?} for address: {}",
-            elapsed, address
-        );
+        info!("update_account(account_id: {}, nickname: {:?}, bio: {:?}, image_uri: {:?}) completed in {:?}", address, req.nickname, req.bio, req.image_uri, elapsed);
 
         Ok(updated_account)
     }
@@ -319,10 +309,7 @@ impl AccountController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_account completed in {:?} for account_id: {}",
-            elapsed, account_id
-        );
+        info!("get_account(account_id: {}) completed in {:?}", account_id, elapsed);
         Ok(account)
     }
 
@@ -521,10 +508,7 @@ impl AccountController {
         };
 
         let elapsed = start_time.elapsed();
-        info!(
-            "get_account_with_mutual completed in {:?} for identifier: {:?}",
-            elapsed, id_value
-        );
+        info!("get_account_with_mutual(account_id: {:?}, request_account_id: {:?}) completed in {:?}", id_value, request_account_id, elapsed);
 
         Ok(account)
     }
