@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use redis::{AsyncCommands, Client, aio::ConnectionManager, pipe};
 
+use std::time::Instant;
 use tracing::{debug, info};
 
 use anyhow::Result;
@@ -66,6 +67,7 @@ impl RedisDatabase {
 
     //nonce -> address -> nonce
     pub async fn set_sign_message(&self, address: &str, message: &str) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
@@ -73,15 +75,21 @@ impl RedisDatabase {
         conn.pset_ex::<String, String, ()>(key, message.to_string(), *MESSAGE_EXPIRATION)
             .await?;
 
+        let elapsed = start_time.elapsed();
+        debug!("set_sign_message(address: {}) completed in {:?}", address, elapsed);
         Ok(())
     }
 
     pub async fn get_sign_message(&self, address: &str) -> Result<String> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
         let message: Option<String> = conn.get(key).await?;
-        info!("Message for address {}: {:?}", address, message);
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_sign_message(address: {}) completed in {:?}", address, elapsed);
+        
         match message {
             Some(message) => Ok(message),
             None => Err(anyhow::anyhow!("Message not found")),
@@ -89,11 +97,14 @@ impl RedisDatabase {
     }
 
     pub async fn delete_sign_message(&self, address: &str) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
         conn.del::<_, ()>(key).await?;
-        debug!("Message deleted for address: {}", address);
+        
+        let elapsed = start_time.elapsed();
+        debug!("delete_sign_message(address: {}) completed in {:?}", address, elapsed);
         Ok(())
     }
 
@@ -104,30 +115,36 @@ impl RedisDatabase {
         address: &str,
         expiration: u64,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:id", session_id);
         conn.pset_ex::<_, _, ()>(key, address, expiration).await?;
-        debug!(
-            "Session set: {} -> {} (expires in {}ms)",
-            session_id, address, expiration
-        );
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_session(session_id: {}, address: {}, expiration: {}) completed in {:?}", session_id, address, expiration, elapsed);
         Ok(())
     }
 
     pub async fn get_address_by_session(&self, session_id: &str) -> Result<String> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("session:{}:id", session_id);
         let address = conn.get::<_, String>(key).await?;
-        debug!("Address for session {}: {:?}", session_id, address);
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_address_by_session(session_id: {}) completed in {:?}", session_id, elapsed);
         Ok(address)
     }
 
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("session:{}:id", session_id);
         conn.del::<_, ()>(key).await?;
-        debug!("Session deleted: {}", session_id);
+        
+        let elapsed = start_time.elapsed();
+        debug!("delete_session(session_id: {}) completed in {:?}", session_id, elapsed);
         Ok(())
     }
 }
@@ -135,6 +152,7 @@ impl RedisDatabase {
 //search response
 impl RedisDatabase {
     pub async fn set_search_response(&self, query: &str, response: &SearchResponse) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let token_key = format!("search:{}:tokens", query);
         let account_key = format!("search:{}:accounts", query);
@@ -149,7 +167,9 @@ impl RedisDatabase {
             .pset_ex(&account_key, account_json, *SEARCH_EXPIRATION);
 
         let _: ((), ()) = pipe.query_async(&mut conn).await?;
-        debug!("Search response set for query {}", query);
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_search_response(query: {}) completed in {:?}", query, elapsed);
         Ok(())
     }
 
@@ -158,6 +178,7 @@ impl RedisDatabase {
         query: &str,
         pagination: PaginationParams,
     ) -> Result<Option<SearchResponse>> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let token_key = format!("search:{}:tokens", query);
         let account_key = format!("search:{}:accounts", query);
@@ -216,7 +237,8 @@ impl RedisDatabase {
             }
         };
 
-        debug!("Search response retrieved for query {}", query);
+        let elapsed = start_time.elapsed();
+        debug!("get_search_response(query: {}, page: {}, limit: {}) completed in {:?}", query, pagination.page, pagination.limit, elapsed);
         Ok(Some(SearchResponse {
             tokens: token_response,
             accounts: account_response,
@@ -232,6 +254,7 @@ impl RedisDatabase {
         response: &OrderMessage,
         pagination: Option<&PaginationParams>,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
         // 페이지네이션 파라미터가 있는 경우 키에 포함
@@ -250,10 +273,8 @@ impl RedisDatabase {
         conn.pset_ex::<_, _, ()>(key, response_json, *ORDER_EXPIRATION)
             .await?;
 
-        debug!(
-            "Order response set for order type {:?} with pagination {:?}",
-            order_type, pagination
-        );
+        let elapsed = start_time.elapsed();
+        debug!("set_order_response(order_type: {:?}, pagination: {:?}) completed in {:?}", order_type, pagination, elapsed);
         Ok(())
     }
 
@@ -262,6 +283,7 @@ impl RedisDatabase {
         order_type: &TokenOrderType,
         pagination: Option<&PaginationParams>,
     ) -> Result<OrderMessage> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
         // 페이지네이션 파라미터가 있는 경우 키에 포함
@@ -278,10 +300,8 @@ impl RedisDatabase {
         let response_json: String = conn.get(key).await?;
         let response: OrderMessage = serde_json::from_str(&response_json)?;
 
-        debug!(
-            "Order response retrieved for order type {:?} with pagination {:?}",
-            order_type, pagination
-        );
+        let elapsed = start_time.elapsed();
+        debug!("get_order_response(order_type: {:?}, pagination: {:?}) completed in {:?}", order_type, pagination, elapsed);
         Ok(response)
     }
 }
@@ -292,6 +312,7 @@ impl RedisDatabase {
         address: &str,
         pagination: &PaginationParams,
     ) -> Result<HoldTokenResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hold_token:{}:page:{}:limit:{}",
@@ -299,6 +320,9 @@ impl RedisDatabase {
         );
         let value: String = conn.get(key).await?;
         let response: HoldTokenResponse = serde_json::from_str(&value)?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_account_hold_token(address: {}, page: {}, limit: {}) completed in {:?}", address, pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
     pub async fn set_account_hold_token(
@@ -307,6 +331,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &HoldTokenResponse,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hold_token:{}:page:{}:limit:{}",
@@ -316,7 +341,8 @@ impl RedisDatabase {
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
             .await?;
-        debug!("Position set for address {:?}", address);
+        let elapsed = start_time.elapsed();
+        debug!("set_account_hold_token(address: {}, page: {}, limit: {}) completed in {:?}", address, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
 
@@ -326,6 +352,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &TokenCreatedResponse,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "create_token:{}:page:{}:limit:{}",
@@ -335,7 +362,8 @@ impl RedisDatabase {
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
             .await?;
-        debug!("Token set for address {:?}", address);
+        let elapsed = start_time.elapsed();
+        debug!("set_account_token_created(address: {}, page: {}, limit: {}) completed in {:?}", address, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
     pub async fn get_account_token_created(
@@ -343,6 +371,7 @@ impl RedisDatabase {
         address: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenCreatedResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "create_token:{}:page:{}:limit:{}",
@@ -350,12 +379,16 @@ impl RedisDatabase {
         );
         let response_json: String = conn.get(key).await?;
         let response: TokenCreatedResponse = serde_json::from_str(&response_json)?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_account_token_created(address: {}, page: {}, limit: {}) completed in {:?}", address, pagination.page, pagination.limit, elapsed);
         Ok(response)
     }
 }
 
 impl RedisDatabase {
     pub async fn set_token_response(&self, token_id: &str, response: &TokenResponse) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}", token_id);
 
@@ -363,15 +396,21 @@ impl RedisDatabase {
         conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
             .await?;
 
+        let elapsed = start_time.elapsed();
+        debug!("set_token_response(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(())
     }
 
     pub async fn get_token_response(&self, token_id: &str) -> Result<TokenResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}", token_id);
 
         let token_json: String = conn.get(key).await?;
         let response_json: TokenResponse = serde_json::from_str(&token_json)?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_token_response(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(response_json)
     }
 
@@ -380,21 +419,27 @@ impl RedisDatabase {
         token_address: &str,
         response: &TokenMetadataResponse,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token_metadata:{}", token_address);
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, response_json, *GET_TOKEN_METADATA_EXPIRATION)
             .await?;
-        debug!("Token metadata set for address {:?}", token_address);
+        let elapsed = start_time.elapsed();
+        debug!("set_token_metadata(token_address: {}) completed in {:?}", token_address, elapsed);
         Ok(())
     }
 
     pub async fn get_token_metadata(&self, token_address: &str) -> Result<TokenMetadataResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token_metadata:{}", token_address);
         let response_json: String = conn.get(key).await?;
         let response: TokenMetadataResponse = serde_json::from_str(&response_json)?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_token_metadata(token_address: {}) completed in {:?}", token_address, elapsed);
         Ok(response)
     }
 }
@@ -405,10 +450,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &HypeTokenResponse,
     ) -> Result<()> {
-        info!(
-            "Set Hype Token: pagination: {:?}, response: {:?}",
-            pagination, response
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hype_token:page:{}:limit:{}",
@@ -417,6 +459,9 @@ impl RedisDatabase {
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_hype_token_response(page: {}, limit: {}) completed in {:?}", pagination.page, pagination.limit, elapsed);
         Ok(())
     }
 
@@ -424,14 +469,15 @@ impl RedisDatabase {
         &self,
         pagination: &PaginationParams,
     ) -> Result<HypeTokenResponse> {
-        info!("Get Hype Token: pagination: {:?}", pagination);
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "hype_token:page:{}:limit:{}",
             pagination.page, pagination.limit
         );
         let response_json: String = conn.get(key).await?;
-        info!("Get Hype Token: response: {:?}", response_json);
+        let elapsed = start_time.elapsed();
+        debug!("get_hype_token_response(page: {}, limit: {}) completed in {:?}", pagination.page, pagination.limit, elapsed);
         let response_json: HypeTokenResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -449,10 +495,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &DevPositionsResponse,
     ) -> Result<()> {
-        info!(
-            "Set Dev Positions: pagination: {:?}, response: {:?}",
-            pagination, response
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "dev_positions:{}:page:{}:limit:{}",
@@ -461,6 +504,9 @@ impl RedisDatabase {
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_DEV_POSITIONS_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_dev_positions(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
 
@@ -469,14 +515,15 @@ impl RedisDatabase {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<DevPositionsResponse> {
-        info!("Get Dev Positions: pagination: {:?}", pagination);
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "dev_positions:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
         );
         let response_json: String = conn.get(key).await?;
-        info!("Get Dev Positions: response: {:?}", response_json);
+        let elapsed = start_time.elapsed();
+        debug!("get_dev_positions(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         let response_json: DevPositionsResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -487,10 +534,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &HoldingTokenManagementResponse,
     ) -> Result<()> {
-        info!(
-            "Set Holding Token Treasury: pagination: {:?}, response: {:?}",
-            pagination, response
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "holding_token_treasury:{}:page:{}:limit:{}",
@@ -499,6 +543,9 @@ impl RedisDatabase {
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_holding_token_management(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
 
@@ -507,20 +554,15 @@ impl RedisDatabase {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HoldingTokenManagementResponse> {
-        info!(
-            "Get Holding Token Token Management: pagination: {:?}",
-            pagination
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "holding_token_management:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
         );
         let response_json: String = conn.get(key).await?;
-        info!(
-            "Get Holding Token Token Management: response: {:?}",
-            response_json
-        );
+        let elapsed = start_time.elapsed();
+        debug!("get_holding_token_management(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         let response_json: HoldingTokenManagementResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -530,14 +572,15 @@ impl RedisDatabase {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenLockResponse> {
-        info!("Get Account Locks: pagination: {:?}", pagination);
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_locks:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
         );
         let response_json: String = conn.get(key).await?;
-        info!("Get Account Locks: response: {:?}", response_json);
+        let elapsed = start_time.elapsed();
+        debug!("get_account_locks(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         let response_json: TokenLockResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -548,10 +591,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &TokenLockResponse,
     ) -> Result<()> {
-        info!(
-            "Set Account Locks: pagination: {:?}, response: {:?}",
-            pagination, response
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_locks:{}:page:{}:limit:{}",
@@ -560,6 +600,9 @@ impl RedisDatabase {
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_ACCOUNT_LOCKS_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_account_locks(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
 
@@ -568,20 +611,15 @@ impl RedisDatabase {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<WithdrawableLockResponse> {
-        info!(
-            "Get Account Withdrawable Lock: pagination: {:?}",
-            pagination
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_withdrawable_lock:{}:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
         );
         let response_json: String = conn.get(key).await?;
-        info!(
-            "Get Account Withdrawable Lock: response: {:?}",
-            response_json
-        );
+        let elapsed = start_time.elapsed();
+        debug!("get_account_withdrawable_lock(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         let response_json: WithdrawableLockResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -592,10 +630,7 @@ impl RedisDatabase {
         pagination: &PaginationParams,
         response: &WithdrawableLockResponse,
     ) -> Result<()> {
-        info!(
-            "Set Account Withdrawable Lock: pagination: {:?}, response: {:?}",
-            pagination, response
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "account_withdrawable_lock:{}:page:{}:limit:{}",
@@ -604,6 +639,9 @@ impl RedisDatabase {
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_account_withdrawable_lock(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
 
@@ -612,13 +650,12 @@ impl RedisDatabase {
         token_id: &str,
         query: &ManagementHistoryQuery,
     ) -> Result<ManagementHistoryResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:management_history:query:{:?}", token_id, query);
         let response_json: String = conn.get(key).await?;
-        info!(
-            "Get Token Management History: response: {:?}",
-            response_json
-        );
+        let elapsed = start_time.elapsed();
+        debug!("get_token_management_history(token_id: {}, query: {:?}) completed in {:?}", token_id, query, elapsed);
         let response_json: ManagementHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -629,15 +666,15 @@ impl RedisDatabase {
         query: &ManagementHistoryQuery,
         response: &ManagementHistoryResponse,
     ) -> Result<()> {
-        info!(
-            "Set Token Management History: query: {:?}, response: {:?}",
-            query, response
-        );
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:management_history:query:{:?}", token_id, query);
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_token_management_history(token_id: {}, query: {:?}) completed in {:?}", token_id, query, elapsed);
         Ok(())
     }
 }
@@ -650,13 +687,15 @@ impl RedisDatabase {
         response: &TokenSwapResponse,
         swap_query: &SwapQuery,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
             .await?;
-        debug!("Token swap history set for token {:?}", token_id);
+        let elapsed = start_time.elapsed();
+        debug!("set_token_swap_history(token_id: {}, query: {:?}) completed in {:?}", token_id, swap_query, elapsed);
         Ok(())
     }
 
@@ -665,11 +704,13 @@ impl RedisDatabase {
         token_id: &str,
         swap_query: &SwapQuery,
     ) -> Result<TokenSwapResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json: String = conn.get(key).await?;
         let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
-        debug!("Token swap history retrieved for token {:?}", token_id);
+        let elapsed = start_time.elapsed();
+        debug!("get_token_swap_history(token_id: {}, query: {:?}) completed in {:?}", token_id, swap_query, elapsed);
         Ok(history)
     }
 
@@ -679,6 +720,7 @@ impl RedisDatabase {
         response: &TokenHolderResponse,
         pagination: &PaginationParams,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:holder:{}:{}",
@@ -688,7 +730,8 @@ impl RedisDatabase {
         //pset is miliseconds
         conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
             .await?;
-        debug!("Token holder set for token {:?}", token_id);
+        let elapsed = start_time.elapsed();
+        debug!("set_token_holder_response(token_id: {}, page: {}, limit: {}) completed in {:?}", token_id, pagination.page, pagination.limit, elapsed);
         Ok(())
     }
     pub async fn get_token_holder_response(
@@ -696,6 +739,7 @@ impl RedisDatabase {
         token_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:holder:{}:{}",
@@ -703,7 +747,8 @@ impl RedisDatabase {
         );
         let history_json: String = conn.get(key).await?;
         let history: TokenHolderResponse = serde_json::from_str(&history_json)?;
-        debug!("Token holder retrieved for token {:?}", token_id);
+        let elapsed = start_time.elapsed();
+        debug!("get_token_holder_response(token_id: {}, page: {}, limit: {}) completed in {:?}", token_id, pagination.page, pagination.limit, elapsed);
         Ok(history)
     }
     pub async fn get_prices(
@@ -711,6 +756,7 @@ impl RedisDatabase {
         token_id: &str,
         request: &GetBarsRequest,
     ) -> Result<Option<BarResponse>> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:chart:resolution:{}:from:{}_to:{}",
@@ -718,6 +764,9 @@ impl RedisDatabase {
         );
         let data: Option<String> = conn.get(&key).await?;
 
+        let elapsed = start_time.elapsed();
+        debug!("get_prices(token_id: {}, resolution: {}, from: {}, to: {}) completed in {:?}", token_id, request.resolution, request.from, request.to, elapsed);
+        
         match data {
             Some(json) => {
                 let bar_data = serde_json::from_str::<BarResponse>(&json)
@@ -734,6 +783,7 @@ impl RedisDatabase {
         request: &GetBarsRequest,
         bar_data: &BarResponse,
     ) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
             "token:{}:chart:resolution:{}:from:{}_to:{}",
@@ -742,23 +792,34 @@ impl RedisDatabase {
         let json = serde_json::to_string(bar_data)?;
         conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_prices(token_id: {}, resolution: {}, from: {}, to: {}) completed in {:?}", token_id, request.resolution, request.from, request.to, elapsed);
         Ok(())
     }
 
     pub async fn set_market(&self, token_id: &str, response: &Market) -> Result<()> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_market(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(())
     }
 
     pub async fn get_market(&self, token_id: &str) -> Result<Market> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let response_json: String = conn.get(key).await?;
         let response: Market = serde_json::from_str(&response_json)?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_market(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(response)
     }
 }
@@ -766,21 +827,27 @@ impl RedisDatabase {
 //New Content
 impl RedisDatabase {
     pub async fn get_new_content(&self) -> Result<NewContentResponse> {
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = "new_content:latest";
         let response_json: String = conn.get(key).await?;
-        info!("Get New Content from cache: {:?}", response_json);
         let response: NewContentResponse = serde_json::from_str(&response_json)?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("get_new_content() completed in {:?}", elapsed);
         Ok(response)
     }
 
     pub async fn set_new_content(&self, response: &NewContentResponse) -> Result<()> {
-        info!("Set New Content cache: {:?}", response);
+        let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = "new_content:latest";
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key.to_string(), json, *NEW_CONTENT_EXPIRATION)
             .await?;
+        
+        let elapsed = start_time.elapsed();
+        debug!("set_new_content() completed in {:?}", elapsed);
         Ok(())
     }
 }
