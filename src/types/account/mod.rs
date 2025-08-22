@@ -291,7 +291,7 @@ impl AccountController {
             .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
 
         let elapsed = start_time.elapsed();
-        info!("update_account(account_id: {}, nickname: {:?}, bio: {:?}, image_uri: {:?}) completed in {:?}", address, req.nickname, req.bio, req.image_uri, elapsed);
+        info!("update_account(account_id: {}, nickname: {:?}, bio: {:?}, image_uri: {:?}) completed in {:?}", address, nickname, bio, image_uri, elapsed);
 
         Ok(updated_account)
     }
