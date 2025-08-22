@@ -149,7 +149,10 @@ impl AccountController {
             .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
         let elapsed = start_time.elapsed();
-        info!("upsert_account(account_id: {}) completed in {:?}", account.account_id, elapsed);
+        info!(
+            "upsert_account(account_id: {}) completed in {:?}",
+            account.account_id, elapsed
+        );
 
         if elapsed > Duration::from_millis(100) {
             warn!(
@@ -182,9 +185,19 @@ impl AccountController {
                 // 이 경우에만 get_account 호출 (하지만 이미 존재하므로 순환 호출 없음)
                 let query = sqlx::query_as::<_, AccountRow>(
                     r#"
-                    SELECT account_id, nickname, image_uri, bio, follower_count, following_count, NULL as x_handle, NULL as x_image_uri, NULL as is_blue_label
-                    FROM account 
-                    WHERE account_id = $1
+                   SELECT a.account_id,
+                        a.nickname,
+                        a.image_uri,
+                        a.bio,
+                        a.follower_count,
+                        a.following_count,
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                        ax.x_image_uri,
+                        ax.is_blue_label
+                        FROM account a
+                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    WHERE a.account_id = $1
                     "#,
                 )
                 .bind(&account.account_id)
@@ -291,7 +304,10 @@ impl AccountController {
             .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
 
         let elapsed = start_time.elapsed();
-        info!("update_account(account_id: {}) completed in {:?}", address, elapsed);
+        info!(
+            "update_account(account_id: {}) completed in {:?}",
+            address, elapsed
+        );
 
         Ok(updated_account)
     }
@@ -309,7 +325,10 @@ impl AccountController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_account(account_id: {}) completed in {:?}", account_id, elapsed);
+        info!(
+            "get_account(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         Ok(account)
     }
 
@@ -508,7 +527,10 @@ impl AccountController {
         };
 
         let elapsed = start_time.elapsed();
-        info!("get_account_with_mutual(account_id: {:?}, request_account_id: {:?}) completed in {:?}", id_value, request_account_id, elapsed);
+        info!(
+            "get_account_with_mutual(account_id: {:?}, request_account_id: {:?}) completed in {:?}",
+            id_value, request_account_id, elapsed
+        );
 
         Ok(account)
     }
