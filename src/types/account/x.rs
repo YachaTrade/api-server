@@ -144,10 +144,15 @@ impl AccountXController {
             return Err(anyhow!("X handle not found for this account"));
         }
 
-        // 존재하면 삭제 진행
+        // 존재하면 삭제 진행 (WITH절을 사용한 단일 쿼리로 양쪽 테이블에서 삭제)
         let query = sqlx::query(
             r#"
-            DELETE FROM account_x
+            WITH deleted_verified AS (
+                DELETE FROM account_verified 
+                WHERE x_handle = $2 
+                RETURNING x_handle
+            )
+            DELETE FROM account_x 
             WHERE account_id = $1 AND x_handle = $2
             "#,
         )
