@@ -75,6 +75,7 @@ use clap::Parser;
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
+        router::order::handler::get_verified_order,
 
         // ----------------Follow----------------
         router::follow::handler::add_follow,

@@ -67,7 +67,7 @@ pub async fn get_creation_time_order(
                 })
         },
         async {
-            order_controller.get_total_count().await.map_err(|err| {
+            order_controller.get_total_count_by_type(&TokenOrderType::CreationTime).await.map_err(|err| {
                 error!("Failed to get total count: {}", err);
                 AppError::InternalError(err.to_string())
             })
@@ -130,7 +130,7 @@ pub async fn get_market_cap_order(
     let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
         order_controller.get_order_tokens(TokenOrderType::MarketCap, &query),
         order_controller.get_latest_king_of_the_hill(),
-        order_controller.get_total_count()
+        order_controller.get_total_count_by_type(&TokenOrderType::MarketCap)
     )
     .map_err(|err| {
         error!("Failed to fetch order data: {}", err);
@@ -210,7 +210,7 @@ pub async fn get_latest_trade_order(
                 })
         },
         async {
-            order_controller.get_total_count().await.map_err(|err| {
+            order_controller.get_total_count_by_type(&TokenOrderType::LatestTrade).await.map_err(|err| {
                 error!("Failed to get total count: {}", err);
                 AppError::InternalError(err.to_string())
             })
@@ -239,6 +239,23 @@ pub async fn get_latest_trade_order(
     Ok(Json(response))
 }
 
+/// Get tokens ordered by verified creators (price descending)
+#[utoipa::path(
+    get,
+    path = OrderPath::Verified.docs_str(),
+    params(
+        ("page" = Option<i64>, Query, description = "Page number for pagination"),
+        ("limit" = Option<i64>, Query, description = "Number of items per page"),
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved tokens from verified creators ordered by price", body = OrderMessage),
+        (status = 400, description = "Bad request - Invalid pagination parameters"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Order"
+)]
+#[instrument(skip(state))]
 pub async fn get_verified_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
@@ -273,10 +290,13 @@ pub async fn get_verified_order(
                 })
         },
         async {
-            order_controller.get_total_count().await.map_err(|err| {
-                error!("Failed to get total count: {}", err);
-                AppError::InternalError(err.to_string())
-            })
+            order_controller
+                .get_total_count_by_type(&TokenOrderType::Verified)
+                .await
+                .map_err(|err| {
+                    error!("Failed to get verified token count: {}", err);
+                    AppError::InternalError(err.to_string())
+                })
         }
     )?;
     let response = OrderMessage {
@@ -289,12 +309,12 @@ pub async fn get_verified_order(
     // 결과를 캐시에 저장
     if let Err(err) = state
         .redis
-        .set_order_response(&TokenOrderType::LatestTrade, &response, Some(&query))
+        .set_order_response(&TokenOrderType::Verified, &response, Some(&query))
         .await
     {
         warn!(
             "Failed to set {:?} cache: {}",
-            TokenOrderType::LatestTrade,
+            TokenOrderType::Verified,
             err
         );
     }
