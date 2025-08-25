@@ -387,7 +387,7 @@ impl SearchController {
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        WHERE ax.x_handle LIKE $1 || '%'
+                        WHERE ax.x_handle LIKE '@' || $1 || '%'
                         ORDER BY total_value DESC
                         LIMIT 25
                         "#,
