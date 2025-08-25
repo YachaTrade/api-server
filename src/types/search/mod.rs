@@ -291,40 +291,7 @@ impl SearchController {
 
         match pattern {
             SearchPattern::TwitterHandle => {
-                // @ 한들 검색: 정확한 매칭 우선
-                let handle = query.trim_start_matches('@');
-
-                // 먼저 정확한 매칭 시도
-                let exact_results = sqlx::query_as::<_, SearchAccountRow>(
-                    r#"
-                    SELECT a.account_id, a.nickname, a.image_uri,
-                           a.follower_count, a.following_count,
-                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                           ax.x_image_uri, ax.is_blue_label,
-                           COALESCE((
-                               SELECT SUM(b.balance * m.price)
-                               FROM balance b
-                               JOIN market m ON b.token_id = m.token_id
-                               WHERE b.account_id = a.account_id 
-                               AND b.balance >= 1000000000000000000
-                           ), 0) as total_value
-                    FROM account_x ax
-                    JOIN account a ON ax.account_id = a.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE ax.x_handle = $1
-                    LIMIT 20
-                    "#,
-                )
-                .bind(handle)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Database error: {}", e))?;
-
-                if !exact_results.is_empty() {
-                    return Ok(exact_results);
-                }
-
-                // prefix 검색
+                // @ 시작하는 건 x_handle만 검색
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
                     SELECT a.account_id, a.nickname, a.image_uri,
@@ -342,11 +309,11 @@ impl SearchController {
                     JOIN account a ON ax.account_id = a.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE ax.x_handle LIKE $1 || '%'
-                    ORDER BY ax.x_handle
-                    LIMIT 20
+                    ORDER BY total_value DESC
+                    LIMIT 50
                     "#,
                 )
-                .bind(handle)
+                .bind(query)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
@@ -379,32 +346,79 @@ impl SearchController {
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
             }
             SearchPattern::Universal => {
-                // OR 조건으로 정확한 매칭과 prefix 동시 처리
-                sqlx::query_as::<_, SearchAccountRow>(
-                    r#"
-                    SELECT a.account_id, a.nickname, a.image_uri,
-                           a.follower_count, a.following_count,
-                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                           ax.x_image_uri, ax.is_blue_label,
-                           COALESCE((
-                               SELECT SUM(b.balance * m.price)
-                               FROM balance b
-                               JOIN market m ON b.token_id = m.token_id
-                               WHERE b.account_id = a.account_id 
-                               AND b.balance >= 1000000000000000000
-                           ), 0) as total_value
-                    FROM account a
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE a.nickname = $1 OR a.nickname LIKE $1 || '%'
-                    ORDER BY a.nickname, a.follower_count DESC
-                    LIMIT 50
-                    "#,
-                )
-                .bind(query)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Database error: {}", e))
+                // nickname과 x_handle 각각 별도로 검색하여 결과 합치기
+                let (nickname_future, x_handle_future) = (
+                    sqlx::query_as::<_, SearchAccountRow>(
+                        r#"
+                        SELECT a.account_id, a.nickname, a.image_uri,
+                               a.follower_count, a.following_count,
+                               CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                               ax.x_image_uri, ax.is_blue_label,
+                               COALESCE((
+                                   SELECT SUM(b.balance * m.price)
+                                   FROM balance b
+                                   JOIN market m ON b.token_id = m.token_id
+                                   WHERE b.account_id = a.account_id 
+                                   AND b.balance >= 1000000000000000000
+                               ), 0) as total_value
+                        FROM account a
+                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                        WHERE a.nickname LIKE $1 || '%'
+                        ORDER BY total_value DESC
+                        LIMIT 25
+                        "#,
+                    )
+                    .bind(query)
+                    .fetch_all(pool),
+                    sqlx::query_as::<_, SearchAccountRow>(
+                        r#"
+                        SELECT a.account_id, a.nickname, a.image_uri,
+                               a.follower_count, a.following_count,
+                               CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                               ax.x_image_uri, ax.is_blue_label,
+                               COALESCE((
+                                   SELECT SUM(b.balance * m.price)
+                                   FROM balance b
+                                   JOIN market m ON b.token_id = m.token_id
+                                   WHERE b.account_id = a.account_id 
+                                   AND b.balance >= 1000000000000000000
+                               ), 0) as total_value
+                        FROM account_x ax
+                        JOIN account a ON ax.account_id = a.account_id
+                        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                        WHERE ax.x_handle LIKE $1 || '%'
+                        ORDER BY total_value DESC
+                        LIMIT 25
+                        "#,
+                    )
+                    .bind(query)
+                    .fetch_all(pool),
+                );
+
+                // 두 결과를 동시에 기다림
+                let (nickname_results, x_handle_results) = tokio::join!(nickname_future, x_handle_future);
+
+                let mut combined_results = Vec::new();
+                let mut seen_ids = HashSet::new();
+
+                // nickname 결과 추가 (중복 제거)
+                for account in nickname_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
+                    if seen_ids.insert(account.account_id.clone()) {
+                        combined_results.push(account);
+                    }
+                }
+
+                // x_handle 결과 추가 (중복 제거)
+                for account in x_handle_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
+                    if seen_ids.insert(account.account_id.clone()) && combined_results.len() < 50 {
+                        combined_results.push(account);
+                    }
+                }
+
+                // 최대 50개로 제한
+                combined_results.truncate(50);
+                Ok(combined_results)
             }
         }
     }
