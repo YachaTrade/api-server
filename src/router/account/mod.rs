@@ -1,8 +1,8 @@
 pub mod handler;
 pub mod path;
 use axum::{
-    routing::{delete, get, patch, put},
     Router,
+    routing::{delete, get, patch, put},
 };
 
 use path::AccountPath;
@@ -17,10 +17,10 @@ pub fn router() -> Router<AppState> {
         )
         .route(AccountPath::GetAccount.as_str(), get(handler::get_account))
         .route(AccountPath::ConnectX.as_str(), put(handler::connect_x))
-        .route(
-            AccountPath::DisconnectX.as_str(),
-            delete(handler::disconnect_x),
-        )
+        // .route(
+        //     AccountPath::DisconnectX.as_str(),
+        //     delete(handler::disconnect_x),
+        // )
         .route(AccountPath::GetX.as_str(), get(handler::get_x_handle))
         .route(
             AccountPath::RegisterWallet.as_str(),
