@@ -61,6 +61,7 @@ pub struct HypeTokenResponse {
 pub struct HypePointResponse {
     pub account_id: String,
     pub point: String,
+    pub spend_point: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -124,6 +125,7 @@ pub struct HypeVoteRequest {
 pub struct HypeVoteResponse {
     pub account_id: String,
     pub account_point: String,
+    pub account_spend_point: String,
     pub token_vote: String,
 }
 
@@ -290,6 +292,7 @@ impl HypeController {
         struct PointRow {
             account_id: String,
             point: i64,
+            spend_point: i64,
         }
 
         let row = tokio::time::timeout(
@@ -298,7 +301,8 @@ impl HypeController {
                 r#"
                 SELECT 
                     account_id,
-                    point
+                    point,
+                    spend_point
                 FROM point
                 WHERE account_id = $1
                 "#,
@@ -312,6 +316,7 @@ impl HypeController {
         Ok(HypePointResponse {
             account_id: row.account_id,
             point: row.point.to_string(),
+            spend_point: row.spend_point.to_string(),
         })
     }
 
@@ -733,6 +738,7 @@ impl HypeController {
         #[derive(sqlx::FromRow)]
         struct VoteResult {
             new_point: i64,
+            new_spend_point: i64,
             new_vote: BigDecimal,
         }
 
@@ -753,10 +759,10 @@ impl HypeController {
             ),
             point_update AS (
                 UPDATE point 
-                SET point = point - $3
+                SET point = point - $3, spend_point = spend_point + $3
                 WHERE account_id = $1 AND point >= $3
                 AND EXISTS (SELECT 1 FROM vote_history_insert)
-                RETURNING point as new_point
+                RETURNING point as new_point, spend_point as new_spend_point
             ),
             vote_update AS (
                 UPDATE hype_token 
@@ -768,6 +774,7 @@ impl HypeController {
             )
             SELECT 
                 (SELECT new_point FROM point_update) as new_point,
+                (SELECT new_spend_point FROM point_update) as new_spend_point,
                 (SELECT new_vote FROM vote_update) as new_vote
             WHERE EXISTS (SELECT 1 FROM vote_history_insert)
             "#,
@@ -789,6 +796,7 @@ impl HypeController {
         Ok(HypeVoteResponse {
             account_id: account_id.to_string(),
             account_point: vote_result.new_point.to_string(),
+            account_spend_point: vote_result.new_spend_point.to_string(),
             token_vote: vote_result.new_vote.to_string(),
         })
     }
