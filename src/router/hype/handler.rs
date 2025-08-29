@@ -3,6 +3,8 @@ use axum::{
     extract::{Query, State},
 };
 
+use chrono::{self, Timelike};
+use tokio::time::Instant;
 use tracing::{error, instrument};
 
 use super::path::HypePath;
@@ -108,8 +110,13 @@ pub async fn get_hype_point(
     tag = "Hype"
 )]
 pub async fn get_hype_epoch(State(state): State<AppState>) -> AppJsonResult<HypeEpochResponse> {
-    if let Ok(cached_response) = state.redis.get_hype_epoch_response().await {
-        return Ok(Json(cached_response));
+    let now = chrono::Utc::now();
+    let is_midnight_utc = now.hour() == 0 && now.minute() == 0;
+
+    if !is_midnight_utc {
+        if let Ok(cached_response) = state.redis.get_hype_epoch_response().await {
+            return Ok(Json(cached_response));
+        }
     }
     let hype_token_controller = HypeController::new(state.postgres.clone());
     let response = hype_token_controller
