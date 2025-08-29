@@ -2,7 +2,7 @@ use axum::extract::{Multipart, State};
 use axum::response::IntoResponse;
 use axum::Json;
 
-use tracing::{info, instrument};
+use tracing::instrument;
 use uuid::Uuid;
 
 use crate::result::AppResult;

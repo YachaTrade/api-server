@@ -17,7 +17,7 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use tracing::{error, info, instrument};
+use tracing::{error, instrument};
 
 use super::path::ProfilePath;
 

@@ -170,7 +170,10 @@ impl SwapController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_account(account_id: {}) completed in {:?}", account_id, elapsed);
+        info!(
+            "get_total_count_by_account(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         Ok(count)
     }
 
@@ -199,8 +202,6 @@ impl SwapController {
         account_id: &str,
         pagination: PaginationParams,
     ) -> Result<PositionSwapResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!(
             "swaps_by_account",
@@ -450,7 +451,10 @@ impl SwapController {
         };
 
         let elapsed = start_time.elapsed();
-        info!("get_swaps_by_token(token_id: {}, page: {}, limit: {}) completed in {:?}", token_id, query.page, query.limit, elapsed);
+        info!(
+            "get_swaps_by_token(token_id: {}, page: {}, limit: {}) completed in {:?}",
+            token_id, query.page, query.limit, elapsed
+        );
         Ok(TokenSwapResponse { swaps, total_count })
     }
 
