@@ -7,22 +7,16 @@ use api_server::{
 };
 
 use std::{
-    env, net::{IpAddr, SocketAddr}, str::FromStr, sync::Arc, time::Duration
+    env, net::{IpAddr, SocketAddr}, str::FromStr, time::Duration
 };
 
 use anyhow::Result;
 use axum::{
-    error_handling::HandleErrorLayer, http::{Method, StatusCode, Uri}, middleware as axum_middleware, response::IntoResponse, routing::get, BoxError, Router
+    http::{Method, StatusCode}, middleware as axum_middleware, response::IntoResponse, routing::get, Router
 };
-use tower::{ServiceBuilder, Service, timeout::TimeoutLayer};
+use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
-use std::task::{Context, Poll};
-use std::pin::Pin;
 use axum::http::Request;
-use std::future::Future;
-use tower_governor::{
-    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, 
-};
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -323,18 +317,6 @@ async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
-async fn handle_timeout_error(
-    // `Method` and `Uri` are extractors so they can be used here
-    method: Method,
-    uri: Uri,
-    // the last argument must be the error itself
-    err: BoxError,
-) -> (StatusCode, String) {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        format!("`{method} {uri}` failed with {err}"),
-    )
-}
 
 // 메서드별 타임아웃 미들웨어
 async fn method_based_timeout(

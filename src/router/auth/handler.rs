@@ -15,7 +15,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use tower_cookies::Cookie;
 use tower_cookies::cookie::time::Duration;
 
-use tracing::{error, info, instrument};
+use tracing::{error, instrument};
 
 use uuid::Uuid;
 
@@ -86,7 +86,7 @@ pub async fn auth_nonce(
         return Err(AppError::RedisError(err.to_string()).into());
     }
 
-    let time_end = time_start.elapsed();
+    let _time_end = time_start.elapsed();
     Ok(Json(AuthNonceResponse { nonce: message }))
 }
 
@@ -108,7 +108,7 @@ pub async fn auth_session(
     State(state): State<AppState>,
     Json(payload): Json<AuthSessionRequest>,
 ) -> AppResult<impl IntoResponse> {
-    let time_start = std::time::Instant::now();
+    let _time_start = std::time::Instant::now();
 
     let chain_id = payload.chain_id;
     let env_chain_id = env::var("CHAIN_ID")
@@ -157,20 +157,20 @@ pub async fn auth_session(
             let account = Account::new(address.clone());
             async move {
                 let result = account_controller.upsert_account(account).await;
-                let elapsed = start.elapsed();
+                let _elapsed = start.elapsed();
                 result
             }
         },
         {
             let start = std::time::Instant::now();
             let result = redis.delete_sign_message(&address);
-            let elapsed = start.elapsed();
+            let _elapsed = start.elapsed();
             result
         },
         {
             let start = std::time::Instant::now();
             let result = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
-            let elapsed = start.elapsed();
+            let _elapsed = start.elapsed();
             result
         },
         {
@@ -181,7 +181,7 @@ pub async fn auth_session(
             async move {
                 let session_controller = SessionController::new(postgres);
                 let result = session_controller.set_session(&session_id, &address).await;
-                let elapsed = start.elapsed();
+                let _elapsed = start.elapsed();
                 result
             }
         }
@@ -269,7 +269,7 @@ pub async fn auth_delete_session(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppResult<impl IntoResponse> {
-    let time_start = std::time::Instant::now();
+    let _time_start = std::time::Instant::now();
     // 병렬로 Redis와 PostgreSQL에서 세션 정보 삭제
     let postgres_clone = state.postgres.clone();
     let redis_clone = state.redis.clone();
@@ -279,13 +279,13 @@ pub async fn auth_delete_session(
         {
             let start = std::time::Instant::now();
             let result = redis_clone.delete_session(&session_address);
-            let elapsed = start.elapsed();
+            let _elapsed = start.elapsed();
             result
         },
         {
             let start = std::time::Instant::now();
             let result = session_controller.delete_session_by_id(&session_address);
-            let elapsed = start.elapsed();
+            let _elapsed = start.elapsed();
             result
         }
     );

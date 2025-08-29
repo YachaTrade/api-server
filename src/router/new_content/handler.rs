@@ -1,5 +1,5 @@
 use axum::{extract::State, response::Json};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 use crate::{
     result::{AppError, AppJsonResult},

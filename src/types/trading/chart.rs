@@ -4,7 +4,6 @@ use std::time::Instant;
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use tracing::info;
 use utoipa::ToSchema;
 

@@ -14,7 +14,6 @@ use crate::{
     db::postgres::PostgresDatabase,
     types::common::info::{AccountInfo, TokenInfo},
     utils::single_flight::{with_cache, GLOBAL_CACHE},
-    cache_key,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

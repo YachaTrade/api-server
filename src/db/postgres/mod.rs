@@ -1,4 +1,3 @@
-use sqlx::Executor;
 use std::{env, error::Error, str::FromStr, time::Duration};
 use tracing::info;
 

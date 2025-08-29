@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
 };
 
-use tracing::{error, info, instrument};
+use tracing::{error, instrument};
 
 use super::path::TokenPath;
 use crate::{

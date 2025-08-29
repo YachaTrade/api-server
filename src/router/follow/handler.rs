@@ -3,7 +3,7 @@ use axum::{
     Extension, Json,
 };
 
-use tracing::{info, instrument};
+use tracing::instrument;
 
 use crate::{
     result::{AppError, AppJsonResult},

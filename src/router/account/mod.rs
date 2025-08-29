@@ -2,7 +2,7 @@ pub mod handler;
 pub mod path;
 use axum::{
     Router,
-    routing::{delete, get, patch, put},
+    routing::{get, patch, put},
 };
 
 use path::AccountPath;
