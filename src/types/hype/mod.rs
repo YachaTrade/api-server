@@ -198,7 +198,7 @@ impl HypeController {
                 JOIN market m ON h.token_id = m.token_id
                 LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
                 -- reward 정보 조인 (같은 epoch, 같은 token)
-                LEFT JOIN reward r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                 WHERE h.epoch = (SELECT MAX(epoch) FROM hype_token)
                 ORDER BY h.vote DESC, market_cap DESC
                 "#,
