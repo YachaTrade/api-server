@@ -1,20 +1,20 @@
 pub mod create_token;
-pub mod hype;
+
 pub mod metadata;
 pub mod order;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 use super::common::info::AccountInfo;
@@ -80,21 +80,24 @@ impl TokenController {
     }
     pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("token", token_id);
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_token(token_id).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_token(token_id: {}) completed in {:?}", token_id, elapsed);
+        info!(
+            "get_token(token_id: {}) completed in {:?}",
+            token_id, elapsed
+        );
         Ok(response)
     }
-    
+
     async fn fetch_token(&self, token_id: &str) -> Result<TokenResponse> {
         // Using query_as instead of query! to automatically map to the TokenRow struct
         let row = tokio::time::timeout(

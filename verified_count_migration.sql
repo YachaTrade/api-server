@@ -2,13 +2,13 @@
 ALTER TABLE token_count ADD COLUMN IF NOT EXISTS verified_token_count BIGINT NOT NULL DEFAULT 0;
 
 -- Step 2: Initialize verified_token_count with current data
+-- account_verified는 x_handle만 가지고 있으므로 JOIN 로직 수정
 UPDATE token_count SET verified_token_count = (
     SELECT COUNT(*)
     FROM token t
     JOIN account a ON t.creator = a.account_id
-    LEFT JOIN account_x ax ON t.creator = ax.account_id
-    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-    WHERE av.account_id IS NOT NULL
+    JOIN account_x ax ON t.creator = ax.account_id
+    JOIN account_verified av ON ax.x_handle = av.x_handle
 );
 
 -- Step 3: Trigger 1 - When a new token is created
@@ -18,12 +18,13 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     -- Check if the token creator is verified
+    -- account_verified에 account_id가 없으므로 x_handle로 확인
     IF EXISTS (
         SELECT 1 
         FROM account a
-        LEFT JOIN account_x ax ON a.account_id = ax.account_id
-        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-        WHERE a.account_id = NEW.creator AND av.account_id IS NOT NULL
+        JOIN account_x ax ON a.account_id = ax.account_id
+        JOIN account_verified av ON ax.x_handle = av.x_handle
+        WHERE a.account_id = NEW.creator
     ) THEN
         UPDATE token_count SET verified_token_count = verified_token_count + 1;
     END IF;
@@ -38,20 +39,23 @@ CREATE TRIGGER token_verified_count_insert_trigger
     FOR EACH ROW EXECUTE FUNCTION update_verified_count_on_token_insert();
 
 -- Step 4: Trigger 2 - When account_verified is added (account becomes verified)
+-- account_verified는 x_handle만 가지므로 해당 x_handle을 가진 모든 계정의 토큰 카운트
 CREATE OR REPLACE FUNCTION update_verified_count_on_verified_insert()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    token_count_for_account INTEGER;
+    token_count_for_handle INTEGER;
 BEGIN
-    -- Count how many tokens this account has created
-    SELECT COUNT(*) INTO token_count_for_account
+    -- Count how many tokens are created by accounts with this x_handle
+    SELECT COUNT(*) INTO token_count_for_handle
     FROM token t
-    WHERE t.creator = NEW.account_id;
+    JOIN account a ON t.creator = a.account_id
+    JOIN account_x ax ON a.account_id = ax.account_id
+    WHERE ax.x_handle = NEW.x_handle;
     
     -- Add that count to verified_token_count
-    UPDATE token_count SET verified_token_count = verified_token_count + token_count_for_account;
+    UPDATE token_count SET verified_token_count = verified_token_count + token_count_for_handle;
     
     RETURN NEW;
 END;
@@ -69,15 +73,17 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    token_count_for_account INTEGER;
+    token_count_for_handle INTEGER;
 BEGIN
-    -- Count how many tokens this account has created
-    SELECT COUNT(*) INTO token_count_for_account
+    -- Count how many tokens are created by accounts with this x_handle
+    SELECT COUNT(*) INTO token_count_for_handle
     FROM token t
-    WHERE t.creator = OLD.account_id;
+    JOIN account a ON t.creator = a.account_id
+    JOIN account_x ax ON a.account_id = ax.account_id
+    WHERE ax.x_handle = OLD.x_handle;
     
     -- Subtract that count from verified_token_count
-    UPDATE token_count SET verified_token_count = verified_token_count - token_count_for_account;
+    UPDATE token_count SET verified_token_count = verified_token_count - token_count_for_handle;
     
     RETURN OLD;
 END;
