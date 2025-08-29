@@ -59,6 +59,12 @@ use clap::Parser;
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
+        router::hype::handler::get_hype_point,
+        router::hype::handler::get_hype_epoch,
+        router::hype::handler::get_hype_vote_history,
+        router::hype::handler::get_hype_point_history,
+        router::hype::handler::get_hype_reward_history,
+        router::hype::handler::vote,
 
         // ----------------Trade----------------
         router::trade::handler::get_swap_history,
@@ -139,12 +145,22 @@ use clap::Parser;
             types::token::order::OrderTokenInfo,
             types::token::order::OrderToken,
             types::token::order::OrderMessage,
-            types::token::hype::HypeToken,
-            types::token::hype::HypeTokenResponse,
-            types::token::hype::HypeInfo,
-   
             types::token::metadata::TokenMetadata,
             types::token::metadata::TokenMetadataResponse,
+            //Hype
+            types::hype::HypeToken,
+            types::hype::HypeTokenResponse,
+            types::hype::HypeInfo,
+            types::hype::HypePointResponse,
+            types::hype::HypeEpochResponse,
+            types::hype::HypeVoteHistory,
+            types::hype::HypeVoteHistoryResponse,
+            types::hype::HypePointRecord,
+            types::hype::HypePointRecordResponse,
+            types::hype::HypeReward,
+            types::hype::HypeRewardHistoryResponse,
+            types::hype::HypeVoteRequest,
+            types::hype::HypeVoteResponse,
 
             //Trading
             types::trading::chart::Chart,
@@ -267,7 +283,7 @@ async fn main() -> Result<()> {
         .merge(trade::router())
         .merge(profile::router())
         .merge(order::router())
-        .merge(hype::router())
+        .merge(hype::router(app_state.clone()))
         .merge(follow::router(app_state.clone()))
         .merge(bot::router())
         .merge(management::router().layer(ServiceBuilder::new().layer(
