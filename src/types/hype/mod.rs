@@ -437,18 +437,18 @@ impl HypeController {
 
         let query = r#"
             SELECT 
-                epoch,
-                token_id,
-                vote,
-                total_vote_amount,
-                created_at,
-                token.name,
-                token.symbol,
-                token.image_uri
-            FROM vote_history
-            JOIN token ON vote_history.token_id = token.token_id
-            WHERE account_id = $1
-            ORDER BY created_at DESC
+                vh.epoch,
+                vh.token_id,
+                vh.vote,
+                vh.total_vote_amount,
+                vh.created_at,
+                t.name,
+                t.symbol,
+                t.image_uri
+            FROM vote_history vh
+            JOIN token t ON vh.token_id = t.token_id
+            WHERE vh.account_id = $1
+            ORDER BY vh.created_at DESC
             LIMIT $2 OFFSET $3
             "#;
 
