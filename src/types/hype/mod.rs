@@ -453,8 +453,8 @@ impl HypeController {
             "#;
 
         let count_query = r#"
-            SELECT COUNT(*) as count
-            FROM vote_history
+            SELECT COALESCE(total_count, 0) as count
+            FROM account_vote_history_count
             WHERE account_id = $1
             "#;
 
