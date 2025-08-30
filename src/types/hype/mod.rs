@@ -579,7 +579,7 @@ impl HypeController {
             Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(
                 r#"
-                SELECT COALESCE(total_point_count, 0) as count
+                SELECT COALESCE(total_count, 0) as count
                 FROM account_point_distribution_count
                 WHERE account_id = $1
                 "#,
