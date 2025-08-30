@@ -308,16 +308,23 @@ impl HypeController {
                 "#,
             )
             .bind(account_id)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_optional(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
-        Ok(HypePointResponse {
-            account_id: row.account_id,
-            point: row.point.to_string(),
-            spend_point: row.spend_point.to_string(),
-        })
+        match row {
+            Some(row) => Ok(HypePointResponse {
+                account_id: row.account_id,
+                point: row.point.to_string(),
+                spend_point: row.spend_point.to_string(),
+            }),
+            None => Ok(HypePointResponse {
+                account_id: account_id.to_string(),
+                point: "0".to_string(),
+                spend_point: "0".to_string(),
+            }),
+        }
     }
 
     pub async fn get_hype_epoch(&self) -> Result<HypeEpochResponse> {
