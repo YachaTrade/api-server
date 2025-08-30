@@ -446,8 +446,8 @@ impl HypeController {
                 token.symbol,
                 token.image_uri
             FROM vote_history
-            WHERE account_id = $1
             JOIN token ON vote_history.token_id = token.token_id
+            WHERE account_id = $1
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#;
