@@ -67,6 +67,7 @@ pub struct TokenHolderResponse {
 pub struct HoldToken {
     pub token_info: TokenInfo,
     pub balance: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -96,7 +97,10 @@ impl PositionController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_token_holder(token_id: {}) completed in {:?}", token_id, elapsed);
+        info!(
+            "get_total_count_by_token_holder(token_id: {}) completed in {:?}",
+            token_id, elapsed
+        );
         Ok(count)
     }
 
@@ -138,7 +142,10 @@ impl PositionController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_holders_by_token(token_id: {}) completed in {:?}", token_id, elapsed);
+        info!(
+            "get_holders_by_token(token_id: {}) completed in {:?}",
+            token_id, elapsed
+        );
 
         Ok(response)
     }
@@ -254,7 +261,10 @@ impl PositionController {
         let count = count.count;
 
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_hold_token(account_id: {}) completed in {:?}", account_id, elapsed);
+        info!(
+            "get_total_count_by_hold_token(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         Ok(count)
     }
     pub async fn get_hold_token_by_account(
@@ -271,6 +281,7 @@ impl PositionController {
             pub symbol: String,
             pub image_uri: String,
             pub balance: BigDecimal,
+            pub price: BigDecimal,
         }
 
         let record = tokio::time::timeout(
@@ -282,7 +293,8 @@ impl PositionController {
                     t.name,
                     t.symbol,
                     t.image_uri,
-                    b.balance
+                    b.balance,
+                    m.price
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
                 JOIN market m ON t.token_id = m.token_id
@@ -315,10 +327,14 @@ impl PositionController {
                     image_uri: row.image_uri,
                 },
                 balance: row.balance.to_string(),
+                value: (row.balance * row.price).to_string(),
             })
             .collect();
         let elapsed = start_time.elapsed();
-        info!("get_hold_token_by_account(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, pagination.page, pagination.limit, elapsed);
+        info!(
+            "get_hold_token_by_account(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, pagination.page, pagination.limit, elapsed
+        );
         Ok(HoldTokenResponse {
             tokens,
             total_count,
