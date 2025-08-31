@@ -102,7 +102,10 @@ impl FollowController {
             .collect();
 
         let elapsed = start_time.elapsed();
-        info!("get_follows(account_id: {}, is_following: {}) completed in {:?}", account_id, is_following, elapsed);
+        info!(
+            "get_follows(account_id: {}, is_following: {}) completed in {:?}",
+            account_id, is_following, elapsed
+        );
         Ok(follows)
     }
 
@@ -112,46 +115,60 @@ impl FollowController {
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
         let start_time = Instant::now();
-        let mut tx = self.db.get_write_pool().begin().await?;
 
-        self.insert_follow(&mut tx, &follower, &following).await?;
+        #[derive(sqlx::FromRow)]
+        struct FollowResult {
+            follower_info: serde_json::Value,
+            following_info: serde_json::Value,
+        }
 
-        let follower = tokio::time::timeout(
+        let result = tokio::time::timeout(
             Duration::from_millis(1000),
-            sqlx::query_as::<_, AccountInfo>(
+            sqlx::query_as::<_, FollowResult>(
                 r#"
-                UPDATE account
-                SET following_count = following_count + 1
-                WHERE account_id = $1
-                RETURNING account_id, nickname, image_uri, follower_count, following_count
+                WITH follow_insert AS (
+                    INSERT INTO follow (follower_id, following_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT DO NOTHING
+                    RETURNING follower_id, following_id
+                ),
+                follower_update AS (
+                    UPDATE account
+                    SET following_count = following_count + 1
+                    WHERE account_id = $1
+                    AND EXISTS (SELECT 1 FROM follow_insert)
+                    RETURNING account_id, nickname, image_uri, follower_count, following_count
+                ),
+                following_update AS (
+                    UPDATE account
+                    SET follower_count = follower_count + 1
+                    WHERE account_id = $2
+                    AND EXISTS (SELECT 1 FROM follow_insert)
+                    RETURNING account_id, nickname, image_uri, follower_count, following_count
+                )
+                SELECT 
+                    (SELECT row_to_json(follower_update.*) FROM follower_update) as follower_info,
+                    (SELECT row_to_json(following_update.*) FROM following_update) as following_info
+                WHERE EXISTS (SELECT 1 FROM follow_insert)
                 "#,
             )
             .bind(&follower)
-            .fetch_one(tx.as_mut()),
-        )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
-
-        let following = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, AccountInfo>(
-                r#"
-                UPDATE account
-                SET follower_count = follower_count + 1
-                WHERE account_id = $1
-                RETURNING account_id, nickname, image_uri, follower_count, following_count
-                "#,
-            )
             .bind(&following)
-            .fetch_one(tx.as_mut()),
+            .fetch_optional(self.db.get_write_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
-        tx.commit().await?;
+        let result = result.ok_or_else(|| anyhow!("Follow already exists or failed"))?;
+        let follower_info: AccountInfo = serde_json::from_value(result.follower_info)?;
+        let following_info: AccountInfo = serde_json::from_value(result.following_info)?;
+
         let elapsed = start_time.elapsed();
-        info!("add_follow(follower: {}, following: {}) completed in {:?}", follower.account_id, following.account_id, elapsed);
-        Ok((follower, following))
+        info!(
+            "add_follow(follower: {}, following: {}) completed in {:?}",
+            follower_info.account_id, following_info.account_id, elapsed
+        );
+        Ok((follower_info, following_info))
     }
 
     pub async fn remove_follow(
@@ -160,47 +177,59 @@ impl FollowController {
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
         let start_time = Instant::now();
-        let mut tx = self.db.get_write_pool().begin().await?;
 
-        self.delete_follow(&mut tx, &follower, &following).await?;
+        #[derive(sqlx::FromRow)]
+        struct FollowResult {
+            follower_info: serde_json::Value,
+            following_info: serde_json::Value,
+        }
 
-        let follower = tokio::time::timeout(
+        let result = tokio::time::timeout(
             Duration::from_millis(1000),
-            sqlx::query_as::<_, AccountInfo>(
+            sqlx::query_as::<_, FollowResult>(
                 r#"
-                UPDATE account
-                SET following_count = GREATEST(following_count - 1, 0)
-                WHERE account_id = $1
-                RETURNING account_id, nickname, image_uri, follower_count, following_count
+                WITH follow_delete AS (
+                    DELETE FROM follow 
+                    WHERE follower_id = $1 AND following_id = $2
+                    RETURNING follower_id, following_id
+                ),
+                follower_update AS (
+                    UPDATE account
+                    SET following_count = GREATEST(following_count - 1, 0)
+                    WHERE account_id = $1
+                    AND EXISTS (SELECT 1 FROM follow_delete)
+                    RETURNING account_id, nickname, image_uri, follower_count, following_count
+                ),
+                following_update AS (
+                    UPDATE account
+                    SET follower_count = GREATEST(follower_count - 1, 0)
+                    WHERE account_id = $2
+                    AND EXISTS (SELECT 1 FROM follow_delete)
+                    RETURNING account_id, nickname, image_uri, follower_count, following_count
+                )
+                SELECT 
+                    (SELECT row_to_json(follower_update.*) FROM follower_update) as follower_info,
+                    (SELECT row_to_json(following_update.*) FROM following_update) as following_info
+                WHERE EXISTS (SELECT 1 FROM follow_delete)
                 "#,
             )
             .bind(&follower)
-            .fetch_one(tx.as_mut()),
+            .bind(&following)
+            .fetch_optional(self.db.get_write_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
-        let following = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, AccountInfo>(
-                r#"
-                UPDATE account
-                SET follower_count = GREATEST(follower_count - 1, 0)
-                WHERE account_id = $1
-                RETURNING account_id, nickname, image_uri, follower_count, following_count
-                "#,
-            )
-            .bind(&following)
-            .fetch_one(tx.as_mut()),
-        )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-        .map_err(|err| anyhow!("Failed to remove follow\n Reason :{err}"))?;
+        let result = result.ok_or_else(|| anyhow!("Follow relationship not found or failed"))?;
+        let follower_info: AccountInfo = serde_json::from_value(result.follower_info)?;
+        let following_info: AccountInfo = serde_json::from_value(result.following_info)?;
 
-        tx.commit().await?;
         let elapsed = start_time.elapsed();
-        info!("remove_follow(follower: {}, following: {}) completed in {:?}", follower.account_id, following.account_id, elapsed);
-        Ok((follower, following))
+        info!(
+            "remove_follow(follower: {}, following: {}) completed in {:?}",
+            follower_info.account_id, following_info.account_id, elapsed
+        );
+        Ok((follower_info, following_info))
     }
 
     pub async fn check_follow(&self, follower: String, following: String) -> Result<bool> {
@@ -223,7 +252,10 @@ impl FollowController {
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         let elapsed = start_time.elapsed();
-        info!("check_follow(follower: {}, following: {}) completed in {:?}", follower, following, elapsed);
+        info!(
+            "check_follow(follower: {}, following: {}) completed in {:?}",
+            follower, following, elapsed
+        );
         Ok(result.exists)
     }
 
