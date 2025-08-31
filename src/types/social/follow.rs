@@ -134,14 +134,14 @@ impl FollowController {
                 ),
                 follower_update AS (
                     UPDATE account
-                    SET following_count = following_count + 1
+                    SET follower_count = follower_count + 1
                     WHERE account_id = $1
                     AND EXISTS (SELECT 1 FROM follow_insert)
                     RETURNING account_id, nickname, image_uri, follower_count, following_count
                 ),
                 following_update AS (
                     UPDATE account
-                    SET follower_count = follower_count + 1
+                    SET following_count = following_count + 1
                     WHERE account_id = $2
                     AND EXISTS (SELECT 1 FROM follow_insert)
                     RETURNING account_id, nickname, image_uri, follower_count, following_count
@@ -195,14 +195,14 @@ impl FollowController {
                 ),
                 follower_update AS (
                     UPDATE account
-                    SET following_count = GREATEST(following_count - 1, 0)
+                    SET follower_count = GREATEST(follower_count - 1, 0)
                     WHERE account_id = $1
                     AND EXISTS (SELECT 1 FROM follow_delete)
                     RETURNING account_id, nickname, image_uri, follower_count, following_count
                 ),
                 following_update AS (
                     UPDATE account
-                    SET follower_count = GREATEST(follower_count - 1, 0)
+                    SET following_count = GREATEST(following_count - 1, 0)
                     WHERE account_id = $2
                     AND EXISTS (SELECT 1 FROM follow_delete)
                     RETURNING account_id, nickname, image_uri, follower_count, following_count
