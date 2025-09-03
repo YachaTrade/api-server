@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::types::common::info::{TokenInfo, TokenInfoWithDescription};
+use crate::types::common::info::TokenInfoWithCreatedAtAndDescription;
 
 use crate::types::common::CountRow;
 use crate::types::common::pagination::PaginationParams;
@@ -26,6 +26,7 @@ struct HypeTokenRow {
     symbol: String,
     image_uri: String,
     description: Option<String>,
+    created_at: i64,
     creator_account_id: String,
     creator_nickname: String,
     creator_image_uri: String,
@@ -46,7 +47,7 @@ pub struct HypeInfo {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
-    pub token_info: TokenInfoWithDescription,
+    pub token_info: TokenInfoWithCreatedAtAndDescription,
     pub account_info: AccountInfo,
     pub hype_info: HypeInfo,
 }
@@ -75,7 +76,7 @@ pub struct HypeEpochResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeVoteHistory {
     pub epoch: i64,
-    pub token_info: TokenInfo,
+    pub token_info: TokenInfoWithCreatedAtAndDescription,
     pub vote_amount: String,
     pub total_vote_amount: String,
     pub created_at: i64,
@@ -104,7 +105,7 @@ pub struct HypePointRecordResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeReward {
     pub epoch: i64,
-    pub token_info: TokenInfo,
+    pub token_info: TokenInfoWithCreatedAtAndDescription,
     pub vote_amount: String,
     pub created_at: i64,
 }
@@ -173,6 +174,7 @@ impl HypeController {
                     t.image_uri,
                     t.description,
                     t.total_supply,
+                    t.created_at,
                     -- account 정보 (creator) - verified 우선 처리
                     a.account_id as creator_account_id,
                     CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE a.nickname END as creator_nickname,
@@ -233,11 +235,12 @@ impl HypeController {
         let tokens = token_rows
             .into_par_iter()
             .map(|row| HypeToken {
-                token_info: TokenInfoWithDescription {
+                token_info: TokenInfoWithCreatedAtAndDescription {
                     token_id: row.token_id,
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
+                    created_at: row.created_at,
                     description: row.description,
                 },
                 account_info: AccountInfo {
@@ -430,6 +433,7 @@ impl HypeController {
             name: String,
             symbol: String,
             image_uri: String,
+            token_created_at: i64,
             vote: BigDecimal,
             total_vote_amount: BigDecimal,
             created_at: i64,
@@ -444,7 +448,8 @@ impl HypeController {
                 vh.created_at,
                 t.name,
                 t.symbol,
-                t.image_uri
+                t.image_uri,
+                t.created_at as token_created_at
             FROM vote_history vh
             JOIN token t ON vh.token_id = t.token_id
             WHERE vh.account_id = $1
@@ -486,11 +491,13 @@ impl HypeController {
             .into_iter()
             .map(|row| HypeVoteHistory {
                 epoch: row.epoch,
-                token_info: TokenInfo {
+                token_info: TokenInfoWithCreatedAtAndDescription {
                     token_id: row.token_id,
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
+                    created_at: row.token_created_at,
+                    description: None,
                 },
                 vote_amount: row.vote.to_string(),
                 total_vote_amount: row.total_vote_amount.to_string(),
@@ -661,6 +668,7 @@ impl HypeController {
             name: String,
             symbol: String,
             image_uri: String,
+            token_created_at: i64,
             vote_amount: BigDecimal,
             created_at: i64,
         }
@@ -675,6 +683,7 @@ impl HypeController {
                     t.name,
                     t.symbol,
                     t.image_uri,
+                    t.created_at as token_created_at,
                     rah.vote_amount,
                     rah.created_at
                 FROM reward_airdrop_history rah
@@ -714,11 +723,13 @@ impl HypeController {
             .into_iter()
             .map(|row| HypeReward {
                 epoch: row.epoch,
-                token_info: TokenInfo {
+                token_info: TokenInfoWithCreatedAtAndDescription {
                     token_id: row.token_id,
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
+                    created_at: row.token_created_at,
+                    description: None,
                 },
                 vote_amount: row.vote_amount.to_string(),
                 created_at: row.created_at,

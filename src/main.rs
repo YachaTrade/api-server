@@ -101,6 +101,7 @@ use clap::Parser;
             // Common
             types::common::info::TokenInfo,
             types::common::info::TokenInfoWithDescription,
+            types::common::info::TokenInfoWithCreatedAt,
             types::common::info::AccountInfo,
             types::common::info::AccountInfoWithX,
             types::common::info::MarketInfo,
