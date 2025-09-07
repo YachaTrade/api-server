@@ -106,6 +106,11 @@ pub struct HypePointRecordResponse {
 pub struct HypeReward {
     pub epoch: i64,
     pub token_info: TokenInfoWithCreatedAtAndDescription,
+    pub amount: String,
+    pub claimable: bool,
+    pub proof: Vec<String>,
+    pub transaction_hash: Option<String>,
+    pub claim_at: Option<i64>,
     pub vote_amount: String,
     pub created_at: i64,
 }
@@ -663,12 +668,17 @@ impl HypeController {
 
         #[derive(sqlx::FromRow)]
         struct HypeRewardRow {
-            epoch: i64,
             token_id: String,
             name: String,
             symbol: String,
             image_uri: String,
             token_created_at: i64,
+            epoch: i64,
+            amount: BigDecimal,
+            status: String,
+            proof: Vec<String>,
+            transaction_hash: Option<String>,
+            claim_at: Option<i64>,
             vote_amount: BigDecimal,
             created_at: i64,
         }
@@ -678,18 +688,22 @@ impl HypeController {
             sqlx::query_as::<_, HypeRewardRow>(
                 r#"
                 SELECT 
-                    rah.epoch,
-                    rah.token_id,
                     t.name,
                     t.symbol,
                     t.image_uri,
                     t.created_at as token_created_at,
-                    rah.vote_amount,
-                    rah.created_at
-                FROM reward_airdrop_history rah
-                JOIN token t ON rah.token_id = t.token_id
-                WHERE rah.account_id = $1
-                ORDER BY rah.created_at DESC
+                    r.epoch,
+                    r.vote_amount,
+                    r.amount,
+                    r.status,
+                    r.proof,
+                    r.transaction_hash,
+                    r.claim_at,
+                    r.created_at
+                FROM reward r
+                JOIN token t ON r.token_id = t.token_id
+                WHERE r.account_id = $1
+                ORDER BY r.created_at DESC
                 LIMIT $2 OFFSET $3
                 "#,
             )
@@ -731,6 +745,11 @@ impl HypeController {
                     created_at: row.token_created_at,
                     description: None,
                 },
+                amount: row.amount.to_string(),
+                claimable: row.status == "AWAITING",
+                proof: row.proof,
+                transaction_hash: row.transaction_hash,
+                claim_at: row.claim_at,
                 vote_amount: row.vote_amount.to_string(),
                 created_at: row.created_at,
             })
