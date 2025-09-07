@@ -718,7 +718,7 @@ impl HypeController {
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COUNT(*) as count
-                FROM reward_airdrop_history
+                FROM reward
                 WHERE account_id = $1
                 "#,
             )
