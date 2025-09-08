@@ -481,7 +481,7 @@ impl HypeController {
             Duration::from_millis(1000),
             sqlx::query_as::<_, CountRow>(count_query)
                 .bind(account_id)
-                .fetch_one(self.db.get_read_pool()),
+                .fetch_optional(self.db.get_read_pool()),
         );
 
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
@@ -490,7 +490,8 @@ impl HypeController {
             rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
         let total_count = total_count_result
             .map_err(|_| anyhow!("Query timeout after 1000ms"))??
-            .count as u64;
+            .map(|row| row.count as u64)
+            .unwrap_or(0);
 
         let history = vote_history_rows
             .into_iter()
