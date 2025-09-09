@@ -689,6 +689,7 @@ impl HypeController {
             sqlx::query_as::<_, HypeRewardRow>(
                 r#"
                 SELECT 
+                    t.token_id,
                     t.name,
                     t.symbol,
                     t.image_uri,
