@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                SUM(CASE WHEN is_buy = true THEN 1 ELSE 0 END) as buy_count,\n                SUM(CASE WHEN is_buy = false THEN 1 ELSE 0 END) as sell_count,\n                COALESCE(SUM(native_amount), 0) as volume\n            FROM swap \n            WHERE token_id = $1 \n            AND created_at > $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "buy_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "sell_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "79d42e356c3c7cc8201b7636fd1beea2438c35a860527c1b555fd0d5f08ed146"
+}
