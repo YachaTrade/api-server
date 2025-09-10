@@ -1098,4 +1098,16 @@ impl RedisDatabase {
         debug!("set_nsfw_status(url: {}, is_nsfw: {}) completed in {:?}", image_url, is_nsfw, elapsed);
         Ok(())
     }
+
+    pub async fn delete_nsfw_status(&self, image_url: &str) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("nsfw:{}", image_url);
+        
+        conn.del::<String, ()>(key).await?;
+
+        let elapsed = start_time.elapsed();
+        debug!("delete_nsfw_status(url: {}) completed in {:?}", image_url, elapsed);
+        Ok(())
+    }
 }
