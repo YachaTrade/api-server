@@ -243,10 +243,15 @@ pub async fn upload_metadata(
 
     // Check NSFW status from cache (required)
     let is_nsfw = match state.redis.get_nsfw_status(&payload.image_url).await {
-        Ok(is_nsfw) => is_nsfw,
+        Ok(Some(is_nsfw)) => is_nsfw,
+        Ok(None) => {
+            return Err(AppError::BadRequest(
+                "NSFW status not found for this image - please upload image first".to_string(),
+            ));
+        }
         Err(_) => {
             return Err(AppError::BadRequest(
-                "NSFW status unknown for this image".to_string(),
+                "Failed to check NSFW status for this image".to_string(),
             ));
         }
     };

@@ -1074,11 +1074,11 @@ impl RedisDatabase {
 
 // NSFW Caching
 impl RedisDatabase {
-    pub async fn get_nsfw_status(&self, image_url: &str) -> Result<bool> {
+    pub async fn get_nsfw_status(&self, image_url: &str) -> Result<Option<bool>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("nsfw:{}", image_url);
-        let is_nsfw: bool = conn.get(key).await?;
+        let is_nsfw: Option<bool> = conn.get(key).await?;
 
         let elapsed = start_time.elapsed();
         debug!("get_nsfw_status(url: {}) completed in {:?}", image_url, elapsed);
