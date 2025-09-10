@@ -4,7 +4,7 @@ use axum::{
     response::Json,
 };
 use bytes::Bytes;
-use std::time::Instant;
+use std::{env, time::Instant};
 use tracing::info;
 use utoipa;
 use uuid::Uuid;
@@ -14,15 +14,14 @@ use crate::{
     router::metadata::MetadataPath,
     state::AppState,
     types::metadata::{
-        MetadataController, TokenMetadata, UploadImageMultipart, UploadImageResponse, UploadMetadataRequest,
-        UploadMetadataResponse,
+        MetadataController, TokenMetadata, UploadImageMultipart, UploadImageResponse,
+        UploadMetadataRequest, UploadMetadataResponse,
     },
 };
 use aws_config::BehaviorVersion;
 use aws_sdk_rekognition::Client;
 use aws_sdk_rekognition::primitives::Blob;
 use aws_sdk_rekognition::types::Image;
-
 
 // 허용된 이미지 타입 상수 정의
 const ALLOWED_IMAGE_TYPES: [&str; 4] = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
@@ -85,10 +84,11 @@ fn validate_image(data: &[u8], content_type: &Option<String>) -> Result<String, 
 
 /// Check if image is NSFW using AWS Rekognition
 async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
-    // AWS 설정 로드 (ap-northeast-1: 도쿄 리전)
+    // AWS 설정 로드 - 환경 변수에서 리전 가져오기
     // AWS SDK가 자동으로 환경 변수에서 인증 정보를 찾습니다
+    let aws_region = env::var("AWS_REGION").expect("AWS_REGION must be set");
     let config = aws_config::defaults(BehaviorVersion::latest())
-        .region("ap-northeast-1")
+        .region(aws_region)
         .load()
         .await;
 
@@ -286,6 +286,13 @@ pub async fn upload_metadata(
             AppError::InternalError(format!("Failed to save metadata to database: {}", e))
         })?;
     info!("💾 Database save took: {:?}", db_start.elapsed());
+
+    // Clean up NSFW cache after successful metadata upload
+    let cleanup_start = Instant::now();
+    if let Err(e) = state.redis.delete_nsfw_status(&payload.image_url).await {
+        tracing::warn!("Failed to delete NSFW status from cache: {}", e);
+    }
+    info!("🧹 NSFW cache cleanup took: {:?}", cleanup_start.elapsed());
 
     let total_duration = start_time.elapsed();
     info!(
