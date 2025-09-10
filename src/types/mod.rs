@@ -8,6 +8,7 @@ pub mod management;
 pub mod new_content;
 
 pub mod hype;
+pub mod metadata;
 pub mod search;
 pub mod social;
 pub mod token;

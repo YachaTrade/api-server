@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, follow, hype, management, new_content, order, profile, search, token, trade},
+    router::{self, account, auth, bot, follow, hype, management, metadata, new_content, order, profile, search, token, trade},
     state::AppState,
     types,
 };
@@ -95,6 +95,10 @@ use clap::Parser;
         // ----------------New Content----------------
         router::new_content::handler::get_new_content,
 
+        // ----------------Metadata----------------
+        router::metadata::handler::upload_image,
+        router::metadata::handler::upload_metadata,
+
     ),
     components(
         schemas(
@@ -141,6 +145,14 @@ use clap::Parser;
             types::token::order::OrderMessage,
             types::token::metadata::TokenMetadata,
             types::token::metadata::TokenMetadataResponse,
+            
+            // Metadata
+            types::metadata::UploadImageMultipart,
+            types::metadata::UploadImageResponse,
+            types::metadata::UploadMetadataRequest,
+            types::metadata::UploadMetadataResponse,
+            types::metadata::TokenMetadata,
+            
             //Hype
             types::hype::HypeToken,
             types::hype::HypeTokenResponse,
@@ -284,7 +296,7 @@ async fn main() -> Result<()> {
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
         .merge(new_content::router())
-
+        .merge(metadata::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
