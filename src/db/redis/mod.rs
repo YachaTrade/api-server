@@ -14,7 +14,7 @@ use crate::{
         GET_DEV_POSITIONS_EXPIRATION, GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION,
         GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
         GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION,
-        NEW_CONTENT_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
+        NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     types::{
         common::pagination::PaginationParams,
@@ -1068,6 +1068,34 @@ impl RedisDatabase {
 
         let elapsed = start_time.elapsed();
         debug!("set_new_content() completed in {:?}", elapsed);
+        Ok(())
+    }
+}
+
+// NSFW Caching
+impl RedisDatabase {
+    pub async fn get_nsfw_status(&self, image_url: &str) -> Result<bool> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("nsfw:{}", image_url);
+        let is_nsfw: bool = conn.get(key).await?;
+
+        let elapsed = start_time.elapsed();
+        debug!("get_nsfw_status(url: {}) completed in {:?}", image_url, elapsed);
+        Ok(is_nsfw)
+    }
+
+    pub async fn set_nsfw_status(&self, image_url: &str, is_nsfw: bool) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("nsfw:{}", image_url);
+        
+        // Cache using NSFW_STATUS_EXPIRATION (3 minutes = 180000 ms)
+        conn.pset_ex::<String, bool, ()>(key, is_nsfw, *NSFW_STATUS_EXPIRATION)
+            .await?;
+
+        let elapsed = start_time.elapsed();
+        debug!("set_nsfw_status(url: {}, is_nsfw: {}) completed in {:?}", image_url, is_nsfw, elapsed);
         Ok(())
     }
 }

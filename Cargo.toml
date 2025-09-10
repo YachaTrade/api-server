@@ -96,6 +96,9 @@ urlencoding = "2.1"
 clap = { version = "4.4.11", features = ["derive"] }
 url = "2.5.4"
 reqwest = { version = "0.12.15", features = ["multipart", "json"] }
+aws-config = "1.8.6"
+aws-sdk-rekognition = "1.87.0"
+aws-sdk-s3 = "1.105.0"
 
 
 [dev-dependencies]

@@ -43,6 +43,11 @@ lazy_static! {
         .parse::<u64>()
         .expect("GET_HYPE_TOKEN_RESPONSE_EXPIRATION must be a valid u64");
 
+    pub static ref NSFW_STATUS_EXPIRATION: u64 = env::var("NSFW_STATUS_EXPIRATION")
+        .expect("NSFW_STATUS_EXPIRATION must be set")
+        .parse::<u64>()
+        .expect("NSFW_STATUS_EXPIRATION must be a valid u64");
+
 
     // Treasury related expirations
     pub static ref GET_DEV_POSITIONS_EXPIRATION: u64 = env::var("GET_DEV_POSITIONS_EXPIRATION")
