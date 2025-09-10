@@ -18,7 +18,7 @@ use crate::{
         UploadMetadataRequest, UploadMetadataResponse,
     },
 };
-use aws_config::BehaviorVersion;
+use aws_config::{BehaviorVersion, Region};
 use aws_sdk_rekognition::Client;
 use aws_sdk_rekognition::primitives::Blob;
 use aws_sdk_rekognition::types::Image;
@@ -87,8 +87,9 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
     // AWS 설정 로드 - 환경 변수에서 리전 가져오기
     // AWS SDK가 자동으로 환경 변수에서 인증 정보를 찾습니다
     let aws_region = env::var("AWS_REGION").expect("AWS_REGION must be set");
+    let region = Region::new(aws_region);
     let config = aws_config::defaults(BehaviorVersion::latest())
-        .region(aws_region)
+        .region(region)
         .load()
         .await;
 
@@ -285,14 +286,13 @@ pub async fn upload_metadata(
         .map_err(|e| {
             AppError::InternalError(format!("Failed to save metadata to database: {}", e))
         })?;
+
     info!("💾 Database save took: {:?}", db_start.elapsed());
 
     // Clean up NSFW cache after successful metadata upload
-    let cleanup_start = Instant::now();
-    if let Err(e) = state.redis.delete_nsfw_status(&payload.image_url).await {
+    if let Err(e) = state.redis.delete_nsfw_status(&metadata.image_url).await {
         tracing::warn!("Failed to delete NSFW status from cache: {}", e);
     }
-    info!("🧹 NSFW cache cleanup took: {:?}", cleanup_start.elapsed());
 
     let total_duration = start_time.elapsed();
     info!(
