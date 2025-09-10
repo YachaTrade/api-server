@@ -21,4 +21,5 @@ pub fn router() -> Router<AppState> {
             TradePath::GetManagementHistory.as_str(),
             get(handler::get_management_history),
         )
+        .route(TradePath::GetMetrics.as_str(), get(handler::get_metrics))
 }
