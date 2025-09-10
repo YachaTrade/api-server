@@ -4,7 +4,7 @@ use axum::{
 };
 
 use chrono::{self, Timelike};
-use tokio::time::Instant;
+
 use tracing::{error, instrument};
 
 use super::path::HypePath;
@@ -29,10 +29,6 @@ use crate::{
         (status = 200, description = "Hype Token fetched successfully", body = HypeTokenResponse),
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
-    ),
-    params(
-        ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page")
     ),
     tag = "Hype"
 )]
