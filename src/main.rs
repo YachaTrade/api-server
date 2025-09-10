@@ -67,6 +67,7 @@ use clap::Parser;
         router::trade::handler::get_price,
         router::trade::handler::get_holder,
         router::trade::handler::get_management_history,
+        router::trade::handler::get_metrics,
 
         // ----------------Search----------------
         router::search::handler::search,
@@ -186,6 +187,8 @@ use clap::Parser;
             types::trading::price::PriceResponse,
             types::trading::chart::BarResponse,
             types::trading::chart::GetBarsRequest,
+            types::trading::metrics::TimeFrame,
+            types::trading::metrics::TokenTradingMetrics,
 
 
             //Search

@@ -2,8 +2,11 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use std::time::Instant;
 
-use tracing::{error, instrument, warn};
+use tracing::{error, info, instrument, warn};
+use serde::Deserialize;
+use utoipa::IntoParams;
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -16,15 +19,15 @@ use crate::{
         trading::{
             chart::{BarResponse, ChartController, GetBarsRequest},
             market::{Market, MarketController},
+            metrics::{MetricsController, TimeFrame, TokenTradingMetrics},
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
             swap_history::{SwapController, SwapQuery, TokenSwapResponse},
         },
     },
     utils::valid_evm_address,
+    router::trade::path::TradePath,
 };
-
-use super::path::TradePath;
 
 ///Get swap history for a token
 #[utoipa::path(
@@ -329,4 +332,63 @@ pub async fn get_management_history(
         warn!("Failed to set token management history cache: {}", err);
     }
     Ok(Json(response))
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct MetricsQuery {
+    /// Timeframe for metrics (1, 5, 15, 30, 60, 4H, D, W, M)
+    pub timeframe: TimeFrame,
+}
+
+/// Get trading metrics for a token within a specific timeframe
+#[utoipa::path(
+    get,
+    path = TradePath::GetMetrics.docs_str(),
+    params(
+        ("token_id" = String, Path, description = "Token ID"),
+        MetricsQuery
+    ),
+    responses(
+        (status = 200, description = "Trading metrics retrieved successfully", body = TokenTradingMetrics),
+        (status = 400, description = "Bad request - Invalid token_id or timeframe"),
+        (status = 500, description = "Internal server error - Database query failed")
+    ),
+    tag = "Trade"
+)]
+pub async fn get_metrics(
+    State(state): State<AppState>,
+    Path(token_id): Path<String>,
+    Query(params): Query<MetricsQuery>,
+) -> AppJsonResult<TokenTradingMetrics> {
+    let start_time = Instant::now();
+    info!(
+        "🚀 Getting trading metrics for token: {}, timeframe: {}",
+        token_id,
+        params.timeframe.to_display_string()
+    );
+
+    if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
+        return Err(AppError::BadRequest("Invalid token ID".to_string()));
+    }
+
+    let metrics_controller = MetricsController::new(state.postgres.clone());
+    
+    let metrics = metrics_controller
+        .trading_metrics(&token_id, params.timeframe)
+        .await
+        .map_err(|e| {
+            error!("Failed to get trading metrics: {}", e);
+            AppError::InternalError(format!("Failed to get trading metrics: {}", e))
+        })?;
+
+    let elapsed = start_time.elapsed();
+    info!(
+        "🎉 Trading metrics retrieved successfully in {:?} - Token: {}, Volume: {}",
+        elapsed, 
+        token_id,
+        metrics.volume
+    );
+
+    Ok(Json(metrics))
 }
