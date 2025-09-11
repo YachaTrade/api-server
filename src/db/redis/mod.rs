@@ -11,17 +11,19 @@ use anyhow::Result;
 use crate::{
     config::{
         GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
-        GET_DEV_POSITIONS_EXPIRATION, GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION,
-        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
+        GET_COMMUNITY_TREASURY_EXPIRATION, GET_DEV_POSITIONS_EXPIRATION,
+        GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
+        GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
         GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
-        GET_TOTAL_SPEND_POINT_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
+        GET_TOTAL_SPEND_POINT_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
         NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     types::{
         common::pagination::PaginationParams,
         hype::{
             AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
-            HypeRewardHistoryResponse, HypeTokenResponse, HypeVoteHistoryResponse,
+            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenResponse,
+            HypeVoteHistoryResponse,
         },
         management::{
             DevPositionsResponse, HoldingTokenManagementResponse, ManagementHistoryQuery,
@@ -567,7 +569,10 @@ impl RedisDatabase {
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_community_treasury_response() completed in {:?}", elapsed);
+        debug!(
+            "set_community_treasury_response() completed in {:?}",
+            elapsed
+        );
         Ok(())
     }
 
@@ -577,7 +582,10 @@ impl RedisDatabase {
         let key = format!("community_treasury");
         let response_json: String = conn.get(key).await?;
         let elapsed = start_time.elapsed();
-        debug!("get_community_treasury_response() completed in {:?}", elapsed);
+        debug!(
+            "get_community_treasury_response() completed in {:?}",
+            elapsed
+        );
         let response_json: AmountResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -776,6 +784,51 @@ impl RedisDatabase {
             account_id, params.page, params.limit, elapsed
         );
         let response: HypeRewardHistoryResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
+    }
+
+    pub async fn set_hype_reward_add_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+        response: &HypeRewardAddHistoryResponse,
+    ) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!(
+            "hype_reward_add_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
+        let serialized = serde_json::to_string(response)?;
+        let _: () = conn
+            .pset_ex::<String, String, ()>(key, serialized, *GET_REWARD_ADD_HISTORY_EXPIRATION)
+            .await?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_hype_reward_add_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_hype_reward_add_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+    ) -> Result<HypeRewardAddHistoryResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!(
+            "hype_reward_add_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
+        let response_json: String = conn.get(key).await?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_hype_reward_add_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
+        let response: HypeRewardAddHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 }

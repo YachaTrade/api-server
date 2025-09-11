@@ -50,6 +50,10 @@ lazy_static! {
         .expect("GET_COMMUNITY_TREASURY_EXPIRATION must be set")
         .parse::<u64>()
         .expect("GET_COMMUNITY_TREASURY_EXPIRATION must be a valid u64");
+    pub static ref GET_REWARD_ADD_HISTORY_EXPIRATION: u64 = env::var("GET_REWARD_ADD_HISTORY_EXPIRATION")
+        .expect("GET_REWARD_ADD_HISTORY_EXPIRATION must be set")
+        .parse::<u64>()
+        .expect("GET_REWARD_ADD_HISTORY_EXPIRATION must be a valid u64");
 
     pub static ref NSFW_STATUS_EXPIRATION: u64 = env::var("NSFW_STATUS_EXPIRATION")
         .expect("NSFW_STATUS_EXPIRATION must be set")

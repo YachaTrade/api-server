@@ -142,6 +142,22 @@ pub struct HypeVoteResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RewardAdd {
+    pub epoch: i64,
+    pub token_info: TokenInfoWithCreatedAtAndDescription,
+    pub amount: String,
+    pub total_amount: String,
+    pub created_at: i64,
+    pub transaction_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HypeRewardAddHistoryResponse {
+    pub history: Vec<RewardAdd>,
+    pub total_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AmountResponse {
     pub amount: String,
 }
@@ -988,5 +1004,135 @@ impl HypeController {
             .map_err(|e| anyhow!("Failed to convert balance to BigDecimal: {}", e))?;
 
         Ok(balance_decimal)
+    }
+
+    pub async fn get_hype_reward_add_history(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<HypeRewardAddHistoryResponse> {
+        let start_time = Instant::now();
+
+        // 캐시 키 생성
+        let cache_key = format!(
+            "hype_reward_add_history:{}:{}:{}",
+            account_id, pagination.page, pagination.limit
+        );
+
+        // Single Flight Pattern 적용
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+
+            async move {
+                let controller = HypeController::new(db);
+                controller
+                    .fetch_hype_reward_add_history(&account_id, &pagination)
+                    .await
+            }
+        })
+        .await?;
+
+        let elapsed = start_time.elapsed();
+        info!(
+            "get_hype_reward_add_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, pagination.page, pagination.limit, elapsed
+        );
+        Ok(response)
+    }
+
+    async fn fetch_hype_reward_add_history(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<HypeRewardAddHistoryResponse> {
+        let offset = (pagination.page - 1) * pagination.limit;
+
+        #[derive(sqlx::FromRow)]
+        struct RewardAddHistoryRow {
+            epoch: i64,
+            token_id: String,
+            name: String,
+            symbol: String,
+            image_uri: String,
+            token_created_at: i64,
+            amount: BigDecimal,
+            total_amount: BigDecimal,
+            transaction_hash: String,
+            created_at: i64,
+        }
+
+        let rows_future = tokio::time::timeout(
+            Duration::from_millis(1000),
+            sqlx::query_as::<_, RewardAddHistoryRow>(
+                r#"
+                SELECT 
+                    rah.epoch,
+                    rah.token_id,
+                    rah.amount,
+                    rah.total_amount,
+                    rah.transaction_hash,
+                    rah.created_at,
+                    t.name,
+                    t.symbol,
+                    t.image_uri,
+                    t.created_at as token_created_at
+                FROM reward_add_history rah
+                JOIN token t ON rah.token_id = t.token_id
+                WHERE rah.account_id = $1
+                ORDER BY rah.created_at DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(account_id)
+            .bind(pagination.limit)
+            .bind(offset)
+            .fetch_all(self.db.get_read_pool()),
+        );
+
+        let total_count_future = tokio::time::timeout(
+            Duration::from_millis(1000),
+            sqlx::query_as::<_, CountRow>(
+                r#"
+                SELECT COALESCE(total_count, 0) as count
+                FROM reward_add_history_count
+                WHERE account_id = $1
+                "#,
+            )
+            .bind(account_id)
+            .fetch_optional(self.db.get_read_pool()),
+        );
+
+        let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
+
+        let reward_add_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let total_count = total_count_result
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map(|row| row.count as u64)
+            .unwrap_or(0);
+
+        let history = reward_add_rows
+            .into_iter()
+            .map(|row| RewardAdd {
+                epoch: row.epoch,
+                token_info: TokenInfoWithCreatedAtAndDescription {
+                    token_id: row.token_id,
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.image_uri,
+                    created_at: row.token_created_at,
+                    description: None,
+                },
+                amount: row.amount.to_string(),
+                total_amount: row.total_amount.to_string(),
+                created_at: row.created_at,
+                transaction_hash: row.transaction_hash,
+            })
+            .collect();
+
+        Ok(HypeRewardAddHistoryResponse {
+            history,
+            total_count,
+        })
     }
 }
