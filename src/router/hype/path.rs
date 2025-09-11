@@ -7,6 +7,8 @@ pub enum HypePath {
     GetPointHistory,
     GetRewardHistory,
     Vote,
+    GetCommunityTreasury,
+    GetTotalSpendPoint,
 }
 
 impl HypePath {
@@ -18,6 +20,8 @@ impl HypePath {
             HypePath::GetVoteHistory => "/hype/vote_history",
             HypePath::GetPointHistory => "/hype/point_history",
             HypePath::GetRewardHistory => "/hype/reward_history",
+            HypePath::GetCommunityTreasury => "/hype/community_treasury",
+            HypePath::GetTotalSpendPoint => "/hype/total_spend_point",
             HypePath::Vote => "/hype/vote",
         }
     }
@@ -29,6 +33,8 @@ impl HypePath {
             HypePath::GetVoteHistory => "/hype/vote_history",
             HypePath::GetPointHistory => "/hype/point_history",
             HypePath::GetRewardHistory => "/hype/reward_history",
+            HypePath::GetCommunityTreasury => "/hype/community_treasury",
+            HypePath::GetTotalSpendPoint => "/hype/total_spend_point",
             HypePath::Vote => "/hype/vote",
         }
     }

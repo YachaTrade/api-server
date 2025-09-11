@@ -13,12 +13,16 @@ use crate::{
         GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
         GET_DEV_POSITIONS_EXPIRATION, GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION,
         GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
-        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION,
-        NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
+        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
+        GET_TOTAL_SPEND_POINT_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
+        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     types::{
         common::pagination::PaginationParams,
-        hype::{HypeEpochResponse, HypeTokenResponse, HypeVoteHistoryResponse, HypePointRecordResponse, HypePointResponse, HypeRewardHistoryResponse},
+        hype::{
+            AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
+            HypeRewardHistoryResponse, HypeTokenResponse, HypeVoteHistoryResponse,
+        },
         management::{
             DevPositionsResponse, HoldingTokenManagementResponse, ManagementHistoryQuery,
             ManagementHistoryResponse, TokenLockResponse, WithdrawableLockResponse,
@@ -524,6 +528,60 @@ impl RedisDatabase {
         Ok(response_json)
     }
 
+    pub async fn set_total_spend_point_response(&self, response: &AmountResponse) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("total_spend_point");
+        let json = serde_json::to_string(response)?;
+        conn.pset_ex::<String, String, ()>(key, json, *GET_TOTAL_SPEND_POINT_EXPIRATION)
+            .await?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_total_spend_point_response() completed in {:?}",
+            elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_total_spend_point_response(&self) -> Result<AmountResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("total_spend_point");
+        let response_json: String = conn.get(key).await?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_total_spend_point_response() completed in {:?}",
+            elapsed
+        );
+        let response_json: AmountResponse = serde_json::from_str(&response_json)?;
+        Ok(response_json)
+    }
+
+    pub async fn set_community_treasury_response(&self, response: &AmountResponse) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("community_treasury");
+        let json = serde_json::to_string(response)?;
+        conn.pset_ex::<String, String, ()>(key, json, *GET_COMMUNITY_TREASURY_EXPIRATION)
+            .await?;
+
+        let elapsed = start_time.elapsed();
+        debug!("set_community_treasury_response() completed in {:?}", elapsed);
+        Ok(())
+    }
+
+    pub async fn get_community_treasury_response(&self) -> Result<AmountResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("community_treasury");
+        let response_json: String = conn.get(key).await?;
+        let elapsed = start_time.elapsed();
+        debug!("get_community_treasury_response() completed in {:?}", elapsed);
+        let response_json: AmountResponse = serde_json::from_str(&response_json)?;
+        Ok(response_json)
+    }
+
     pub async fn set_hype_epoch_response(&self, response: &HypeEpochResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
@@ -552,55 +610,101 @@ impl RedisDatabase {
         Ok(response)
     }
 
-    pub async fn set_hype_vote_history_response(&self, account_id: &str, params: &PaginationParams, response: &HypeVoteHistoryResponse) -> Result<()> {
+    pub async fn set_hype_vote_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+        response: &HypeVoteHistoryResponse,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_vote_history:{}:{}:{}", account_id, params.page, params.limit);
+        let key = format!(
+            "hype_vote_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, params.page, params.limit, elapsed);
+        debug!(
+            "set_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
         Ok(())
     }
 
-    pub async fn get_hype_vote_history_response(&self, account_id: &str, params: &PaginationParams) -> Result<HypeVoteHistoryResponse> {
+    pub async fn get_hype_vote_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+    ) -> Result<HypeVoteHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_vote_history:{}:{}:{}", account_id, params.page, params.limit);
+        let key = format!(
+            "hype_vote_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
         let response_json: String = conn.get(key).await?;
         let elapsed = start_time.elapsed();
-        debug!("get_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, params.page, params.limit, elapsed);
+        debug!(
+            "get_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
         let response: HypeVoteHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 
-    pub async fn set_hype_point_history_response(&self, account_id: &str, params: &PaginationParams, response: &HypePointRecordResponse) -> Result<()> {
+    pub async fn set_hype_point_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+        response: &HypePointRecordResponse,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_point_history:{}:{}:{}", account_id, params.page, params.limit);
+        let key = format!(
+            "hype_point_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, params.page, params.limit, elapsed);
+        debug!(
+            "set_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
         Ok(())
     }
 
-    pub async fn get_hype_point_history_response(&self, account_id: &str, params: &PaginationParams) -> Result<HypePointRecordResponse> {
+    pub async fn get_hype_point_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+    ) -> Result<HypePointRecordResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_point_history:{}:{}:{}", account_id, params.page, params.limit);
+        let key = format!(
+            "hype_point_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
         let response_json: String = conn.get(key).await?;
         let elapsed = start_time.elapsed();
-        debug!("get_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, params.page, params.limit, elapsed);
+        debug!(
+            "get_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
         let response: HypePointRecordResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 
-    pub async fn set_hype_point_response(&self, account_id: &str, response: &HypePointResponse) -> Result<()> {
+    pub async fn set_hype_point_response(
+        &self,
+        account_id: &str,
+        response: &HypePointResponse,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_point:{}", account_id);
@@ -609,7 +713,10 @@ impl RedisDatabase {
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_hype_point_response(account_id: {}) completed in {:?}", account_id, elapsed);
+        debug!(
+            "set_hype_point_response(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         Ok(())
     }
 
@@ -619,31 +726,55 @@ impl RedisDatabase {
         let key = format!("hype_point:{}", account_id);
         let response_json: String = conn.get(key).await?;
         let elapsed = start_time.elapsed();
-        debug!("get_hype_point_response(account_id: {}) completed in {:?}", account_id, elapsed);
+        debug!(
+            "get_hype_point_response(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         let response: HypePointResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 
-    pub async fn set_hype_reward_history_response(&self, account_id: &str, params: &PaginationParams, response: &HypeRewardHistoryResponse) -> Result<()> {
+    pub async fn set_hype_reward_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+        response: &HypeRewardHistoryResponse,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_reward_history:{}:{}:{}", account_id, params.page, params.limit);
+        let key = format!(
+            "hype_reward_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
         let json = serde_json::to_string(response)?;
         conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, params.page, params.limit, elapsed);
+        debug!(
+            "set_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
         Ok(())
     }
 
-    pub async fn get_hype_reward_history_response(&self, account_id: &str, params: &PaginationParams) -> Result<HypeRewardHistoryResponse> {
+    pub async fn get_hype_reward_history_response(
+        &self,
+        account_id: &str,
+        params: &PaginationParams,
+    ) -> Result<HypeRewardHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_reward_history:{}:{}:{}", account_id, params.page, params.limit);
+        let key = format!(
+            "hype_reward_history:{}:{}:{}",
+            account_id, params.page, params.limit
+        );
         let response_json: String = conn.get(key).await?;
         let elapsed = start_time.elapsed();
-        debug!("get_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}", account_id, params.page, params.limit, elapsed);
+        debug!(
+            "get_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, params.page, params.limit, elapsed
+        );
         let response: HypeRewardHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
@@ -1081,7 +1212,10 @@ impl RedisDatabase {
         let is_nsfw: Option<bool> = conn.get(key).await?;
 
         let elapsed = start_time.elapsed();
-        debug!("get_nsfw_status(url: {}) completed in {:?}", image_url, elapsed);
+        debug!(
+            "get_nsfw_status(url: {}) completed in {:?}",
+            image_url, elapsed
+        );
         Ok(is_nsfw)
     }
 
@@ -1089,13 +1223,16 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("nsfw:{}", image_url);
-        
+
         // Cache using NSFW_STATUS_EXPIRATION (3 minutes = 180000 ms)
         conn.pset_ex::<String, bool, ()>(key, is_nsfw, *NSFW_STATUS_EXPIRATION)
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_nsfw_status(url: {}, is_nsfw: {}) completed in {:?}", image_url, is_nsfw, elapsed);
+        debug!(
+            "set_nsfw_status(url: {}, is_nsfw: {}) completed in {:?}",
+            image_url, is_nsfw, elapsed
+        );
         Ok(())
     }
 
@@ -1103,11 +1240,14 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("nsfw:{}", image_url);
-        
+
         conn.del::<String, ()>(key).await?;
 
         let elapsed = start_time.elapsed();
-        debug!("delete_nsfw_status(url: {}) completed in {:?}", image_url, elapsed);
+        debug!(
+            "delete_nsfw_status(url: {}) completed in {:?}",
+            image_url, elapsed
+        );
         Ok(())
     }
 }

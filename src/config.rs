@@ -42,6 +42,14 @@ lazy_static! {
         .expect("GET_HYPE_TOKEN_RESPONSE_EXPIRATION must be set")
         .parse::<u64>()
         .expect("GET_HYPE_TOKEN_RESPONSE_EXPIRATION must be a valid u64");
+    pub static ref GET_TOTAL_SPEND_POINT_EXPIRATION: u64 = env::var("GET_TOTAL_SPEND_POINT_EXPIRATION")
+        .expect("GET_TOTAL_SPEND_POINT_EXPIRATION must be set")
+        .parse::<u64>()
+        .expect("GET_TOTAL_SPEND_POINT_EXPIRATION must be a valid u64");
+    pub static ref GET_COMMUNITY_TREASURY_EXPIRATION: u64 = env::var("GET_COMMUNITY_TREASURY_EXPIRATION")
+        .expect("GET_COMMUNITY_TREASURY_EXPIRATION must be set")
+        .parse::<u64>()
+        .expect("GET_COMMUNITY_TREASURY_EXPIRATION must be a valid u64");
 
     pub static ref NSFW_STATUS_EXPIRATION: u64 = env::var("NSFW_STATUS_EXPIRATION")
         .expect("NSFW_STATUS_EXPIRATION must be set")
@@ -70,4 +78,12 @@ lazy_static! {
         .expect("GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION must be set")
         .parse::<u64>()
         .expect("GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION must be a valid u64");
+
+    // Contract Addresses
+    pub static ref COMMUNITY_TREASURY: String = env::var("COMMUNITY_TREASURY")
+        .expect("COMMUNITY_TREASURY must be set");
+    pub static ref WMON: String = env::var("WMON")
+        .expect("WMON must be set");
+    pub static ref RPC_URL: String = env::var("RPC_URL")
+        .expect("RPC_URL must be set");
 }

@@ -14,9 +14,9 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         hype::{
-            HypeController, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
-            HypeRewardHistoryResponse, HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest,
-            HypeVoteResponse,
+            AmountResponse, HypeController, HypeEpochResponse, HypePointRecordResponse,
+            HypePointResponse, HypeRewardHistoryResponse, HypeTokenResponse,
+            HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
     },
 };
@@ -296,6 +296,80 @@ pub async fn vote(
             error!(error_msg);
             AppError::InternalError(error_msg)
         })?;
+
+    Ok(Json(response))
+}
+
+/// Get Community Treasury
+#[utoipa::path(
+    get,
+    path = HypePath::GetCommunityTreasury.docs_str(),
+    responses(
+        (status = 200, description = "Community treasury fetched successfully", body = AmountResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Hype"
+)]
+#[instrument(skip(state))]
+pub async fn get_community_treasury(
+    State(state): State<AppState>,
+) -> AppJsonResult<AmountResponse> {
+    // Redis 캐시에서 먼저 확인
+    if let Ok(cached_response) = state.redis.get_community_treasury_response().await {
+        return Ok(Json(cached_response));
+    }
+
+    let hype_controller = HypeController::new(state.postgres.clone());
+    let response = hype_controller
+        .get_community_treasury()
+        .await
+        .map_err(|err| {
+            let error_msg = format!("Failed to get community treasury, error: {}", err);
+            error!(error_msg);
+            AppError::InternalError(error_msg)
+        })?;
+
+    // Redis 캐시에 저장
+    if let Err(e) = state.redis.set_community_treasury_response(&response).await {
+        error!("Failed to set community treasury response: {}", e);
+    }
+
+    Ok(Json(response))
+}
+
+/// Get Total Spend Point
+#[utoipa::path(
+    get,
+    path = HypePath::GetTotalSpendPoint.docs_str(),
+    responses(
+        (status = 200, description = "Total spend point fetched successfully", body = AmountResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Hype"
+)]
+#[instrument(skip(state))]
+pub async fn get_total_spend_point(State(state): State<AppState>) -> AppJsonResult<AmountResponse> {
+    // Redis 캐시에서 먼저 확인
+    if let Ok(cached_response) = state.redis.get_total_spend_point_response().await {
+        return Ok(Json(cached_response));
+    }
+
+    let hype_controller = HypeController::new(state.postgres.clone());
+    let response = hype_controller
+        .get_total_spend_point()
+        .await
+        .map_err(|err| {
+            let error_msg = format!("Failed to get total spend point, error: {}", err);
+            error!(error_msg);
+            AppError::InternalError(error_msg)
+        })?;
+
+    // Redis 캐시에 저장
+    if let Err(e) = state.redis.set_total_spend_point_response(&response).await {
+        error!("Failed to set total spend point response: {}", e);
+    }
 
     Ok(Json(response))
 }

@@ -49,6 +49,7 @@ utoipa-swagger-ui = { version = "7.1.0", features = ["axum"] }
 anyhow = "1.0.92"
 
 
+
 #DOTENV
 dotenv = "0.15.0"
 
@@ -85,8 +86,12 @@ chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22.1"
 
 
-#alloy
-alloy = { version = "0.11.0", features = ["signer-keystore"] }
+alloy = { version = "1.0.24", features = [
+    "contract",
+    "providers",
+    "rpc-types-eth",
+    "sol-types",
+] } #alloy
 
 
 bigdecimal = { version = "0.4.6", features = ["serde-json"] } # '-' not '_'
@@ -99,7 +104,3 @@ reqwest = { version = "0.12.15", features = ["multipart", "json"] }
 aws-config = "1.8.6"
 aws-sdk-rekognition = "1.87.0"
 aws-sdk-s3 = "1.105.0"
-
-
-[dev-dependencies]
-alloy = { version = "0.11.0", features = ["full", "signer-keystore"] }

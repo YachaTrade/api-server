@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,11 @@ use utoipa::ToSchema;
 use crate::types::common::info::TokenInfoWithCreatedAtAndDescription;
 
 use crate::types::common::CountRow;
+
+#[derive(Debug, sqlx::FromRow)]
+struct AmountRow {
+    amount: BigDecimal,
+}
 use crate::types::common::pagination::PaginationParams;
 use crate::{
     db::postgres::PostgresDatabase,
@@ -133,6 +139,11 @@ pub struct HypeVoteResponse {
     pub account_point: String,
     pub account_spend_point: String,
     pub token_vote: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AmountResponse {
+    pub amount: String,
 }
 
 pub struct HypeController {
@@ -838,5 +849,144 @@ impl HypeController {
             account_spend_point: vote_result.new_spend_point.to_string(),
             token_vote: vote_result.new_vote.to_string(),
         })
+    }
+
+    pub async fn get_total_spend_point(&self) -> Result<AmountResponse> {
+        let cache_key = "get_total_spend_point";
+
+        with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = HypeController::new(db);
+                controller.fetch_total_spend_point().await
+            }
+        })
+        .await
+    }
+
+    async fn fetch_total_spend_point(&self) -> Result<AmountResponse> {
+        let start_time = Instant::now();
+
+        let query = sqlx::query_as::<_, AmountRow>(
+            "SELECT spend_point as amount FROM total_spent_point WHERE id = 1",
+        )
+        .fetch_one(self.db.get_read_pool());
+
+        let result = tokio::time::timeout(Duration::from_millis(1000), query)
+            .await
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+            .map_err(|err| anyhow!("Failed to get total spend point\n Reason: {err}"))?;
+
+        let elapsed = start_time.elapsed();
+        info!("fetch_total_spend_point() completed in {:?}", elapsed);
+
+        Ok(AmountResponse {
+            amount: result.amount.to_string(),
+        })
+    }
+
+    pub async fn get_community_treasury(&self) -> Result<AmountResponse> {
+        let cache_key = "get_community_treasury";
+
+        with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = HypeController::new(db);
+                controller.fetch_community_treasury().await
+            }
+        })
+        .await
+    }
+    async fn fetch_community_treasury(&self) -> Result<AmountResponse> {
+        let start_time = Instant::now();
+
+        // Get WMON balance from blockchain and buyback amount from database in parallel
+        let (wmon_balance_result, buyback_sum_result) =
+            tokio::join!(self.get_wmon_balance(), self.get_buyback_amount_sum());
+
+        // Use 0 if any operation fails
+        let wmon_balance = wmon_balance_result.unwrap_or_else(|e| {
+            tracing::error!("Failed to get WMON balance: {}", e);
+            BigDecimal::from(0)
+        });
+        let buyback_sum = buyback_sum_result.unwrap_or_else(|e| {
+            tracing::error!("Failed to get buyback amount sum: {}", e);
+            BigDecimal::from(0)
+        });
+
+        // Add WMON balance and buyback amount sum
+        let total_amount = wmon_balance + buyback_sum;
+
+        let elapsed = start_time.elapsed();
+        info!("fetch_community_treasury() completed in {:?}", elapsed);
+
+        Ok(AmountResponse {
+            amount: total_amount.to_string(),
+        })
+    }
+
+    async fn get_buyback_amount_sum(&self) -> Result<bigdecimal::BigDecimal> {
+        let start_time = Instant::now();
+
+        let query = sqlx::query_as::<_, AmountRow>(
+            "SELECT COALESCE(SUM(amount), 0) as amount FROM buyback_amount",
+        )
+        .fetch_one(self.db.get_read_pool());
+
+        let result = tokio::time::timeout(Duration::from_millis(1000), query)
+            .await
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+            .map_err(|err| anyhow!("Failed to get buyback amount sum\n Reason: {err}"))?;
+
+        let elapsed = start_time.elapsed();
+        info!("get_buyback_amount_sum() completed in {:?}", elapsed);
+
+        Ok(result.amount)
+    }
+
+    async fn get_wmon_balance(&self) -> Result<bigdecimal::BigDecimal> {
+        use crate::config::{COMMUNITY_TREASURY, RPC_URL, WMON};
+        use alloy::primitives::{Address, U256};
+        use alloy::providers::ProviderBuilder;
+        use alloy::sol;
+
+        // IERC20 interface definition
+        sol! {
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            interface IERC20 {
+                function balanceOf(address account) external view returns (uint256);
+            }
+        }
+
+        // Parse RPC URL
+        let rpc_url: url::Url = RPC_URL
+            .parse()
+            .map_err(|e| anyhow!("Invalid RPC_URL: {}", e))?;
+
+        // Initialize provider
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+        // Parse addresses
+        let wmon_address: Address = WMON
+            .parse()
+            .map_err(|e| anyhow!("Invalid WMON address: {}", e))?;
+        let treasury_address: Address = COMMUNITY_TREASURY
+            .parse()
+            .map_err(|e| anyhow!("Invalid COMMUNITY_TREASURY address: {}", e))?;
+
+        // Create contract instance
+        let contract = IERC20::new(wmon_address, provider);
+
+        // Call balanceOf
+        let balance_result = contract.balanceOf(treasury_address).call().await?;
+        let balance: U256 = balance_result;
+
+        // Convert U256 to BigDecimal
+        let balance_str = balance.to_string();
+        let balance_decimal = bigdecimal::BigDecimal::from_str(&balance_str)
+            .map_err(|e| anyhow!("Failed to convert balance to BigDecimal: {}", e))?;
+
+        Ok(balance_decimal)
     }
 }
