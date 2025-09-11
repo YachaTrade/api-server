@@ -33,8 +33,6 @@ use clap::Parser;
         router::account::handler::update_account,
         router::account::handler::get_account,
         router::account::handler::connect_x,
-        // router::account::handler::disconnect_x,
-        router::account::handler::get_x_handle,
         router::account::handler::update_x,
         router::account::handler::register_wallet,
         router::account::handler::get_wallet,
