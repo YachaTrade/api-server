@@ -15,8 +15,8 @@ use crate::{
         common::pagination::PaginationParams,
         hype::{
             AmountResponse, HypeController, HypeEpochResponse, HypePointRecordResponse,
-            HypePointResponse, HypeRewardHistoryResponse, HypeTokenResponse,
-            HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
+            HypePointResponse, HypeRewardAddHistoryResponse, HypeRewardHistoryResponse,
+            HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
     },
 };
@@ -262,6 +262,54 @@ pub async fn get_hype_reward_history(
         .await
     {
         error!("Failed to set hype reward history response: {}", e);
+    }
+
+    Ok(Json(response))
+}
+
+/// Get Hype Reward Add History
+#[utoipa::path(
+    get,
+    path = HypePath::GetRewardAddHistory.docs_str(),
+    params(
+        ("page" = i64, Query, description = "Page number"),
+        ("limit" = i64, Query, description = "Number of items per page"),
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
+    responses(
+        (status = 200, description = "Hype reward add history fetched successfully", body = HypeRewardAddHistoryResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Hype"
+)]
+pub async fn get_hype_reward_add_history(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Query(params): Query<PaginationParams>,
+) -> AppJsonResult<HypeRewardAddHistoryResponse> {
+    if let Ok(cached_response) = state
+        .redis
+        .get_hype_reward_add_history_response(&session_address, &params)
+        .await
+    {
+        return Ok(Json(cached_response));
+    }
+    let hype_controller = HypeController::new(state.postgres.clone());
+    let response = hype_controller
+        .get_hype_reward_add_history(&session_address, &params)
+        .await
+        .map_err(|err| {
+            let error_msg = format!("Failed to get hype reward add history, error: {}", err);
+            error!(error_msg);
+            AppError::InternalError(error_msg)
+        })?;
+    if let Err(e) = state
+        .redis
+        .set_hype_reward_add_history_response(&session_address, &params, &response)
+        .await
+    {
+        error!("Failed to set hype reward add history response: {}", e);
     }
 
     Ok(Json(response))
