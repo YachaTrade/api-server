@@ -21,7 +21,7 @@ pub fn router() -> Router<AppState> {
         //     AccountPath::DisconnectX.as_str(),
         //     delete(handler::disconnect_x),
         // )
-        .route(AccountPath::UpdateX.as_str(), put(handler::update_x))
+        .route(AccountPath::UpdateX.as_str(), patch(handler::update_x))
         .route(
             AccountPath::RegisterWallet.as_str(),
             patch(handler::register_wallet),
