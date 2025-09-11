@@ -868,7 +868,7 @@ impl HypeController {
         let start_time = Instant::now();
 
         let query = sqlx::query_as::<_, AmountRow>(
-            "SELECT spend_point as amount FROM total_spent_point WHERE id = 1",
+            "SELECT spend_point::NUMERIC as amount FROM total_spent_point WHERE id = 1",
         )
         .fetch_one(self.db.get_read_pool());
 
@@ -925,7 +925,7 @@ impl HypeController {
         })
     }
 
-    async fn get_buyback_amount_sum(&self) -> Result<bigdecimal::BigDecimal> {
+    async fn get_buyback_amount_sum(&self) -> Result<BigDecimal> {
         let start_time = Instant::now();
 
         let query = sqlx::query_as::<_, AmountRow>(
