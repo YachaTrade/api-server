@@ -206,36 +206,6 @@ pub async fn disconnect_x(
 
 #[utoipa::path(
     get,
-    path = AccountPath::GetX.docs_str(),
-    responses(
-        (status = 200, description = "Get x handle successfully", body = GetXHandleResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
-    ),
-    security(
-        ("session_token" = [])
-    ),
-    tag="Account"
-)]
-
-pub async fn get_x_handle(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-) -> AppJsonResult<GetXHandleResponse> {
-    let account_x_controller = AccountXController::new(state.postgres.clone());
-    let response = account_x_controller
-        .get_x_handle(session_address)
-        .await
-        .map_err(|err| {
-            warn!("get x handle Error {:?}", err);
-            AppError::BadRequest(err.to_string())
-        })?;
-    Ok(Json(response))
-}
-
-#[utoipa::path(
-    get,
     path = AccountPath::UpdateX.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")

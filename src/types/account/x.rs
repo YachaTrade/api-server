@@ -196,32 +196,6 @@ impl AccountXController {
         })
     }
 
-    pub async fn get_x_handle(&self, account_id: String) -> Result<GetXHandleResponse> {
-        let start_time = Instant::now();
-
-        let query = sqlx::query_as::<_, XInfo>(
-            r#"
-            SELECT x_handle, x_image_uri, is_blue_label
-            FROM account_x
-            WHERE account_id = $1
-            "#,
-        )
-        .bind(&account_id)
-        .fetch_one(self.db.get_read_pool());
-
-        let x_info: XInfo = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-            .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_x_handle(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
-
-        Ok(GetXHandleResponse { account_id, x_info })
-    }
     pub async fn update_x(
         &self,
         account_id: String,
