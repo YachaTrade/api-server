@@ -21,7 +21,9 @@ use crate::{
         trading::{
             chart::{BarResponse, ChartController, GetBarsRequest},
             market::{Market, MarketController},
-            metrics::{MetricsController, TimeFrame, TokenTradingMetrics},
+            metrics::{
+                MetricsController, TimeFrame, TokenTradingMetrics, TokenTradingMetricsBatch,
+            },
             position::{PositionController, TokenHolderResponse},
             price::{PriceController, PriceResponse},
             swap_history::{SwapController, SwapQuery, TokenSwapResponse},
@@ -350,15 +352,17 @@ pub struct MetricsBatchQuery {
 }
 
 /// Deserialize comma-separated timeframes string into Vec<TimeFrame>
-fn deserialize_comma_separated_timeframes<'de, D>(deserializer: D) -> Result<Vec<TimeFrame>, D::Error>
+fn deserialize_comma_separated_timeframes<'de, D>(
+    deserializer: D,
+) -> Result<Vec<TimeFrame>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     use serde::de::Error;
-    
+
     let s = String::deserialize(deserializer)?;
     let mut timeframes = Vec::new();
-    
+
     for timeframe_str in s.split(',') {
         let trimmed = timeframe_str.trim();
         if !trimmed.is_empty() {
@@ -376,11 +380,11 @@ where
             }
         }
     }
-    
+
     if timeframes.is_empty() {
         return Err(D::Error::custom("At least one timeframe is required"));
     }
-    
+
     Ok(timeframes)
 }
 
@@ -454,7 +458,7 @@ pub async fn get_metrics_batch(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
     Query(params): Query<MetricsBatchQuery>,
-) -> AppJsonResult<Vec<TokenTradingMetrics>> {
+) -> AppJsonResult<TokenTradingMetricsBatch> {
     let start_time = Instant::now();
     info!(
         "🚀 Getting batch trading metrics for token: {}, timeframes: {:?}",
@@ -479,7 +483,7 @@ pub async fn get_metrics_batch(
 
     let metrics_controller = MetricsController::new(state.postgres.clone());
 
-    let batch_result = metrics_controller
+    let metrics_batch = metrics_controller
         .trading_metrics_batch(&token_id, params.timeframes)
         .await
         .map_err(|e| {
@@ -487,15 +491,13 @@ pub async fn get_metrics_batch(
             AppError::InternalError(format!("Failed to get batch trading metrics: {}", e))
         })?;
 
-    let metrics_results = batch_result.metrics;
-
     let elapsed = start_time.elapsed();
     info!(
         "🎉 Batch trading metrics retrieved successfully in {:?} - Token: {}, Count: {}",
         elapsed,
         token_id,
-        metrics_results.len()
+        metrics_batch.metrics.len()
     );
 
-    Ok(Json(metrics_results))
+    Ok(Json(metrics_batch))
 }
