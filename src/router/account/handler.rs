@@ -205,7 +205,7 @@ pub async fn disconnect_x(
 }
 
 #[utoipa::path(
-    get,
+    patch,
     path = AccountPath::UpdateX.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
@@ -217,7 +217,9 @@ pub async fn disconnect_x(
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-
+    security(
+        ("session_token" = [])
+    ),
     tag="Account"
 )]
 
