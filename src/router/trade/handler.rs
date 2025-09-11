@@ -372,6 +372,7 @@ where
                 "15" => timeframes.push(TimeFrame::FifteenMinutes),
                 "30" => timeframes.push(TimeFrame::ThirtyMinutes),
                 "60" => timeframes.push(TimeFrame::OneHour),
+                "1H" => timeframes.push(TimeFrame::OneHour),
                 "4H" => timeframes.push(TimeFrame::FourHours),
                 "D" => timeframes.push(TimeFrame::OneDay),
                 "W" => timeframes.push(TimeFrame::OneWeek),
