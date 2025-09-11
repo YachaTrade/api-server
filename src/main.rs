@@ -171,6 +171,7 @@ use clap::Parser;
             types::hype::HypeRewardHistoryResponse,
             types::hype::HypeVoteRequest,
             types::hype::HypeVoteResponse,
+            types::hype::AmountResponse,
 
             //Trading
             types::trading::chart::Chart,
