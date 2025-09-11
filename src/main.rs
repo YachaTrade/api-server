@@ -58,6 +58,8 @@ use clap::Parser;
         router::hype::handler::get_hype_point_history,
         router::hype::handler::get_hype_reward_history,
         router::hype::handler::vote,
+        router::hype::handler::get_total_spend_point,
+        router::hype::handler::get_community_treasury,
 
         // ----------------Trade----------------
         router::trade::handler::get_swap_history,
