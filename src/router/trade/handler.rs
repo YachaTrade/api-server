@@ -4,12 +4,14 @@ use axum::{
 };
 use std::time::Instant;
 
-use tracing::{error, info, instrument, warn};
 use serde::Deserialize;
+use serde_json::json;
+use tracing::{error, info, instrument, warn};
 use utoipa::IntoParams;
 
 use crate::{
     result::{AppError, AppJsonResult},
+    router::trade::path::TradePath,
     state::AppState,
     types::{
         common::pagination::PaginationParams,
@@ -26,7 +28,6 @@ use crate::{
         },
     },
     utils::valid_evm_address,
-    router::trade::path::TradePath,
 };
 
 ///Get swap history for a token
@@ -340,6 +341,49 @@ pub struct MetricsQuery {
     pub timeframe: TimeFrame,
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct MetricsBatchQuery {
+    /// Comma-separated timeframes string (e.g., "D,1H,5" or "D,W,M")
+    /// Available values: 1, 5, 15, 30, 60, 4H, D, W, M
+    #[serde(deserialize_with = "deserialize_comma_separated_timeframes")]
+    pub timeframes: Vec<TimeFrame>,
+}
+
+/// Deserialize comma-separated timeframes string into Vec<TimeFrame>
+fn deserialize_comma_separated_timeframes<'de, D>(deserializer: D) -> Result<Vec<TimeFrame>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    
+    let s = String::deserialize(deserializer)?;
+    let mut timeframes = Vec::new();
+    
+    for timeframe_str in s.split(',') {
+        let trimmed = timeframe_str.trim();
+        if !trimmed.is_empty() {
+            match trimmed {
+                "1" => timeframes.push(TimeFrame::OneMinute),
+                "5" => timeframes.push(TimeFrame::FiveMinutes),
+                "15" => timeframes.push(TimeFrame::FifteenMinutes),
+                "30" => timeframes.push(TimeFrame::ThirtyMinutes),
+                "60" => timeframes.push(TimeFrame::OneHour),
+                "4H" => timeframes.push(TimeFrame::FourHours),
+                "D" => timeframes.push(TimeFrame::OneDay),
+                "W" => timeframes.push(TimeFrame::OneWeek),
+                "M" => timeframes.push(TimeFrame::OneMonth),
+                _ => return Err(D::Error::custom(format!("Invalid timeframe: {}", trimmed))),
+            }
+        }
+    }
+    
+    if timeframes.is_empty() {
+        return Err(D::Error::custom("At least one timeframe is required"));
+    }
+    
+    Ok(timeframes)
+}
+
 /// Get trading metrics for a token within a specific timeframe
 #[utoipa::path(
     get,
@@ -373,7 +417,7 @@ pub async fn get_metrics(
     }
 
     let metrics_controller = MetricsController::new(state.postgres.clone());
-    
+
     let metrics = metrics_controller
         .trading_metrics(&token_id, params.timeframe)
         .await
@@ -385,10 +429,73 @@ pub async fn get_metrics(
     let elapsed = start_time.elapsed();
     info!(
         "🎉 Trading metrics retrieved successfully in {:?} - Token: {}, Volume: {}",
-        elapsed, 
-        token_id,
-        metrics.volume
+        elapsed, token_id, metrics.volume
     );
 
     Ok(Json(metrics))
+}
+
+/// Get trading metrics for multiple timeframes for a token
+#[utoipa::path(
+    get,
+    path = TradePath::GetMetricsBatch.docs_str(),
+    params(
+        ("token_id" = String, Path, description = "Token ID"),
+        ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., 'D,1H,5' or 'D,W,M'). Available values: 1, 5, 15, 30, 60, 4H, D, W, M", example = "D,1H,5")
+    ),
+    responses(
+        (status = 200, description = "Trading metrics retrieved successfully for multiple timeframes", body = Vec<TokenTradingMetrics>),
+        (status = 400, description = "Bad request - Invalid token_id or timeframes"),
+        (status = 500, description = "Internal server error - Database query failed")
+    ),
+    tag = "Trade"
+)]
+pub async fn get_metrics_batch(
+    State(state): State<AppState>,
+    Path(token_id): Path<String>,
+    Query(params): Query<MetricsBatchQuery>,
+) -> AppJsonResult<Vec<TokenTradingMetrics>> {
+    let start_time = Instant::now();
+    info!(
+        "🚀 Getting batch trading metrics for token: {}, timeframes: {:?}",
+        token_id,
+        params
+            .timeframes
+            .iter()
+            .map(|tf| tf.to_display_string())
+            .collect::<Vec<_>>()
+    );
+
+    if !valid_evm_address(&token_id) {
+        error!("Invalid token ID format: {}", token_id);
+        return Err(AppError::BadRequest("Invalid token ID".to_string()));
+    }
+
+    if params.timeframes.is_empty() {
+        return Err(AppError::BadRequest(
+            "At least one timeframe is required".to_string(),
+        ));
+    }
+
+    let metrics_controller = MetricsController::new(state.postgres.clone());
+
+    let batch_result = metrics_controller
+        .trading_metrics_batch(&token_id, params.timeframes)
+        .await
+        .map_err(|e| {
+            error!("Failed to get batch trading metrics: {}", e);
+            AppError::InternalError(format!("Failed to get batch trading metrics: {}", e))
+        })?;
+
+    let metrics_results = batch_result.metrics;
+
+    let elapsed = start_time.elapsed();
+    info!(
+        "🎉 Batch trading metrics retrieved successfully in {:?} - Token: {}, Count: {}",
+        elapsed,
+        token_id,
+        metrics_results.len()
+    );
+
+    Ok(Json(metrics_results))
 }

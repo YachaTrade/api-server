@@ -68,6 +68,7 @@ use clap::Parser;
         router::trade::handler::get_holder,
         router::trade::handler::get_management_history,
         router::trade::handler::get_metrics,
+        router::trade::handler::get_metrics_batch,
 
         // ----------------Search----------------
         router::search::handler::search,
@@ -189,6 +190,7 @@ use clap::Parser;
             types::trading::chart::GetBarsRequest,
             types::trading::metrics::TimeFrame,
             types::trading::metrics::TokenTradingMetrics,
+            types::trading::metrics::TokenTradingMetricsBatch,
 
 
             //Search
