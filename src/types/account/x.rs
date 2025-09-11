@@ -70,6 +70,25 @@ pub struct GetXHandleResponse {
     pub x_info: XInfo,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateXRequest {
+    pub x_image_uri: String,
+}
+impl UpdateXRequest {
+    pub fn validate(&self) -> Result<(), anyhow::Error> {
+        if !self
+            .x_image_uri
+            .starts_with("https://pbs.twimg.com/profile_images/")
+        {
+            return Err(anyhow!(
+                "X image URI must start with https://pbs.twimg.com/profile_images/"
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 pub struct AccountXController {
     db: Arc<PostgresDatabase>,
 }
@@ -111,7 +130,10 @@ impl AccountXController {
         };
 
         let elapsed = start_time.elapsed();
-        info!("connect_x(account_id: {}, x_handle: {}) completed in {:?}", account_id, req.x_handle, elapsed);
+        info!(
+            "connect_x(account_id: {}, x_handle: {}) completed in {:?}",
+            account_id, req.x_handle, elapsed
+        );
 
         Ok(response)
     }
@@ -163,7 +185,10 @@ impl AccountXController {
             .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
-        info!("disconnect_x(account_id: {}, x_handle: {}) completed in {:?}", account_id, x_handle, elapsed);
+        info!(
+            "disconnect_x(account_id: {}, x_handle: {}) completed in {:?}",
+            account_id, x_handle, elapsed
+        );
 
         Ok(DisconnectedXAccountResponse {
             account_id,
@@ -190,7 +215,42 @@ impl AccountXController {
             .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
 
         let elapsed = start_time.elapsed();
-        info!("get_x_handle(account_id: {}) completed in {:?}", account_id, elapsed);
+        info!(
+            "get_x_handle(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
+
+        Ok(GetXHandleResponse { account_id, x_info })
+    }
+    pub async fn update_x(
+        &self,
+        account_id: String,
+        x_image_uri: String,
+    ) -> Result<GetXHandleResponse> {
+        let start_time = Instant::now();
+
+        let query = sqlx::query_as::<_, XInfo>(
+            r#"
+            UPDATE account_x
+            SET x_image_uri = $2
+            WHERE account_id = $1
+            RETURNING *
+            "#,
+        )
+        .bind(&account_id)
+        .bind(&x_image_uri)
+        .fetch_one(self.db.get_write_pool());
+
+        let x_info: XInfo = tokio::time::timeout(Duration::from_millis(1000), query)
+            .await
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+            .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
+
+        let elapsed = start_time.elapsed();
+        info!(
+            "update_x(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
 
         Ok(GetXHandleResponse { account_id, x_info })
     }
