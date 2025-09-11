@@ -10,7 +10,7 @@ use crate::{
         wallet::{AccountWalletResponse, RegisterWalletRequest, WalletController},
         x::{
             AccountXController, ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest,
-            DisconnectedXAccountResponse, GetXHandleResponse,
+            DisconnectedXAccountResponse, GetXHandleResponse, UpdateXRequest,
         },
     },
 };
@@ -229,6 +229,43 @@ pub async fn get_x_handle(
         .await
         .map_err(|err| {
             warn!("get x handle Error {:?}", err);
+            AppError::BadRequest(err.to_string())
+        })?;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    get,
+    path = AccountPath::UpdateX.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
+    request_body = UpdateXRequest,
+    responses(
+        (status = 200, description = "Update x successfully", body = GetXHandleResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+
+    tag="Account"
+)]
+
+pub async fn update_x(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Json(payload): Json<UpdateXRequest>,
+) -> AppJsonResult<GetXHandleResponse> {
+    payload
+        .validate()
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+
+    let account_x_controller = AccountXController::new(state.postgres.clone());
+    let response = account_x_controller
+        .update_x(session_address, payload.x_image_uri)
+        .await
+        .map_err(|err| {
+            warn!("update x Error {:?}", err);
             AppError::BadRequest(err.to_string())
         })?;
     Ok(Json(response))
