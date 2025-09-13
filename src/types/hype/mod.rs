@@ -401,7 +401,7 @@ impl HypeController {
                     end_at,
                     status
                 FROM epoch 
-                WHERE status = 'ACTIVE'
+                WHERE epoch = (SELECT MAX(epoch) FROM epoch)
                 "#,
             )
             .fetch_one(self.db.get_read_pool()),
