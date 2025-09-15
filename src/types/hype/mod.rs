@@ -209,7 +209,11 @@ impl HypeController {
                     t.created_at,
                     -- account 정보 (creator) - verified 우선 처리
                     a.account_id as creator_account_id,
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE a.nickname END as creator_nickname,
+                    CASE 
+                        WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
+                        WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
+                        ELSE a.nickname 
+                    END as creator_nickname,
                     CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
                     a.follower_count as creator_follower_count,
                     a.following_count as creator_following_count,
