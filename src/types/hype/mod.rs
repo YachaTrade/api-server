@@ -283,10 +283,10 @@ impl HypeController {
                     following_count: row.creator_following_count,
                 },
                 hype_info: HypeInfo {
-                    vote: row.vote.to_string(),
+                    vote: row.vote.to_plain_string(),
                     holder_count: row.holder_count.unwrap_or_default() as u64,
-                    market_cap: row.market_cap.to_string(),
-                    reward_amount: row.reward_amount.unwrap_or_default().to_string(),
+                    market_cap: row.market_cap.to_plain_string(),
+                    reward_amount: row.reward_amount.unwrap_or_default().to_plain_string(),
                 },
             })
             .collect::<Vec<HypeToken>>();
