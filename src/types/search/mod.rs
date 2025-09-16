@@ -211,7 +211,7 @@ impl SearchController {
                            t.created_at, t.total_supply, m.market_type, m.price
                     FROM token t
                     JOIN market m ON t.token_id = m.token_id
-                    WHERE t.token_id = $1
+                    WHERE t.token_id ILIKE $1
                     LIMIT 1
                     "#,
                 )
@@ -336,7 +336,7 @@ impl SearchController {
                     FROM account a
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE a.account_id = $1
+                    WHERE a.account_id ILIKE $1
                     LIMIT 1
                     "#,
                 )
