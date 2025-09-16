@@ -241,7 +241,6 @@ impl HypeController {
                 ORDER BY h.vote DESC, market_cap DESC
                 "#,
             )
-
             .fetch_all(self.db.get_read_pool())
         );
 

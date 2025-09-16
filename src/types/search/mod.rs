@@ -233,7 +233,7 @@ impl SearchController {
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
                         WHERE t.symbol ILIKE $1 || '%'
-                        ORDER BY t.symbol, m.price DESC
+                        ORDER BY m.price DESC, t.symbol DESC
                         LIMIT 25
                         "#,
                     )
@@ -246,7 +246,7 @@ impl SearchController {
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
                         WHERE t.name ILIKE $1 || '%'
-                        ORDER BY t.name, m.price DESC
+                        ORDER BY m.price DESC, t.name DESC
                         LIMIT 25
                         "#,
                     )
