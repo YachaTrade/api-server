@@ -116,10 +116,23 @@ impl SearchController {
         // 검색 패턴 분석
         let search_pattern = self.analyze_search_pattern(query);
 
+        // 토큰 검색과 계정 검색 시간 분리 측정
+        let search_start = std::time::Instant::now();
         let (token_result, account_result) = tokio::join!(
-            self.search_tokens_by_pattern(query, &search_pattern),
-            self.search_accounts_by_pattern(query, &search_pattern)
+            async {
+                let token_start = std::time::Instant::now();
+                let result = self.search_tokens_by_pattern(query, &search_pattern).await;
+                tracing::info!("Token search completed - query: {}, time: {:?}", query, token_start.elapsed());
+                result
+            },
+            async {
+                let account_start = std::time::Instant::now(); 
+                let result = self.search_accounts_by_pattern(query, &search_pattern).await;
+                tracing::info!("Account search completed - query: {}, time: {:?}", query, account_start.elapsed());
+                result
+            }
         );
+        tracing::info!("Total search time - query: {}, time: {:?}", query, search_start.elapsed());
 
         let token_records = token_result?;
         let account_records = account_result?;
@@ -232,7 +245,7 @@ impl SearchController {
                                t.created_at, t.total_supply, m.market_type, m.price
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
-                        WHERE t.symbol ILIKE $1 || '%'
+                        WHERE t.symbol ILIKE '%' || $1 || '%'
                         ORDER BY m.price DESC, t.symbol DESC
                         LIMIT 25
                         "#,
@@ -245,7 +258,7 @@ impl SearchController {
                                t.created_at, t.total_supply, m.market_type, m.price
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
-                        WHERE t.name ILIKE $1 || '%'
+                        WHERE t.name ILIKE '%' || $1 || '%'
                         ORDER BY m.price DESC, t.name DESC
                         LIMIT 25
                         "#,
@@ -274,6 +287,9 @@ impl SearchController {
                     }
                 }
 
+                // price 순으로 정렬 (높은 가격 우선)
+                combined_results.sort_by(|a, b| b.price.cmp(&a.price));
+                
                 // 최대 50개로 제한
                 combined_results.truncate(50);
                 Ok(combined_results)
@@ -308,7 +324,7 @@ impl SearchController {
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE ax.x_handle ILIKE $1 || '%'
+                    WHERE ax.x_handle ILIKE '%' || $1 || '%'
                     ORDER BY total_value DESC
                     LIMIT 50
                     "#,
@@ -350,23 +366,30 @@ impl SearchController {
                 let (nickname_future, x_handle_future) = (
                     sqlx::query_as::<_, SearchAccountRow>(
                         r#"
-                        SELECT a.account_id, a.nickname, a.image_uri,
-                               a.follower_count, a.following_count,
+                        WITH limited_accounts AS (
+                            SELECT a.account_id, a.nickname, a.image_uri,
+                                   a.follower_count, a.following_count
+                            FROM account a
+                            WHERE a.nickname ILIKE '%' || $1 || '%'
+                            ORDER BY follower_count DESC
+                            LIMIT 20
+                        )
+                        SELECT la.account_id, la.nickname, la.image_uri,
+                               la.follower_count, la.following_count,
                                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                                ax.x_image_uri, ax.is_blue_label,
                                COALESCE((
                                    SELECT SUM(b.balance * m.price)
                                    FROM balance b
                                    JOIN market m ON b.token_id = m.token_id
-                                   WHERE b.account_id = a.account_id 
+                                   WHERE b.account_id = la.account_id 
                                    AND b.balance >= 1000000000000000000
                                ), 0) as total_value
-                        FROM account a
-                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                        FROM limited_accounts la
+                        LEFT JOIN account_x ax ON la.account_id = ax.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        WHERE a.nickname ILIKE $1 || '%'
                         ORDER BY total_value DESC
-                        LIMIT 25
+                        LIMIT 20
                         "#,
                     )
                     .bind(query)
@@ -387,9 +410,9 @@ impl SearchController {
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        WHERE ax.x_handle ILIKE '@' || $1 || '%'
+                        WHERE ax.x_handle ILIKE '%' || $1 || '%'
                         ORDER BY total_value DESC
-                        LIMIT 25
+                        LIMIT 20
                         "#,
                     )
                     .bind(query)
@@ -415,6 +438,8 @@ impl SearchController {
                         combined_results.push(account);
                     }
                 }
+
+                combined_results.sort_by(|a, b| b.total_value.cmp(&a.total_value));
 
                 // 최대 50개로 제한
                 combined_results.truncate(50);
