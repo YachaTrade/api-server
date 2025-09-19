@@ -14,8 +14,8 @@ use crate::{
 };
 
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 use tracing::{error, instrument};
 
@@ -46,10 +46,9 @@ pub async fn get_profile(
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
 
-    let identifier: Identifier = account_id.clone().into();
     let account_controller = AccountController::new(state.postgres.clone());
     let account = account_controller
-        .get_account_with_mutual(&identifier, params.request_account_id)
+        .get_account(&account_id)
         .await
         .map_err(|err| {
             error!(
