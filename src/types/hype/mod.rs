@@ -237,7 +237,7 @@ impl HypeController {
                 LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
                 -- reward 정보 조인 (같은 epoch, 같은 token)
                 LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                WHERE h.epoch = (SELECT MAX(epoch) FROM hype_token)
+                WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
                 ORDER BY h.vote DESC, market_cap DESC
                 "#,
             )
@@ -251,7 +251,7 @@ impl HypeController {
                 r#"
                 SELECT COUNT(*) as count
                 FROM hype_token h
-                WHERE h.epoch = (SELECT MAX(epoch) FROM hype_token)
+                WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
                 "#,
             )
             .fetch_one(self.db.get_read_pool()),
@@ -404,7 +404,10 @@ impl HypeController {
                     end_at,
                     status
                 FROM epoch 
-                WHERE epoch = (SELECT MAX(epoch) FROM epoch)
+                WHERE epoch = COALESCE(
+                    (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
+                    (SELECT MAX(epoch) FROM epoch)
+                )
                 "#,
             )
             .fetch_one(self.db.get_read_pool()),
