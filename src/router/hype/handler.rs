@@ -22,10 +22,6 @@ use crate::{
     },
 };
 
-#[derive(Deserialize)]
-pub struct HypeTokenQuery {
-    epoch: Option<i64>,
-}
 
 /// Get Hype Token
 #[utoipa::path(
