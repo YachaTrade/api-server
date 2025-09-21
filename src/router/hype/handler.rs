@@ -17,11 +17,11 @@ use crate::{
         hype::{
             AmountResponse, HypeController, HypeEpochResponse, HypePointRecordResponse,
             HypePointResponse, HypeRewardAddHistoryResponse, HypeRewardHistoryResponse,
-            HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
+            HypeTokenQuery, HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest,
+            HypeVoteResponse,
         },
     },
 };
-
 
 /// Get Hype Token
 #[utoipa::path(
@@ -43,7 +43,7 @@ pub async fn get_hype_token(
     Query(query): Query<HypeTokenQuery>,
 ) -> AppJsonResult<HypeTokenResponse> {
     let hype_token_controller = HypeController::new(state.postgres.clone());
-    
+
     let response = match query.epoch {
         Some(epoch) => {
             // 특정 epoch 요청
@@ -54,11 +54,18 @@ pub async fn get_hype_token(
                 .get_hype_token_epoch(epoch)
                 .await
                 .map_err(|err| {
-                    let error_msg = format!("Failed to get hype token for epoch {}, error: {}", epoch, err);
+                    let error_msg = format!(
+                        "Failed to get hype token for epoch {}, error: {}",
+                        epoch, err
+                    );
                     error!(error_msg);
                     AppError::InternalError(error_msg)
                 })?;
-            if let Err(e) = state.redis.set_hype_token_epoch_response(epoch, &response).await {
+            if let Err(e) = state
+                .redis
+                .set_hype_token_epoch_response(epoch, &response)
+                .await
+            {
                 error!("Failed to set hype token epoch response: {}", e);
             }
             response
@@ -85,7 +92,6 @@ pub async fn get_hype_token(
 
     Ok(Json(response))
 }
-
 
 /// Get Hype Point
 #[utoipa::path(
