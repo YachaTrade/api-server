@@ -1,7 +1,8 @@
 use axum::{
     Extension, Json,
-    extract::{Path, Query, State},
+    extract::{Query, State},
 };
+use serde::Deserialize;
 
 use chrono::{self, Timelike};
 
@@ -21,83 +22,74 @@ use crate::{
     },
 };
 
+#[derive(Deserialize)]
+pub struct HypeTokenQuery {
+    epoch: Option<i64>,
+}
+
 /// Get Hype Token
 #[utoipa::path(
     get,
     path = HypePath::GetHype.docs_str(),
-    responses(
-        (status = 200, description = "Hype Token fetched successfully", body = HypeTokenResponse),
-        (status = 400, description = "Bad request"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Hype"
-)]
-#[instrument(skip(state))]
-pub async fn get_hype_token(State(state): State<AppState>) -> AppJsonResult<HypeTokenResponse> {
-    if let Ok(cached_response) = state.redis.get_hype_token_response().await {
-        return Ok(Json(cached_response));
-    }
-    let hype_token_controller = HypeController::new(state.postgres.clone());
-    let response = hype_token_controller
-        .get_hype_token()
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype token, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state.redis.set_hype_token_response(&response).await {
-        error!("Failed to set hype token response: {}", e);
-    }
-
-    Ok(Json(response))
-}
-
-/// Get Hype Token Epoch
-#[utoipa::path(
-    get,
-    path = HypePath::GetHypeTokenEpoch.docs_str(),
-    responses(
-        (status = 200, description = "Hype Token fetched successfully", body = HypeTokenResponse),
-        (status = 400, description = "Bad request"),
-        (status = 500, description = "Internal server error")
-    ),
     params(
-        ("epoch" = String, Path, description = "Hype Token Round")
+        ("epoch" = Option<i64>, Query, description = "Optional epoch parameter")
+    ),
+    responses(
+        (status = 200, description = "Hype Token fetched successfully", body = HypeTokenResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
     ),
     tag = "Hype"
 )]
 #[instrument(skip(state))]
-pub async fn get_hype_token_epoch(
+pub async fn get_hype_token(
     State(state): State<AppState>,
-    Path(epoch): Path<String>,
+    Query(query): Query<HypeTokenQuery>,
 ) -> AppJsonResult<HypeTokenResponse> {
-    let epoch = epoch
-        .parse::<i64>()
-        .map_err(|_| AppError::BadRequest("Invalid epoch".to_string()))?;
-
-    if let Ok(cached_response) = state.redis.get_hype_token_epoch_response(epoch).await {
-        return Ok(Json(cached_response));
-    }
     let hype_token_controller = HypeController::new(state.postgres.clone());
-    let response = hype_token_controller
-        .get_hype_token_epoch(epoch)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype token, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_hype_token_epoch_response(epoch, &response)
-        .await
-    {
-        error!("Failed to set hype token epoch response: {}", e);
-    }
+    
+    let response = match query.epoch {
+        Some(epoch) => {
+            // 특정 epoch 요청
+            if let Ok(cached_response) = state.redis.get_hype_token_epoch_response(epoch).await {
+                return Ok(Json(cached_response));
+            }
+            let response = hype_token_controller
+                .get_hype_token_epoch(epoch)
+                .await
+                .map_err(|err| {
+                    let error_msg = format!("Failed to get hype token for epoch {}, error: {}", epoch, err);
+                    error!(error_msg);
+                    AppError::InternalError(error_msg)
+                })?;
+            if let Err(e) = state.redis.set_hype_token_epoch_response(epoch, &response).await {
+                error!("Failed to set hype token epoch response: {}", e);
+            }
+            response
+        }
+        None => {
+            // 현재 활성 epoch 요청
+            if let Ok(cached_response) = state.redis.get_hype_token_response().await {
+                return Ok(Json(cached_response));
+            }
+            let response = hype_token_controller
+                .get_hype_token()
+                .await
+                .map_err(|err| {
+                    let error_msg = format!("Failed to get hype token, error: {}", err);
+                    error!(error_msg);
+                    AppError::InternalError(error_msg)
+                })?;
+            if let Err(e) = state.redis.set_hype_token_response(&response).await {
+                error!("Failed to set hype token response: {}", e);
+            }
+            response
+        }
+    };
 
     Ok(Json(response))
 }
+
 
 /// Get Hype Point
 #[utoipa::path(
