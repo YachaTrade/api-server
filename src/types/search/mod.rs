@@ -122,17 +122,31 @@ impl SearchController {
             async {
                 let token_start = std::time::Instant::now();
                 let result = self.search_tokens_by_pattern(query, &search_pattern).await;
-                tracing::info!("Token search completed - query: {}, time: {:?}", query, token_start.elapsed());
+                tracing::info!(
+                    "Token search completed - query: {}, time: {:?}",
+                    query,
+                    token_start.elapsed()
+                );
                 result
             },
             async {
-                let account_start = std::time::Instant::now(); 
-                let result = self.search_accounts_by_pattern(query, &search_pattern).await;
-                tracing::info!("Account search completed - query: {}, time: {:?}", query, account_start.elapsed());
+                let account_start = std::time::Instant::now();
+                let result = self
+                    .search_accounts_by_pattern(query, &search_pattern)
+                    .await;
+                tracing::info!(
+                    "Account search completed - query: {}, time: {:?}",
+                    query,
+                    account_start.elapsed()
+                );
                 result
             }
         );
-        tracing::info!("Total search time - query: {}, time: {:?}", query, search_start.elapsed());
+        tracing::info!(
+            "Total search time - query: {}, time: {:?}",
+            query,
+            search_start.elapsed()
+        );
 
         let token_records = token_result?;
         let account_records = account_result?;
@@ -224,7 +238,7 @@ impl SearchController {
                            t.created_at, t.total_supply, m.market_type, m.price
                     FROM token t
                     JOIN market m ON t.token_id = m.token_id
-                    WHERE t.token_id ILIKE $1
+                    WHERE LOWER(t.token_id) = LOWER($1)
                     LIMIT 1
                     "#,
                 )
@@ -245,7 +259,7 @@ impl SearchController {
                                t.created_at, t.total_supply, m.market_type, m.price
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
-                        WHERE t.symbol ILIKE $1 || '%'
+                        WHERE t.symbol ILIKE '%' || $1 || '%'
                         ORDER BY m.price DESC, t.symbol DESC
                         LIMIT 25
                         "#,
@@ -258,7 +272,7 @@ impl SearchController {
                                t.created_at, t.total_supply, m.market_type, m.price
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
-                        WHERE t.name ILIKE $1 || '%'
+                        WHERE t.name ILIKE '%' || $1 || '%'
                         ORDER BY m.price DESC, t.name DESC
                         LIMIT 25
                         "#,
@@ -289,7 +303,7 @@ impl SearchController {
 
                 // price 순으로 정렬 (높은 가격 우선)
                 combined_results.sort_by(|a, b| b.price.cmp(&a.price));
-                
+
                 // 최대 50개로 제한
                 combined_results.truncate(50);
                 Ok(combined_results)
@@ -314,17 +328,20 @@ impl SearchController {
                            a.follower_count, a.following_count,
                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                            ax.x_image_uri, ax.is_blue_label,
-                           COALESCE((
-                               SELECT SUM(b.balance * m.price)
-                               FROM balance b
-                               JOIN market m ON b.token_id = m.token_id
-                               WHERE b.account_id = a.account_id 
-                               AND b.balance >= 1000000000000000000
-                           ), 0) as total_value
+                           COALESCE(bv.total_value, 0) as total_value
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE ax.x_handle ILIKE $1 || '%'
+                    LEFT JOIN (
+                        SELECT 
+                            b.account_id,
+                            SUM(b.balance * m.price) as total_value
+                        FROM balance b
+                        JOIN market m ON b.token_id = m.token_id
+                        WHERE b.balance >= 1000000000000000000
+                        GROUP BY b.account_id
+                    ) bv ON a.account_id = bv.account_id
+                    WHERE ax.x_handle ILIKE '%' || $1 || '%'
                     ORDER BY total_value DESC
                     LIMIT 50
                     "#,
@@ -335,25 +352,34 @@ impl SearchController {
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
             }
             SearchPattern::EvmAddress => {
-                // EVM 주소: 계정 ID로 직접 검색 (Primary Key 접근)
+                // EVM 주소: 먼저 account를 찾고 그 다음에 balance 조회
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
-                    SELECT a.account_id, a.nickname, a.image_uri,
-                           a.follower_count, a.following_count,
+                    WITH target_account AS (
+                        SELECT a.account_id, a.nickname, a.image_uri,
+                               a.follower_count, a.following_count
+                        FROM account a
+                        WHERE LOWER(a.account_id) = LOWER($1)
+                        LIMIT 1
+                    ),
+                    account_balance AS (
+                        SELECT 
+                            ta.account_id,
+                            COALESCE(SUM(b.balance * m.price), 0) as total_value
+                        FROM target_account ta
+                        LEFT JOIN balance b ON ta.account_id = b.account_id AND b.balance >= 1000000000000000000
+                        LEFT JOIN market m ON b.token_id = m.token_id
+                        GROUP BY ta.account_id
+                    )
+                    SELECT ta.account_id, ta.nickname, ta.image_uri,
+                           ta.follower_count, ta.following_count,
                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                            ax.x_image_uri, ax.is_blue_label,
-                           COALESCE((
-                               SELECT SUM(b.balance * m.price)
-                               FROM balance b
-                               JOIN market m ON b.token_id = m.token_id
-                               WHERE b.account_id = a.account_id 
-                               AND b.balance >= 1000000000000000000
-                           ), 0) as total_value
-                    FROM account a
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                           COALESCE(ab.total_value, 0) as total_value
+                    FROM target_account ta
+                    LEFT JOIN account_x ax ON ta.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE a.account_id ILIKE $1
-                    LIMIT 1
+                    LEFT JOIN account_balance ab ON ta.account_id = ab.account_id
                     "#,
                 )
                 .bind(query)
@@ -370,7 +396,7 @@ impl SearchController {
                             SELECT a.account_id, a.nickname, a.image_uri,
                                    a.follower_count, a.following_count
                             FROM account a
-                            WHERE a.nickname ILIKE $1 || '%'
+                            WHERE a.nickname ILIKE '%' || $1 || '%'
                             ORDER BY follower_count DESC
                             LIMIT 20
                         )
@@ -378,16 +404,19 @@ impl SearchController {
                                la.follower_count, la.following_count,
                                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                                ax.x_image_uri, ax.is_blue_label,
-                               COALESCE((
-                                   SELECT SUM(b.balance * m.price)
-                                   FROM balance b
-                                   JOIN market m ON b.token_id = m.token_id
-                                   WHERE b.account_id = la.account_id 
-                                   AND b.balance >= 1000000000000000000
-                               ), 0) as total_value
+                               COALESCE(bv.total_value, 0) as total_value
                         FROM limited_accounts la
                         LEFT JOIN account_x ax ON la.account_id = ax.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                        LEFT JOIN (
+                            SELECT 
+                                b.account_id,
+                                SUM(b.balance * m.price) as total_value
+                            FROM balance b
+                            JOIN market m ON b.token_id = m.token_id
+                            WHERE b.balance >= 1000000000000000000
+                            GROUP BY b.account_id
+                        ) bv ON la.account_id = bv.account_id
                         ORDER BY total_value DESC
                         LIMIT 20
                         "#,
@@ -400,17 +429,20 @@ impl SearchController {
                                a.follower_count, a.following_count,
                                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
                                ax.x_image_uri, ax.is_blue_label,
-                               COALESCE((
-                                   SELECT SUM(b.balance * m.price)
-                                   FROM balance b
-                                   JOIN market m ON b.token_id = m.token_id
-                                   WHERE b.account_id = a.account_id 
-                                   AND b.balance >= 1000000000000000000
-                               ), 0) as total_value
+                               COALESCE(bv.total_value, 0) as total_value
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        WHERE ax.x_handle ILIKE $1 || '%'
+                        LEFT JOIN (
+                            SELECT 
+                                b.account_id,
+                                SUM(b.balance * m.price) as total_value
+                            FROM balance b
+                            JOIN market m ON b.token_id = m.token_id
+                            WHERE b.balance >= 1000000000000000000
+                            GROUP BY b.account_id
+                        ) bv ON a.account_id = bv.account_id
+                        WHERE ax.x_handle ILIKE '%' || $1 || '%'
                         ORDER BY total_value DESC
                         LIMIT 20
                         "#,
@@ -420,20 +452,25 @@ impl SearchController {
                 );
 
                 // 두 결과를 동시에 기다림
-                let (nickname_results, x_handle_results) = tokio::join!(nickname_future, x_handle_future);
+                let (nickname_results, x_handle_results) =
+                    tokio::join!(nickname_future, x_handle_future);
 
                 let mut combined_results = Vec::new();
                 let mut seen_ids = HashSet::new();
 
                 // nickname 결과 추가 (중복 제거)
-                for account in nickname_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
+                for account in
+                    nickname_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))?
+                {
                     if seen_ids.insert(account.account_id.clone()) {
                         combined_results.push(account);
                     }
                 }
 
                 // x_handle 결과 추가 (중복 제거)
-                for account in x_handle_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
+                for account in
+                    x_handle_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))?
+                {
                     if seen_ids.insert(account.account_id.clone()) && combined_results.len() < 50 {
                         combined_results.push(account);
                     }
