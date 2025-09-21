@@ -52,7 +52,6 @@ use clap::Parser;
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
-        router::hype::handler::get_hype_token_epoch,
         router::hype::handler::get_hype_point,
         router::hype::handler::get_hype_epoch,
         router::hype::handler::get_hype_vote_history,
