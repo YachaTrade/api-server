@@ -24,6 +24,13 @@ use crate::{
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
+
+#[derive(Debug,Deserialize)]
+pub struct HypeTokenQuery {
+    epoch: Option<i64>,
+}
+
+
 // 데이터베이스 쿼리 결과를 담을 구조체
 #[derive(Debug, sqlx::FromRow)]
 struct HypeTokenRow {
