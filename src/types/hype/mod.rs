@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
+use chrono::{TimeZone, Utc};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -855,88 +856,94 @@ impl HypeController {
             vote_amount: BigDecimal,
             created_at: i64,
         }
+        //
+        let cutoff_date = Utc.with_ymd_and_hms(2025, 9, 22, 0, 0, 0).unwrap();
+        let current_time = Utc::now();
+
+        if current_time < cutoff_date {
+            // 2025년 9월 22일 이전이면 빈 배열 리턴
+            return Ok(HypeRewardHistoryResponse {
+                history: vec![],
+                total_count: 0,
+            });
+        }
+        let rows_future = tokio::time::timeout(
+            Duration::from_millis(1000),
+            sqlx::query_as::<_, HypeRewardRow>(
+                r#"
+                SELECT
+                    t.token_id,
+                    t.name,
+                    t.symbol,
+                    t.image_uri,
+                    t.created_at as token_created_at,
+                    r.epoch,
+                    r.vote_amount,
+                    r.amount,
+                    r.status,
+                    r.proof,
+                    r.transaction_hash,
+                    r.claim_at,
+                    r.created_at
+                FROM reward r
+                JOIN token t ON r.token_id = t.token_id
+                WHERE r.account_id = $1
+                ORDER BY r.created_at DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(account_id)
+            .bind(pagination.limit)
+            .bind(offset)
+            .fetch_all(self.db.get_read_pool()),
+        );
+
+        let total_count_future = tokio::time::timeout(
+            Duration::from_millis(1000),
+            sqlx::query_as::<_, CountRow>(
+                r#"
+                SELECT COUNT(*) as count
+                FROM reward
+                WHERE account_id = $1
+                "#,
+            )
+            .bind(account_id)
+            .fetch_one(self.db.get_read_pool()),
+        );
+
+        let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
+
+        let reward_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let total_count = total_count_result
+            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .count as u64;
+
+        let history = reward_rows
+            .into_iter()
+            .map(|row| HypeReward {
+                epoch: row.epoch,
+                token_info: TokenInfoWithCreatedAtAndDescription {
+                    token_id: row.token_id,
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.image_uri,
+                    created_at: row.token_created_at,
+                    description: None,
+                },
+                amount: row.amount.to_string(),
+                claimable: row.status == "AWAITING",
+                proof: row.proof,
+                transaction_hash: row.transaction_hash,
+                claim_at: row.claim_at,
+                vote_amount: row.vote_amount.to_string(),
+                created_at: row.created_at,
+            })
+            .collect();
 
         Ok(HypeRewardHistoryResponse {
-            history: vec![],
-            total_count: 0,
+            history,
+            total_count,
         })
-        // let rows_future = tokio::time::timeout(
-        //     Duration::from_millis(1000),
-        //     sqlx::query_as::<_, HypeRewardRow>(
-        //         r#"
-        //         SELECT
-        //             t.token_id,
-        //             t.name,
-        //             t.symbol,
-        //             t.image_uri,
-        //             t.created_at as token_created_at,
-        //             r.epoch,
-        //             r.vote_amount,
-        //             r.amount,
-        //             r.status,
-        //             r.proof,
-        //             r.transaction_hash,
-        //             r.claim_at,
-        //             r.created_at
-        //         FROM reward r
-        //         JOIN token t ON r.token_id = t.token_id
-        //         WHERE r.account_id = $1
-        //         ORDER BY r.created_at DESC
-        //         LIMIT $2 OFFSET $3
-        //         "#,
-        //     )
-        //     .bind(account_id)
-        //     .bind(pagination.limit)
-        //     .bind(offset)
-        //     .fetch_all(self.db.get_read_pool()),
-        // );
-
-        // let total_count_future = tokio::time::timeout(
-        //     Duration::from_millis(1000),
-        //     sqlx::query_as::<_, CountRow>(
-        //         r#"
-        //         SELECT COUNT(*) as count
-        //         FROM reward
-        //         WHERE account_id = $1
-        //         "#,
-        //     )
-        //     .bind(account_id)
-        //     .fetch_one(self.db.get_read_pool()),
-        // );
-
-        // let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
-
-        // let reward_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
-        // let total_count = total_count_result
-        //     .map_err(|_| anyhow!("Query timeout after 1000ms"))??
-        //     .count as u64;
-
-        // let history = reward_rows
-        //     .into_iter()
-        //     .map(|row| HypeReward {
-        //         epoch: row.epoch,
-        //         token_info: TokenInfoWithCreatedAtAndDescription {
-        //             token_id: row.token_id,
-        //             name: row.name,
-        //             symbol: row.symbol,
-        //             image_uri: row.image_uri,
-        //             created_at: row.token_created_at,
-        //             description: None,
-        //         },
-        //         amount: row.amount.to_string(),
-        //         claimable: row.status == "AWAITING",
-        //         proof: row.proof,
-        //         transaction_hash: row.transaction_hash,
-        //         claim_at: row.claim_at,
-        //         vote_amount: row.vote_amount.to_string(),
-        //         created_at: row.created_at,
-        //     })
-        //     .collect();
-
-        // Ok(HypeRewardHistoryResponse {
-        //     history,
-        //     total_count,
-        // })
     }
 
     pub async fn vote(
