@@ -88,7 +88,11 @@ pub async fn get_hype_token_epoch(
             error!(error_msg);
             AppError::InternalError(error_msg)
         })?;
-    if let Err(e) = state.redis.set_hype_token_epoch_response(epoch, &response).await {
+    if let Err(e) = state
+        .redis
+        .set_hype_token_epoch_response(epoch, &response)
+        .await
+    {
         error!("Failed to set hype token epoch response: {}", e);
     }
 

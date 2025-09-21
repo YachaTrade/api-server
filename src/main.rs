@@ -52,6 +52,7 @@ use clap::Parser;
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
+        router::hype::handler::get_hype_token_epoch,
         router::hype::handler::get_hype_point,
         router::hype::handler::get_hype_epoch,
         router::hype::handler::get_hype_vote_history,
@@ -127,8 +128,7 @@ use clap::Parser;
             types::account::Account,
             types::account::AccountResponse,
             types::account::UpdateAccountRequest,
-            types::account::Mutual,
-            types::account::MutualFriend,
+        
             types::account::x::ConnectXRequest,
             types::account::x::ConnectedXAccountResponse,
             // types::account::x::DisconnectXRequest,
@@ -348,8 +348,8 @@ async fn method_based_timeout(
     next: axum::middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
     let timeout_duration = match method {
-        Method::GET => Duration::from_millis(1000),
-        _ => Duration::from_millis(2000), // POST, PUT, DELETE 등은 3초
+        Method::GET => Duration::from_millis(3000),
+        _ => Duration::from_millis(4000), // POST, PUT, DELETE 등은 3초
     };
     
     match tokio::time::timeout(timeout_duration, next.run(req)).await {
