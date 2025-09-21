@@ -1,6 +1,7 @@
 #[derive(Debug)]
 pub enum HypePath {
     GetHype,
+    GetHypeTokenEpoch,
     GetEpoch,
     GetPoint,
     GetVoteHistory,
@@ -16,6 +17,7 @@ impl HypePath {
     pub fn as_str(&self) -> &'static str {
         match self {
             HypePath::GetHype => "/hype/token",
+            HypePath::GetHypeTokenEpoch => "/hype/token/:epoch",
             HypePath::GetEpoch => "/hype/epoch",
             HypePath::GetPoint => "/hype/point",
             HypePath::GetVoteHistory => "/hype/vote_history",
@@ -30,6 +32,7 @@ impl HypePath {
     pub fn docs_str(&self) -> &'static str {
         match self {
             HypePath::GetHype => "/hype/token",
+            HypePath::GetHypeTokenEpoch => "/hype/token/{epoch}",
             HypePath::GetEpoch => "/hype/epoch",
             HypePath::GetPoint => "/hype/point",
             HypePath::GetVoteHistory => "/hype/vote_history",
