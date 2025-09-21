@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
 };
 
 use chrono::{self, Timelike};
@@ -48,6 +48,48 @@ pub async fn get_hype_token(State(state): State<AppState>) -> AppJsonResult<Hype
         })?;
     if let Err(e) = state.redis.set_hype_token_response(&response).await {
         error!("Failed to set hype token response: {}", e);
+    }
+
+    Ok(Json(response))
+}
+
+/// Get Hype Token Epoch
+#[utoipa::path(
+    get,
+    path = HypePath::GetHypeTokenEpoch.docs_str(),
+    responses(
+        (status = 200, description = "Hype Token fetched successfully", body = HypeTokenResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    params(
+        ("epoch" = String, Path, description = "Hype Token Round")
+    ),
+    tag = "Hype"
+)]
+#[instrument(skip(state))]
+pub async fn get_hype_token_epoch(
+    State(state): State<AppState>,
+    Path(epoch): Path<String>,
+) -> AppJsonResult<HypeTokenResponse> {
+    let epoch = epoch
+        .parse::<i64>()
+        .map_err(|_| AppError::BadRequest("Invalid epoch".to_string()))?;
+
+    if let Ok(cached_response) = state.redis.get_hype_token_epoch_response(epoch).await {
+        return Ok(Json(cached_response));
+    }
+    let hype_token_controller = HypeController::new(state.postgres.clone());
+    let response = hype_token_controller
+        .get_hype_token_epoch(epoch)
+        .await
+        .map_err(|err| {
+            let error_msg = format!("Failed to get hype token, error: {}", err);
+            error!(error_msg);
+            AppError::InternalError(error_msg)
+        })?;
+    if let Err(e) = state.redis.set_hype_token_epoch_response(epoch, &response).await {
+        error!("Failed to set hype token epoch response: {}", e);
     }
 
     Ok(Json(response))

@@ -530,6 +530,30 @@ impl RedisDatabase {
         Ok(response_json)
     }
 
+    pub async fn set_hype_token_epoch_response(&self, epoch: i64, response: &HypeTokenResponse) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("hype_token_epoch:{}", epoch);
+        let json = serde_json::to_string(response)?;
+        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+            .await?;
+
+        let elapsed = start_time.elapsed();
+        debug!("set_hype_token_epoch_response(epoch: {}) completed in {:?}", epoch, elapsed);
+        Ok(())
+    }
+
+    pub async fn get_hype_token_epoch_response(&self, epoch: i64) -> Result<HypeTokenResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("hype_token_epoch:{}", epoch);
+        let response_json: String = conn.get(key).await?;
+        let elapsed = start_time.elapsed();
+        debug!("get_hype_token_epoch_response(epoch: {}) completed in {:?}", epoch, elapsed);
+        let response: HypeTokenResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
+    }
+
     pub async fn set_total_spend_point_response(&self, response: &AmountResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
