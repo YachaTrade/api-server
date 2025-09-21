@@ -245,7 +245,7 @@ impl SearchController {
                                t.created_at, t.total_supply, m.market_type, m.price
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
-                        WHERE t.symbol ILIKE '%' || $1 || '%'
+                        WHERE t.symbol ILIKE $1 || '%'
                         ORDER BY m.price DESC, t.symbol DESC
                         LIMIT 25
                         "#,
@@ -258,7 +258,7 @@ impl SearchController {
                                t.created_at, t.total_supply, m.market_type, m.price
                         FROM token t
                         JOIN market m ON t.token_id = m.token_id
-                        WHERE t.name ILIKE '%' || $1 || '%'
+                        WHERE t.name ILIKE $1 || '%'
                         ORDER BY m.price DESC, t.name DESC
                         LIMIT 25
                         "#,
@@ -324,7 +324,7 @@ impl SearchController {
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE ax.x_handle ILIKE '%' || $1 || '%'
+                    WHERE ax.x_handle ILIKE $1 || '%'
                     ORDER BY total_value DESC
                     LIMIT 50
                     "#,
@@ -370,7 +370,7 @@ impl SearchController {
                             SELECT a.account_id, a.nickname, a.image_uri,
                                    a.follower_count, a.following_count
                             FROM account a
-                            WHERE a.nickname ILIKE '%' || $1 || '%'
+                            WHERE a.nickname ILIKE $1 || '%'
                             ORDER BY follower_count DESC
                             LIMIT 20
                         )
@@ -410,7 +410,7 @@ impl SearchController {
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        WHERE ax.x_handle ILIKE '%' || $1 || '%'
+                        WHERE ax.x_handle ILIKE $1 || '%'
                         ORDER BY total_value DESC
                         LIMIT 20
                         "#,
