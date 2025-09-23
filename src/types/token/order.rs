@@ -84,8 +84,8 @@ impl From<OrderTokenRow> for OrderToken {
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
                 description: row.description.unwrap_or_default(),
-                market_cap: (row.total_supply * row.price).to_string(),
-                reserve_token: row.reserve_token.to_string(),
+                market_cap: (row.total_supply * row.price).to_plain_string(),
+                reserve_token: row.reserve_token.to_plain_string(),
                 created_at: row.created_at,
                 market_type: row.market_type,
                 score: row.score,
@@ -152,7 +152,14 @@ impl OrderController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_order_tokens(order_by: {:?}, page: {}, limit: {}, direction: {}) completed in {:?}", order_by.as_str(), pagination.page, pagination.limit, pagination.direction, elapsed);
+        info!(
+            "get_order_tokens(order_by: {:?}, page: {}, limit: {}, direction: {}) completed in {:?}",
+            order_by.as_str(),
+            pagination.page,
+            pagination.limit,
+            pagination.direction,
+            elapsed
+        );
 
         Ok(tokens)
     }
@@ -374,32 +381,34 @@ impl OrderController {
         Ok(row.map(OrderToken::from))
     }
 
-
     pub async fn get_total_count_by_type(&self, order_type: &TokenOrderType) -> Result<i64> {
         let start_time = Instant::now();
-        
+
         let (query, log_type) = match order_type {
             TokenOrderType::Verified => (
                 "SELECT verified_token_count as count FROM token_count",
-                "verified_token_count"
+                "verified_token_count",
             ),
             _ => (
-                "SELECT total_count as count FROM token_count", 
-                "total_count"
-            )
+                "SELECT total_count as count FROM token_count",
+                "total_count",
+            ),
         };
-        
+
         let row = tokio::time::timeout(
             Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(query)
-                .fetch_one(self.db.get_read_pool()),
+            sqlx::query_as::<_, CountRow>(query).fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|e| anyhow!("Failed to get {} count: {}", log_type, e))?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_total_count_by_type(order_type: {:?}) completed in {:?}", order_type.as_str(), elapsed);
+        info!(
+            "get_total_count_by_type(order_type: {:?}) completed in {:?}",
+            order_type.as_str(),
+            elapsed
+        );
         Ok(row.count)
     }
 }

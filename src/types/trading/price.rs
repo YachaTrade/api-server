@@ -9,15 +9,15 @@ use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 
 pub struct PriceResponse {
-    pub price: BigDecimal,
+    pub price: String,
     pub token_address: String,
 }
 
@@ -31,10 +31,10 @@ impl PriceController {
     }
     pub async fn get_price(&self, token: &str) -> Result<PriceResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("price", token);
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -45,12 +45,12 @@ impl PriceController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("get_price(token: {}) completed in {:?}", token, elapsed);
         Ok(response)
     }
-    
+
     async fn fetch_price(&self, token: &str) -> Result<PriceResponse> {
         #[derive(FromRow)]
         struct PriceRow {
@@ -74,7 +74,7 @@ impl PriceController {
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
 
         Ok(PriceResponse {
-            price: price.price,
+            price: price.price.to_plain_string(),
             token_address: token.to_string(),
         })
     }

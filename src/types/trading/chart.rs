@@ -8,9 +8,9 @@ use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
@@ -100,7 +100,7 @@ impl ChartController {
         request: &GetBarsRequest,
     ) -> Result<BarResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "chart",
@@ -110,18 +110,21 @@ impl ChartController {
             request.to,
             request.countback
         );
-        
+
         // Single Flight Pattern 적용
         let result = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
             self.fetch_chart_data(token_id, request).await
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_prices(token_id: {}, resolution: {}, from: {}, to: {}) completed in {:?}", token_id, request.resolution, request.from, request.to, elapsed);
+        info!(
+            "get_prices(token_id: {}, resolution: {}, from: {}, to: {}) completed in {:?}",
+            token_id, request.resolution, request.from, request.to, elapsed
+        );
         Ok(result)
     }
-    
+
     async fn fetch_chart_data(
         &self,
         token_id: &str,
@@ -191,11 +194,11 @@ impl ChartController {
 
         for chart in charts {
             t.push(chart.time_stamp);
-            c.push(chart.close_price.to_string());
-            o.push(chart.open_price.to_string());
-            h.push(chart.high_price.to_string());
-            l.push(chart.low_price.to_string());
-            v.push(chart.volume.to_string());
+            c.push(chart.close_price.to_plain_string());
+            o.push(chart.open_price.to_plain_string());
+            h.push(chart.high_price.to_plain_string());
+            l.push(chart.low_price.to_plain_string());
+            v.push(chart.volume.to_plain_string());
         }
 
         Ok(BarResponse {

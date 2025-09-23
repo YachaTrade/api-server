@@ -62,8 +62,8 @@ pub struct TokenWithAccountInfo {
     pub account_info: AccountInfo,
     pub is_king: bool,
     pub is_king_created_at: Option<i64>,
-    pub total_supply: BigDecimal,
-    pub price: BigDecimal,
+    pub total_supply: String,
+    pub price: String,
     pub market_cap: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -202,8 +202,8 @@ impl TokenController {
             is_king: row.is_king.unwrap_or(false),
             is_king_created_at: row.is_king_created_at,
             market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
-            total_supply: row.total_supply,
-            price: row.price,
+            total_supply: row.total_supply.to_plain_string(),
+            price: row.price.to_plain_string(),
         };
         let response = TokenResponse { token };
         Ok(response)
