@@ -857,16 +857,7 @@ impl HypeController {
             created_at: i64,
         }
         //
-        let cutoff_date = Utc.with_ymd_and_hms(2025, 9, 22, 0, 0, 0).unwrap();
-        let current_time = Utc::now();
 
-        if current_time < cutoff_date {
-            // 2025년 9월 22일 이전이면 빈 배열 리턴
-            return Ok(HypeRewardHistoryResponse {
-                history: vec![],
-                total_count: 0,
-            });
-        }
         let rows_future = tokio::time::timeout(
             Duration::from_millis(1000),
             sqlx::query_as::<_, HypeRewardRow>(

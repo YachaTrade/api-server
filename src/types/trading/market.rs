@@ -40,8 +40,8 @@ impl From<MarketRow> for Market {
             market_type: raw.market_type,
             token_id: raw.token_id,
             market_id: raw.pool_id,
-            price: raw.price.to_string(),
-            total_supply: raw.total_supply.to_string(),
+            price: raw.price.to_plain_string(),
+            total_supply: raw.total_supply.to_plain_string(),
         };
 
         if market.market_type == "CURVE" {
@@ -73,7 +73,10 @@ impl MarketController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_market_by_token(token_id: {}) completed in {:?}", token_id, elapsed);
+        info!(
+            "get_market_by_token(token_id: {}) completed in {:?}",
+            token_id, elapsed
+        );
         Ok(market)
     }
 

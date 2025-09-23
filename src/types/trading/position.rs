@@ -39,7 +39,7 @@ pub struct PositionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenHolder {
-    pub current_amount: BigDecimal,
+    pub current_amount: String,
     pub account_info: AccountInfo,
     pub is_dev: bool,
 }
@@ -218,7 +218,7 @@ impl PositionController {
         let holders = record
             .into_iter()
             .map(|row| TokenHolder {
-                current_amount: row.current_token_amount,
+                current_amount: row.current_token_amount.to_plain_string(),
                 is_dev: row.account_id == token_creator,
                 account_info: AccountInfo {
                     account_id: row.account_id,

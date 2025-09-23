@@ -19,7 +19,7 @@ use super::common::info::{AccountInfo, TokenInfo};
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchToken {
     pub token_info: TokenInfo,
-    pub price: BigDecimal,
+    pub price: String,
     pub market_cap: String,
     pub created_at: i64,
 }
@@ -162,7 +162,7 @@ impl SearchController {
                 },
                 market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
 
-                price: row.price,
+                price: row.price.to_plain_string(),
                 created_at: row.created_at,
             })
             .collect();

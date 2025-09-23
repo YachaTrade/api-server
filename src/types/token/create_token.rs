@@ -2,16 +2,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::{
-    db::postgres::PostgresDatabase,
-    types::common::{info::TokenInfo, pagination::PaginationParams, CountRow},
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
     cache_key,
+    db::postgres::PostgresDatabase,
+    types::common::{CountRow, info::TokenInfo, pagination::PaginationParams},
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use tracing::info;
+use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreatedResponse {
@@ -24,10 +24,10 @@ pub struct TokenCreated {
     pub token: TokenInfo,
     pub is_listing: bool,
     pub created_at: i64,
-    pub market_cap: BigDecimal,     //market cap -> price * total_supply
-    pub total_supply: BigDecimal,   // token table total_supply
-    pub price: String,              // market table price
-    pub current_amount: BigDecimal, //position table current_token_amount
+    pub market_cap: String,     //market cap -> price * total_supply
+    pub total_supply: String,   // token table total_supply
+    pub price: String,          // market table price
+    pub current_amount: String, //position table current_token_amount
     pub description: Option<String>,
 }
 
@@ -42,10 +42,10 @@ impl TokenCreatedController {
 
     pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!("token_created_count", account_id);
-        
+
         // Single Flight Pattern 적용
         let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -56,12 +56,15 @@ impl TokenCreatedController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_total_count(account_id: {}) completed in {:?}", account_id, elapsed);
+        info!(
+            "get_total_count(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         Ok(count)
     }
-    
+
     async fn fetch_total_count(&self, account_id: &str) -> Result<i64> {
         let count = tokio::time::timeout(
             Duration::from_millis(1000),
@@ -73,11 +76,11 @@ impl TokenCreatedController {
                 "#,
             )
             .bind(account_id)
-            .fetch_one(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
-        
+
         Ok(count.count)
     }
 
@@ -87,7 +90,7 @@ impl TokenCreatedController {
         pagination: &PaginationParams,
     ) -> Result<TokenCreatedResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = cache_key!(
             "tokens_created",
@@ -95,7 +98,7 @@ impl TokenCreatedController {
             pagination.page,
             pagination.limit
         );
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -103,16 +106,21 @@ impl TokenCreatedController {
             let pagination = pagination;
             async move {
                 let controller = TokenCreatedController::new(db);
-                controller.fetch_tokens_created(&account_id, &pagination).await
+                controller
+                    .fetch_tokens_created(&account_id, &pagination)
+                    .await
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
-        info!("get_tokens_created(account_id: {}) completed in {:?}", account_id, elapsed);
+        info!(
+            "get_tokens_created(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
         Ok(response)
     }
-    
+
     async fn fetch_tokens_created(
         &self,
         account_id: &str,
@@ -128,7 +136,7 @@ impl TokenCreatedController {
             name: String,
             is_listing: bool,
             created_at: i64,
-            price: String,
+            price: BigDecimal,
             total_supply: BigDecimal,
             market_cap: BigDecimal,
             current_amount: BigDecimal,
@@ -165,7 +173,7 @@ impl TokenCreatedController {
                     name,
                     is_listing,
                     created_at,
-                    COALESCE(price::TEXT, '0') as price,
+                    COALESCE(price, 0) as price,
                     total_supply,
                     COALESCE(price * total_supply, 0) as market_cap,
                     COALESCE(current_amount, 0) as current_amount,
@@ -179,7 +187,7 @@ impl TokenCreatedController {
             .bind(account_id)
             .bind(pagination.limit as i64)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool())
+            .fetch_all(self.db.get_read_pool()),
         )
         .await
         .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
@@ -196,10 +204,10 @@ impl TokenCreatedController {
                 },
                 is_listing: row.is_listing,
                 created_at: row.created_at,
-                market_cap: row.market_cap,
-                total_supply: row.total_supply,
-                price: row.price,
-                current_amount: row.current_amount,
+                market_cap: row.market_cap.to_plain_string(),
+                total_supply: row.total_supply.to_plain_string(),
+                price: row.price.to_plain_string(),
+                current_amount: row.current_amount.to_plain_string(),
                 description: row.description,
             })
             .collect();

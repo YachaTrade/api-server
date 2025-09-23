@@ -168,8 +168,8 @@ impl MetricsController {
 
         let (start_price, current_price) = match result {
             Some(row) => (
-                row.start_price.map(|p| p.to_string()),
-                row.current_price.map(|p| p.to_string()),
+                row.start_price.map(|p| p.to_plain_string()),
+                row.current_price.map(|p| p.to_plain_string()),
             ),
             None => (None, None),
         };

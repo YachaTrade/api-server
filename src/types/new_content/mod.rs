@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 use crate::{
     db::postgres::PostgresDatabase,
     types::common::info::{AccountInfo, TokenInfo},
-    utils::single_flight::{with_cache, GLOBAL_CACHE},
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -28,7 +28,7 @@ pub struct NewSwapMessage {
     pub account_info: AccountInfo,
     pub token_info: TokenInfo,
     pub is_buy: bool,
-    pub amount: BigDecimal,
+    pub amount: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -48,10 +48,10 @@ impl NewContentController {
 
     pub async fn get_latest_new_buy(&self) -> Result<Option<NewSwapMessage>> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = "new_content:latest_buy";
-        
+
         // Single Flight Pattern 적용
         let result = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
             let db = self.db.clone();
@@ -61,20 +61,18 @@ impl NewContentController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("get_latest_new_buy() completed in {:?}", elapsed);
-        
+
         if elapsed > Duration::from_millis(100) {
             tracing::warn!("get_latest_new_buy() slow performance: {:?}", elapsed);
         }
-        
+
         Ok(result)
     }
-    
+
     async fn fetch_latest_new_buy(&self) -> Result<Option<NewSwapMessage>> {
-
-
         let query = r#"
             SELECT
                 s.is_buy,
@@ -138,7 +136,7 @@ impl NewContentController {
                 image_uri: row.get("token_image_uri"),
             },
             is_buy: row.get("is_buy"),
-            amount: row.get("native_amount"),
+            amount: row.get::<BigDecimal, _>("native_amount").to_plain_string(),
         });
 
         Ok(result)
@@ -146,10 +144,10 @@ impl NewContentController {
 
     pub async fn get_latest_new_sell(&self) -> Result<Option<NewSwapMessage>> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = "new_content:latest_sell";
-        
+
         // Single Flight Pattern 적용
         let result = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
             let db = self.db.clone();
@@ -159,20 +157,18 @@ impl NewContentController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("get_latest_new_sell() completed in {:?}", elapsed);
-        
+
         if elapsed > Duration::from_millis(100) {
             tracing::warn!("get_latest_new_sell() slow performance: {:?}", elapsed);
         }
-        
+
         Ok(result)
     }
-    
+
     async fn fetch_latest_new_sell(&self) -> Result<Option<NewSwapMessage>> {
-
-
         let query = r#"
             SELECT
                 s.is_buy,
@@ -236,7 +232,7 @@ impl NewContentController {
                 image_uri: row.get("token_image_uri"),
             },
             is_buy: row.get("is_buy"),
-            amount: row.get("native_amount"),
+            amount: row.get::<BigDecimal, _>("native_amount").to_plain_string(),
         });
 
         Ok(result)
@@ -244,10 +240,10 @@ impl NewContentController {
 
     pub async fn get_latest_new_token(&self) -> Result<Option<NewTokenMessage>> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = "new_content:latest_token";
-        
+
         // Single Flight Pattern 적용
         let result = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
             let db = self.db.clone();
@@ -257,20 +253,18 @@ impl NewContentController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("get_latest_new_token() completed in {:?}", elapsed);
-        
+
         if elapsed > Duration::from_millis(100) {
             tracing::warn!("get_latest_new_token() slow performance: {:?}", elapsed);
         }
-        
+
         Ok(result)
     }
-    
+
     async fn fetch_latest_new_token(&self) -> Result<Option<NewTokenMessage>> {
-
-
         let query = r#"
             SELECT 
                 t.name as token_name,
@@ -337,10 +331,10 @@ impl NewContentController {
 
     pub async fn get_new_content(&self) -> Result<NewContentResponse> {
         let start_time = Instant::now();
-        
+
         // 캐시 키 생성
         let cache_key = "new_content:all";
-        
+
         // Single Flight Pattern 적용
         let response = with_cache(&GLOBAL_CACHE.cache, cache_key, || {
             let db = self.db.clone();
@@ -350,15 +344,14 @@ impl NewContentController {
             }
         })
         .await?;
-        
+
         let elapsed = start_time.elapsed();
         info!("get_new_content() completed in {:?}", elapsed);
-        
+
         Ok(response)
     }
-    
-    async fn fetch_new_content(&self) -> Result<NewContentResponse> {
 
+    async fn fetch_new_content(&self) -> Result<NewContentResponse> {
         let (new_buy, new_sell, new_token) = tokio::try_join!(
             self.get_latest_new_buy(),
             self.get_latest_new_sell(),

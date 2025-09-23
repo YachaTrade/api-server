@@ -30,8 +30,8 @@ pub struct PositionSwap {
     pub token: TokenInfo,
     pub account_id: String,
     pub is_buy: bool,
-    pub native_amount: BigDecimal,
-    pub token_amount: BigDecimal,
+    pub native_amount: String,
+    pub token_amount: String,
     pub created_at: i64,
     pub transaction_hash: String,
 }
@@ -46,8 +46,8 @@ pub struct PositionSwapResponse {
 pub struct TokenSwap {
     pub account_info: AccountInfo,
     pub is_buy: bool,
-    pub native_amount: BigDecimal,
-    pub token_amount: BigDecimal,
+    pub native_amount: String,
+    pub token_amount: String,
     pub created_at: i64,
     pub transaction_hash: String,
 }
@@ -301,8 +301,8 @@ impl SwapController {
                 },
                 account_id: row.account_id,
                 is_buy: row.is_buy,
-                native_amount: row.native_amount,
-                token_amount: row.token_amount,
+                native_amount: row.native_amount.to_plain_string(),
+                token_amount: row.token_amount.to_plain_string(),
                 created_at: row.created_at,
                 transaction_hash: row.transaction_hash,
             })
@@ -435,8 +435,8 @@ impl SwapController {
                         following_count,
                     },
                     is_buy,
-                    native_amount,
-                    token_amount,
+                    native_amount: native_amount.to_plain_string(),
+                    token_amount: token_amount.to_plain_string(),
                     created_at,
                     transaction_hash,
                 }
