@@ -134,12 +134,10 @@ pub async fn auth_session(
     let address = verify_wallet(&payload.signature, &message).await?;
     let redis = state.redis.clone();
 
-
     let sign_message = redis.get_sign_message(&address).await.map_err(|err| {
         error!("Failed to get nonce: address: {}, error: {}", address, err);
         AppError::RedisError(err.to_string())
     })?;
-
 
     if message != sign_message {
         error!("Invalid nonce: address: {}, nonce: {}", address, message);
@@ -149,14 +147,28 @@ pub async fn auth_session(
     let session_id = generate_session_id(address.as_str(), message.as_str());
 
     // 병렬로 모든 작업 실행
-    let (account_result, del_nonce_result, set_sign_message_result, postgres_set_sign_message_result) = tokio::join!(
+    let (
+        account_result,
+        del_nonce_result,
+        set_sign_message_result,
+        postgres_set_sign_message_result,
+    ) = tokio::join!(
         {
             let start = std::time::Instant::now();
             let postgres = state.postgres.clone();
             let account_controller = AccountController::new(postgres);
-            let account = Account::new(address.clone());
+            let address_clone = address.clone();
             async move {
-                let result = account_controller.upsert_account(account).await;
+                // 먼저 계정이 존재하는지 확인
+                let existing_account = account_controller.get_account(&address_clone).await;
+                let result = match existing_account {
+                    Ok(account) => Ok(account),
+                    Err(_) => {
+                        // 계정이 존재하지 않으면 새로 생성
+                        let account = Account::new(address_clone.clone());
+                        account_controller.upsert_account(account).await
+                    }
+                };
                 let _elapsed = start.elapsed();
                 result
             }
@@ -298,7 +310,6 @@ pub async fn auth_delete_session(
         );
         AppError::InternalError(err.to_string())
     })?;
-
 
     // Redis 결과 처리
     redis_result.map_err(|err| {
