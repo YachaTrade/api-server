@@ -13,10 +13,10 @@ use crate::{
         GET_ACCOUNT_LOCKS_EXPIRATION, GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION,
         GET_COMMUNITY_TREASURY_EXPIRATION, GET_DEV_POSITIONS_EXPIRATION,
         GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-        GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION,
-        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
-        GET_TOTAL_SPEND_POINT_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
-        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION,
+        GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
+        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_SPEND_POINT_EXPIRATION, MESSAGE_EXPIRATION,
+        NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
+        TOKEN_TRADE_EXPIRATION,
     },
     types::{
         common::pagination::PaginationParams,
@@ -24,10 +24,6 @@ use crate::{
             AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
             HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenResponse,
             HypeVoteHistoryResponse,
-        },
-        management::{
-            DevPositionsResponse, HoldingTokenManagementResponse, ManagementHistoryQuery,
-            ManagementHistoryResponse, TokenLockResponse, WithdrawableLockResponse,
         },
         new_content::NewContentResponse,
         search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
@@ -530,7 +526,11 @@ impl RedisDatabase {
         Ok(response_json)
     }
 
-    pub async fn set_hype_token_epoch_response(&self, epoch: i64, response: &HypeTokenResponse) -> Result<()> {
+    pub async fn set_hype_token_epoch_response(
+        &self,
+        epoch: i64,
+        response: &HypeTokenResponse,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_token_epoch:{}", epoch);
@@ -539,7 +539,10 @@ impl RedisDatabase {
             .await?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_hype_token_epoch_response(epoch: {}) completed in {:?}", epoch, elapsed);
+        debug!(
+            "set_hype_token_epoch_response(epoch: {}) completed in {:?}",
+            epoch, elapsed
+        );
         Ok(())
     }
 
@@ -549,7 +552,10 @@ impl RedisDatabase {
         let key = format!("hype_token_epoch:{}", epoch);
         let response_json: String = conn.get(key).await?;
         let elapsed = start_time.elapsed();
-        debug!("get_hype_token_epoch_response(epoch: {}) completed in {:?}", epoch, elapsed);
+        debug!(
+            "get_hype_token_epoch_response(epoch: {}) completed in {:?}",
+            epoch, elapsed
+        );
         let response: HypeTokenResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
@@ -854,232 +860,6 @@ impl RedisDatabase {
         );
         let response: HypeRewardAddHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response)
-    }
-}
-
-// Market cache methods
-impl RedisDatabase {}
-
-//@@@@@@@@@@@Treasury@@@@@@@@@@@@@@@@@@@@@@@
-
-impl RedisDatabase {
-    pub async fn set_dev_positions(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-        response: &DevPositionsResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "dev_positions:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_DEV_POSITIONS_EXPIRATION)
-            .await?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_dev_positions(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_dev_positions(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<DevPositionsResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "dev_positions:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let response_json: String = conn.get(key).await?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_dev_positions(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        let response_json: DevPositionsResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_holding_token_management(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-        response: &HoldingTokenManagementResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "holding_token_treasury:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HOLDING_TOKEN_MANAGEMENT_EXPIRATION)
-            .await?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_holding_token_management(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_holding_token_management(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<HoldingTokenManagementResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "holding_token_management:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let response_json: String = conn.get(key).await?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_holding_token_management(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        let response_json: HoldingTokenManagementResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn get_account_locks(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<TokenLockResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "account_locks:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let response_json: String = conn.get(key).await?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_account_locks(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        let response_json: TokenLockResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_account_locks(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-        response: &TokenLockResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "account_locks:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_ACCOUNT_LOCKS_EXPIRATION)
-            .await?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_account_locks(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_account_withdrawable_lock(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<WithdrawableLockResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "account_withdrawable_lock:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let response_json: String = conn.get(key).await?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_account_withdrawable_lock(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        let response_json: WithdrawableLockResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_account_withdrawable_lock(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-        response: &WithdrawableLockResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "account_withdrawable_lock:{}:page:{}:limit:{}",
-            account_id, pagination.page, pagination.limit
-        );
-        let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_ACCOUNT_WITHDRAWABLE_LOCK_EXPIRATION)
-            .await?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_account_withdrawable_lock(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_token_management_history(
-        &self,
-        token_id: &str,
-        query: &ManagementHistoryQuery,
-    ) -> Result<ManagementHistoryResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!("token:{}:management_history:query:{:?}", token_id, query);
-        let response_json: String = conn.get(key).await?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_token_management_history(token_id: {}, query: {:?}) completed in {:?}",
-            token_id, query, elapsed
-        );
-        let response_json: ManagementHistoryResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_token_management_history(
-        &self,
-        token_id: &str,
-        query: &ManagementHistoryQuery,
-        response: &ManagementHistoryResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!("token:{}:management_history:query:{:?}", token_id, query);
-        let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION)
-            .await?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_token_management_history(token_id: {}, query: {:?}) completed in {:?}",
-            token_id, query, elapsed
-        );
-        Ok(())
     }
 }
 
