@@ -1,7 +1,7 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, follow, hype, management, metadata, new_content, order, profile, search, token, trade},
+    router::{self, account, auth, bot, follow, hype, management, metadata, metrics, new_content, order, profile, search, token, trade},
     state::AppState,
     types,
 };
@@ -307,6 +307,7 @@ async fn main() -> Result<()> {
         )))
         .merge(new_content::router())
         .merge(metadata::router())
+        .merge(metrics::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())

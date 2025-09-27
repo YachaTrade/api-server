@@ -1,6 +1,7 @@
 pub mod config;
 pub mod cors;
 pub mod db;
+pub mod metrics;
 
 pub mod middleware;
 pub mod result;
