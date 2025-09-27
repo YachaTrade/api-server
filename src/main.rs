@@ -1,7 +1,8 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-    router::{self, account, auth, bot, follow, hype, management, metadata, metrics, new_content, order, profile, search, token, trade},
+
+    router::{self, account, auth, bot, follow, hype,  metadata, metrics, new_content, order, profile, search, token, trade},
     state::AppState,
     types,
 };
@@ -68,7 +69,6 @@ use clap::Parser;
         router::trade::handler::get_prices,
         router::trade::handler::get_price,
         router::trade::handler::get_holder,
-        router::trade::handler::get_management_history,
         router::trade::handler::get_metrics,
         router::trade::handler::get_metrics_batch,
 
@@ -87,14 +87,6 @@ use clap::Parser;
         router::follow::handler::check_follow,
         router::follow::handler::get_followers,
         router::follow::handler::get_followings,  
-
-
- 
-        // ----------------Management----------------
-        router::management::handler::get_dev_positions,
-        router::management::handler::get_holding_token_management,
-        router::management::handler::get_account_locks,
-        router::management::handler::get_account_withdrawable_lock,
 
         // ----------------New Content----------------
         router::new_content::handler::get_new_content,
@@ -215,19 +207,7 @@ use clap::Parser;
         
    
            
-           //Management
-           types::management::DevPositionsResponse,
-           types::management::DevPosition,
-           types::management::HoldingTokenManagementResponse,
-           types::management::TokenManagement,
-           types::management::TokenLockResponse,
-           types::management::TokenLock,
-           types::management::UnlockInfo,
-           types::management::WithdrawableLockResponse,
-           types::management::WithdrawableLock,
-           types::management::ManagementHistoryResponse,
-           types::management::ManagementHistory,
-           types::management::ManagementHistoryQuery,
+     
 
            // New Content
            types::new_content::NewContentResponse,
@@ -302,9 +282,7 @@ async fn main() -> Result<()> {
         .merge(hype::router(app_state.clone()))
         .merge(follow::router(app_state.clone()))
         .merge(bot::router())
-        .merge(management::router().layer(ServiceBuilder::new().layer(
-            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
-        )))
+ 
         .merge(new_content::router())
         .merge(metadata::router())
         .merge(metrics::router())

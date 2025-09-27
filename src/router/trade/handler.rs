@@ -15,9 +15,6 @@ use crate::{
     state::AppState,
     types::{
         common::pagination::PaginationParams,
-        management::{
-            ManagementHistoryQuery, ManagementHistoryResponse, TokenManagementController,
-        },
         trading::{
             chart::{BarResponse, ChartController, GetBarsRequest},
             market::{Market, MarketController},
@@ -281,60 +278,6 @@ pub async fn get_price(
         AppError::InternalError(format!("Failed to get price: {}", err))
     })?;
     Ok(Json(price_response))
-}
-
-///Get management history for a token
-#[utoipa::path(
-    get,
-    path = TradePath::GetManagementHistory.docs_str(),
-    responses(
-        (status = 200, description = "Success", body = ManagementHistoryResponse),
-        (status = 400, description = "Invalid token ID"),
-        (status = 500, description = "Internal server error")
-    ),
-    params(
-        ("token_id" = String, Path, description = "Token ID"),
-        ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page"),
-        ("direction" = Option<String>, Query, description = "Sort direction (ASC or DESC) Default DESC"),
-        ("min_volume" = Option<String>, Query, description = "Minimum volume filter (1 mon = 1000000000000000000)"),
-        ("account_id" = Option<String>, Query, description = "Account ID for own trades filter"),
-        ("activity_type" = Option<String>, Query, description = "Activity type filter: (LOCK, WITHDRAW, AIRDROP, BURN) Default ALL")
-    ),
-    tag = "Trade"
-)]
-#[instrument(skip(state))]
-pub async fn get_management_history(
-    State(state): State<AppState>,
-    Query(query): Query<ManagementHistoryQuery>,
-    Path(token): Path<String>,
-) -> AppJsonResult<ManagementHistoryResponse> {
-    if let Ok(cached_response) = state
-        .redis
-        .get_token_management_history(&token, &query)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-
-    let response = TokenManagementController::new(state.postgres.clone())
-        .get_management_history(&token, &query)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get management history: token: {}, error: {}",
-                token, err
-            );
-            AppError::InternalError(format!("Failed to get management history: {}", err))
-        })?;
-    if let Err(err) = state
-        .redis
-        .set_token_management_history(&token, &query, &response)
-        .await
-    {
-        warn!("Failed to set token management history cache: {}", err);
-    }
-    Ok(Json(response))
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
