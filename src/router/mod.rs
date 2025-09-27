@@ -14,4 +14,5 @@ pub mod trade;
 pub mod hype;
 pub mod management;
 pub mod metadata;
+pub mod metrics;
 pub mod new_content;
