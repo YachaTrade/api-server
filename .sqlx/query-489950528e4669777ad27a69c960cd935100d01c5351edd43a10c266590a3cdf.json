@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                SUM(CASE WHEN is_buy = true THEN 1 ELSE 0 END) as buy_count,\n                SUM(CASE WHEN is_buy = false THEN 1 ELSE 0 END) as sell_count,\n                COALESCE(SUM(native_amount), 0) as volume\n            FROM swap \n            WHERE token_id = $1 \n            AND created_at > $2\n            ",
+  "query": "\n                SELECT \n                    SUM(CASE WHEN is_buy = true THEN 1 ELSE 0 END) as buy_count,\n                    SUM(CASE WHEN is_buy = false THEN 1 ELSE 0 END) as sell_count,\n                    COALESCE(SUM(native_amount), 0) as volume\n                FROM swap \n                WHERE token_id = $1 \n                AND created_at > $2\n                ",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       null
     ]
   },
-  "hash": "79d42e356c3c7cc8201b7636fd1beea2438c35a860527c1b555fd0d5f08ed146"
+  "hash": "489950528e4669777ad27a69c960cd935100d01c5351edd43a10c266590a3cdf"
 }
