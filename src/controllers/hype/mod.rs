@@ -123,7 +123,7 @@ impl HypeController {
                             WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
                             ELSE a.nickname 
                         END as creator_nickname,
-                        CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         COALESCE(thc.holder_count, 0) as holder_count,
