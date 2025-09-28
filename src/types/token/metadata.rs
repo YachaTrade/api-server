@@ -1,15 +1,14 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::types::BigDecimal;
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -45,8 +44,6 @@ impl TokenMetadataController {
         TokenMetadataController { db }
     }
     pub async fn get_token_metadata(&self, token_id: &str) -> Result<TokenMetadataResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("token_metadata", token_id);
 
@@ -61,8 +58,6 @@ impl TokenMetadataController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!("get_token_metadata(token_id: {}) completed in {:?}", token_id, elapsed);
         Ok(response)
     }
 
@@ -84,16 +79,15 @@ impl TokenMetadataController {
             total_supply: BigDecimal,
         }
 
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let row = measure_postgres!(
+            "token.fetch_token_metadata",
             sqlx::query_as::<_, TokenMetadataRow>(
                 "SELECT token_id, name, symbol, image_uri, description, twitter, telegram, website, is_listing, created_at, transaction_hash, creator, total_supply FROM token WHERE token_id = $1",
             )
             .bind(token_id)
-            .fetch_one(&*self.db.get_read_pool()),
+            .fetch_one(&*self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to get token metadata: {}", err))?;
 
         let token = TokenMetadata {
             token_id: row.token_id,

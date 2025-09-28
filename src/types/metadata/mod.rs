@@ -1,10 +1,10 @@
-use crate::{db::postgres::PostgresDatabase, result::AppError};
+use crate::{db::postgres::PostgresDatabase, measure_postgres, result::AppError};
 use anyhow::Result;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use std::{env, sync::Arc};
-use tracing::{info, warn};
+use tracing::warn;
 use utoipa::ToSchema;
 
 #[derive(ToSchema)]
@@ -57,8 +57,7 @@ impl TokenMetadata {
             if !website_url.is_empty() {
                 if !website_url.starts_with("https://") {
                     return Err(AppError::BadRequest(
-                        "Invalid website URL format - must start with https://"
-                            .to_string(),
+                        "Invalid website URL format - must start with https://".to_string(),
                     ));
                 }
             }
@@ -74,8 +73,7 @@ impl TokenMetadata {
                 }
                 if !twitter_url.starts_with("https://") {
                     return Err(AppError::BadRequest(
-                        "Invalid X (Twitter) URL format - must start with https://"
-                            .to_string(),
+                        "Invalid X (Twitter) URL format - must start with https://".to_string(),
                     ));
                 }
             }
@@ -91,8 +89,7 @@ impl TokenMetadata {
                 }
                 if !telegram_url.starts_with("https://") {
                     return Err(AppError::BadRequest(
-                        "Invalid Telegram URL format - must start with https://"
-                            .to_string(),
+                        "Invalid Telegram URL format - must start with https://".to_string(),
                     ));
                 }
             }
@@ -170,20 +167,13 @@ impl MetadataController {
             metadata.is_nsfw
         );
 
-        tokio::time::timeout(
-            Duration::from_millis(1000),
-            query.execute(self.db.get_write_pool()),
+        measure_postgres!(
+            "metadata.save_token_metadata",
+            query.execute(self.db.get_write_pool())
         )
-        .await
-        .map_err(|_| anyhow::anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow::anyhow!("Failed to save token metadata. Reason: {:?}", err))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "save_token_metadata(name: {}, symbol: {}) completed in {:?}",
-            metadata.name, metadata.symbol, elapsed
-        );
-
         if elapsed > Duration::from_millis(100) {
             warn!(
                 "save_token_metadata query slow performance: {:?} for name: {}, symbol: {}",

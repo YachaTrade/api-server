@@ -1,15 +1,14 @@
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -99,8 +98,6 @@ impl ChartController {
         token_id: &str,
         request: &GetBarsRequest,
     ) -> Result<BarResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!(
             "chart",
@@ -117,11 +114,6 @@ impl ChartController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_prices(token_id: {}, resolution: {}, from: {}, to: {}) completed in {:?}",
-            token_id, request.resolution, request.from, request.to, elapsed
-        );
         Ok(result)
     }
 
@@ -159,15 +151,17 @@ impl ChartController {
             LIMIT $5
         "#;
 
-        let mut charts = sqlx::query_as::<_, Chart>(&query)
-            .bind(token_id)
-            .bind(interval_type)
-            .bind(request.from)
-            .bind(request.to)
-            .bind(limit as i32)
-            .fetch_all(self.db.get_read_pool())
-            .await
-            .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
+        let mut charts = measure_postgres!(
+            "chart.fetch_chart_data",
+            sqlx::query_as::<_, Chart>(&query)
+                .bind(token_id)
+                .bind(interval_type)
+                .bind(request.from)
+                .bind(request.to)
+                .bind(limit as i32)
+                .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;
 
         // DESC로 가져온 데이터를 reverse하여 ASC 순서로 만듦
         charts.reverse();

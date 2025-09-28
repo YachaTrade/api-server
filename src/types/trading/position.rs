@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::{
         CountRow,
         info::{AccountInfo, MarketInfo, PositionInfo, PositionTokenInfo, TokenInfo},
@@ -16,7 +16,6 @@ use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
 use utoipa::ToSchema;
 
 /// Position information for a token held by a profile
@@ -85,8 +84,6 @@ impl PositionController {
     }
 
     pub async fn get_total_count_by_token_holder(&self, token_id: &str) -> Result<i64> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("token_holder_count", token_id);
 
@@ -96,18 +93,13 @@ impl PositionController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_token_holder(token_id: {}) completed in {:?}",
-            token_id, elapsed
-        );
         Ok(count)
     }
 
     async fn fetch_token_holder_count(&self, token_id: &str) -> Result<i64> {
         // token_holder_count 테이블 사용으로 최적화
-        let count = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let count = measure_postgres!(
+            "position.fetch_token_holder_count",
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(holder_count, 0) as count
@@ -116,10 +108,9 @@ impl PositionController {
                 "#,
             )
             .bind(token_id)
-            .fetch_optional(self.db.get_read_pool()),
+            .fetch_optional(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch token holder count: {}", err))?;
 
         // 레코드가 없으면 0 반환
         Ok(count.map(|c| c.count).unwrap_or(0))
@@ -130,8 +121,6 @@ impl PositionController {
         token_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("token_holders", token_id, pagination.page, pagination.limit);
 
@@ -140,12 +129,6 @@ impl PositionController {
             self.fetch_holders_by_token(token_id, pagination).await
         })
         .await?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_holders_by_token(token_id: {}) completed in {:?}",
-            token_id, elapsed
-        );
 
         Ok(response)
     }
@@ -156,8 +139,8 @@ impl PositionController {
         pagination: &PaginationParams,
     ) -> Result<TokenHolderResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
-        let record = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let record = measure_postgres!(
+            "position.fetch_holders_by_token",
             sqlx::query_as::<_, TokenHolderRow>(
                 r#"
                 SELECT 
@@ -182,10 +165,9 @@ impl PositionController {
             .bind(token_id)
             .bind(offset)
             .bind(pagination.limit as i64)
-            .fetch_all(self.db.get_read_pool()),
+            .fetch_all(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch token holders: {}", err))?;
         let total_count = if record.is_empty() {
             0
         } else {
@@ -197,8 +179,8 @@ impl PositionController {
             creator: String,
         }
 
-        let token_creator = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let token_creator = measure_postgres!(
+            "position.fetch_token_creator",
             sqlx::query_as::<_, CreatorRow>(
                 r#"
                 SELECT 
@@ -208,10 +190,9 @@ impl PositionController {
                 "#,
             )
             .bind(token_id)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch token creator: {}", err))?;
 
         let token_creator = token_creator.creator;
 
@@ -242,9 +223,8 @@ impl PositionController {
     }
 
     pub async fn get_total_count_by_hold_token(&self, account_id: &str) -> Result<i64> {
-        let start_time = Instant::now();
-        let count = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let count = measure_postgres!(
+            "position.get_total_count_by_hold_token",
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(COUNT(*)::bigint, 0) as count
@@ -253,18 +233,12 @@ impl PositionController {
                 "#,
             )
             .bind(account_id)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to get hold token count: {}", err))?;
 
         let count = count.count;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_hold_token(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
         Ok(count)
     }
     pub async fn get_hold_token_by_account(
@@ -272,7 +246,6 @@ impl PositionController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HoldTokenResponse> {
-        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
         #[derive(sqlx::FromRow)]
         pub struct HoldTokenRow {
@@ -284,8 +257,8 @@ impl PositionController {
             pub price: BigDecimal,
         }
 
-        let record = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let record = measure_postgres!(
+            "position.get_hold_token_by_account",
             sqlx::query_as::<_, HoldTokenRow>(
                 r#"
                 SELECT 
@@ -306,10 +279,9 @@ impl PositionController {
             .bind(account_id)
             .bind(pagination.limit)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
+            .fetch_all(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to get hold token by account: {}", err))?;
 
         let total_count = if record.is_empty() {
             0
@@ -330,11 +302,6 @@ impl PositionController {
                 value: (row.balance * row.price).to_string(),
             })
             .collect();
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hold_token_by_account(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
         Ok(HoldTokenResponse {
             tokens,
             total_count,

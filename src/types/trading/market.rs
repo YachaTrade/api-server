@@ -1,19 +1,15 @@
-use std::{
-    env,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{env, sync::Arc};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -61,8 +57,6 @@ impl MarketController {
     }
 
     pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("market", token_id);
 
@@ -72,17 +66,12 @@ impl MarketController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_market_by_token(token_id: {}) completed in {:?}",
-            token_id, elapsed
-        );
         Ok(market)
     }
 
     async fn fetch_market_by_token(&self, token_id: &str) -> Result<Market> {
-        let market = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let market = measure_postgres!(
+            "market.fetch_market_by_token",
             sqlx::query_as::<_, MarketRow>(
                 r#"
                 SELECT 
@@ -97,10 +86,9 @@ impl MarketController {
                 "#,
             )
             .bind(token_id)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch market by token: {}", err))?;
 
         Ok(Market::from(market))
     }

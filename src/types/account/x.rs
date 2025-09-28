@@ -1,16 +1,13 @@
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use crate::{
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::{ExistsRow, info::XInfo},
 };
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -102,8 +99,6 @@ impl AccountXController {
         account_id: &str,
         req: ConnectXRequest,
     ) -> Result<ConnectedXAccountResponse> {
-        let start_time = Instant::now();
-
         let query = sqlx::query_as::<_, XAccountRow>(
             r#"
             INSERT INTO account_x (account_id, x_handle, x_image_uri, is_blue_label)
@@ -117,9 +112,7 @@ impl AccountXController {
         .bind(req.is_blue_label)
         .fetch_one(self.db.get_write_pool());
 
-        let record = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let record = measure_postgres!("account_x.connect", query)
             .map_err(|err| anyhow!("Failed to connect x\n Reason :{err}"))?;
 
         let response = ConnectedXAccountResponse {
@@ -129,12 +122,6 @@ impl AccountXController {
             is_blue_label: record.is_blue_label,
         };
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "connect_x(account_id: {}, x_handle: {}) completed in {:?}",
-            account_id, req.x_handle, elapsed
-        );
-
         Ok(response)
     }
 
@@ -143,8 +130,6 @@ impl AccountXController {
         account_id: String,
         x_handle: String,
     ) -> Result<DisconnectedXAccountResponse> {
-        let start_time = Instant::now();
-
         // 먼저 해당 X 핸들이 존재하는지 확인
         let query = sqlx::query_as::<_, ExistsRow>(
             "SELECT EXISTS(SELECT 1 FROM account_x WHERE account_id = $1 AND x_handle = $2) as exists",
@@ -153,9 +138,7 @@ impl AccountXController {
         .bind(&x_handle)
         .fetch_optional(self.db.get_read_pool());
 
-        let exists = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let exists = measure_postgres!("account_x.disconnect.exists", query)
             .map_err(|err| anyhow!("Failed to check if x handle exists\n Reason :{err}"))?;
 
         // 존재하지 않으면 NotFound 오류 반환
@@ -179,16 +162,8 @@ impl AccountXController {
         .bind(&x_handle)
         .execute(self.db.get_write_pool());
 
-        tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        measure_postgres!("account_x.disconnect", query)
             .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            "disconnect_x(account_id: {}, x_handle: {}) completed in {:?}",
-            account_id, x_handle, elapsed
-        );
 
         Ok(DisconnectedXAccountResponse {
             account_id,
@@ -201,8 +176,6 @@ impl AccountXController {
         account_id: String,
         x_image_uri: String,
     ) -> Result<GetXHandleResponse> {
-        let start_time = Instant::now();
-
         let query = sqlx::query_as::<_, XInfo>(
             r#"
             UPDATE account_x
@@ -215,16 +188,8 @@ impl AccountXController {
         .bind(&x_image_uri)
         .fetch_one(self.db.get_write_pool());
 
-        let x_info: XInfo = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let x_info: XInfo = measure_postgres!("account_x.update", query)
             .map_err(|err| anyhow!("Failed to get x handle\n Reason :{err}"))?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            "update_x(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
 
         Ok(GetXHandleResponse { account_id, x_info })
     }

@@ -11,12 +11,13 @@ use anyhow::{Result, anyhow};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder, Row, postgres::PgRow};
-use tracing::{info, warn};
+use tracing::warn;
 use utoipa::ToSchema;
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -143,17 +144,10 @@ impl AccountController {
         .bind(account.following_count)
         .fetch_optional(self.db.get_write_pool());
 
-        let result = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let result = measure_postgres!("account.upsert_account", query)
             .map_err(|err| anyhow!("Failed to upsert account. Reason: {:?}", err))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "upsert_account(account_id: {}) completed in {:?}",
-            account.account_id, elapsed
-        );
-
         if elapsed > Duration::from_millis(100) {
             warn!(
                 "upsert_account query slow performance: {:?} for account_id: {}",
@@ -201,13 +195,12 @@ impl AccountController {
                     "#,
                 )
                 .bind(&account.account_id)
-                .fetch_one(self.db.get_read_pool());
-                let row = tokio::time::timeout(Duration::from_millis(1000), query)
-                    .await
-                    .map_err(|_| anyhow!("Query timeout after 1000ms"))?;
+                .fetch_optional(self.db.get_read_pool());
+                let row = measure_postgres!("account.fetch_existing", query)
+                    .map_err(|err| anyhow!("Query timeout or error occurred. Reason: {:?}", err))?;
                 let row = match row {
-                    Ok(row) => row,
-                    Err(_) => {
+                    Some(row) => row,
+                    None => {
                         return Err(anyhow!("Account not found: {}", account.account_id));
                     }
                 };
@@ -238,7 +231,6 @@ impl AccountController {
         nickname: Option<String>,
         bio: Option<String>,
     ) -> Result<Account> {
-        let start_time = Instant::now();
         // 1. UPDATE 구문 시작
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new("UPDATE account SET ");
 
@@ -298,23 +290,13 @@ impl AccountController {
             })
             .fetch_one(self.db.get_write_pool()); // 풀에서 커넥션 얻기
 
-        let updated_account = tokio::time::timeout(Duration::from_millis(1000), update_query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let updated_account = measure_postgres!("account.update_account", update_query)
             .map_err(|err| anyhow!("Fail update account. Reason: {err} address: {}", address))?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "update_account(account_id: {}) completed in {:?}",
-            address, elapsed
-        );
 
         Ok(updated_account)
     }
-
     pub async fn get_account(&self, account_id: &str) -> Result<Account> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("account", account_id);
 
@@ -324,11 +306,6 @@ impl AccountController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_account(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
         Ok(account)
     }
 
@@ -351,15 +328,14 @@ impl AccountController {
             "#,
         )
         .bind(account_id)
-        .fetch_one(self.db.get_read_pool());
+        .fetch_optional(self.db.get_read_pool());
 
-        let row = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?;
+        let row = measure_postgres!("account.fetch_account", query)
+            .map_err(|err| anyhow!("Query timeout or error occurred. Reason: {:?}", err))?;
 
         let row = match row {
-            Ok(row) => row,
-            Err(_) => {
+            Some(row) => row,
+            None => {
                 let account = Account::new(account_id.to_string());
                 self.upsert_account(account.clone())
                     .await

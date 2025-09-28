@@ -18,6 +18,7 @@ use crate::{
         NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
         TOKEN_TRADE_EXPIRATION,
     },
+    measure_redis,
     types::{
         common::pagination::PaginationParams,
         hype::{
@@ -74,8 +75,10 @@ impl RedisDatabase {
 
         let key = format!("session:{}:message", address);
 
-        conn.pset_ex::<String, String, ()>(key, message.to_string(), *MESSAGE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_sign_message",
+            conn.pset_ex::<String, String, ()>(key, message.to_string(), *MESSAGE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -90,7 +93,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
-        let message: Option<String> = conn.get(key).await?;
+        let message: Option<String> = measure_redis!(
+            "redis.get_sign_message",
+            conn.get::<_, Option<String>>(key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -109,7 +115,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:message", address);
-        conn.del::<_, ()>(key).await?;
+        measure_redis!(
+            "redis.delete_sign_message",
+            conn.del::<_, ()>(key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -130,7 +139,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
 
         let key = format!("session:{}:id", session_id);
-        conn.pset_ex::<_, _, ()>(key, address, expiration).await?;
+        measure_redis!(
+            "redis.set_session",
+            conn.pset_ex::<_, _, ()>(key, address, expiration)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -144,7 +156,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("session:{}:id", session_id);
-        let address = conn.get::<_, String>(key).await?;
+        let address: String = measure_redis!(
+            "redis.get_address_by_session",
+            conn.get::<_, String>(key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -158,7 +173,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("session:{}:id", session_id);
-        conn.del::<_, ()>(key).await?;
+        measure_redis!(
+            "redis.delete_session",
+            conn.del::<_, ()>(key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -186,7 +204,10 @@ impl RedisDatabase {
         pipe.pset_ex(&token_key, token_json, *SEARCH_EXPIRATION)
             .pset_ex(&account_key, account_json, *SEARCH_EXPIRATION);
 
-        let _: ((), ()) = pipe.query_async(&mut conn).await?;
+        let _: ((), ()) = measure_redis!(
+            "redis.set_search_response",
+            pipe.query_async(&mut conn)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -207,12 +228,14 @@ impl RedisDatabase {
         let account_key = format!("search:{}:accounts", query);
 
         // Get both token and account responses
-        let (token_json, account_json): (Option<String>, Option<String>) = pipe()
-            .atomic()
-            .get(&token_key)
-            .get(&account_key)
-            .query_async(&mut conn)
-            .await?;
+        let (token_json, account_json): (Option<String>, Option<String>) = measure_redis!(
+            "redis.get_search_response",
+            pipe()
+                .atomic()
+                .get(&token_key)
+                .get(&account_key)
+                .query_async(&mut conn)
+        )?;
 
         // If either cache is missing, return None
         if token_json.is_none() || account_json.is_none() {
@@ -296,8 +319,10 @@ impl RedisDatabase {
 
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, response_json, *ORDER_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_order_response",
+            conn.pset_ex::<_, _, ()>(key, response_json, *ORDER_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -326,7 +351,10 @@ impl RedisDatabase {
             None => format!("order:{}:response", order_type.as_str()),
         };
 
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_order_response",
+            conn.get::<_, String>(key)
+        )?;
         let response: OrderMessage = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
@@ -350,7 +378,10 @@ impl RedisDatabase {
             "hold_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
         );
-        let value: String = conn.get(key).await?;
+        let value: String = measure_redis!(
+            "redis.get_account_hold_token",
+            conn.get::<_, String>(key)
+        )?;
         let response: HoldTokenResponse = serde_json::from_str(&value)?;
 
         let elapsed = start_time.elapsed();
@@ -374,8 +405,10 @@ impl RedisDatabase {
         );
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_account_hold_token",
+            conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "set_account_hold_token(address: {}, page: {}, limit: {}) completed in {:?}",
@@ -398,8 +431,10 @@ impl RedisDatabase {
         );
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_account_token_created",
+            conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "set_account_token_created(address: {}, page: {}, limit: {}) completed in {:?}",
@@ -418,7 +453,10 @@ impl RedisDatabase {
             "create_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
         );
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_account_token_created",
+            conn.get::<_, String>(key)
+        )?;
         let response: TokenCreatedResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
@@ -437,8 +475,10 @@ impl RedisDatabase {
         let key = format!("token:{}", token_id);
 
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_token_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -453,7 +493,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}", token_id);
 
-        let token_json: String = conn.get(key).await?;
+        let token_json: String = measure_redis!(
+            "redis.get_token_response",
+            conn.get::<_, String>(key)
+        )?;
         let response_json: TokenResponse = serde_json::from_str(&token_json)?;
 
         let elapsed = start_time.elapsed();
@@ -474,8 +517,10 @@ impl RedisDatabase {
         let key = format!("token_metadata:{}", token_address);
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, response_json, *GET_TOKEN_METADATA_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_token_metadata",
+            conn.pset_ex::<_, _, ()>(key, response_json, *GET_TOKEN_METADATA_EXPIRATION)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "set_token_metadata(token_address: {}) completed in {:?}",
@@ -488,7 +533,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token_metadata:{}", token_address);
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_token_metadata",
+            conn.get::<_, String>(key)
+        )?;
         let response: TokenMetadataResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
@@ -507,8 +555,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_token");
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_token_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!("set_hype_token_response() completed in {:?}", elapsed);
@@ -519,7 +569,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_token");
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_token_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!("get_hype_token_response() completed in {:?}", elapsed);
         let response_json: HypeTokenResponse = serde_json::from_str(&response_json)?;
@@ -535,8 +588,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_token_epoch:{}", epoch);
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_token_epoch_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -550,7 +605,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_token_epoch:{}", epoch);
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_token_epoch_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_hype_token_epoch_response(epoch: {}) completed in {:?}",
@@ -565,8 +623,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("total_spend_point");
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_TOTAL_SPEND_POINT_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_total_spend_point_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_TOTAL_SPEND_POINT_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -580,7 +640,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("total_spend_point");
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_total_spend_point_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_total_spend_point_response() completed in {:?}",
@@ -595,8 +658,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("community_treasury");
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_COMMUNITY_TREASURY_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_community_treasury_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_COMMUNITY_TREASURY_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -610,7 +675,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("community_treasury");
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_community_treasury_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_community_treasury_response() completed in {:?}",
@@ -625,12 +693,14 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = "hype_epoch";
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(
-            key.to_string(),
-            json,
-            *GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-        )
-        .await?;
+        measure_redis!(
+            "redis.set_hype_epoch_response",
+            conn.pset_ex::<String, String, ()>(
+                key.to_string(),
+                json,
+                *GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
+            )
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!("set_hype_epoch_response() completed in {:?}", elapsed);
@@ -641,7 +711,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = "hype_epoch";
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_epoch_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!("get_hype_epoch_response() completed in {:?}", elapsed);
         let response: HypeEpochResponse = serde_json::from_str(&response_json)?;
@@ -661,8 +734,10 @@ impl RedisDatabase {
             account_id, params.page, params.limit
         );
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_vote_history_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -683,7 +758,10 @@ impl RedisDatabase {
             "hype_vote_history:{}:{}:{}",
             account_id, params.page, params.limit
         );
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_vote_history_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
@@ -706,8 +784,10 @@ impl RedisDatabase {
             account_id, params.page, params.limit
         );
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_point_history_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -728,7 +808,10 @@ impl RedisDatabase {
             "hype_point_history:{}:{}:{}",
             account_id, params.page, params.limit
         );
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_point_history_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
@@ -747,8 +830,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_point:{}", account_id);
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_point_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -762,7 +847,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("hype_point:{}", account_id);
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_point_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_hype_point_response(account_id: {}) completed in {:?}",
@@ -785,8 +873,10 @@ impl RedisDatabase {
             account_id, params.page, params.limit
         );
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_reward_history_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -807,7 +897,10 @@ impl RedisDatabase {
             "hype_reward_history:{}:{}:{}",
             account_id, params.page, params.limit
         );
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_reward_history_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
@@ -830,9 +923,10 @@ impl RedisDatabase {
             account_id, params.page, params.limit
         );
         let serialized = serde_json::to_string(response)?;
-        let _: () = conn
-            .pset_ex::<String, String, ()>(key, serialized, *GET_REWARD_ADD_HISTORY_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_hype_reward_add_history_response",
+            conn.pset_ex::<String, String, ()>(key, serialized, *GET_REWARD_ADD_HISTORY_EXPIRATION)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "set_hype_reward_add_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
@@ -852,7 +946,10 @@ impl RedisDatabase {
             "hype_reward_add_history:{}:{}:{}",
             account_id, params.page, params.limit
         );
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_hype_reward_add_history_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "get_hype_reward_add_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
@@ -876,8 +973,10 @@ impl RedisDatabase {
         let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_token_swap_history",
+            conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "set_token_swap_history(token_id: {}, query: {:?}) completed in {:?}",
@@ -894,7 +993,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
-        let history_json: String = conn.get(key).await?;
+        let history_json: String = measure_redis!(
+            "redis.get_token_swap_history",
+            conn.get::<_, String>(key)
+        )?;
         let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
         let elapsed = start_time.elapsed();
         debug!(
@@ -918,8 +1020,10 @@ impl RedisDatabase {
         );
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
-        conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_token_holder_response",
+            conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
+        )?;
         let elapsed = start_time.elapsed();
         debug!(
             "set_token_holder_response(token_id: {}, page: {}, limit: {}) completed in {:?}",
@@ -938,7 +1042,10 @@ impl RedisDatabase {
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
         );
-        let history_json: String = conn.get(key).await?;
+        let history_json: String = measure_redis!(
+            "redis.get_token_holder_response",
+            conn.get::<_, String>(key)
+        )?;
         let history: TokenHolderResponse = serde_json::from_str(&history_json)?;
         let elapsed = start_time.elapsed();
         debug!(
@@ -958,7 +1065,10 @@ impl RedisDatabase {
             "token:{}:chart:resolution:{}:from:{}_to:{}",
             token_id, request.resolution, request.from, request.to
         );
-        let data: Option<String> = conn.get(&key).await?;
+        let data: Option<String> = measure_redis!(
+            "redis.get_prices",
+            conn.get::<_, Option<String>>(&key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -989,8 +1099,10 @@ impl RedisDatabase {
             token_id, request.resolution, request.from, request.to
         );
         let json = serde_json::to_string(bar_data)?;
-        conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_prices",
+            conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -1005,8 +1117,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_market",
+            conn.pset_ex::<String, String, ()>(key, json, *TOKEN_TRADE_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -1020,7 +1134,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_market",
+            conn.get::<_, String>(key)
+        )?;
         let response: Market = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
@@ -1038,7 +1155,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = "new_content:latest";
-        let response_json: String = conn.get(key).await?;
+        let response_json: String = measure_redis!(
+            "redis.get_new_content",
+            conn.get::<_, String>(key)
+        )?;
         let response: NewContentResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
@@ -1051,8 +1171,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = "new_content:latest";
         let json = serde_json::to_string(response)?;
-        conn.pset_ex::<String, String, ()>(key.to_string(), json, *NEW_CONTENT_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_new_content",
+            conn.pset_ex::<String, String, ()>(key.to_string(), json, *NEW_CONTENT_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!("set_new_content() completed in {:?}", elapsed);
@@ -1066,7 +1188,10 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("nsfw:{}", image_url);
-        let is_nsfw: Option<bool> = conn.get(key).await?;
+        let is_nsfw: Option<bool> = measure_redis!(
+            "redis.get_nsfw_status",
+            conn.get::<_, Option<bool>>(key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -1082,8 +1207,10 @@ impl RedisDatabase {
         let key = format!("nsfw:{}", image_url);
 
         // Cache using NSFW_STATUS_EXPIRATION (3 minutes = 180000 ms)
-        conn.pset_ex::<String, bool, ()>(key, is_nsfw, *NSFW_STATUS_EXPIRATION)
-            .await?;
+        measure_redis!(
+            "redis.set_nsfw_status",
+            conn.pset_ex::<String, bool, ()>(key, is_nsfw, *NSFW_STATUS_EXPIRATION)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -1098,7 +1225,10 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("nsfw:{}", image_url);
 
-        conn.del::<String, ()>(key).await?;
+        measure_redis!(
+            "redis.delete_nsfw_status",
+            conn.del::<String, ()>(key)
+        )?;
 
         let elapsed = start_time.elapsed();
         debug!(

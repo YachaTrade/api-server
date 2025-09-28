@@ -1,12 +1,9 @@
-use std::{
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{str::FromStr, sync::Arc};
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::{
         CountRow,
         info::{AccountInfo, TokenInfo},
@@ -22,7 +19,6 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::FromRow;
 use sqlx::Row;
-use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
@@ -158,8 +154,6 @@ impl SwapController {
     }
 
     pub async fn get_total_count_by_account(&self, account_id: &str) -> Result<i64> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("swap_count_by_account", account_id);
 
@@ -169,18 +163,13 @@ impl SwapController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_account(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
         Ok(count)
     }
 
     async fn fetch_total_count_by_account(&self, account_id: &str) -> Result<i64> {
         // account_swap_count 테이블 사용으로 최적화
-        let count = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let count = measure_postgres!(
+            "swap.fetch_total_count_by_account",
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(total_count, 0) as count
@@ -189,10 +178,9 @@ impl SwapController {
                 "#,
             )
             .bind(account_id)
-            .fetch_optional(self.db.get_read_pool()),
+            .fetch_optional(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch total count by account: {}", err))?;
 
         // 레코드가 없으면 0 반환
         Ok(count.map(|c| c.count).unwrap_or(0))
@@ -241,8 +229,8 @@ impl SwapController {
         }
 
         // CTE를 사용한 최적화
-        let swaps = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let swaps = measure_postgres!(
+            "swap.fetch_swaps_by_account",
             sqlx::query_as::<_, SwapRow>(
                 r#"
                 WITH recent_swaps AS (
@@ -279,10 +267,9 @@ impl SwapController {
             .bind(account_id)
             .bind(pagination.limit as i64)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
+            .fetch_all(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch swaps by account: {}", err))?;
 
         let total_count = if swaps.is_empty() {
             0
@@ -316,7 +303,6 @@ impl SwapController {
         token_id: &str,
         query: &SwapQuery,
     ) -> Result<TokenSwapResponse> {
-        let start_time = Instant::now();
         let offset = (query.page - 1) * query.limit;
 
         // 파라미터 카운터로 순서 관리
@@ -393,12 +379,11 @@ impl SwapController {
         }
 
         // 쿼리 실행
-        let rows = tokio::time::timeout(
-            Duration::from_millis(1000),
-            query_builder.fetch_all(self.db.get_read_pool()),
+        let rows = measure_postgres!(
+            "swap.get_swaps_by_token",
+            query_builder.fetch_all(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch swaps by token: {}", err))?;
 
         // 결과 변환 (기존과 동일)
         let swaps: Vec<TokenSwap> = rows
@@ -450,11 +435,6 @@ impl SwapController {
                 .await?
         };
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_swaps_by_token(token_id: {}, page: {}, limit: {}) completed in {:?}",
-            token_id, query.page, query.limit, elapsed
-        );
         Ok(TokenSwapResponse { swaps, total_count })
     }
 
@@ -528,12 +508,11 @@ impl SwapController {
             query_builder = query_builder.bind(min_vol_decimal);
         }
 
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
-            query_builder.fetch_one(self.db.get_read_pool()),
+        let row = measure_postgres!(
+            "swap.get_total_count_by_token_with_filters",
+            query_builder.fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch swap count with filters: {}", err))?;
         let count: i64 = row.try_get("count").unwrap();
         Ok(count)
     }
@@ -544,14 +523,13 @@ impl SwapController {
             column
         );
 
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let row = measure_postgres!(
+            "swap.get_cached_count",
             sqlx::query(&query)
                 .bind(token_id)
-                .fetch_optional(self.db.get_read_pool()),
+                .fetch_optional(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch cached swap count: {}", err))?;
 
         Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
     }
