@@ -1,18 +1,18 @@
 use axum::{
-    extract::{Path, Query, State},
     Extension, Json,
+    extract::{Path, Query, State},
 };
 
 use tracing::instrument;
 
 use crate::{
     result::{AppError, AppJsonResult},
+    services::social::SocialService,
     state::AppState,
     types::{
         common::pagination::PaginationParams,
         social::follow::{
-            CheckFollowResponse, FollowController, FollowsResponse, UpdateFollowRequest,
-            UpdateFollowResponse,
+            CheckFollowResponse, FollowsResponse, UpdateFollowRequest, UpdateFollowResponse,
         },
     },
 };
@@ -52,19 +52,10 @@ pub async fn add_follow(
         ));
     }
 
-    let follow_controller = FollowController::new(state.postgres.clone());
+    let service = SocialService::new(state.postgres.clone());
+    let response = service.add_follow(follower, following).await?;
 
-    let (follower_account, following_account) = follow_controller
-        .add_follow(follower, following)
-        .await
-        .map_err(|err| {
-            AppError::BadRequest(err.to_string())
-        })?;
-
-    Ok(Json(UpdateFollowResponse {
-        follower: follower_account,
-        following: following_account,
-    }))
+    Ok(Json(response))
 }
 
 #[utoipa::path(
@@ -99,18 +90,10 @@ pub async fn remove_follow(
             "Address and target_address are same".into(),
         ));
     }
-    let follow_controller = FollowController::new(state.postgres.clone());
-    let (follower_account, following_account) = follow_controller
-        .remove_follow(follower, following)
-        .await
-        .map_err(|err| {
-            AppError::BadRequest(err.to_string())
-        })?;
+    let service = SocialService::new(state.postgres.clone());
+    let response = service.remove_follow(follower, following).await?;
 
-    Ok(Json(UpdateFollowResponse {
-        follower: follower_account,
-        following: following_account,
-    }))
+    Ok(Json(response))
 }
 
 #[utoipa::path(
@@ -137,12 +120,9 @@ pub async fn check_follow(
     Extension(session_address): Extension<String>,
     Path(account_id): Path<String>,
 ) -> AppJsonResult<CheckFollowResponse> {
-    let follow_controller = FollowController::new(state.postgres.clone());
+    let service = SocialService::new(state.postgres.clone());
 
-    let is_following = follow_controller
-        .check_follow(account_id, session_address)
-        .await
-        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+    let is_following = service.check_follow(account_id, session_address).await?;
 
     Ok(Json(CheckFollowResponse { is_following }))
 }
@@ -169,9 +149,8 @@ pub async fn get_followers(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<FollowsResponse> {
-    let follows = FollowController::new(state.postgres.clone())
-        .get_follows(&account_id, false, pagination)
-        .await?;
+    let service = SocialService::new(state.postgres.clone());
+    let follows = service.get_follows(&account_id, false, pagination).await?;
     Ok(Json(FollowsResponse { accounts: follows }))
 }
 
@@ -197,8 +176,7 @@ pub async fn get_followings(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<FollowsResponse> {
-    let follows = FollowController::new(state.postgres.clone())
-        .get_follows(&account_id, true, pagination)
-        .await?;
+    let service = SocialService::new(state.postgres.clone());
+    let follows = service.get_follows(&account_id, true, pagination).await?;
     Ok(Json(FollowsResponse { accounts: follows }))
 }

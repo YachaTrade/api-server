@@ -1,7 +1,7 @@
 pub mod handler;
 pub mod path;
 
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
 use path::MetricsPath;
 

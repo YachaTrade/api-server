@@ -3,14 +3,15 @@ use axum::{
     extract::{Query, State},
 };
 
-use tracing::{error, instrument, warn};
+use tracing::instrument;
 
 use crate::{
-    result::{AppError, AppJsonResult},
+    result::AppJsonResult,
+    services::token::order::TokenOrderService,
     state::AppState,
     types::{
         common::pagination::PaginationParams,
-        token::order::{OrderController, OrderMessage, TokenOrderType},
+        token::order::{OrderMessage, TokenOrderType},
     },
 };
 
@@ -37,61 +38,10 @@ pub async fn get_creation_time_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<OrderMessage> {
-    // 캐시된 결과 확인
-    if let Ok(cached_response) = state
-        .redis
-        .get_order_response(&TokenOrderType::CreationTime, Some(&query))
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-
-    let order_controller = OrderController::new(state.postgres.clone());
-    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
-        async {
-            order_controller
-                .get_order_tokens(TokenOrderType::CreationTime, &query)
-                .await
-                .map_err(|err| {
-                    error!("Failed to get order tokens: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        },
-        async {
-            order_controller
-                .get_latest_king_of_the_hill()
-                .await
-                .map_err(|err| {
-                    error!("Failed to get latest king of the hill: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        },
-        async {
-            order_controller.get_total_count_by_type(&TokenOrderType::CreationTime).await.map_err(|err| {
-                error!("Failed to get total count: {}", err);
-                AppError::InternalError(err.to_string())
-            })
-        }
-    )?;
-    let response = OrderMessage {
-        order_type: TokenOrderType::CreationTime,
-        order_token: Some(order_tokens),
-        king_of_the_hill,
-        total_count,
-    };
-
-    // 결과를 캐시에 저장
-    if let Err(err) = state
-        .redis
-        .set_order_response(&TokenOrderType::CreationTime, &response, Some(&query))
-        .await
-    {
-        warn!(
-            "Failed to set {:?} cache: {}",
-            TokenOrderType::CreationTime,
-            err
-        );
-    }
+    let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
+        .get_order(TokenOrderType::CreationTime, &query)
+        .await?;
 
     Ok(Json(response))
 }
@@ -117,44 +67,8 @@ pub async fn get_market_cap_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<OrderMessage> {
-    // 캐시된 결과 확인
-    if let Ok(cached_response) = state
-        .redis
-        .get_order_response(&TokenOrderType::MarketCap, Some(&query))
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-
-    let order_controller = OrderController::new(state.postgres.clone());
-    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
-        order_controller.get_order_tokens(TokenOrderType::MarketCap, &query),
-        order_controller.get_latest_king_of_the_hill(),
-        order_controller.get_total_count_by_type(&TokenOrderType::MarketCap)
-    )
-    .map_err(|err| {
-        error!("Failed to fetch order data: {}", err);
-        AppError::InternalError(err.to_string())
-    })?;
-    let response = OrderMessage {
-        order_type: TokenOrderType::MarketCap,
-        order_token: Some(order_tokens),
-        king_of_the_hill,
-        total_count,
-    };
-
-    // 결과를 캐시에 저장
-    if let Err(err) = state
-        .redis
-        .set_order_response(&TokenOrderType::MarketCap, &response, Some(&query))
-        .await
-    {
-        warn!(
-            "Failed to set {:?} cache: {}",
-            TokenOrderType::MarketCap,
-            err
-        );
-    }
+    let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_order(TokenOrderType::MarketCap, &query).await?;
 
     Ok(Json(response))
 }
@@ -180,61 +94,10 @@ pub async fn get_latest_trade_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<OrderMessage> {
-    // 캐시된 결과 확인
-    if let Ok(cached_response) = state
-        .redis
-        .get_order_response(&TokenOrderType::LatestTrade, Some(&query))
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-
-    let order_controller = OrderController::new(state.postgres.clone());
-    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
-        async {
-            order_controller
-                .get_order_tokens(TokenOrderType::LatestTrade, &query)
-                .await
-                .map_err(|err| {
-                    error!("Failed to get order tokens: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        },
-        async {
-            order_controller
-                .get_latest_king_of_the_hill()
-                .await
-                .map_err(|err| {
-                    error!("Failed to get latest king of the hill: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        },
-        async {
-            order_controller.get_total_count_by_type(&TokenOrderType::LatestTrade).await.map_err(|err| {
-                error!("Failed to get total count: {}", err);
-                AppError::InternalError(err.to_string())
-            })
-        }
-    )?;
-    let response = OrderMessage {
-        order_type: TokenOrderType::LatestTrade,
-        order_token: Some(order_tokens),
-        king_of_the_hill,
-        total_count,
-    };
-
-    // 결과를 캐시에 저장
-    if let Err(err) = state
-        .redis
-        .set_order_response(&TokenOrderType::LatestTrade, &response, Some(&query))
-        .await
-    {
-        warn!(
-            "Failed to set {:?} cache: {}",
-            TokenOrderType::LatestTrade,
-            err
-        );
-    }
+    let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
+        .get_order(TokenOrderType::LatestTrade, &query)
+        .await?;
 
     Ok(Json(response))
 }
@@ -260,64 +123,8 @@ pub async fn get_verified_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
 ) -> AppJsonResult<OrderMessage> {
-    // 캐시된 결과 확인
-    if let Ok(cached_response) = state
-        .redis
-        .get_order_response(&TokenOrderType::Verified, Some(&query))
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-
-    let order_controller = OrderController::new(state.postgres.clone());
-    let (order_tokens, king_of_the_hill, total_count) = tokio::try_join!(
-        async {
-            order_controller
-                .get_order_tokens(TokenOrderType::Verified, &query)
-                .await
-                .map_err(|err| {
-                    error!("Failed to get order tokens: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        },
-        async {
-            order_controller
-                .get_latest_king_of_the_hill()
-                .await
-                .map_err(|err| {
-                    error!("Failed to get latest king of the hill: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        },
-        async {
-            order_controller
-                .get_total_count_by_type(&TokenOrderType::Verified)
-                .await
-                .map_err(|err| {
-                    error!("Failed to get verified token count: {}", err);
-                    AppError::InternalError(err.to_string())
-                })
-        }
-    )?;
-    let response = OrderMessage {
-        order_type: TokenOrderType::Verified,
-        order_token: Some(order_tokens),
-        king_of_the_hill,
-        total_count,
-    };
-
-    // 결과를 캐시에 저장
-    if let Err(err) = state
-        .redis
-        .set_order_response(&TokenOrderType::Verified, &response, Some(&query))
-        .await
-    {
-        warn!(
-            "Failed to set {:?} cache: {}",
-            TokenOrderType::Verified,
-            err
-        );
-    }
+    let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_order(TokenOrderType::Verified, &query).await?;
 
     Ok(Json(response))
 }

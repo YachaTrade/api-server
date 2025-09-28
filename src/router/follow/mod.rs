@@ -1,7 +1,6 @@
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{delete, get, put},
-    Router,
 };
 
 use path::FollowPath;

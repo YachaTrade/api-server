@@ -1,8 +1,8 @@
 use anyhow::Error;
 use axum::{
+    Json,
     http::{Response, StatusCode},
     response::IntoResponse,
-    Json,
 };
 
 use redis::RedisError;
@@ -12,6 +12,7 @@ pub type AppResult<T> = Result<T, AppError>;
 pub type AppJsonResult<T> = AppResult<Json<T>>;
 pub type AppResonseResult<T> = AppResult<Response<T>>;
 /// From: https://github.com/Brendonovich/prisma-client-rust/blob/e520c5f6e30c0839d9dbccaa228f3eedbf188b6c/examples/axum-rest/src/routes.rs#L118
+#[derive(Debug)]
 pub enum AppError {
     AnyhowError(anyhow::Error),
     RouteError(String),

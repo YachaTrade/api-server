@@ -1,4 +1,4 @@
-use crate::types::auth::SessionController;
+use crate::controllers::auth::session::SessionController;
 
 use super::{config::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
 
@@ -8,8 +8,8 @@ use axum::{
     http::{Request, Response},
     middleware::Next,
 };
-use tower_cookies::Cookies;
 use std::env;
+use tower_cookies::Cookies;
 
 pub async fn authenticate_user(
     State(state): State<AppState>,

@@ -2,7 +2,7 @@ pub mod handler;
 pub mod path;
 use crate::state::AppState;
 
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
 use path::ProfilePath;
 

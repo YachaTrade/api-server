@@ -3,16 +3,14 @@ use axum::{
     extract::{Path, State},
 };
 
-use tracing::{error, instrument};
+use tracing::instrument;
 
 use super::path::TokenPath;
 use crate::{
     result::{AppError, AppJsonResult},
+    services::token::{detail::TokenService, metadata::TokenMetadataService},
     state::AppState,
-    types::token::{
-        TokenController, TokenResponse,
-        metadata::{TokenMetadataController, TokenMetadataResponse},
-    },
+    types::token::{TokenResponse, metadata::TokenMetadataResponse},
     utils::valid_evm_address,
 };
 
@@ -36,23 +34,10 @@ pub async fn get_token(
     Path(token_id): Path<String>,
 ) -> AppJsonResult<TokenResponse> {
     if !valid_evm_address(&token_id) {
-        error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    if let Ok(cached_response) = state.redis.get_token_response(&token_id).await {
-        return Ok(Json(cached_response));
-    }
-    let token_controller = TokenController::new(state.postgres.clone());
-    let response = token_controller.get_token(&token_id).await.map_err(|err| {
-        error!(
-            "Failed to get token: token_id: {}, error: {}",
-            token_id, err
-        );
-        AppError::NotFound(err.to_string())
-    })?;
-    if let Err(e) = state.redis.set_token_response(&token_id, &response).await {
-        error!("Failed to set token response: {}", e);
-    }
+    let service = TokenService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_token(&token_id).await?;
 
     Ok(Json(response))
 }
@@ -76,30 +61,10 @@ pub async fn get_token_metadata(
     Path(token_address): Path<String>,
 ) -> AppJsonResult<TokenMetadataResponse> {
     if !valid_evm_address(&token_address) {
-        error!("Invalid token ID format: {}", token_address);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    if let Ok(cached_response) = state.redis.get_token_metadata(&token_address).await {
-        return Ok(Json(cached_response));
-    }
-    let token_metadata_controller = TokenMetadataController::new(state.postgres.clone());
-    let response = token_metadata_controller
-        .get_token_metadata(&token_address)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get token metadata: token_address: {}, error: {}",
-                token_address, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_token_metadata(&token_address, &response)
-        .await
-    {
-        error!("Failed to set token metadata: {}", e);
-    }
+    let service = TokenMetadataService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_token_metadata(&token_address).await?;
 
     Ok(Json(response))
 }

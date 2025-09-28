@@ -2,9 +2,8 @@ pub mod handler;
 pub mod path;
 
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{delete, post},
-    Router,
 };
 use handler::{auth_delete_session, auth_nonce, auth_session};
 use path::AuthPath;

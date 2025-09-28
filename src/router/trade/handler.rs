@@ -5,25 +5,26 @@ use axum::{
 use std::time::Instant;
 
 use serde::Deserialize;
-use serde_json::json;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, info, instrument};
 use utoipa::IntoParams;
 
 use crate::{
     result::{AppError, AppJsonResult},
     router::trade::path::TradePath,
+    services::trading::{
+        chart::ChartService, market::MarketService, metrics::MetricsService,
+        position::PositionService, price::PriceService, swap_history::SwapService,
+    },
     state::AppState,
     types::{
         common::pagination::PaginationParams,
         trading::{
-            chart::{BarResponse, ChartController, GetBarsRequest},
-            market::{Market, MarketController},
-            metrics::{
-                MetricsController, TimeFrame, TokenTradingMetrics, TokenTradingMetricsBatch,
-            },
-            position::{PositionController, TokenHolderResponse},
-            price::{PriceController, PriceResponse},
-            swap_history::{SwapController, SwapQuery, TokenSwapResponse},
+            chart::{BarResponse, GetBarsRequest},
+            market::Market,
+            metrics::{TimeFrame, TokenTradingMetrics, TokenTradingMetricsBatch},
+            position::TokenHolderResponse,
+            price::PriceResponse,
+            swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
     utils::valid_evm_address,
@@ -64,28 +65,8 @@ pub async fn get_swap_history(
         AppError::BadRequest(e)
     })?;
 
-    if let Ok(cached_response) = state.redis.get_token_swap_history(&token_id, &query).await {
-        return Ok(Json(cached_response));
-    }
-
-    let response = SwapController::new(state.postgres.clone())
-        .get_swaps_by_token(&token_id, &query)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get swap history: token_id: {:?}, error: {}",
-                token_id, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-
-    if let Err(err) = state
-        .redis
-        .set_token_swap_history(&token_id, &response, &query)
-        .await
-    {
-        warn!("Failed to set token swap history cache: {}", err);
-    }
+    let swap_service = SwapService::new(state.postgres.clone(), state.redis.clone());
+    let response = swap_service.get_swaps_by_token(&token_id, &query).await?;
 
     Ok(Json(response))
 }
@@ -116,30 +97,10 @@ pub async fn get_holder(
         error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
-    if let Ok(cached_response) = state
-        .redis
-        .get_token_holder_response(&token_id, &params)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-    let response = PositionController::new(state.postgres.clone())
+    let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
+    let response = position_service
         .get_holders_by_token(&token_id, &params)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get token holders: token_id: {}, error: {}",
-                token_id, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-    if let Err(err) = state
-        .redis
-        .set_token_holder_response(&token_id, &response, &params)
-        .await
-    {
-        warn!("Failed to set token holder cache: {}", err);
-    }
+        .await?;
     Ok(Json(response))
 }
 
@@ -167,26 +128,8 @@ pub async fn get_market(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
-    // Try to get from cache first
-    if let Ok(cached_response) = state.redis.get_market(&token_id).await {
-        return Ok(Json(cached_response));
-    }
-
-    let response = MarketController::new(state.postgres.clone())
-        .get_market_by_token(&token_id)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get market information: token_id: {}, error: {}",
-                token_id, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-
-    // Cache the response
-    if let Err(e) = state.redis.set_market(&token_id, &response).await {
-        error!("Failed to set market cache: {}", e);
-    }
+    let market_service = MarketService::new(state.postgres.clone(), state.redis.clone());
+    let response = market_service.get_market(&token_id).await?;
 
     Ok(Json(response))
 }
@@ -220,35 +163,8 @@ pub async fn get_prices(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
-    // 캐시에서 먼저 데이터 조회
-    let cache_result = state.redis.get_prices(&token_id, &query).await;
-
-    if let Ok(Some(cached_data)) = cache_result {
-        return Ok(Json(cached_data));
-    }
-
-    let chart_controller = ChartController::new(state.postgres.clone());
-
-    // 요청에서 필요한 매개변수 추출
-    let token_id = token_id;
-
-    // 차트 데이터 가져오기
-    let bar_data = chart_controller
-        .get_prices(&token_id, &query)
-        .await
-        .map_err(|err| {
-            let err_msg = format!(
-                "Failed to get price chart data: token_id: {}, error: {}",
-                token_id, err
-            );
-            error!("{}", err_msg);
-            AppError::InternalError(err_msg)
-        })?;
-
-    // 조회 결과를 캐시에 저장
-    if let Err(err) = state.redis.set_prices(&token_id, &query, &bar_data).await {
-        error!("Failed to cache bar data response: {}", err);
-    }
+    let chart_service = ChartService::new(state.postgres.clone(), state.redis.clone());
+    let bar_data = chart_service.get_prices(&token_id, &query).await?;
 
     Ok(Json(bar_data))
 }
@@ -272,11 +188,8 @@ pub async fn get_price(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> AppJsonResult<PriceResponse> {
-    let price_controller = PriceController::new(state.postgres.clone());
-    let price_response = price_controller.get_price(&token).await.map_err(|err| {
-        error!("Failed to get price: token: {}, error: {}", token, err);
-        AppError::InternalError(format!("Failed to get price: {}", err))
-    })?;
+    let price_service = PriceService::new(state.postgres.clone());
+    let price_response = price_service.get_price(&token).await?;
     Ok(Json(price_response))
 }
 
@@ -364,14 +277,14 @@ pub async fn get_metrics(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
-    let metrics_controller = MetricsController::new(state.postgres.clone());
+    let metrics_service = MetricsService::new(state.postgres.clone());
 
-    let metrics = metrics_controller
-        .trading_metrics(&token_id, params.timeframe)
+    let metrics = metrics_service
+        .get_metrics(&token_id, params.timeframe)
         .await
-        .map_err(|e| {
-            error!("Failed to get trading metrics: {}", e);
-            AppError::InternalError(format!("Failed to get trading metrics: {}", e))
+        .map_err(|err| {
+            error!("Failed to get trading metrics: {:?}", err);
+            err
         })?;
 
     let elapsed = start_time.elapsed();
@@ -425,14 +338,14 @@ pub async fn get_metrics_batch(
         ));
     }
 
-    let metrics_controller = MetricsController::new(state.postgres.clone());
+    let metrics_service = MetricsService::new(state.postgres.clone());
 
-    let metrics_batch = metrics_controller
-        .trading_metrics_batch(&token_id, params.timeframes)
+    let metrics_batch = metrics_service
+        .get_metrics_batch(&token_id, params.timeframes)
         .await
-        .map_err(|e| {
-            error!("Failed to get batch trading metrics: {}", e);
-            AppError::InternalError(format!("Failed to get batch trading metrics: {}", e))
+        .map_err(|err| {
+            error!("Failed to get batch trading metrics: {:?}", err);
+            err
         })?;
 
     let elapsed = start_time.elapsed();
