@@ -56,6 +56,37 @@ impl HypeController {
         HypeController { db }
     }
 
+    pub async fn get_active_epoch(&self) -> Result<Option<HypeEpochResponse>> {
+        #[derive(sqlx::FromRow)]
+        struct ActiveEpochRow {
+            epoch: i64,
+            start_at: i64,
+            end_at: i64,
+            status: String,
+        }
+
+        let row = measure_postgres!(
+            "hype.get_active_epoch",
+            sqlx::query_as::<_, ActiveEpochRow>(
+                r#"
+                SELECT epoch, start_at, end_at, status
+                FROM epoch
+                WHERE status = 'ACTIVE'
+                LIMIT 1
+                "#,
+            )
+            .fetch_optional(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch active hype epoch: {}", err))?;
+
+        Ok(row.map(|row| HypeEpochResponse {
+            epoch: row.epoch,
+            start_at: row.start_at,
+            end_at: row.end_at,
+            status: row.status,
+        }))
+    }
+
     pub async fn get_hype_token(&self) -> Result<HypeTokenResponse> {
         let cache_key = "hype_token";
 
