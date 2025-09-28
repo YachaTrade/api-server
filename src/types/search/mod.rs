@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
@@ -83,8 +81,6 @@ impl SearchController {
     }
 
     pub async fn search(&self, query: &str) -> Result<SearchResponse> {
-        let start_time = Instant::now();
-
         if query.trim().is_empty() {
             return Ok(SearchResponse {
                 tokens: SearchTokenResponse {
@@ -107,8 +103,6 @@ impl SearchController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!("search(query: {}) completed in {:?}", query, elapsed);
         Ok(result)
     }
 

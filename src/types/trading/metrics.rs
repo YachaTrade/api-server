@@ -2,10 +2,10 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{info, warn};
+use tracing::warn;
 use utoipa::ToSchema;
 
-use crate::db::postgres::PostgresDatabase;
+use crate::{db::postgres::PostgresDatabase, measure_postgres};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub enum TimeFrame {
@@ -220,22 +220,13 @@ impl MetricsController {
             timeframe_ago
         );
 
-        let result = tokio::time::timeout(
-            Duration::from_millis(1000),
-            query.fetch_one(self.db.get_read_pool()),
+        let result = measure_postgres!(
+            "trading_metrics.trading_metrics",
+            query.fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow::anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow::anyhow!("Failed to get trading metrics. Reason: {:?}", err))?;
 
         let elapsed = start_time.elapsed();
-        info!(
-            "trading_metrics(token_id: {}, timeframe: {}) completed in {:?}",
-            token_id,
-            timeframe.to_display_string(),
-            elapsed
-        );
-
         if elapsed > Duration::from_millis(100) {
             warn!(
                 "trading_metrics query slow performance: {:?} for token_id: {}, timeframe: {}",

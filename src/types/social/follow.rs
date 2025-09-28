@@ -1,14 +1,13 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::{
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::{ExistsRow, info::AccountInfo, pagination::PaginationParams},
 };
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
 use utoipa::ToSchema;
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateFollowRequest {
@@ -60,11 +59,10 @@ impl FollowController {
         is_following: bool,
         pagination: PaginationParams,
     ) -> Result<Vec<Follow>> {
-        let start_time = Instant::now();
         let offset = (pagination.page - 1) * pagination.limit;
 
-        let follows = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let follows = measure_postgres!(
+            "follow.get_follows",
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 SELECT 
@@ -75,12 +73,12 @@ impl FollowController {
                     a.following_count
                 FROM follow f
                 JOIN account a ON CASE 
-                    WHEN $2 = true THEN a.account_id = f.following_id  -- Get following
-                    ELSE a.account_id = f.follower_id                  -- Get followers
+                    WHEN $2 = true THEN a.account_id = f.following_id
+                    ELSE a.account_id = f.follower_id
                 END
                 WHERE CASE 
-                    WHEN $2 = true THEN f.follower_id = $1   -- account_id is following others
-                    ELSE f.following_id = $1                 -- others are following account_id
+                    WHEN $2 = true THEN f.follower_id = $1
+                    ELSE f.following_id = $1
                 END
                 ORDER BY a.follower_count DESC
                 LIMIT $3
@@ -91,21 +89,15 @@ impl FollowController {
             .bind(is_following)
             .bind(pagination.limit as i64)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
+            .fetch_all(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch follows: {}", err))?;
 
         let follows = follows
             .into_iter()
             .map(|account| Follow { account })
             .collect();
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_follows(account_id: {}, is_following: {}) completed in {:?}",
-            account_id, is_following, elapsed
-        );
         Ok(follows)
     }
 
@@ -114,16 +106,14 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
-        let start_time = Instant::now();
-
         #[derive(sqlx::FromRow)]
         struct FollowResult {
             follower_info: serde_json::Value,
             following_info: serde_json::Value,
         }
 
-        let result = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let result = measure_postgres!(
+            "follow.add_follow",
             sqlx::query_as::<_, FollowResult>(
                 r#"
                 WITH follow_insert AS (
@@ -154,20 +144,14 @@ impl FollowController {
             )
             .bind(&follower)
             .bind(&following)
-            .fetch_optional(self.db.get_write_pool()),
+            .fetch_optional(self.db.get_write_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to add follow: {}", err))?;
 
         let result = result.ok_or_else(|| anyhow!("Follow already exists or failed"))?;
         let follower_info: AccountInfo = serde_json::from_value(result.follower_info)?;
         let following_info: AccountInfo = serde_json::from_value(result.following_info)?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "add_follow(follower: {}, following: {}) completed in {:?}",
-            follower_info.account_id, following_info.account_id, elapsed
-        );
         Ok((follower_info, following_info))
     }
 
@@ -176,16 +160,14 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
-        let start_time = Instant::now();
-
         #[derive(sqlx::FromRow)]
         struct FollowResult {
             follower_info: serde_json::Value,
             following_info: serde_json::Value,
         }
 
-        let result = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let result = measure_postgres!(
+            "follow.remove_follow",
             sqlx::query_as::<_, FollowResult>(
                 r#"
                 WITH follow_delete AS (
@@ -215,27 +197,20 @@ impl FollowController {
             )
             .bind(&follower)
             .bind(&following)
-            .fetch_optional(self.db.get_write_pool()),
+            .fetch_optional(self.db.get_write_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to remove follow: {}", err))?;
 
         let result = result.ok_or_else(|| anyhow!("Follow relationship not found or failed"))?;
         let follower_info: AccountInfo = serde_json::from_value(result.follower_info)?;
         let following_info: AccountInfo = serde_json::from_value(result.following_info)?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "remove_follow(follower: {}, following: {}) completed in {:?}",
-            follower_info.account_id, following_info.account_id, elapsed
-        );
         Ok((follower_info, following_info))
     }
 
     pub async fn check_follow(&self, follower: String, following: String) -> Result<bool> {
-        let start_time = Instant::now();
-        let result = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let result = measure_postgres!(
+            "follow.check_follow",
             sqlx::query_as::<_, ExistsRow>(
                 r#"
                 SELECT EXISTS (
@@ -246,16 +221,10 @@ impl FollowController {
             )
             .bind(&follower)
             .bind(&following)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to check follow: {}", err))?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "check_follow(follower: {}, following: {}) completed in {:?}",
-            follower, following, elapsed
-        );
         Ok(result.exists)
     }
 
@@ -265,8 +234,8 @@ impl FollowController {
         follower: &str,
         following: &str,
     ) -> Result<()> {
-        tokio::time::timeout(
-            Duration::from_millis(1000),
+        measure_postgres!(
+            "follow.insert_follow",
             sqlx::query(
                 r#"
                 INSERT INTO follow (follower_id, following_id)
@@ -276,10 +245,8 @@ impl FollowController {
             )
             .bind(follower)
             .bind(following)
-            .execute(tx),
+            .execute(tx)
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed to insert follow\n Reason :{err}"))?;
 
         Ok(())
@@ -291,8 +258,8 @@ impl FollowController {
         follower: &str,
         following: &str,
     ) -> Result<()> {
-        tokio::time::timeout(
-            Duration::from_millis(1000),
+        measure_postgres!(
+            "follow.delete_follow",
             sqlx::query(
                 r#"
                 DELETE FROM follow
@@ -301,10 +268,8 @@ impl FollowController {
             )
             .bind(follower)
             .bind(following)
-            .execute(tx.as_mut()),
+            .execute(tx.as_mut())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed delete follow\n Reason:{} ", err))?;
         Ok(())
     }

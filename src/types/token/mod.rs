@@ -3,17 +3,16 @@ pub mod create_token;
 pub mod metadata;
 pub mod order;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -79,8 +78,6 @@ impl TokenController {
         TokenController { db }
     }
     pub async fn get_token(&self, token_id: &str) -> Result<TokenResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("token", token_id);
 
@@ -90,18 +87,13 @@ impl TokenController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_token(token_id: {}) completed in {:?}",
-            token_id, elapsed
-        );
         Ok(response)
     }
 
     async fn fetch_token(&self, token_id: &str) -> Result<TokenResponse> {
         // Using query_as instead of query! to automatically map to the TokenRow struct
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let row = measure_postgres!(
+            "token.fetch_token",
             sqlx::query_as::<_, TokenRow>(
                 r#"
                     WITH token_info AS (
@@ -170,8 +162,6 @@ impl TokenController {
             .bind(token_id)
             .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|err| anyhow!("Failed to get token: {}", err))?;
 
         let token = TokenWithAccountInfo {

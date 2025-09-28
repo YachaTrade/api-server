@@ -1,16 +1,15 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -30,8 +29,6 @@ impl PriceController {
         PriceController { db }
     }
     pub async fn get_price(&self, token: &str) -> Result<PriceResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("price", token);
 
@@ -46,8 +43,6 @@ impl PriceController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!("get_price(token: {}) completed in {:?}", token, elapsed);
         Ok(response)
     }
 
@@ -57,8 +52,8 @@ impl PriceController {
             price: BigDecimal,
         }
 
-        let price = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let price = measure_postgres!(
+            "price.fetch_price",
             sqlx::query_as::<_, PriceRow>(
                 r#"
                 SELECT 
@@ -68,10 +63,9 @@ impl PriceController {
                 "#,
             )
             .bind(token)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch price: {}", err))?;
 
         Ok(PriceResponse {
             price: price.price.to_plain_string(),

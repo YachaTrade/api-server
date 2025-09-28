@@ -1,13 +1,11 @@
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use chrono::{TimeZone, Utc};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::types::common::info::TokenInfoWithCreatedAtAndDescription;
@@ -21,6 +19,7 @@ struct AmountRow {
 use crate::types::common::pagination::PaginationParams;
 use crate::{
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::info::AccountInfo,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -178,8 +177,6 @@ impl HypeController {
     }
 
     pub async fn get_hype_token(&self) -> Result<HypeTokenResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = "hype_token";
 
@@ -193,83 +190,75 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!("get_hype_token() completed in {:?}", elapsed);
         Ok(response)
     }
 
     async fn fetch_hype_token(&self) -> Result<HypeTokenResponse> {
-        let rows_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, HypeTokenRow>(
-                r#"
-                SELECT 
-                    h.vote,
-                    -- token 정보
-                    t.token_id,
-                    t.name,
-                    t.symbol,
-                    t.image_uri,
-                    t.description,
-                    t.total_supply,
-                    t.created_at,
-                    -- account 정보 (creator) - verified 우선 처리
-                    a.account_id as creator_account_id,
-                    CASE 
-                        WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
-                        WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
-                        ELSE a.nickname 
-                    END as creator_nickname,
-                    CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
-                    a.follower_count as creator_follower_count,
-                    a.following_count as creator_following_count,
-                    -- holder_count 테이블 사용으로 최적화
-                    COALESCE(thc.holder_count, 0) as holder_count,
-                    -- market cap 정보
-                    (m.price * t.total_supply) as market_cap,
-                    -- reward 정보
-                    r.amount as reward_amount
-                FROM hype_token h
-                -- token 정보 조인
-                JOIN token t ON h.token_id = t.token_id
-                -- creator account 정보 조인  
-                JOIN account a ON t.creator = a.account_id
-                -- account_x 정보 조인 (LEFT JOIN - 없을 수도 있음)
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                -- account_verified 정보 조인 (LEFT JOIN - verified 아닐 수도 있음)
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                -- market 정보 조인
-                JOIN market m ON h.token_id = m.token_id
-                LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
-                -- reward 정보 조인 (같은 epoch, 같은 token)
-                LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
-                ORDER BY h.vote DESC, market_cap DESC
-                "#,
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_token.rows",
+                sqlx::query_as::<_, HypeTokenRow>(
+                    r#"
+                    SELECT 
+                        h.vote,
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri,
+                        t.description,
+                        t.total_supply,
+                        t.created_at,
+                        a.account_id as creator_account_id,
+                        CASE 
+                            WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
+                            WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
+                            ELSE a.nickname 
+                        END as creator_nickname,
+                        CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        COALESCE(thc.holder_count, 0) as holder_count,
+                        (m.price * t.total_supply) as market_cap,
+                        r.amount as reward_amount
+                    FROM hype_token h
+                    JOIN token t ON h.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    JOIN market m ON h.token_id = m.token_id
+                    LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
+                    LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                    WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
+                    ORDER BY h.vote DESC, market_cap DESC
+                    "#,
+                )
+                .fetch_all(self.db.get_read_pool())
             )
-            .fetch_all(self.db.get_read_pool())
-        );
+        };
 
         // 총 개수 조회 Future - 캐싱 가능한 데이터, 필요한 경우 별도 테이블에 저장할 수 있음
-        let total_count_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(
-                r#"
-                SELECT COUNT(*) as count
-                FROM hype_token h
-                WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
-                "#,
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_token.count",
+                sqlx::query_as::<_, CountRow>(
+                    r#"
+                    SELECT COUNT(*) as count
+                    FROM hype_token h
+                    WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
+                    "#,
+                )
+                .fetch_one(self.db.get_read_pool())
             )
-            .fetch_one(self.db.get_read_pool()),
-        );
+        };
 
         // 두 쿼리를 병렬로 실행
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
 
         // 결과 처리
-        let token_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let token_rows =
+            rows_result.map_err(|err| anyhow!("Failed to fetch hype tokens: {}", err))?;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map_err(|err| anyhow!("Failed to fetch hype token count: {}", err))?
             .count as u64;
 
         // 결과 매핑
@@ -307,8 +296,6 @@ impl HypeController {
     }
 
     pub async fn get_hype_point(&self, account_id: &str) -> Result<HypePointResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = format!("hype_point:{}", account_id);
 
@@ -323,17 +310,10 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_point(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
         Ok(response)
     }
 
     pub async fn get_hype_token_epoch(&self, epoch: i64) -> Result<HypeTokenResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = format!("hype_token_epoch:{}", epoch);
 
@@ -347,88 +327,77 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_token_epoch(epoch: {}) completed in {:?}",
-            epoch, elapsed
-        );
         Ok(response)
     }
 
     async fn fetch_hype_token_epoch(&self, epoch: i64) -> Result<HypeTokenResponse> {
-        let rows_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, HypeTokenRow>(
-                r#"
-                SELECT 
-                    h.vote,
-                    -- token 정보
-                    t.token_id,
-                    t.name,
-                    t.symbol,
-                    t.image_uri,
-                    t.description,
-                    t.total_supply,
-                    t.created_at,
-                    -- account 정보 (creator) - verified 우선 처리
-                    a.account_id as creator_account_id,
-                    CASE 
-                        WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
-                        WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
-                        ELSE a.nickname 
-                    END as creator_nickname,
-                    CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
-                    a.follower_count as creator_follower_count,
-                    a.following_count as creator_following_count,
-                    -- holder_count 테이블 사용으로 최적화
-                    COALESCE(thc.holder_count, 0) as holder_count,
-                    -- market cap 정보
-                    (m.price * t.total_supply) as market_cap,
-                    -- reward 정보
-                    r.amount as reward_amount
-                FROM hype_token h
-                -- token 정보 조인
-                JOIN token t ON h.token_id = t.token_id
-                -- creator account 정보 조인  
-                JOIN account a ON t.creator = a.account_id
-                -- account_x 정보 조인 (LEFT JOIN - 없을 수도 있음)
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                -- account_verified 정보 조인 (LEFT JOIN - verified 아닐 수도 있음)
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                -- market 정보 조인
-                JOIN market m ON h.token_id = m.token_id
-                LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
-                -- reward 정보 조인 (같은 epoch, 같은 token)
-                LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                WHERE h.epoch = $1
-                ORDER BY h.vote DESC, market_cap DESC
-                "#,
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_token_epoch.rows",
+                sqlx::query_as::<_, HypeTokenRow>(
+                    r#"
+                    SELECT 
+                        h.vote,
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri,
+                        t.description,
+                        t.total_supply,
+                        t.created_at,
+                        a.account_id as creator_account_id,
+                        CASE 
+                            WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
+                            WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
+                            ELSE a.nickname 
+                        END as creator_nickname,
+                        CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        COALESCE(thc.holder_count, 0) as holder_count,
+                        (m.price * t.total_supply) as market_cap,
+                        r.amount as reward_amount
+                    FROM hype_token h
+                    JOIN token t ON h.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    JOIN market m ON h.token_id = m.token_id
+                    LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
+                    LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                    WHERE h.epoch = $1
+                    ORDER BY h.vote DESC, market_cap DESC
+                    "#,
+                )
+                .bind(epoch)
+                .fetch_all(self.db.get_read_pool())
             )
-            .bind(epoch)
-            .fetch_all(self.db.get_read_pool())
-        );
+        };
 
         // 총 개수 조회 Future - 캐싱 가능한 데이터, 필요한 경우 별도 테이블에 저장할 수 있음
-        let total_count_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(
-                r#"
-                SELECT COUNT(*) as count
-                FROM hype_token h
-                WHERE h.epoch = $1
-                "#,
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_token_epoch.count",
+                sqlx::query_as::<_, CountRow>(
+                    r#"
+                    SELECT COUNT(*) as count
+                    FROM hype_token h
+                    WHERE h.epoch = $1
+                    "#,
+                )
+                .bind(epoch)
+                .fetch_one(self.db.get_read_pool())
             )
-            .bind(epoch)
-            .fetch_one(self.db.get_read_pool()),
-        );
+        };
 
         // 두 쿼리를 병렬로 실행
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
 
         // 결과 처리
-        let token_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let token_rows =
+            rows_result.map_err(|err| anyhow!("Failed to fetch hype tokens for epoch: {}", err))?;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map_err(|err| anyhow!("Failed to fetch hype token count for epoch: {}", err))?
             .count as u64;
 
         // 결과 매핑
@@ -473,8 +442,8 @@ impl HypeController {
             spend_point: i64,
         }
 
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let row = measure_postgres!(
+            "hype.fetch_hype_point",
             sqlx::query_as::<_, PointRow>(
                 r#"
                 SELECT 
@@ -486,10 +455,9 @@ impl HypeController {
                 "#,
             )
             .bind(account_id)
-            .fetch_optional(self.db.get_read_pool()),
+            .fetch_optional(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch hype point: {}", err))?;
 
         match row {
             Some(row) => Ok(HypePointResponse {
@@ -506,8 +474,6 @@ impl HypeController {
     }
 
     pub async fn get_hype_epoch(&self) -> Result<HypeEpochResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = "hype_epoch";
 
@@ -521,8 +487,6 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!("get_hype_epoch() completed in {:?}", elapsed);
         Ok(response)
     }
 
@@ -534,8 +498,8 @@ impl HypeController {
             end_at: i64,
             status: String,
         }
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let row = measure_postgres!(
+            "hype.fetch_hype_epoch",
             sqlx::query_as::<_, HypeEpochRow>(
                 r#"
                 SELECT 
@@ -550,10 +514,9 @@ impl HypeController {
                 )
                 "#,
             )
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch hype epoch: {}", err))?;
 
         Ok(HypeEpochResponse {
             epoch: row.epoch,
@@ -568,8 +531,6 @@ impl HypeController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HypeVoteHistoryResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = format!(
             "hype_vote_history:{}:{}:{}",
@@ -590,11 +551,6 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_vote_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
         Ok(response)
     }
 
@@ -641,28 +597,32 @@ impl HypeController {
             WHERE account_id = $1
             "#;
 
-        let rows_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, HypeVoteHistoryRow>(query)
-                .bind(account_id)
-                .bind(pagination.limit)
-                .bind(offset)
-                .fetch_all(self.db.get_read_pool()),
-        );
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_vote_history.rows",
+                sqlx::query_as::<_, HypeVoteHistoryRow>(query)
+                    .bind(account_id)
+                    .bind(pagination.limit)
+                    .bind(offset)
+                    .fetch_all(self.db.get_read_pool())
+            )
+        };
 
-        let total_count_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(count_query)
-                .bind(account_id)
-                .fetch_optional(self.db.get_read_pool()),
-        );
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_vote_history.count",
+                sqlx::query_as::<_, CountRow>(count_query)
+                    .bind(account_id)
+                    .fetch_optional(self.db.get_read_pool())
+            )
+        };
 
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
 
         let vote_history_rows =
-            rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+            rows_result.map_err(|err| anyhow!("Failed to fetch hype vote history: {}", err))?;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map_err(|err| anyhow!("Failed to fetch hype vote history count: {}", err))?
             .map(|row| row.count as u64)
             .unwrap_or(0);
 
@@ -695,8 +655,6 @@ impl HypeController {
         account_id: &str,
         pagination_params: &PaginationParams,
     ) -> Result<HypePointRecordResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = format!(
             "hype_point_history:{}:{}:{}",
@@ -717,11 +675,6 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_point_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination_params.page, pagination_params.limit, elapsed
-        );
         Ok(response)
     }
 
@@ -740,45 +693,50 @@ impl HypeController {
             created_at: i64,
         }
 
-        let rows_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, PointDistributionRow>(
-                r#"
-                SELECT 
-                    epoch,
-                    activity_type,
-                    amount,
-                    created_at
-                FROM point_distribution
-                WHERE account_id = $1
-                ORDER BY created_at DESC, amount DESC
-                LIMIT $2 OFFSET $3
-                "#,
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_point_history.rows",
+                sqlx::query_as::<_, PointDistributionRow>(
+                    r#"
+                    SELECT 
+                        epoch,
+                        activity_type,
+                        amount,
+                        created_at
+                    FROM point_distribution
+                    WHERE account_id = $1
+                    ORDER BY created_at DESC, amount DESC
+                    LIMIT $2 OFFSET $3
+                    "#,
+                )
+                .bind(account_id)
+                .bind(pagination_params.limit)
+                .bind(offset)
+                .fetch_all(self.db.get_read_pool())
             )
-            .bind(account_id)
-            .bind(pagination_params.limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
-        );
+        };
 
-        let total_count_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(
-                r#"
-                SELECT COALESCE(total_count, 0) as count
-                FROM account_point_distribution_count
-                WHERE account_id = $1
-                "#,
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_point_history.count",
+                sqlx::query_as::<_, CountRow>(
+                    r#"
+                    SELECT COALESCE(total_count, 0) as count
+                    FROM account_point_distribution_count
+                    WHERE account_id = $1
+                    "#,
+                )
+                .bind(account_id)
+                .fetch_optional(self.db.get_read_pool())
             )
-            .bind(account_id)
-            .fetch_optional(self.db.get_read_pool()),
-        );
+        };
 
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
 
-        let point_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let point_rows =
+            rows_result.map_err(|err| anyhow!("Failed to fetch hype point history: {}", err))?;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map_err(|err| anyhow!("Failed to fetch hype point history count: {}", err))?
             .map(|row| row.count as u64)
             .unwrap_or(0);
 
@@ -803,8 +761,6 @@ impl HypeController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HypeRewardHistoryResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = format!(
             "hype_reward_history:{}:{}:{}",
@@ -825,11 +781,6 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_reward_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
         Ok(response)
     }
 
@@ -858,55 +809,60 @@ impl HypeController {
         }
         //
 
-        let rows_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, HypeRewardRow>(
-                r#"
-                SELECT
-                    t.token_id,
-                    t.name,
-                    t.symbol,
-                    t.image_uri,
-                    t.created_at as token_created_at,
-                    r.epoch,
-                    r.vote_amount,
-                    r.amount,
-                    r.status,
-                    r.proof,
-                    r.transaction_hash,
-                    r.claim_at,
-                    r.created_at
-                FROM reward r
-                JOIN token t ON r.token_id = t.token_id
-                WHERE r.account_id = $1 AND epoch > 1
-                ORDER BY r.created_at DESC
-                LIMIT $2 OFFSET $3
-                "#,
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_reward_history.rows",
+                sqlx::query_as::<_, HypeRewardRow>(
+                    r#"
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri,
+                        t.created_at as token_created_at,
+                        r.epoch,
+                        r.vote_amount,
+                        r.amount,
+                        r.status,
+                        r.proof,
+                        r.transaction_hash,
+                        r.claim_at,
+                        r.created_at
+                    FROM reward r
+                    JOIN token t ON r.token_id = t.token_id
+                    WHERE r.account_id = $1 AND epoch > 1
+                    ORDER BY r.created_at DESC
+                    LIMIT $2 OFFSET $3
+                    "#,
+                )
+                .bind(account_id)
+                .bind(pagination.limit)
+                .bind(offset)
+                .fetch_all(self.db.get_read_pool())
             )
-            .bind(account_id)
-            .bind(pagination.limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
-        );
+        };
 
-        let total_count_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(
-                r#"
-                SELECT COUNT(*) as count
-                FROM reward
-                WHERE account_id = $1
-                "#,
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_reward_history.count",
+                sqlx::query_as::<_, CountRow>(
+                    r#"
+                    SELECT COUNT(*) as count
+                    FROM reward
+                    WHERE account_id = $1
+                    "#,
+                )
+                .bind(account_id)
+                .fetch_one(self.db.get_read_pool())
             )
-            .bind(account_id)
-            .fetch_one(self.db.get_read_pool()),
-        );
+        };
 
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
 
-        let reward_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let reward_rows =
+            rows_result.map_err(|err| anyhow!("Failed to fetch hype reward history: {}", err))?;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map_err(|err| anyhow!("Failed to fetch hype reward history count: {}", err))?
             .count as u64;
 
         let history = reward_rows
@@ -942,7 +898,6 @@ impl HypeController {
         account_id: &str,
         payload: &HypeVoteRequest,
     ) -> Result<HypeVoteResponse> {
-        let start_time = Instant::now();
         let amount = payload
             .amount
             .parse::<i64>()
@@ -1000,12 +955,6 @@ impl HypeController {
 
         let vote_result = result.ok_or_else(|| anyhow!("Insufficient points for voting"))?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "vote(account_id: {}, token_id: {}, amount: {}) completed in {:?}",
-            account_id, payload.token_id, amount, elapsed
-        );
-
         Ok(HypeVoteResponse {
             account_id: account_id.to_string(),
             account_point: vote_result.new_point.to_string(),
@@ -1028,20 +977,13 @@ impl HypeController {
     }
 
     async fn fetch_total_spend_point(&self) -> Result<AmountResponse> {
-        let start_time = Instant::now();
-
         let query = sqlx::query_as::<_, AmountRow>(
             "SELECT spend_point::NUMERIC as amount FROM total_spent_point WHERE id = 1",
         )
         .fetch_one(self.db.get_read_pool());
 
-        let result = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let result = measure_postgres!("hype.fetch_total_spend_point", query)
             .map_err(|err| anyhow!("Failed to get total spend point\n Reason: {err}"))?;
-
-        let elapsed = start_time.elapsed();
-        info!("fetch_total_spend_point() completed in {:?}", elapsed);
 
         Ok(AmountResponse {
             amount: result.amount.to_string(),
@@ -1061,8 +1003,6 @@ impl HypeController {
         .await
     }
     async fn fetch_community_treasury(&self) -> Result<AmountResponse> {
-        let start_time = Instant::now();
-
         // Get WMON balance from blockchain and buyback amount from database in parallel
         let (wmon_balance_result, buyback_sum_result) =
             tokio::join!(self.get_wmon_balance(), self.get_buyback_amount_sum());
@@ -1080,30 +1020,19 @@ impl HypeController {
         // Add WMON balance and buyback amount sum
         let total_amount = wmon_balance + buyback_sum;
 
-        let elapsed = start_time.elapsed();
-        info!("fetch_community_treasury() completed in {:?}", elapsed);
-
         Ok(AmountResponse {
             amount: total_amount.to_string(),
         })
     }
 
     async fn get_buyback_amount_sum(&self) -> Result<BigDecimal> {
-        let start_time = Instant::now();
-
         let query = sqlx::query_as::<_, AmountRow>(
             "SELECT COALESCE(SUM(amount), 0) as amount FROM buyback_amount",
         )
         .fetch_one(self.db.get_read_pool());
 
-        let result = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let result = measure_postgres!("hype.get_buyback_amount_sum", query)
             .map_err(|err| anyhow!("Failed to get buyback amount sum\n Reason: {err}"))?;
-
-        let elapsed = start_time.elapsed();
-        info!("get_buyback_amount_sum() completed in {:?}", elapsed);
-
         Ok(result.amount)
     }
 
@@ -1158,8 +1087,6 @@ impl HypeController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<HypeRewardAddHistoryResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = format!(
             "hype_reward_add_history:{}:{}:{}",
@@ -1180,11 +1107,6 @@ impl HypeController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_hype_reward_add_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, pagination.page, pagination.limit, elapsed
-        );
         Ok(response)
     }
 
@@ -1209,52 +1131,57 @@ impl HypeController {
             created_at: i64,
         }
 
-        let rows_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, RewardAddHistoryRow>(
-                r#"
-                SELECT 
-                    rah.epoch,
-                    rah.token_id,
-                    rah.amount,
-                    rah.total_amount,
-                    rah.transaction_hash,
-                    rah.created_at,
-                    t.name,
-                    t.symbol,
-                    t.image_uri,
-                    t.created_at as token_created_at
-                FROM reward_add_history rah
-                JOIN token t ON rah.token_id = t.token_id
-                WHERE rah.account_id = $1
-                ORDER BY rah.created_at DESC
-                LIMIT $2 OFFSET $3
-                "#,
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_reward_add_history.rows",
+                sqlx::query_as::<_, RewardAddHistoryRow>(
+                    r#"
+                    SELECT 
+                        rah.epoch,
+                        rah.token_id,
+                        rah.amount,
+                        rah.total_amount,
+                        rah.transaction_hash,
+                        rah.created_at,
+                        t.name,
+                        t.symbol,
+                        t.image_uri,
+                        t.created_at as token_created_at
+                    FROM reward_add_history rah
+                    JOIN token t ON rah.token_id = t.token_id
+                    WHERE rah.account_id = $1
+                    ORDER BY rah.created_at DESC
+                    LIMIT $2 OFFSET $3
+                    "#,
+                )
+                .bind(account_id)
+                .bind(pagination.limit)
+                .bind(offset)
+                .fetch_all(self.db.get_read_pool())
             )
-            .bind(account_id)
-            .bind(pagination.limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
-        );
+        };
 
-        let total_count_future = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(
-                r#"
-                SELECT COALESCE(total_count, 0) as count
-                FROM reward_add_history_count
-                WHERE account_id = $1
-                "#,
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_reward_add_history.count",
+                sqlx::query_as::<_, CountRow>(
+                    r#"
+                    SELECT COALESCE(total_count, 0) as count
+                    FROM reward_add_history_count
+                    WHERE account_id = $1
+                    "#,
+                )
+                .bind(account_id)
+                .fetch_optional(self.db.get_read_pool())
             )
-            .bind(account_id)
-            .fetch_optional(self.db.get_read_pool()),
-        );
+        };
 
         let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
 
-        let reward_add_rows = rows_result.map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        let reward_add_rows = rows_result
+            .map_err(|err| anyhow!("Failed to fetch hype reward add history: {}", err))?;
         let total_count = total_count_result
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+            .map_err(|err| anyhow!("Failed to fetch hype reward add history count: {}", err))?
             .map(|row| row.count as u64)
             .unwrap_or(0);
 

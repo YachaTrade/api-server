@@ -1,16 +1,15 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::{CountRow, info::TokenInfo, pagination::PaginationParams},
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -41,8 +40,6 @@ impl TokenCreatedController {
     }
 
     pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!("token_created_count", account_id);
 
@@ -57,17 +54,12 @@ impl TokenCreatedController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
         Ok(count)
     }
 
     async fn fetch_total_count(&self, account_id: &str) -> Result<i64> {
-        let count = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let count = measure_postgres!(
+            "token_created.fetch_total_count",
             sqlx::query_as::<_, CountRow>(
                 r#"
                 SELECT COALESCE(COUNT(*)::bigint, 0) as count
@@ -76,10 +68,9 @@ impl TokenCreatedController {
                 "#,
             )
             .bind(account_id)
-            .fetch_one(self.db.get_read_pool()),
+            .fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch token created count: {}", err))?;
 
         Ok(count.count)
     }
@@ -89,8 +80,6 @@ impl TokenCreatedController {
         account_id: &str,
         pagination: &PaginationParams,
     ) -> Result<TokenCreatedResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!(
             "tokens_created",
@@ -113,11 +102,6 @@ impl TokenCreatedController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_tokens_created(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
         Ok(response)
     }
 
@@ -143,8 +127,8 @@ impl TokenCreatedController {
             description: Option<String>,
         }
 
-        let tokens = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let tokens = measure_postgres!(
+            "token_created.fetch_tokens_created",
             sqlx::query_as::<_, TokenCreatedRow>(
                 r#"
                 WITH created_tokens AS (
@@ -187,10 +171,9 @@ impl TokenCreatedController {
             .bind(account_id)
             .bind(pagination.limit as i64)
             .bind(offset)
-            .fetch_all(self.db.get_read_pool()),
+            .fetch_all(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))??;
+        .map_err(|err| anyhow!("Failed to fetch tokens created: {}", err))?;
 
         // Convert query results to TokenCreated structs
         let tokens: Vec<TokenCreated> = tokens

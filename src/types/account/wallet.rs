@@ -1,12 +1,8 @@
-use crate::db::postgres::PostgresDatabase;
+use crate::{db::postgres::PostgresDatabase, measure_postgres};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use tracing::info;
+use std::sync::Arc;
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -68,8 +64,6 @@ impl WalletController {
         account_id: String,
         wallet: Wallet,
     ) -> Result<AccountWalletResponse> {
-        let start_time = Instant::now();
-
         let query = sqlx::query_as::<_, WalletRow>(
             r#"
             INSERT INTO account_wallet (account_id, wallet)
@@ -83,20 +77,13 @@ impl WalletController {
         .bind(wallet.to_string())
         .fetch_one(self.db.get_write_pool());
 
-        tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        measure_postgres!("account_wallet.register_wallet", query)
             .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
-
-        let elapsed = start_time.elapsed();
-        info!("register_wallet(account_id: {}, wallet: {:?}) completed in {:?}", account_id, wallet, elapsed);
 
         Ok(AccountWalletResponse { account_id, wallet })
     }
 
     pub async fn get_wallet(&self, account_id: String) -> Result<AccountWalletResponse> {
-        let start_time = Instant::now();
-
         let query = sqlx::query_as::<_, WalletRow>(
             r#"
             SELECT account_id, wallet
@@ -107,9 +94,7 @@ impl WalletController {
         .bind(&account_id)
         .fetch_one(self.db.get_read_pool());
 
-        let record = tokio::time::timeout(Duration::from_millis(1000), query)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
+        let record = measure_postgres!("account_wallet.get_wallet", query)
             .map_err(|err| anyhow!("Failed to get wallet: {}", err))?;
 
         let wallet = match record.wallet.as_str() {
@@ -127,9 +112,6 @@ impl WalletController {
             account_id: record.account_id,
             wallet,
         };
-
-        let elapsed = start_time.elapsed();
-        info!("get_wallet(account_id: {}) completed in {:?}", account_id, elapsed);
 
         Ok(response)
     }

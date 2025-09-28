@@ -7,11 +7,11 @@ use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use tracing::info;
 use utoipa::ToSchema;
 
 use crate::{
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::info::{AccountInfo, TokenInfo},
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -63,7 +63,6 @@ impl NewContentController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_latest_new_buy() completed in {:?}", elapsed);
 
         if elapsed > Duration::from_millis(100) {
             tracing::warn!("get_latest_new_buy() slow performance: {:?}", elapsed);
@@ -98,12 +97,11 @@ impl NewContentController {
             LIMIT 1
         "#;
 
-        let query_future = sqlx::query(query).fetch_optional(self.db.get_read_pool());
-
-        let row_opt = tokio::time::timeout(Duration::from_millis(1000), query_future)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-            .map_err(|err| anyhow!("Failed to get latest new buy: {}", err))?;
+        let row_opt = measure_postgres!(
+            "new_content.fetch_latest_new_buy",
+            sqlx::query(query).fetch_optional(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get latest new buy: {}", err))?;
 
         let result = row_opt.map(|row| NewSwapMessage {
             account_info: AccountInfo {
@@ -159,7 +157,6 @@ impl NewContentController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_latest_new_sell() completed in {:?}", elapsed);
 
         if elapsed > Duration::from_millis(100) {
             tracing::warn!("get_latest_new_sell() slow performance: {:?}", elapsed);
@@ -194,12 +191,11 @@ impl NewContentController {
             LIMIT 1
         "#;
 
-        let query_future = sqlx::query(query).fetch_optional(self.db.get_read_pool());
-
-        let row_opt = tokio::time::timeout(Duration::from_millis(1000), query_future)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-            .map_err(|err| anyhow!("Failed to get latest new sell: {}", err))?;
+        let row_opt = measure_postgres!(
+            "new_content.fetch_latest_new_sell",
+            sqlx::query(query).fetch_optional(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get latest new sell: {}", err))?;
 
         let result = row_opt.map(|row| NewSwapMessage {
             account_info: AccountInfo {
@@ -255,7 +251,6 @@ impl NewContentController {
         .await?;
 
         let elapsed = start_time.elapsed();
-        info!("get_latest_new_token() completed in {:?}", elapsed);
 
         if elapsed > Duration::from_millis(100) {
             tracing::warn!("get_latest_new_token() slow performance: {:?}", elapsed);
@@ -287,12 +282,11 @@ impl NewContentController {
             LIMIT 1
         "#;
 
-        let query_future = sqlx::query(query).fetch_optional(self.db.get_read_pool());
-
-        let row_opt = tokio::time::timeout(Duration::from_millis(1000), query_future)
-            .await
-            .map_err(|_| anyhow!("Query timeout after 1000ms"))?
-            .map_err(|err| anyhow!("Failed to get latest new token: {}", err))?;
+        let row_opt = measure_postgres!(
+            "new_content.fetch_latest_new_token",
+            sqlx::query(query).fetch_optional(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get latest new token: {}", err))?;
 
         let result = row_opt.map(|row| NewTokenMessage {
             account_info: AccountInfo {
@@ -330,8 +324,6 @@ impl NewContentController {
     }
 
     pub async fn get_new_content(&self) -> Result<NewContentResponse> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = "new_content:all";
 
@@ -344,9 +336,6 @@ impl NewContentController {
             }
         })
         .await?;
-
-        let elapsed = start_time.elapsed();
-        info!("get_new_content() completed in {:?}", elapsed);
 
         Ok(response)
     }

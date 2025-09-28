@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
+    measure_postgres,
     types::common::{CountRow, info::AccountInfo, pagination::PaginationParams},
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -12,7 +12,6 @@ use bigdecimal::BigDecimal;
 
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use tracing::info;
 use utoipa::ToSchema;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, ToSchema)]
@@ -130,8 +129,6 @@ impl OrderController {
         order_by: TokenOrderType,
         pagination: &PaginationParams,
     ) -> Result<Vec<OrderToken>> {
-        let start_time = Instant::now();
-
         // 캐시 키 생성
         let cache_key = cache_key!(
             "order_tokens",
@@ -150,16 +147,6 @@ impl OrderController {
             self.fetch_order_tokens(order_by_clone, pagination).await
         })
         .await?;
-
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_order_tokens(order_by: {:?}, page: {}, limit: {}, direction: {}) completed in {:?}",
-            order_by.as_str(),
-            pagination.page,
-            pagination.limit,
-            pagination.direction,
-            elapsed
-        );
 
         Ok(tokens)
     }
@@ -197,15 +184,14 @@ impl OrderController {
                     order_direction
                 );
 
-                tokio::time::timeout(
-                    Duration::from_millis(1000),
+                measure_postgres!(
+                    "token_order.fetch_creation_time",
                     sqlx::query_as::<_, OrderTokenRow>(&query)
-                        .bind(pagination.limit)
+                        .bind(pagination.limit as i64)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool()),
+                        .fetch_all(self.db.get_read_pool())
                 )
-                .await
-                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+                .map_err(|err| anyhow!("Failed to fetch tokens by creation time: {}", err))?
             }
             TokenOrderType::LatestTrade => {
                 let query = format!(
@@ -232,15 +218,14 @@ impl OrderController {
                     order_direction
                 );
 
-                tokio::time::timeout(
-                    Duration::from_millis(1000),
+                measure_postgres!(
+                    "token_order.fetch_latest_trade",
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool()),
+                        .fetch_all(&*self.db.get_read_pool())
                 )
-                .await
-                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+                .map_err(|err| anyhow!("Failed to fetch tokens by latest trade: {}", err))?
             }
             TokenOrderType::MarketCap => {
                 let query = format!(
@@ -271,15 +256,14 @@ impl OrderController {
                     order_direction, order_direction
                 );
 
-                tokio::time::timeout(
-                    Duration::from_millis(1000),
+                measure_postgres!(
+                    "token_order.fetch_market_cap",
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool()),
+                        .fetch_all(&*self.db.get_read_pool())
                 )
-                .await
-                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+                .map_err(|err| anyhow!("Failed to fetch tokens by market cap: {}", err))?
             }
             TokenOrderType::Verified => {
                 let query = format!(
@@ -306,15 +290,14 @@ impl OrderController {
                     order_direction
                 );
 
-                tokio::time::timeout(
-                    Duration::from_millis(1000),
+                measure_postgres!(
+                    "token_order.fetch_verified",
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
-                        .fetch_all(&*self.db.get_read_pool()),
+                        .fetch_all(&*self.db.get_read_pool())
                 )
-                .await
-                .map_err(|_| anyhow!("Query timeout after 1000ms"))??
+                .map_err(|err| anyhow!("Failed to fetch verified tokens: {}", err))?
             }
         };
 
@@ -323,8 +306,6 @@ impl OrderController {
     }
 
     pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
-        let start_time = Instant::now();
-
         let cache_key = "king_of_the_hill:latest";
 
         // Single Flight Pattern: 동일한 요청은 하나의 Future를 공유
@@ -333,14 +314,12 @@ impl OrderController {
         })
         .await?;
 
-        let elapsed = start_time.elapsed();
-        info!("get_latest_king_of_the_hill() completed in {:?}", elapsed);
         Ok(king)
     }
 
     async fn fetch_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
+        let row = measure_postgres!(
+            "token_order.fetch_latest_king",
             sqlx::query_as::<_, OrderTokenRow>(
                 r#"
                 SELECT 
@@ -372,18 +351,14 @@ impl OrderController {
                 WHERE k.created_at = (SELECT MAX(created_at) FROM king)
                 "#,
             )
-            .fetch_optional(self.db.get_read_pool()),
+            .fetch_optional(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|e| anyhow!("Failed to get king: {}", e))?;
 
         Ok(row.map(OrderToken::from))
     }
 
     pub async fn get_total_count_by_type(&self, order_type: &TokenOrderType) -> Result<i64> {
-        let start_time = Instant::now();
-
         let (query, log_type) = match order_type {
             TokenOrderType::Verified => (
                 "SELECT verified_token_count as count FROM token_count",
@@ -395,20 +370,12 @@ impl OrderController {
             ),
         };
 
-        let row = tokio::time::timeout(
-            Duration::from_millis(1000),
-            sqlx::query_as::<_, CountRow>(query).fetch_one(self.db.get_read_pool()),
+        let row = measure_postgres!(
+            "token_order.get_total_count_by_type",
+            sqlx::query_as::<_, CountRow>(query).fetch_one(self.db.get_read_pool())
         )
-        .await
-        .map_err(|_| anyhow!("Query timeout after 1000ms"))?
         .map_err(|e| anyhow!("Failed to get {} count: {}", log_type, e))?;
 
-        let elapsed = start_time.elapsed();
-        info!(
-            "get_total_count_by_type(order_type: {:?}) completed in {:?}",
-            order_type.as_str(),
-            elapsed
-        );
         Ok(row.count)
     }
 }
