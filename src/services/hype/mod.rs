@@ -251,6 +251,20 @@ impl HypeService {
         account_id: &str,
         payload: &HypeVoteRequest,
     ) -> Result<HypeVoteResponse, AppError> {
+        let has_active_epoch: bool =
+            sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM epoch WHERE status = 'ACTIVE')")
+                .fetch_one(self.postgres.get_read_pool())
+                .await
+                .map_err(|err| {
+                    AppError::InternalError(format!("Failed to verify active epoch: {}", err))
+                })?;
+
+        if !has_active_epoch {
+            return Err(AppError::BadRequest(
+                "No active hype epoch available".to_string(),
+            ));
+        }
+
         let controller = HypeController::new(self.postgres.clone());
         controller
             .vote(account_id, payload)
