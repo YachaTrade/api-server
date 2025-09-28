@@ -1,8 +1,8 @@
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use lazy_static::lazy_static;
 
 #[derive(Debug, Clone)]
 pub struct DbMetrics {
@@ -27,10 +27,10 @@ impl DbMetrics {
 pub struct MetricsManager {
     // PostgreSQL metrics by operation
     pub postgres_operations: Arc<RwLock<HashMap<String, DbMetrics>>>,
-    
+
     // Redis metrics by operation
     pub redis_operations: Arc<RwLock<HashMap<String, DbMetrics>>>,
-    
+
     // Global counters
     pub total_postgres_timeouts: Arc<AtomicU64>,
     pub total_redis_timeouts: Arc<AtomicU64>,
@@ -53,7 +53,8 @@ impl MetricsManager {
     // PostgreSQL metrics
     pub fn get_or_create_postgres_metrics(&self, operation: &str) -> DbMetrics {
         let mut postgres_ops = self.postgres_operations.write().unwrap();
-        postgres_ops.entry(operation.to_string())
+        postgres_ops
+            .entry(operation.to_string())
             .or_insert_with(DbMetrics::new)
             .clone()
     }
@@ -68,14 +69,17 @@ impl MetricsManager {
         let metrics = self.get_or_create_postgres_metrics(operation);
         metrics.query_count.fetch_add(1, Ordering::Relaxed);
         metrics.success_count.fetch_add(1, Ordering::Relaxed);
-        metrics.total_duration_ms.fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
+        metrics
+            .total_duration_ms
+            .fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
         self.total_postgres_queries.fetch_add(1, Ordering::Relaxed);
     }
 
     // Redis metrics
     pub fn get_or_create_redis_metrics(&self, operation: &str) -> DbMetrics {
         let mut redis_ops = self.redis_operations.write().unwrap();
-        redis_ops.entry(operation.to_string())
+        redis_ops
+            .entry(operation.to_string())
             .or_insert_with(DbMetrics::new)
             .clone()
     }
@@ -90,7 +94,9 @@ impl MetricsManager {
         let metrics = self.get_or_create_redis_metrics(operation);
         metrics.query_count.fetch_add(1, Ordering::Relaxed);
         metrics.success_count.fetch_add(1, Ordering::Relaxed);
-        metrics.total_duration_ms.fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
+        metrics
+            .total_duration_ms
+            .fetch_add(duration.as_millis() as u64, Ordering::Relaxed);
         self.total_redis_queries.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -210,8 +216,7 @@ impl MetricsManager {
                     "# HELP redis_operation_duration_avg_ms Average query duration by operation\n\
                      # TYPE redis_operation_duration_avg_ms gauge\n\
                      redis_operation_duration_avg_ms{{operation=\"{}\"}} {:.2}\n\n",
-                    operation,
-                    avg_duration
+                    operation, avg_duration
                 ));
             }
         }

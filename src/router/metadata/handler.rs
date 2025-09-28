@@ -12,11 +12,9 @@ use uuid::Uuid;
 use crate::{
     result::{AppError, AppJsonResult},
     router::metadata::MetadataPath,
+    services::metadata::MetadataService,
     state::AppState,
-    types::metadata::{
-        MetadataController, TokenMetadata, UploadImageMultipart, UploadImageResponse,
-        UploadMetadataRequest, UploadMetadataResponse,
-    },
+    types::metadata::{UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
 };
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_rekognition::Client;
@@ -171,7 +169,7 @@ async fn extract_image_from_multipart(
     post,
     path = MetadataPath::UploadImage.docs_str(),
     request_body(
-        content = UploadImageMultipart,
+        content = crate::types::metadata::UploadImageMultipart,
         content_type = "multipart/form-data"
     ),
     responses(
@@ -196,30 +194,24 @@ pub async fn upload_image(
 
     let validated_format = validate_image(&image_data, &content_type)?;
 
-    let (upload_result, nsfw_result) = tokio::join!(
-        state
-            .r2
-            .upload_metadata_image_file(&image_id, &image_data, &validated_format),
-        check_nsfw(&image_data),
+    let is_nsfw = check_nsfw(&image_data).await?;
+
+    let service = MetadataService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.r2.clone(),
     );
-
-    let image_url = upload_result?;
-    let is_nsfw = nsfw_result?;
-
-    // Cache NSFW result in Redis
-    let cache_start = Instant::now();
-    if let Err(e) = state.redis.set_nsfw_status(&image_url, is_nsfw).await {
-        tracing::error!("Failed to cache NSFW status: {}", e);
-    }
-    info!("💾 Redis caching took: {:?}", cache_start.elapsed());
+    let response = service
+        .upload_image(&image_id, &image_data, &validated_format, is_nsfw)
+        .await?;
 
     let total_duration = start_time.elapsed();
     info!(
         "🎉 Image upload completed - Total time: {:?}, Image URL: {}, NSFW: {}",
-        total_duration, image_url, is_nsfw
+        total_duration, response.image_url, response.is_nsfw
     );
 
-    Ok(Json(UploadImageResponse { is_nsfw, image_url }))
+    Ok(Json(response))
 }
 
 /// Upload metadata to R2 and DB
@@ -241,72 +233,19 @@ pub async fn upload_metadata(
     let start_time = Instant::now();
     info!("🚀 Starting metadata upload process for: {}", payload.name);
 
-    // Check NSFW status from cache (required)
-    let is_nsfw = match state.redis.get_nsfw_status(&payload.image_url).await {
-        Ok(Some(is_nsfw)) => is_nsfw,
-        Ok(None) => {
-            return Err(AppError::BadRequest(
-                "NSFW status not found for this image - please upload image first".to_string(),
-            ));
-        }
-        Err(_) => {
-            return Err(AppError::BadRequest(
-                "Failed to check NSFW status for this image".to_string(),
-            ));
-        }
-    };
-
-    let metadata = TokenMetadata {
-        name: payload.name,
-        symbol: payload.symbol,
-        description: payload.description,
-        image_url: payload.image_url,
-        website: payload.website,
-        twitter: payload.twitter,
-        telegram: payload.telegram,
-        is_nsfw,
-    };
-
-    // Validate metadata
-    metadata.validate()?;
-
-    // Generate unique metadata ID
-    let metadata_id = Uuid::new_v4().to_string();
-
-    // Upload metadata to R2
-    let metadata_url = state
-        .r2
-        .upload_metadata_file(&metadata_id, &metadata)
-        .await
-        .map_err(|e| AppError::InternalError(format!("Failed to upload metadata: {}", e)))?;
-
-    info!("📤 Metadata uploaded to R2: {}", metadata_url);
-
-    // Save to database
-    let db_start = Instant::now();
-    let metadata_controller = MetadataController::new(state.postgres.clone());
-    metadata_controller
-        .save_token_metadata(&metadata, &metadata_url)
-        .await
-        .map_err(|e| {
-            AppError::InternalError(format!("Failed to save metadata to database: {}", e))
-        })?;
-
-    info!("💾 Database save took: {:?}", db_start.elapsed());
-
-    // Clean up NSFW cache after successful metadata upload
-    if let Err(e) = state.redis.delete_nsfw_status(&metadata.image_url).await {
-        tracing::warn!("Failed to delete NSFW status from cache: {}", e);
-    }
+    let service = MetadataService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.r2.clone(),
+    );
+    let metadata = service.validate_metadata_request(&payload).await?;
+    let response = service.upload_metadata(metadata).await?;
 
     let total_duration = start_time.elapsed();
     info!(
         "🎉 Metadata upload completed - Total time: {:?}, Metadata URL: {}",
-        total_duration, metadata_url
+        total_duration, response.metadata_url
     );
 
-    Ok(Json(UploadMetadataResponse {
-        metadata_url,
-        metadata,
-    }))
+    Ok(Json(response))
 }

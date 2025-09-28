@@ -1,12 +1,13 @@
 use axum::extract::{Path, Query};
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
-use tracing::{debug, error, instrument, warn};
+use tracing::{instrument, warn};
 
 use crate::result::{AppError, AppJsonResult};
+use crate::services::search::SearchService;
 use crate::state::AppState;
 use crate::types::common::pagination::PaginationParams;
-use crate::types::search::{SearchController, SearchResponse};
+use crate::types::search::SearchResponse;
 
 use super::path::SearchPath;
 
@@ -44,25 +45,7 @@ pub async fn search(
         ));
     }
 
-    // 캐시된 결과에서 페이지네이션
-    if let Ok(Some(cached_response)) = state.redis.get_search_response(&name, pagination).await {
-        debug!("Cache hit for search query: {}", name);
-        return Ok(Json(cached_response));
-    }
-
-    // DB에서 검색 수행
-    let response = SearchController::new(state.postgres.clone())
-        .search(&name)
-        .await
-        .map_err(|err| {
-            error!("Failed to search : {}, error: {}", name, err);
-            AppError::InternalError(err.to_string())
-        })?;
-
-    // 결과를 캐시에 저장
-    if let Err(err) = state.redis.set_search_response(&name, &response).await {
-        warn!("Failed to cache search response: {}", err);
-    }
-
+    let service = SearchService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.search(&name, pagination).await?;
     Ok(Json(response))
 }

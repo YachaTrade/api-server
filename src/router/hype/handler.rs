@@ -2,23 +2,19 @@ use axum::{
     Extension, Json,
     extract::{Query, State},
 };
-use serde::Deserialize;
-
-use chrono::{self, Timelike};
-
-use tracing::{error, instrument};
+use tracing::instrument;
 
 use super::path::HypePath;
 use crate::{
-    result::{AppError, AppJsonResult},
+    result::AppJsonResult,
+    services::hype::HypeService,
     state::AppState,
     types::{
         common::pagination::PaginationParams,
         hype::{
-            AmountResponse, HypeController, HypeEpochResponse, HypePointRecordResponse,
-            HypePointResponse, HypeRewardAddHistoryResponse, HypeRewardHistoryResponse,
-            HypeTokenQuery, HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest,
-            HypeVoteResponse,
+            AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
+            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenQuery,
+            HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
     },
 };
@@ -42,53 +38,8 @@ pub async fn get_hype_token(
     State(state): State<AppState>,
     Query(query): Query<HypeTokenQuery>,
 ) -> AppJsonResult<HypeTokenResponse> {
-    let hype_token_controller = HypeController::new(state.postgres.clone());
-
-    let response = match query.epoch {
-        Some(epoch) => {
-            // 특정 epoch 요청
-            if let Ok(cached_response) = state.redis.get_hype_token_epoch_response(epoch).await {
-                return Ok(Json(cached_response));
-            }
-            let response = hype_token_controller
-                .get_hype_token_epoch(epoch)
-                .await
-                .map_err(|err| {
-                    let error_msg = format!(
-                        "Failed to get hype token for epoch {}, error: {}",
-                        epoch, err
-                    );
-                    error!(error_msg);
-                    AppError::InternalError(error_msg)
-                })?;
-            if let Err(e) = state
-                .redis
-                .set_hype_token_epoch_response(epoch, &response)
-                .await
-            {
-                error!("Failed to set hype token epoch response: {}", e);
-            }
-            response
-        }
-        None => {
-            // 현재 활성 epoch 요청
-            if let Ok(cached_response) = state.redis.get_hype_token_response().await {
-                return Ok(Json(cached_response));
-            }
-            let response = hype_token_controller
-                .get_hype_token()
-                .await
-                .map_err(|err| {
-                    let error_msg = format!("Failed to get hype token, error: {}", err);
-                    error!(error_msg);
-                    AppError::InternalError(error_msg)
-                })?;
-            if let Err(e) = state.redis.set_hype_token_response(&response).await {
-                error!("Failed to set hype token response: {}", e);
-            }
-            response
-        }
-    };
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_hype_token(query).await?;
 
     Ok(Json(response))
 }
@@ -111,25 +62,8 @@ pub async fn get_hype_point(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<HypePointResponse> {
-    if let Ok(cached_response) = state.redis.get_hype_point_response(&session_address).await {
-        return Ok(Json(cached_response));
-    }
-    let hype_controller = HypeController::new(state.postgres.clone());
-    let response = hype_controller
-        .get_hype_point(&session_address)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype point, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_hype_point_response(&session_address, &response)
-        .await
-    {
-        error!("Failed to set hype point response: {}", e);
-    }
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_hype_point(&session_address).await?;
 
     Ok(Json(response))
 }
@@ -146,26 +80,8 @@ pub async fn get_hype_point(
     tag = "Hype"
 )]
 pub async fn get_hype_epoch(State(state): State<AppState>) -> AppJsonResult<HypeEpochResponse> {
-    let now = chrono::Utc::now();
-    let is_midnight_utc = now.hour() == 0 && now.minute() == 0;
-
-    if !is_midnight_utc {
-        if let Ok(cached_response) = state.redis.get_hype_epoch_response().await {
-            return Ok(Json(cached_response));
-        }
-    }
-    let hype_token_controller = HypeController::new(state.postgres.clone());
-    let response = hype_token_controller
-        .get_hype_epoch()
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype epoch, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state.redis.set_hype_epoch_response(&response).await {
-        error!("Failed to set hype token response: {}", e);
-    }
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_hype_epoch().await?;
 
     Ok(Json(response))
 }
@@ -191,29 +107,10 @@ pub async fn get_hype_vote_history(
     Extension(session_address): Extension<String>,
     Query(params): Query<PaginationParams>,
 ) -> AppJsonResult<HypeVoteHistoryResponse> {
-    if let Ok(cached_response) = state
-        .redis
-        .get_hype_vote_history_response(&session_address, &params)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-    let hype_token_controller = HypeController::new(state.postgres.clone());
-    let response = hype_token_controller
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
         .get_hype_vote_history(&session_address, &params)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype vote history, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_hype_vote_history_response(&session_address, &params, &response)
-        .await
-    {
-        error!("Failed to set hype vote history response: {}", e);
-    }
+        .await?;
 
     Ok(Json(response))
 }
@@ -239,22 +136,10 @@ pub async fn get_hype_point_history(
     Extension(session_address): Extension<String>,
     Query(params): Query<PaginationParams>,
 ) -> AppJsonResult<HypePointRecordResponse> {
-    let hype_token_controller = HypeController::new(state.postgres.clone());
-    let response = hype_token_controller
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
         .get_hype_point_history(&session_address, &params)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype point history, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_hype_point_history_response(&session_address, &params, &response)
-        .await
-    {
-        error!("Failed to set hype point history response: {}", e);
-    }
+        .await?;
 
     Ok(Json(response))
 }
@@ -280,29 +165,10 @@ pub async fn get_hype_reward_history(
     Extension(session_address): Extension<String>,
     Query(params): Query<PaginationParams>,
 ) -> AppJsonResult<HypeRewardHistoryResponse> {
-    if let Ok(cached_response) = state
-        .redis
-        .get_hype_reward_history_response(&session_address, &params)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-    let hype_controller = HypeController::new(state.postgres.clone());
-    let response = hype_controller
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
         .get_hype_reward_history(&session_address, &params)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype reward history, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_hype_reward_history_response(&session_address, &params, &response)
-        .await
-    {
-        error!("Failed to set hype reward history response: {}", e);
-    }
+        .await?;
 
     Ok(Json(response))
 }
@@ -328,29 +194,10 @@ pub async fn get_hype_reward_add_history(
     Extension(session_address): Extension<String>,
     Query(params): Query<PaginationParams>,
 ) -> AppJsonResult<HypeRewardAddHistoryResponse> {
-    if let Ok(cached_response) = state
-        .redis
-        .get_hype_reward_add_history_response(&session_address, &params)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-    let hype_controller = HypeController::new(state.postgres.clone());
-    let response = hype_controller
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
         .get_hype_reward_add_history(&session_address, &params)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get hype reward add history, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-    if let Err(e) = state
-        .redis
-        .set_hype_reward_add_history_response(&session_address, &params, &response)
-        .await
-    {
-        error!("Failed to set hype reward add history response: {}", e);
-    }
+        .await?;
 
     Ok(Json(response))
 }
@@ -375,15 +222,8 @@ pub async fn vote(
     Extension(session_address): Extension<String>,
     Json(payload): Json<HypeVoteRequest>,
 ) -> AppJsonResult<HypeVoteResponse> {
-    let hype_controller = HypeController::new(state.postgres.clone());
-    let response = hype_controller
-        .vote(&session_address, &payload)
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to vote, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.vote(&session_address, &payload).await?;
 
     Ok(Json(response))
 }
@@ -403,25 +243,8 @@ pub async fn vote(
 pub async fn get_community_treasury(
     State(state): State<AppState>,
 ) -> AppJsonResult<AmountResponse> {
-    // Redis 캐시에서 먼저 확인
-    if let Ok(cached_response) = state.redis.get_community_treasury_response().await {
-        return Ok(Json(cached_response));
-    }
-
-    let hype_controller = HypeController::new(state.postgres.clone());
-    let response = hype_controller
-        .get_community_treasury()
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get community treasury, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-
-    // Redis 캐시에 저장
-    if let Err(e) = state.redis.set_community_treasury_response(&response).await {
-        error!("Failed to set community treasury response: {}", e);
-    }
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_community_treasury().await?;
 
     Ok(Json(response))
 }
@@ -439,25 +262,8 @@ pub async fn get_community_treasury(
 )]
 #[instrument(skip(state))]
 pub async fn get_total_spend_point(State(state): State<AppState>) -> AppJsonResult<AmountResponse> {
-    // Redis 캐시에서 먼저 확인
-    if let Ok(cached_response) = state.redis.get_total_spend_point_response().await {
-        return Ok(Json(cached_response));
-    }
-
-    let hype_controller = HypeController::new(state.postgres.clone());
-    let response = hype_controller
-        .get_total_spend_point()
-        .await
-        .map_err(|err| {
-            let error_msg = format!("Failed to get total spend point, error: {}", err);
-            error!(error_msg);
-            AppError::InternalError(error_msg)
-        })?;
-
-    // Redis 캐시에 저장
-    if let Err(e) = state.redis.set_total_spend_point_response(&response).await {
-        error!("Failed to set total spend point response: {}", e);
-    }
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_total_spend_point().await?;
 
     Ok(Json(response))
 }

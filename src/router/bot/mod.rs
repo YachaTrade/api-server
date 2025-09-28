@@ -1,7 +1,7 @@
 pub mod handler;
 pub mod path;
 
-use axum::{routing::post, Router};
+use axum::{Router, routing::post};
 
 use handler::set_metadata;
 use path::BotPath;

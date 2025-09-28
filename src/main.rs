@@ -1,27 +1,36 @@
 use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
-
-    router::{self, account, auth, bot, follow, hype,  metadata, metrics, new_content, order, profile, search, token, trade},
+    router::{
+        self, account, auth, bot, follow, hype, metadata, metrics, new_content, order, profile,
+        search, token, trade,
+    },
     state::AppState,
     types,
 };
 
 use std::{
-    env, net::{IpAddr, SocketAddr}, str::FromStr, time::Duration
+    env,
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+    time::Duration,
 };
 
 use anyhow::Result;
+use axum::http::Request;
 use axum::{
-    http::{Method, StatusCode}, middleware as axum_middleware, response::IntoResponse, routing::get, Router
+    Router,
+    http::{Method, StatusCode},
+    middleware as axum_middleware,
+    response::IntoResponse,
+    routing::get,
 };
+use clap::Parser;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
-use axum::http::Request;
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use clap::Parser;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -37,7 +46,7 @@ use clap::Parser;
         router::account::handler::update_x,
         router::account::handler::register_wallet,
         router::account::handler::get_wallet,
-        
+
         // ----------------Profile----------------
         router::profile::handler::get_profile,
         router::profile::handler::get_hold_token,
@@ -86,7 +95,7 @@ use clap::Parser;
         router::follow::handler::remove_follow,
         router::follow::handler::check_follow,
         router::follow::handler::get_followers,
-        router::follow::handler::get_followings,  
+        router::follow::handler::get_followings,
 
         // ----------------New Content----------------
         router::new_content::handler::get_new_content,
@@ -114,12 +123,12 @@ use clap::Parser;
             types::auth::AuthNonceResponse,
             types::auth::AuthSessionRequest,
             types::auth::AuthSessionResponse,
-            
+
             // Account
             types::account::Account,
             types::account::AccountResponse,
             types::account::UpdateAccountRequest,
-        
+
             types::account::x::ConnectXRequest,
             types::account::x::ConnectedXAccountResponse,
             // types::account::x::DisconnectXRequest,
@@ -141,14 +150,14 @@ use clap::Parser;
             types::token::order::OrderMessage,
             types::token::metadata::TokenMetadata,
             types::token::metadata::TokenMetadataResponse,
-            
+
             // Metadata
             types::metadata::UploadImageMultipart,
             types::metadata::UploadImageResponse,
             types::metadata::UploadMetadataRequest,
             types::metadata::UploadMetadataResponse,
             types::metadata::TokenMetadata,
-            
+
             //Hype
             types::hype::HypeToken,
             types::hype::HypeTokenResponse,
@@ -204,16 +213,12 @@ use clap::Parser;
             types::social::follow::FollowsResponse,
             types::social::follow::FollowResponse,
             types::social::follow::CheckFollowResponse,
-        
-   
-           
-     
 
-           // New Content
-           types::new_content::NewContentResponse,
-           types::new_content::NewSwapMessage,
-           types::new_content::NewTokenMessage,
-           
+            // New Content
+            types::new_content::NewContentResponse,
+            types::new_content::NewSwapMessage,
+            types::new_content::NewTokenMessage,
+
         )
     ),
     tags(
@@ -252,18 +257,19 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    
+
     let ip = env::var("IP").unwrap_or_else(|_| "127.0.0.1".to_string());
     // 우선순위: 1. 커맨드 라인 인자 2. 환경변수 3. 기본값(8000)
-    let port = args.port
+    let port = args
+        .port
         .map(|p| p.to_string())
         .or_else(|| std::env::var("HTTP_PORT").ok())
         .unwrap_or_else(|| "8000".to_string());
 
     info!("Server will start on {}:{} - v2 deployment test", ip, port);
-    
+
     let app_state = AppState::new().await;
-    
+
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
@@ -282,7 +288,6 @@ async fn main() -> Result<()> {
         .merge(hype::router(app_state.clone()))
         .merge(follow::router(app_state.clone()))
         .merge(bot::router())
- 
         .merge(new_content::router())
         .merge(metadata::router())
         .merge(metrics::router())
@@ -318,7 +323,6 @@ async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
-
 // 메서드별 타임아웃 미들웨어
 async fn method_based_timeout(
     method: Method,
@@ -329,7 +333,7 @@ async fn method_based_timeout(
         Method::GET => Duration::from_millis(3000),
         _ => Duration::from_millis(4000), // POST, PUT, DELETE 등은 3초
     };
-    
+
     match tokio::time::timeout(timeout_duration, next.run(req)).await {
         Ok(response) => Ok(response),
         Err(_) => Err(StatusCode::REQUEST_TIMEOUT),

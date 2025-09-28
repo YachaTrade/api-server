@@ -1,0 +1,188 @@
+use std::sync::Arc;
+
+use anyhow::{Result, anyhow};
+use bigdecimal::BigDecimal;
+
+use crate::{
+    cache_key,
+    db::postgres::PostgresDatabase,
+    measure_postgres,
+    types::{
+        common::{CountRow, info::TokenInfo, pagination::PaginationParams},
+        token::create_token::{TokenCreated, TokenCreatedResponse},
+    },
+    utils::single_flight::{GLOBAL_CACHE, with_cache},
+};
+
+pub struct TokenCreatedController {
+    db: Arc<PostgresDatabase>,
+}
+
+impl TokenCreatedController {
+    pub fn new(db: Arc<PostgresDatabase>) -> Self {
+        TokenCreatedController { db }
+    }
+
+    pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
+        let cache_key = cache_key!("token_created_count", account_id);
+
+        let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            async move {
+                let controller = TokenCreatedController::new(db);
+                controller.fetch_total_count(&account_id).await
+            }
+        })
+        .await?;
+
+        Ok(count)
+    }
+
+    async fn fetch_total_count(&self, account_id: &str) -> Result<i64> {
+        let count = measure_postgres!(
+            "token_created.fetch_total_count",
+            sqlx::query_as::<_, CountRow>(
+                r#"
+                SELECT COALESCE(COUNT(*)::bigint, 0) as count
+                FROM token t
+                WHERE t.creator = $1
+                "#,
+            )
+            .bind(account_id)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch token created count: {}", err))?;
+
+        Ok(count.count)
+    }
+
+    pub async fn get_tokens_created(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenCreatedResponse> {
+        let cache_key = cache_key!(
+            "tokens_created",
+            account_id,
+            pagination.page,
+            pagination.limit
+        );
+
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            let account_id = account_id.to_string();
+            let pagination = PaginationParams {
+                page: pagination.page,
+                limit: pagination.limit,
+                direction: pagination.direction.clone(),
+            };
+            async move {
+                let controller = TokenCreatedController::new(db);
+                controller
+                    .fetch_tokens_created(&account_id, &pagination)
+                    .await
+            }
+        })
+        .await?;
+
+        Ok(response)
+    }
+
+    async fn fetch_tokens_created(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<TokenCreatedResponse> {
+        let offset = (pagination.page - 1) * pagination.limit;
+
+        #[derive(sqlx::FromRow)]
+        struct TokenCreatedRow {
+            token_id: String,
+            symbol: String,
+            image_uri: String,
+            name: String,
+            is_listing: bool,
+            created_at: i64,
+            price: BigDecimal,
+            total_supply: BigDecimal,
+            market_cap: BigDecimal,
+            current_amount: BigDecimal,
+            description: Option<String>,
+        }
+
+        let tokens = measure_postgres!(
+            "token_created.fetch_tokens_created",
+            sqlx::query_as::<_, TokenCreatedRow>(
+                r#"
+                WITH created_tokens AS (
+                    SELECT 
+                        t.token_id,
+                        t.symbol,
+                        t.image_uri,
+                        t.name,
+                        t.total_supply,
+                        t.description,
+                        t.created_at,
+                        t.creator,
+                        t.is_listing,
+                        COALESCE(m.price, 0) as price,
+                        COALESCE(b.balance, 0) as current_amount,
+                        COALESCE(m.price * b.balance, 0) as current_value
+                    FROM token t
+                    LEFT JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
+                    WHERE t.creator = $1
+                )
+                SELECT 
+                    token_id,
+                    symbol,
+                    image_uri,
+                    name,
+                    is_listing,
+                    created_at,
+                    COALESCE(price, 0) as price,
+                    total_supply,
+                    COALESCE(price * total_supply, 0) as market_cap,
+                    COALESCE(current_amount, 0) as current_amount,
+                    description
+                FROM created_tokens
+                ORDER BY current_value DESC
+                LIMIT $2
+                OFFSET $3
+                "#,
+            )
+            .bind(account_id)
+            .bind(pagination.limit as i64)
+            .bind(offset)
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch tokens created: {}", err))?;
+
+        let tokens: Vec<TokenCreated> = tokens
+            .into_iter()
+            .map(|row| TokenCreated {
+                token: TokenInfo {
+                    token_id: row.token_id,
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.image_uri,
+                },
+                is_listing: row.is_listing,
+                created_at: row.created_at,
+                market_cap: row.market_cap.to_plain_string(),
+                total_supply: row.total_supply.to_plain_string(),
+                price: row.price.to_plain_string(),
+                current_amount: row.current_amount.to_plain_string(),
+                description: row.description,
+            })
+            .collect();
+
+        let total_count = self.fetch_total_count(account_id).await?;
+
+        Ok(TokenCreatedResponse {
+            tokens,
+            total_count,
+        })
+    }
+}

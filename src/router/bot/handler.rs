@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::extract::{Multipart, State};
 use axum::response::IntoResponse;
-use axum::Json;
 
 use tracing::instrument;
 use uuid::Uuid;
@@ -8,9 +8,8 @@ use uuid::Uuid;
 use crate::result::AppResult;
 use crate::state::AppState;
 use crate::types::bot::{
-    parse_multipart_data, parse_upload_response, request_update_metadata_url,
+    BotMetadataResponse, parse_multipart_data, parse_upload_response, request_update_metadata_url,
     request_upload_image_url, upload_image_to_url, upload_metadata_to_url, validate_content_type,
-    BotMetadataResponse,
 };
 
 #[instrument(skip(_state), fields(multipart))]

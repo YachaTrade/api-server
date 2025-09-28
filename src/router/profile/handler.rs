@@ -1,14 +1,16 @@
 use crate::{
+    controllers::account::AccountController,
     result::{AppError, AppJsonResult},
+    services::{
+        token::create::TokenCreatedService,
+        trading::{position::PositionService, swap_history::SwapService},
+    },
     state::AppState,
     types::{
-        account::{AccountController, AccountResponse, RequestAccountIdParam},
-        common::{identifier::Identifier, pagination::PaginationParams},
-        token::create_token::{TokenCreatedController, TokenCreatedResponse},
-        trading::{
-            position::{HoldTokenResponse, PositionController},
-            swap_history::{PositionSwapResponse, SwapController},
-        },
+        account::{AccountResponse, RequestAccountIdParam},
+        common::pagination::PaginationParams,
+        token::create_token::TokenCreatedResponse,
+        trading::{position::HoldTokenResponse, swap_history::PositionSwapResponse},
     },
     utils::valid_evm_address,
 };
@@ -85,39 +87,10 @@ pub async fn get_hold_token(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-    if let Ok(cached_response) = state
-        .redis
-        .get_account_hold_token(&account_id, &query)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-    let pagination = PaginationParams {
-        page: query.page,
-        limit: query.limit,
-        direction: "DESC".to_string(),
-    };
-    let position_controller = PositionController::new(state.postgres.clone());
-    let response = position_controller
-        .get_hold_token_by_account(&account_id, &pagination)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get position: account_id: {}, error: {}",
-                account_id, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-    if let Err(err) = state
-        .redis
-        .set_account_hold_token(&account_id, &query, &response)
-        .await
-    {
-        error!(
-            "Failed to set hold token: account_id: {}, error: {}",
-            account_id, err
-        );
-    }
+    let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
+    let response = position_service
+        .get_hold_token_by_account(&account_id, &query)
+        .await?;
     Ok(Json(response))
 }
 
@@ -146,34 +119,11 @@ pub async fn get_token_created(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-    if let Ok(cached_response) = state
-        .redis
-        .get_account_token_created(&account_id, &pagination)
-        .await
-    {
-        return Ok(Json(cached_response));
-    }
-    let token_created_controller = TokenCreatedController::new(state.postgres.clone());
-    let response = token_created_controller
+    let token_created_service =
+        TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
+    let response = token_created_service
         .get_tokens_created(&account_id, &pagination)
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to get token created: account_id: {}, error: {}",
-                account_id, err
-            );
-            AppError::InternalError(err.to_string())
-        })?;
-    if let Err(err) = state
-        .redis
-        .set_account_token_created(&account_id, &pagination, &response)
-        .await
-    {
-        error!(
-            "Failed to set token created: account_id: {}, error: {}",
-            account_id, err
-        );
-    }
+        .await?;
     Ok(Json(response))
 }
 
@@ -202,16 +152,16 @@ pub async fn get_swap_history(
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
-    let swap_controller = SwapController::new(state.postgres.clone());
-    let response = swap_controller
+    let swap_service = SwapService::new(state.postgres.clone(), state.redis.clone());
+    let response = swap_service
         .get_swaps_by_account(&account_id, pagination)
         .await
         .map_err(|err| {
             error!(
-                "Failed to get swap history: account_id: {}, error: {}",
+                "Failed to get swap history: account_id: {}, error: {:?}",
                 account_id, err
             );
-            AppError::InternalError(err.to_string())
+            err
         })?;
     Ok(Json(response))
 }
