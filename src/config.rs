@@ -90,4 +90,9 @@ lazy_static! {
         .expect("WMON must be set");
     pub static ref RPC_URL: String = env::var("RPC_URL")
         .expect("RPC_URL must be set");
+
+    pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")
+        .expect("METRICS_REPORT_INTERVAL must be set")
+        .parse::<u64>()
+        .expect("METRICS_REPORT_INTERVAL must be a valid u64");
 }
