@@ -43,6 +43,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::account::handler::update_account,
         router::account::handler::get_account,
         router::account::handler::connect_x,
+        router::account::handler::disconnect_x,
         router::account::handler::update_x,
         router::account::handler::register_wallet,
         router::account::handler::get_wallet,
@@ -131,8 +132,6 @@ use utoipa_swagger_ui::SwaggerUi;
 
             types::account::x::ConnectXRequest,
             types::account::x::ConnectedXAccountResponse,
-            // types::account::x::DisconnectXRequest,
-            // types::account::x::DisconnectedXAccountResponse,
             types::account::x::GetXHandleResponse,
             types::account::x::UpdateXRequest,
             types::account::wallet::RegisterWalletRequest,
