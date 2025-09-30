@@ -4,6 +4,8 @@ use std::env;
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+
+use sqlx::FromRow;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, ToSchema)]
@@ -38,13 +40,13 @@ pub struct MutualFriend {
     pub following_count: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, FromRow, Deserialize, ToSchema)]
 pub struct Mutual {
     pub mutual_friends: Option<Vec<MutualFriend>>,
     pub mutual_friends_count: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Account {
     pub account_id: String,
     pub nickname: String,
