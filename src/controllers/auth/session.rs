@@ -10,6 +10,16 @@ struct SessionRow {
     account_id: String,
 }
 
+#[derive(FromRow)]
+pub struct AccountRow {
+    pub account_id: String,
+    pub nickname: String,
+    pub image_uri: String,
+    pub bio: String,
+    pub follower_count: i32,
+    pub following_count: i32,
+}
+
 pub struct SessionController {
     pub db: Arc<PostgresDatabase>,
 }
@@ -19,22 +29,28 @@ impl SessionController {
         SessionController { db }
     }
 
-    pub async fn set_session(&self, session_id: &str, address: &str) -> Result<()> {
+    pub async fn set_session(&self, session_id: &str, address: &str) -> Result<AccountRow> {
         let account = Account::new(address.to_string());
-        measure_postgres!(
+        let account_info = measure_postgres!(
             "auth.set_session",
-            sqlx::query(
+            sqlx::query_as::<_, AccountRow>(
                 r#"
                 WITH account_upsert AS (
                     INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)
                     VALUES ($2, $3, $4, $5, $6, $7)
                     ON CONFLICT (account_id) DO NOTHING
+                    RETURNING *
+                ),
+                session_upsert AS (
+                    INSERT INTO account_session (id, account_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT (account_id) DO UPDATE
+                    SET id = EXCLUDED.id
                     RETURNING account_id
                 )
-                INSERT INTO account_session (id, account_id)
-                VALUES ($1, $2)
-                ON CONFLICT (account_id) DO UPDATE
-                SET id = EXCLUDED.id
+                SELECT a.account_id, a.nickname, a.image_uri, a.bio, a.follower_count, a.following_count
+                FROM account a 
+                WHERE a.account_id = $2
                 "#,
             )
             .bind(session_id)
@@ -44,11 +60,11 @@ impl SessionController {
             .bind(&account.bio)
             .bind(account.follower_count)
             .bind(account.following_count)
-            .execute(self.db.get_write_pool())
+            .fetch_one(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to set session: {}", err))?;
 
-        Ok(())
+        Ok(account_info)
     }
     pub async fn get_address_by_session_id(&self, session_id: &str) -> Result<String> {
         let session = measure_postgres!(
