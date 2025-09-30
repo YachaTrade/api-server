@@ -25,14 +25,16 @@ impl SessionController {
             "auth.set_session",
             sqlx::query(
                 r#"
-                INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)
-                VALUES ($2, $3, $4, $5, $6, $7)
-                ON CONFLICT (account_id) DO NOTHING;
-                
+                WITH account_upsert AS (
+                    INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)
+                    VALUES ($2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (account_id) DO NOTHING
+                    RETURNING account_id
+                )
                 INSERT INTO account_session (id, account_id)
                 VALUES ($1, $2)
                 ON CONFLICT (account_id) DO UPDATE
-                SET id = EXCLUDED.id;
+                SET id = EXCLUDED.id
                 "#,
             )
             .bind(session_id)
