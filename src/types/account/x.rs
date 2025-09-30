@@ -1,4 +1,7 @@
-use crate::types::common::info::XInfo;
+use crate::types::{
+    account::Account,
+    common::info::{AccountInfo, XInfo},
+};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -42,7 +45,7 @@ pub struct ConnectedXAccountResponse {
 }
 #[derive(Serialize, ToSchema)]
 pub struct DisconnectedXAccountResponse {
-    pub account_id: String,
+    pub account_info: Account,
 }
 
 #[derive(Serialize, ToSchema)]

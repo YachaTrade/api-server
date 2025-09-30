@@ -7,9 +7,12 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        account::x::{
-            ConnectXRequest, ConnectedXAccountResponse, DisconnectedXAccountResponse,
-            GetXHandleResponse,
+        account::{
+            Account,
+            x::{
+                ConnectXRequest, ConnectedXAccountResponse, DisconnectedXAccountResponse,
+                GetXHandleResponse,
+            },
         },
         common::{ExistsRow, info::XInfo},
     },
@@ -21,6 +24,16 @@ struct XAccountRow {
     x_handle: String,
     x_image_uri: String,
     is_blue_label: bool,
+}
+
+#[derive(FromRow)]
+struct AccountRow {
+    account_id: String,
+    nickname: String,
+    image_uri: String,
+    bio: String,
+    follower_count: i32,
+    following_count: i32,
 }
 
 pub struct AccountXController {
@@ -75,8 +88,29 @@ impl AccountXController {
 
         measure_postgres!("account_x.disconnect", query)
             .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
+        let query = sqlx::query_as::<_, AccountRow>(
+            r#"
+            SELECT account_id, nickname, image_uri, bio, 
+        follower_count, following_count
+            FROM account
+            WHERE account_id = $1
+            "#,
+        )
+        .bind(&account_id)
+        .fetch_one(self.db.get_read_pool());
 
-        Ok(DisconnectedXAccountResponse { account_id })
+        let row = measure_postgres!("account.get", query)?;
+
+        let account_info = Account {
+            account_id: row.account_id,
+            nickname: row.nickname,
+            image_uri: row.image_uri,
+            bio: row.bio,
+            follower_count: row.follower_count,
+            following_count: row.following_count,
+            mutual: None, // 필요시 별도로 계산
+        };
+        Ok(DisconnectedXAccountResponse { account_info })
     }
 
     pub async fn update_x(
