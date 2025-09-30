@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use sqlx::FromRow;
 
-use crate::{db::postgres::PostgresDatabase, measure_postgres};
+use crate::{db::postgres::PostgresDatabase, measure_postgres, types::account::Account};
 
 #[derive(Debug, FromRow)]
 struct SessionRow {
@@ -20,25 +20,34 @@ impl SessionController {
     }
 
     pub async fn set_session(&self, session_id: &str, address: &str) -> Result<()> {
+        let account = Account::new(address.to_string());
         measure_postgres!(
             "auth.set_session",
             sqlx::query(
                 r#"
+                INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)
+                VALUES ($2, $3, $4, $5, $6, $7)
+                ON CONFLICT (account_id) DO NOTHING;
+                
                 INSERT INTO account_session (id, account_id)
                 VALUES ($1, $2)
                 ON CONFLICT (account_id) DO UPDATE
-                SET id = EXCLUDED.id
+                SET id = EXCLUDED.id;
                 "#,
             )
             .bind(session_id)
             .bind(address)
+            .bind(&account.nickname)
+            .bind(&account.image_uri)
+            .bind(&account.bio)
+            .bind(account.follower_count)
+            .bind(account.following_count)
             .execute(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to set session: {}", err))?;
 
         Ok(())
     }
-
     pub async fn get_address_by_session_id(&self, session_id: &str) -> Result<String> {
         let session = measure_postgres!(
             "auth.get_address_by_session_id",
