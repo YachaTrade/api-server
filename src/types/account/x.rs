@@ -43,7 +43,6 @@ pub struct ConnectedXAccountResponse {
 #[derive(Serialize, ToSchema)]
 pub struct DisconnectedXAccountResponse {
     pub account_id: String,
-    pub x_handle: String,
 }
 
 #[derive(Serialize, ToSchema)]

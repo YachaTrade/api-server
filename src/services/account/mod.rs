@@ -118,11 +118,10 @@ impl AccountService {
     pub async fn disconnect_x(
         &self,
         session_address: String,
-        payload: DisconnectXRequest,
     ) -> Result<DisconnectedXAccountResponse, AppError> {
         let controller = AccountXController::new(self.db.clone());
         controller
-            .disconnect_x(session_address, payload.x_handle)
+            .disconnect_x(session_address)
             .await
             .map_err(|err| {
                 warn!("disconnect x account Error {:?}", err);
