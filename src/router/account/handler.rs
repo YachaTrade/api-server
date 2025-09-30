@@ -108,7 +108,6 @@ pub async fn connect_x(
 #[utoipa::path(
     delete,
     path = AccountPath::DisconnectX.docs_str(),
-    request_body = DisconnectXRequest,
     responses(
         (status = 200, description = "Get account successfully", body = AccountResponse),
         (status = 400, description = "Bad request"),
@@ -123,10 +122,9 @@ pub async fn connect_x(
 pub async fn disconnect_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<DisconnectXRequest>,
 ) -> AppJsonResult<DisconnectedXAccountResponse> {
     let service = AccountService::new(state.postgres.clone());
-    let response = service.disconnect_x(session_address, payload).await?;
+    let response = service.disconnect_x(session_address).await?;
     Ok(Json(response))
 }
 

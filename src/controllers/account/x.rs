@@ -63,47 +63,20 @@ impl AccountXController {
         Ok(response)
     }
 
-    pub async fn disconnect_x(
-        &self,
-        account_id: String,
-        x_handle: String,
-    ) -> Result<DisconnectedXAccountResponse> {
-        let query = sqlx::query_as::<_, ExistsRow>(
-            "SELECT EXISTS(SELECT 1 FROM account_x WHERE account_id = $1 AND x_handle = $2) as exists",
-        )
-        .bind(&account_id)
-        .bind(&x_handle)
-        .fetch_optional(self.db.get_read_pool());
-
-        let exists = measure_postgres!("account_x.disconnect.exists", query)
-            .map_err(|err| anyhow!("Failed to check if x handle exists\n Reason :{err}"))?;
-
-        if exists.is_none() {
-            return Err(anyhow!("X handle not found for this account"));
-        }
-
+    pub async fn disconnect_x(&self, account_id: String) -> Result<DisconnectedXAccountResponse> {
         let query = sqlx::query(
             r#"
-            WITH deleted_verified AS (
-                DELETE FROM account_verified
-                WHERE x_handle = $2
-                RETURNING x_handle
-            )
             DELETE FROM account_x
-            WHERE account_id = $1 AND x_handle = $2
+            WHERE account_id = $1 
             "#,
         )
         .bind(&account_id)
-        .bind(&x_handle)
         .execute(self.db.get_write_pool());
 
         measure_postgres!("account_x.disconnect", query)
             .map_err(|err| anyhow!("Failed to disconnect x\n Reason :{err}"))?;
 
-        Ok(DisconnectedXAccountResponse {
-            account_id,
-            x_handle,
-        })
+        Ok(DisconnectedXAccountResponse { account_id })
     }
 
     pub async fn update_x(
