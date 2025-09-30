@@ -32,9 +32,7 @@ use super::path::AccountPath;
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    security(
-        ("session_token" = [])
-    ),
+
     tag="Account"
 )]
 #[instrument(skip(state, session_address, payload))]
@@ -83,15 +81,16 @@ pub async fn get_account(
     put,
     path = AccountPath::ConnectX.docs_str(),
     request_body = ConnectXRequest,
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "Get account successfully", body = AccountResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    security(
-        ("session_token" = [])
-    ),
+
     tag="Account"
 )]
 pub async fn connect_x(
@@ -108,15 +107,16 @@ pub async fn connect_x(
 #[utoipa::path(
     delete,
     path = AccountPath::DisconnectX.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "Get account successfully", body = AccountResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    security(
-        ("session_token" = [])
-    ),
+
     tag="Account"
 )]
 pub async fn disconnect_x(
@@ -161,15 +161,16 @@ pub async fn update_x(
     patch,
     path = AccountPath::RegisterWallet.docs_str(),
     request_body = RegisterWalletRequest,
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "Get account successfully", body = AccountResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    security(
-        ("session_token" = [])
-    ),
+
     tag="Account"
 )]
 pub async fn register_wallet(
@@ -186,15 +187,16 @@ pub async fn register_wallet(
 #[utoipa::path(
     get,
     path = AccountPath::GetWallet.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "Get account successfully", body = AccountWalletResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    security(
-        ("session_token" = [])
-    ),
+
     tag="Account"
 )]
 pub async fn get_wallet(
