@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     config::EXPIRATION_SESSION_KEY,
-    controllers::{account::AccountController, auth::session::SessionController},
+    controllers::auth::session::SessionController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::account::Account,
@@ -86,29 +86,18 @@ impl AuthService {
         let session_id = self.generate_session_id(address.as_str(), payload.nonce.as_str());
 
         let postgres = self.postgres.clone();
-        let account_controller = AccountController::new(postgres.clone());
         let session_controller = SessionController::new(postgres.clone());
-
-        let address_clone = address.clone();
-        let account_future = async move {
-            match account_controller.get_account(&address_clone).await {
-                Ok(account) => Ok(account),
-                Err(_) => {
-                    let account = Account::new(address_clone.clone());
-                    account_controller
-                        .upsert_account(account)
-                        .await
-                        .map_err(|err| AppError::InternalError(err.to_string()))
-                }
-            }
-        };
 
         let delete_nonce_future = redis.delete_sign_message(&address);
         let set_session_future = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
-        let postgres_session_future = session_controller.set_session(&session_id, &address);
 
-        let (account, _, _, _) = try_join!(
-            account_future,
+        let (account_row, _, _) = try_join!(
+            async {
+                session_controller
+                    .set_session(&session_id, &address)
+                    .await
+                    .map_err(|err| AppError::InternalError(err.to_string()))
+            },
             async {
                 delete_nonce_future
                     .await
@@ -118,13 +107,18 @@ impl AuthService {
                 set_session_future
                     .await
                     .map_err(|err| AppError::RedisError(err.to_string()))
-            },
-            async {
-                postgres_session_future
-                    .await
-                    .map_err(|err| AppError::InternalError(err.to_string()))
             }
         )?;
+
+        let account = Account {
+            account_id: account_row.account_id,
+            nickname: account_row.nickname,
+            image_uri: account_row.image_uri,
+            bio: account_row.bio,
+            follower_count: account_row.follower_count,
+            following_count: account_row.following_count,
+            mutual: None,
+        };
 
         Ok((AuthSessionResponse { account }, session_id))
     }
