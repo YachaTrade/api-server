@@ -95,7 +95,7 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
 
     let processed_img = if width > max_width || height > max_height {
         info!("🔄 Resizing image to fit {}x{}", max_width, max_height);
-        img.resize(max_width, max_height, FilterType::Nearest)
+        img.resize(max_width, max_height, FilterType::Lanczos3)
     } else {
         img
     };
@@ -128,9 +128,10 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
     // Run conversion in blocking thread pool to avoid blocking async runtime
     let start_conversion = Instant::now();
     let image_data_owned = image_data.to_vec();
-    let png_data = tokio::task::spawn_blocking(move || convert_to_png(&image_data_owned, 512, 512))
-        .await
-        .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
+    let png_data =
+        tokio::task::spawn_blocking(move || convert_to_png(&image_data_owned, 1024, 1024))
+            .await
+            .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
 
     info!(
         "⏱️  Image conversion took: {:?}",
