@@ -4,7 +4,8 @@ use axum::{
     response::Json,
 };
 use bytes::Bytes;
-use std::{env, time::Instant};
+use image::{imageops::FilterType, ImageFormat, ImageOutputFormat};
+use std::{env, io::Cursor, time::Instant};
 use tracing::info;
 use utoipa;
 use uuid::Uuid;
@@ -80,8 +81,33 @@ fn validate_image(data: &[u8], content_type: &Option<String>) -> Result<String, 
     Ok(actual_format.to_string())
 }
 
-/// Check if image is NSFW using AWS Rekognition
+/// Convert any image format to PNG for validation with optional resize
+fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
+    let img = image::load_from_memory(image_data)
+        .map_err(|e| AppError::BadRequest(format!("Failed to decode image: {}", e)))?;
+
+    // Resize if larger than max dimensions
+    let (width, height) = img.dimensions();
+    let processed_img = if width > max_width || height > max_height {
+        img.resize(max_width, max_height, FilterType::Triangle)
+    } else {
+        img
+    };
+
+    let mut png_data = Vec::new();
+    let mut cursor = Cursor::new(&mut png_data);
+
+    processed_img.write_to(&mut cursor, ImageOutputFormat::Png)
+        .map_err(|e| AppError::InternalError(format!("Failed to convert to PNG: {}", e)))?;
+
+    Ok(png_data)
+}
+
+/// Check if image is NSFW using AWS Rekognition (uses PNG converted data)
 async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
+    // Convert to PNG and resize for Rekognition (max 1024x1024)
+    let png_data = convert_to_png(image_data, 1024, 1024)?;
+
     // AWS 설정 로드 - 환경 변수에서 리전 가져오기
     // AWS SDK가 자동으로 환경 변수에서 인증 정보를 찾습니다
     let aws_region = env::var("AWS_REGION").expect("AWS_REGION must be set");
@@ -93,8 +119,8 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
 
     let client = Client::new(&config);
 
-    // Bytes를 Blob으로 변환
-    let bytes = Bytes::copy_from_slice(image_data);
+    // PNG 데이터를 Blob으로 변환
+    let bytes = Bytes::from(png_data);
     let blob = Blob::new(bytes);
     let image = Image::builder().bytes(blob).build();
 
