@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateAccountRequest {
     pub nickname: Option<String>,
     pub bio: Option<String>,
