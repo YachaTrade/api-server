@@ -251,26 +251,26 @@ async fn extract_image_from_multipart(
 pub async fn upload_image(
     State(state): State<AppState>,
     headers: HeaderMap,
-    multipart: Multipart,
+    body: Bytes,
 ) -> AppJsonResult<UploadImageResponse> {
     let start_time = Instant::now();
     info!("🚀 Starting image upload process");
     info!("📋 Request Headers: {:?}", headers);
 
-    info!("📦 Extracting image from multipart");
-    let (image_data, content_type) = extract_image_from_multipart(multipart)
-        .await
-        .map_err(|_| AppError::BadRequest("No image found in image key".to_string()))?;
+    info!("📦 Reading binary body - Size: {} bytes", body.len());
 
-    info!("✅ Image extracted - Size: {} bytes", image_data.len());
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let image_id = Uuid::new_v4().to_string();
 
     info!("🔍 Validating image format");
-    let validated_format = validate_image(&image_data, &content_type)?;
+    let validated_format = validate_image(&body, &content_type)?;
     info!("✅ Image format validated: {}", validated_format);
 
-    let is_nsfw = check_nsfw(&image_data).await?;
+    let is_nsfw = check_nsfw(&body).await?;
 
     let service = MetadataService::new(
         state.postgres.clone(),
@@ -278,7 +278,7 @@ pub async fn upload_image(
         state.r2.clone(),
     );
     let response = service
-        .upload_image(&image_id, &image_data, &validated_format, is_nsfw)
+        .upload_image(&image_id, &body, &validated_format, is_nsfw)
         .await?;
 
     let total_duration = start_time.elapsed();
