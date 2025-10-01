@@ -1,6 +1,6 @@
 use axum::{
     extract::{Multipart, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::Json,
 };
 use bytes::Bytes;
@@ -250,10 +250,12 @@ async fn extract_image_from_multipart(
 )]
 pub async fn upload_image(
     State(state): State<AppState>,
+    headers: HeaderMap,
     multipart: Multipart,
 ) -> AppJsonResult<UploadImageResponse> {
     let start_time = Instant::now();
     info!("🚀 Starting image upload process");
+    info!("📋 Request Headers: {:?}", headers);
 
     info!("📦 Extracting image from multipart");
     let (image_data, content_type) = extract_image_from_multipart(multipart)
