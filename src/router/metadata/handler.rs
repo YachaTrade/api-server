@@ -119,19 +119,23 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
 
 /// Check if image is NSFW using AWS Rekognition (uses PNG converted data)
 async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
-    info!("🔍 Starting NSFW check - Image size: {} bytes", image_data.len());
+    info!(
+        "🔍 Starting NSFW check - Image size: {} bytes",
+        image_data.len()
+    );
 
     // Convert to PNG and resize for Rekognition (max 512x512)
     // Run conversion in blocking thread pool to avoid blocking async runtime
     let start_conversion = Instant::now();
     let image_data_owned = image_data.to_vec();
-    let png_data = tokio::task::spawn_blocking(move || {
-        convert_to_png(&image_data_owned, 512, 512)
-    })
-    .await
-    .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
+    let png_data = tokio::task::spawn_blocking(move || convert_to_png(&image_data_owned, 512, 512))
+        .await
+        .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
 
-    info!("⏱️  Image conversion took: {:?}", start_conversion.elapsed());
+    info!(
+        "⏱️  Image conversion took: {:?}",
+        start_conversion.elapsed()
+    );
 
     // AWS 설정 로드 - 환경 변수에서 리전 가져오기
     // AWS SDK가 자동으로 환경 변수에서 인증 정보를 찾습니다
@@ -207,15 +211,20 @@ fn is_adult_content(labels: &[aws_sdk_rekognition::types::ModerationLabel]) -> b
 async fn extract_image_from_multipart(
     mut multipart: Multipart,
 ) -> Result<(Bytes, Option<String>), StatusCode> {
+    info!("🔄 Starting multipart field iteration");
     while let Some(field) = multipart
         .next_field()
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?
     {
         if let Some(name) = field.name() {
+            info!("📋 Found field: {}", name);
             if name == "image" {
                 let content_type = field.content_type().map(|ct| ct.to_string());
+                info!("📥 Reading image bytes from field");
+                let start = Instant::now();
                 let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+                info!("✅ Read {} bytes in {:?}", data.len(), start.elapsed());
                 return Ok((data, content_type));
             }
         }
