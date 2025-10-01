@@ -245,13 +245,18 @@ pub async fn upload_image(
     let start_time = Instant::now();
     info!("🚀 Starting image upload process");
 
+    info!("📦 Extracting image from multipart");
     let (image_data, content_type) = extract_image_from_multipart(multipart)
         .await
         .map_err(|_| AppError::BadRequest("No image found in image key".to_string()))?;
 
+    info!("✅ Image extracted - Size: {} bytes", image_data.len());
+
     let image_id = Uuid::new_v4().to_string();
 
+    info!("🔍 Validating image format");
     let validated_format = validate_image(&image_data, &content_type)?;
+    info!("✅ Image format validated: {}", validated_format);
 
     let is_nsfw = check_nsfw(&image_data).await?;
 
