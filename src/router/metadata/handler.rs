@@ -4,7 +4,7 @@ use axum::{
     response::Json,
 };
 use bytes::Bytes;
-use image::{imageops::FilterType, ImageFormat, ImageOutputFormat};
+use image::{imageops::FilterType, ImageFormat, GenericImageView};
 use std::{env, io::Cursor, time::Instant};
 use tracing::info;
 use utoipa;
@@ -83,12 +83,17 @@ fn validate_image(data: &[u8], content_type: &Option<String>) -> Result<String, 
 
 /// Convert any image format to PNG for validation with optional resize
 fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
+    let start_time = Instant::now();
+
     let img = image::load_from_memory(image_data)
         .map_err(|e| AppError::BadRequest(format!("Failed to decode image: {}", e)))?;
 
     // Resize if larger than max dimensions
     let (width, height) = img.dimensions();
+    info!("📐 Original image size: {}x{}", width, height);
+
     let processed_img = if width > max_width || height > max_height {
+        info!("🔄 Resizing image to fit {}x{}", max_width, max_height);
         img.resize(max_width, max_height, FilterType::Triangle)
     } else {
         img
@@ -97,8 +102,11 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
     let mut png_data = Vec::new();
     let mut cursor = Cursor::new(&mut png_data);
 
-    processed_img.write_to(&mut cursor, ImageOutputFormat::Png)
+    processed_img.write_to(&mut cursor, ImageFormat::Png)
         .map_err(|e| AppError::InternalError(format!("Failed to convert to PNG: {}", e)))?;
+
+    let conversion_time = start_time.elapsed();
+    info!("✅ PNG conversion completed - Time: {:?}, Output size: {} bytes", conversion_time, png_data.len());
 
     Ok(png_data)
 }
