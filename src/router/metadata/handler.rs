@@ -119,8 +119,14 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
 
 /// Check if image is NSFW using AWS Rekognition (uses PNG converted data)
 async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
-    // Convert to PNG and resize for Rekognition (max 1024x1024)
-    let png_data = convert_to_png(image_data, 1024, 1024)?;
+    // Convert to PNG and resize for Rekognition (max 512x512)
+    // Run conversion in blocking thread pool to avoid blocking async runtime
+    let image_data_owned = image_data.to_vec();
+    let png_data = tokio::task::spawn_blocking(move || {
+        convert_to_png(&image_data_owned, 512, 512)
+    })
+    .await
+    .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
 
     // AWS 설정 로드 - 환경 변수에서 리전 가져오기
     // AWS SDK가 자동으로 환경 변수에서 인증 정보를 찾습니다
