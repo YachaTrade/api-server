@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State};
 
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     result::AppJsonResult,
@@ -41,6 +41,7 @@ pub async fn update_account(
     Extension(session_address): Extension<String>,
     Json(payload): Json<UpdateAccountRequest>,
 ) -> AppJsonResult<AccountResponse> {
+    info!("update account: {}", payload);
     let service = AccountService::new(state.postgres.clone());
     let response = service.update_account(&session_address, payload).await?;
 
