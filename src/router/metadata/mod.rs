@@ -10,9 +10,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route(
             MetadataPath::UploadImage.as_str(),
-            post(handler::upload_image),
+            post(handler::upload_image).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
         )
-        .layer(DefaultBodyLimit::max(10 * 1024 * 1024)) // 10MB limit
         .route(
             MetadataPath::UploadMetadata.as_str(),
             post(handler::upload_metadata),
