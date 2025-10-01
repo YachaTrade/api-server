@@ -95,7 +95,7 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
 
     let processed_img = if width > max_width || height > max_height {
         info!("🔄 Resizing image to fit {}x{}", max_width, max_height);
-        img.resize(max_width, max_height, FilterType::Triangle)
+        img.resize(max_width, max_height, FilterType::Nearest)
     } else {
         img
     };
@@ -119,8 +119,11 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
 
 /// Check if image is NSFW using AWS Rekognition (uses PNG converted data)
 async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
+    info!("🔍 Starting NSFW check - Image size: {} bytes", image_data.len());
+
     // Convert to PNG and resize for Rekognition (max 512x512)
     // Run conversion in blocking thread pool to avoid blocking async runtime
+    let start_conversion = Instant::now();
     let image_data_owned = image_data.to_vec();
     let png_data = tokio::task::spawn_blocking(move || {
         convert_to_png(&image_data_owned, 512, 512)
@@ -128,8 +131,11 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
     .await
     .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
 
+    info!("⏱️  Image conversion took: {:?}", start_conversion.elapsed());
+
     // AWS 설정 로드 - 환경 변수에서 리전 가져오기
     // AWS SDK가 자동으로 환경 변수에서 인증 정보를 찾습니다
+    info!("☁️  Loading AWS configuration");
     let aws_region = env::var("AWS_REGION").expect("AWS_REGION must be set");
     let region = Region::new(aws_region);
     let config = aws_config::defaults(BehaviorVersion::latest())
@@ -137,6 +143,7 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
         .load()
         .await;
 
+    info!("📡 Creating Rekognition client");
     let client = Client::new(&config);
 
     // PNG 데이터를 Blob으로 변환
@@ -145,6 +152,8 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
     let image = Image::builder().bytes(blob).build();
 
     // Content Moderation API 호출
+    info!("🌐 Calling AWS Rekognition API");
+    let api_start = Instant::now();
     let resp = client
         .detect_moderation_labels()
         .image(image)
@@ -153,9 +162,13 @@ async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
         .await
         .map_err(|e| AppError::InternalError(format!("AWS Rekognition error: {}", e)))?;
 
+    info!("⏱️  Rekognition API took: {:?}", api_start.elapsed());
+
     // 성인물 여부 판단
     let labels = resp.moderation_labels();
     let is_nsfw = is_adult_content(labels);
+
+    info!("✅ NSFW check completed - Result: {}", is_nsfw);
 
     Ok(is_nsfw)
 }
