@@ -48,8 +48,19 @@ impl SessionController {
                     SET id = EXCLUDED.id
                     RETURNING account_id
                 )
-                SELECT a.account_id, a.nickname, a.image_uri, a.bio, a.follower_count, a.following_count
-                FROM account a 
+                SELECT
+                    a.account_id,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as nickname,
+                    COALESCE(ax.image_uri, a.image_uri) as image_uri,
+                    a.bio,
+                    a.follower_count,
+                    a.following_count
+                FROM account a
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 WHERE a.account_id = $2
                 "#,
             )
