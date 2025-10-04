@@ -1,6 +1,6 @@
 use axum::http::{
     self, HeaderValue,
-    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
+    header::{ACCEPT, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE},
 };
 use std::{env, time::Duration};
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -43,7 +43,7 @@ pub fn get_cors() -> CorsLayer {
             http::Method::OPTIONS,
         ])
         .allow_credentials(true)
-        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
+        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE, CONTENT_LENGTH])
         .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _| {
             origin
                 .to_str()
