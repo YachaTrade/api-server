@@ -54,7 +54,7 @@ impl SessionController {
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                         a.nickname
                     ) as nickname,
-                    COALESCE(ax.image_uri, a.image_uri) as image_uri,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                     a.bio,
                     a.follower_count,
                     a.following_count
