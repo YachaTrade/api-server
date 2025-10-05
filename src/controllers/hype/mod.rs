@@ -718,7 +718,7 @@ impl HypeController {
                         r.created_at
                     FROM reward r
                     JOIN token t ON r.token_id = t.token_id
-                    WHERE r.account_id = $1 AND epoch < 2
+                    WHERE r.account_id = $1 AND epoch < 3
                     ORDER BY r.created_at DESC
                     LIMIT $2 OFFSET $3
                     "#,
