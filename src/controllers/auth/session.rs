@@ -38,7 +38,8 @@ impl SessionController {
                 WITH account_upsert AS (
                     INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)
                     VALUES ($2, $3, $4, $5, $6, $7)
-                    ON CONFLICT (account_id) DO NOTHING
+                    ON CONFLICT (account_id) DO UPDATE
+                    SET account_id = EXCLUDED.account_id
                     RETURNING *
                 ),
                 session_upsert AS (
@@ -61,6 +62,7 @@ impl SessionController {
                 FROM account a
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                CROSS JOIN session_upsert
                 WHERE a.account_id = $2
                 "#,
             )
