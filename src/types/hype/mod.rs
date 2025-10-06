@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::common::info::{AccountInfo, TokenInfoWithCreatedAtAndDescription};
+use crate::types::common::info::{AccountInfo, TokenInfo};
 
 #[derive(Debug, Deserialize)]
 pub struct HypeTokenQuery {
@@ -17,7 +17,7 @@ pub struct HypeInfo {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
-    pub token_info: TokenInfoWithCreatedAtAndDescription,
+    pub token_info: TokenInfo,
     pub account_info: AccountInfo,
     pub hype_info: HypeInfo,
 }
@@ -46,7 +46,7 @@ pub struct HypeEpochResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeVoteHistory {
     pub epoch: i64,
-    pub token_info: TokenInfoWithCreatedAtAndDescription,
+    pub token_info: TokenInfo,
     pub vote_amount: String,
     pub total_vote_amount: String,
     pub created_at: i64,
@@ -75,7 +75,7 @@ pub struct HypePointRecordResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeReward {
     pub epoch: i64,
-    pub token_info: TokenInfoWithCreatedAtAndDescription,
+    pub token_info: TokenInfo,
     pub amount: String,
     pub claimable: bool,
     pub proof: Vec<String>,
@@ -108,7 +108,7 @@ pub struct HypeVoteResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RewardAdd {
     pub epoch: i64,
-    pub token_info: TokenInfoWithCreatedAtAndDescription,
+    pub token_info: TokenInfo,
     pub amount: String,
     pub total_amount: String,
     pub created_at: i64,

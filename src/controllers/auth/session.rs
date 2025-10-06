@@ -3,21 +3,11 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use sqlx::FromRow;
 
-use crate::{db::postgres::PostgresDatabase, measure_postgres, types::account::Account};
+use crate::{db::postgres::PostgresDatabase, measure_postgres, types::common::info::AccountInfo};
 
 #[derive(Debug, FromRow)]
 struct SessionRow {
     account_id: String,
-}
-
-#[derive(FromRow)]
-pub struct AccountRow {
-    pub account_id: String,
-    pub nickname: String,
-    pub image_uri: String,
-    pub bio: String,
-    pub follower_count: i32,
-    pub following_count: i32,
 }
 
 pub struct SessionController {
@@ -29,11 +19,11 @@ impl SessionController {
         SessionController { db }
     }
 
-    pub async fn set_session(&self, session_id: &str, address: &str) -> Result<AccountRow> {
-        let account = Account::new(address.to_string());
+    pub async fn set_session(&self, session_id: &str, address: &str) -> Result<AccountInfo> {
+        let account = AccountInfo::new(address.to_string());
         let account_info = measure_postgres!(
             "auth.set_session",
-            sqlx::query_as::<_, AccountRow>(
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 WITH account_upsert AS (
                     INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use serde_json::Value;
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -31,18 +30,24 @@ impl FollowController {
             "follow.get_follows",
             sqlx::query_as::<_, AccountInfo>(
                 r#"
-                SELECT 
+                SELECT
                     a.account_id,
-                    a.nickname,
-                    a.image_uri,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as nickname,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    a.bio,
                     a.follower_count,
                     a.following_count
                 FROM follow f
-                JOIN account a ON CASE 
+                JOIN account a ON CASE
                     WHEN $2 = true THEN a.account_id = f.following_id
                     ELSE a.account_id = f.follower_id
                 END
-                WHERE CASE 
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                WHERE CASE
                     WHEN $2 = true THEN f.follower_id = $1
                     ELSE f.following_id = $1
                 END
@@ -70,15 +75,9 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
-        #[derive(sqlx::FromRow)]
-        struct FollowResult {
-            follower_info: Value,
-            following_info: Value,
-        }
-
-        let result = measure_postgres!(
+        let accounts = measure_postgres!(
             "follow.add_follow",
-            sqlx::query_as::<_, FollowResult>(
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 WITH follow_insert AS (
                     INSERT INTO follow (follower_id, following_id)
@@ -86,37 +85,43 @@ impl FollowController {
                     ON CONFLICT DO NOTHING
                     RETURNING follower_id, following_id
                 ),
-                follower_update AS (
+                account_update AS (
                     UPDATE account
-                    SET follower_count = follower_count + 1
-                    WHERE account_id = $1
+                    SET following_count = following_count + CASE WHEN account_id = $1 THEN 1 ELSE 0 END,
+                        follower_count = follower_count + CASE WHEN account_id = $2 THEN 1 ELSE 0 END
+                    WHERE (account_id = $1 OR account_id = $2)
                     AND EXISTS (SELECT 1 FROM follow_insert)
-                    RETURNING account_id, nickname, image_uri, follower_count, following_count
-                ),
-                following_update AS (
-                    UPDATE account
-                    SET following_count = following_count + 1
-                    WHERE account_id = $2
-                    AND EXISTS (SELECT 1 FROM follow_insert)
-                    RETURNING account_id, nickname, image_uri, follower_count, following_count
+                    RETURNING account_id
                 )
-                SELECT 
-                    (SELECT row_to_json(follower_update.*) FROM follower_update) as follower_info,
-                    (SELECT row_to_json(following_update.*) FROM following_update) as following_info
-                WHERE EXISTS (SELECT 1 FROM follow_insert)
+                SELECT
+                    a.account_id,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as nickname,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    a.bio,
+                    a.follower_count,
+                    a.following_count
+                FROM account a
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                WHERE a.account_id IN ($1, $2)
+                AND EXISTS (SELECT 1 FROM account_update)
+                ORDER BY CASE WHEN a.account_id = $1 THEN 0 ELSE 1 END
                 "#,
             )
             .bind(&follower)
             .bind(&following)
-            .fetch_optional(self.db.get_write_pool())
+            .fetch_all(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to add follow: {}", err))?;
 
-        let result = result.ok_or_else(|| anyhow!("Follow already exists or failed"))?;
-        let follower_info: AccountInfo = serde_json::from_value(result.follower_info)?;
-        let following_info: AccountInfo = serde_json::from_value(result.following_info)?;
+        if accounts.len() != 2 {
+            return Err(anyhow!("Failed to fetch both accounts"));
+        }
 
-        Ok((follower_info, following_info))
+        Ok((accounts[0].clone(), accounts[1].clone()))
     }
 
     pub async fn remove_follow(
@@ -124,52 +129,52 @@ impl FollowController {
         follower: String,
         following: String,
     ) -> Result<(AccountInfo, AccountInfo)> {
-        #[derive(sqlx::FromRow)]
-        struct FollowResult {
-            follower_info: Value,
-            following_info: Value,
-        }
-
-        let result = measure_postgres!(
+        let accounts = measure_postgres!(
             "follow.remove_follow",
-            sqlx::query_as::<_, FollowResult>(
+            sqlx::query_as::<_, AccountInfo>(
                 r#"
                 WITH follow_delete AS (
-                    DELETE FROM follow 
+                    DELETE FROM follow
                     WHERE follower_id = $1 AND following_id = $2
                     RETURNING follower_id, following_id
                 ),
-                follower_update AS (
+                account_update AS (
                     UPDATE account
-                    SET follower_count = GREATEST(follower_count - 1, 0)
-                    WHERE account_id = $1
+                    SET following_count = GREATEST(following_count - CASE WHEN account_id = $1 THEN 1 ELSE 0 END, 0),
+                        follower_count = GREATEST(follower_count - CASE WHEN account_id = $2 THEN 1 ELSE 0 END, 0)
+                    WHERE (account_id = $1 OR account_id = $2)
                     AND EXISTS (SELECT 1 FROM follow_delete)
-                    RETURNING account_id, nickname, image_uri, follower_count, following_count
-                ),
-                following_update AS (
-                    UPDATE account
-                    SET following_count = GREATEST(following_count - 1, 0)
-                    WHERE account_id = $2
-                    AND EXISTS (SELECT 1 FROM follow_delete)
-                    RETURNING account_id, nickname, image_uri, follower_count, following_count
+                    RETURNING account_id
                 )
-                SELECT 
-                    (SELECT row_to_json(follower_update.*) FROM follower_update) as follower_info,
-                    (SELECT row_to_json(following_update.*) FROM following_update) as following_info
-                WHERE EXISTS (SELECT 1 FROM follow_delete)
+                SELECT
+                    a.account_id,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as nickname,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    a.bio,
+                    a.follower_count,
+                    a.following_count
+                FROM account a
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                WHERE a.account_id IN ($1, $2)
+                AND EXISTS (SELECT 1 FROM account_update)
+                ORDER BY CASE WHEN a.account_id = $1 THEN 0 ELSE 1 END
                 "#,
             )
             .bind(&follower)
             .bind(&following)
-            .fetch_optional(self.db.get_write_pool())
+            .fetch_all(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to remove follow: {}", err))?;
 
-        let result = result.ok_or_else(|| anyhow!("Follow relationship not found or failed"))?;
-        let follower_info: AccountInfo = serde_json::from_value(result.follower_info)?;
-        let following_info: AccountInfo = serde_json::from_value(result.following_info)?;
+        if accounts.len() != 2 {
+            return Err(anyhow!("Failed to fetch both accounts"));
+        }
 
-        Ok((follower_info, following_info))
+        Ok((accounts[0].clone(), accounts[1].clone()))
     }
 
     pub async fn check_follow(&self, follower: String, following: String) -> Result<bool> {
