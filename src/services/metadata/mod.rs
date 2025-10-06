@@ -37,19 +37,19 @@ impl MetadataService {
         validated_format: &str,
         is_nsfw: bool,
     ) -> Result<UploadImageResponse, AppError> {
-        let image_url = self
+        let image_uri = self
             .r2
             .upload_metadata_image_file(image_id, image_data, validated_format)
             .await?;
 
         self.redis
-            .set_nsfw_status(&image_url, is_nsfw)
+            .set_nsfw_status(&image_uri, is_nsfw)
             .await
             .map_err(|err| {
                 AppError::InternalError(format!("Failed to cache NSFW status: {}", err))
             })?;
 
-        Ok(UploadImageResponse { is_nsfw, image_url })
+        Ok(UploadImageResponse { is_nsfw, image_uri })
     }
 
     pub async fn validate_metadata_request(
@@ -58,7 +58,7 @@ impl MetadataService {
     ) -> Result<TokenMetadata, AppError> {
         let is_nsfw = match self
             .redis
-            .get_nsfw_status(&payload.image_url)
+            .get_nsfw_status(&payload.image_uri)
             .await
             .map_err(|_| {
                 AppError::BadRequest("Failed to check NSFW status for this image".to_string())
@@ -75,7 +75,7 @@ impl MetadataService {
             name: payload.name.clone(),
             symbol: payload.symbol.clone(),
             description: payload.description.clone(),
-            image_url: payload.image_url.clone(),
+            image_uri: payload.image_uri.clone(),
             website: payload.website.clone(),
             twitter: payload.twitter.clone(),
             telegram: payload.telegram.clone(),

@@ -283,8 +283,8 @@ pub async fn upload_image(
 
     let total_duration = start_time.elapsed();
     info!(
-        "🎉 Image upload completed - Total time: {:?}, Image URL: {}, NSFW: {}",
-        total_duration, response.image_url, response.is_nsfw
+        "🎉 Image upload completed - Total time: {:?}, Image URI: {}, NSFW: {}",
+        total_duration, response.image_uri, response.is_nsfw
     );
 
     Ok(Json(response))

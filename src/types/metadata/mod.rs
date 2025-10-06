@@ -13,12 +13,12 @@ pub struct UploadImageMultipart {
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UploadImageResponse {
     pub is_nsfw: bool,
-    pub image_url: String,
+    pub image_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UploadMetadataRequest {
-    pub image_url: String,
+    pub image_uri: String,
     pub name: String,
     pub symbol: String,
     pub description: String,
