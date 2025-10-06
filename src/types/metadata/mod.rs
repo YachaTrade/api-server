@@ -29,7 +29,7 @@ pub struct UploadMetadataRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UploadMetadataResponse {
-    pub metadata_url: String,
+    pub metadata_uri: String,
     pub metadata: TokenMetadata,
 }
 
