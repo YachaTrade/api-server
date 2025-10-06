@@ -319,8 +319,8 @@ pub async fn upload_metadata(
 
     let total_duration = start_time.elapsed();
     info!(
-        "🎉 Metadata upload completed - Total time: {:?}, Metadata URL: {}",
-        total_duration, response.metadata_url
+        "🎉 Metadata upload completed - Total time: {:?}, Metadata URI: {}",
+        total_duration, response.metadata_uri
     );
 
     Ok(Json(response))
