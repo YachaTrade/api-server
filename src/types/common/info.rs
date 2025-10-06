@@ -1,87 +1,114 @@
-use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
+// ==================== Core Info Structs ====================
+
+/// Token information with metadata and creator
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TokenInfo {
     pub token_id: String,
     pub name: String,
     pub symbol: String,
     pub image_uri: String,
-}
-// #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-// pub struct TokenInfoWithDescription {
-//     pub token_id: String,
-//     pub name: String,
-//     pub symbol: String,
-//     pub image_uri: String,
-//     pub description: Option<String>,
-// }
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct TokenInfoWithCreatedAtAndDescription {
-    pub token_id: String,
-    pub name: String,
-    pub symbol: String,
-    pub image_uri: String,
+    #[serde(default)]
     pub description: Option<String>,
+    pub is_listing: bool,
+    #[serde(default)]
+    pub twitter: Option<String>,
+    #[serde(default)]
+    pub telegram: Option<String>,
+    #[serde(default)]
+    pub website: Option<String>,
     pub created_at: i64,
+    pub creator: AccountInfo,
 }
 
+/// Account information
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct AccountInfo {
     pub account_id: String,
     pub nickname: String,
+    pub bio: String,
     pub image_uri: String,
-    #[serde(default)]
     pub follower_count: i32,
-    #[serde(default)]
     pub following_count: i32,
 }
 
+impl AccountInfo {
+    pub fn new(account_id: String) -> Self {
+        use rand::Rng;
+        use std::env;
+
+        let random_number = rand::thread_rng().gen_range(1..=5);
+        let image_key = format!("DEFAULT_IMAGE_{}", random_number);
+        let image_uri = env::var(&image_key).expect("DEFAULT_IMAGE must be set");
+
+        Self {
+            account_id: account_id.clone(),
+            nickname: account_id,
+            bio: "".to_string(),
+            image_uri,
+            follower_count: 0,
+            following_count: 0,
+        }
+    }
+}
+
+/// Market type enum
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[sqlx(type_name = "VARCHAR")]
+#[sqlx(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MarketType {
+    Curve,
+    Dex,
+}
+
+/// Market information with pricing data
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct AccountInfoWithX {
-    pub account_info: AccountInfo,
-    pub x_info: Option<XInfo>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct PositionTokenInfo {
-    pub token_id: String,
-    pub name: String,
-    pub symbol: String,
-    pub image_uri: String,
-    pub created_at: i64,
-    pub total_supply: BigDecimal,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct MarketInfo {
+    pub market_type: MarketType,
+    pub token_id: String,
     pub market_id: String,
-    pub market_type: String,
-    pub virtual_token: BigDecimal,
-    pub virtual_native: BigDecimal,
-    pub reserve_token: BigDecimal,
-    pub reserve_native: BigDecimal,
-    pub price: BigDecimal,
+    /// Token/USD price
+    pub token_price: String,
+    /// MON/USD price
+    pub native_price: String,
+    /// MON/Token price
+    pub price: String,
+    /// Total supply (used for market cap calculation in bonding curve)
+    pub total_supply: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct PositionInfo {
-    pub total_bought_native: BigDecimal,
-    pub total_bought_token: BigDecimal,
-    pub current_token_amount: BigDecimal,
-    pub current_value: BigDecimal,
-    pub realized_pnl: BigDecimal,
-    pub unrealized_pnl: BigDecimal,
-    pub total_pnl: BigDecimal,
+/// Swap event type enum
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[sqlx(type_name = "VARCHAR")]
+#[sqlx(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SwapType {
+    Buy,
+    Sell,
+}
+
+/// Swap transaction information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SwapInfo {
+    pub event_type: SwapType,
+    pub native_amount: String,
+    pub token_amount: String,
+    pub native_price: String,
+    pub transaction_hash: String,
     pub created_at: i64,
-    pub last_traded_at: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct XInfo {
-    pub x_handle: String,
-    pub x_image_uri: String,
-    pub is_blue_label: bool,
+/// Balance information with pricing (all prices in $)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BalanceInfo {
+    /// Token balance quantity
+    pub balance: String,
+    /// Token/USD price
+    pub token_price: String,
+    /// MON/USD price
+    pub native_price: String,
 }

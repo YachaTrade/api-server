@@ -6,7 +6,7 @@ use sqlx::FromRow;
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::account::wallet::{AccountWalletResponse, Wallet},
+    types::account::GetWalletResponse,
 };
 
 #[derive(Debug, FromRow)]
@@ -27,8 +27,8 @@ impl WalletController {
     pub async fn register_wallet(
         &self,
         account_id: String,
-        wallet: Wallet,
-    ) -> Result<AccountWalletResponse> {
+        wallet: String,
+    ) -> Result<GetWalletResponse> {
         let query = sqlx::query_as::<_, WalletRow>(
             r#"
             INSERT INTO account_wallet (account_id, wallet)
@@ -39,16 +39,16 @@ impl WalletController {
             "#,
         )
         .bind(&account_id)
-        .bind(wallet.to_string())
+        .bind(&wallet)
         .fetch_one(self.db.get_write_pool());
 
         measure_postgres!("account_wallet.register_wallet", query)
             .map_err(|err| anyhow!("Failed to register wallet: {}", err))?;
 
-        Ok(AccountWalletResponse { account_id, wallet })
+        Ok(GetWalletResponse { account_id, wallet })
     }
 
-    pub async fn get_wallet(&self, account_id: String) -> Result<AccountWalletResponse> {
+    pub async fn get_wallet(&self, account_id: String) -> Result<GetWalletResponse> {
         let query = sqlx::query_as::<_, WalletRow>(
             r#"
             SELECT account_id, wallet
@@ -62,22 +62,9 @@ impl WalletController {
         let record = measure_postgres!("account_wallet.get_wallet", query)
             .map_err(|err| anyhow!("Failed to get wallet: {}", err))?;
 
-        let wallet = match record.wallet.as_str() {
-            "METAMASK" => Wallet::METAMASK,
-            "KEPLR" => Wallet::KEPLR,
-            "BACKPACK" => Wallet::BACKPACK,
-            "HAHA" => Wallet::HAHA,
-            "PHANTOM" => Wallet::PHANTOM,
-            "RABBY" => Wallet::RABBY,
-            "OKX" => Wallet::OKX,
-            _ => Wallet::OTHER,
-        };
-
-        let response = AccountWalletResponse {
+        Ok(GetWalletResponse {
             account_id: record.account_id,
-            wallet,
-        };
-
-        Ok(response)
+            wallet: record.wallet,
+        })
     }
 }

@@ -11,8 +11,8 @@ use crate::{
     controllers::auth::session::SessionController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    types::account::Account,
     types::auth::{AuthNonceRequest, AuthNonceResponse, AuthSessionRequest, AuthSessionResponse},
+    types::common::info::AccountInfo,
 };
 
 pub struct AuthService {
@@ -91,7 +91,7 @@ impl AuthService {
         let delete_nonce_future = redis.delete_sign_message(&address);
         let set_session_future = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
 
-        let (account_row, _, _) = try_join!(
+        let (account, _, _) = try_join!(
             async {
                 session_controller
                     .set_session(&session_id, &address)
@@ -109,16 +109,6 @@ impl AuthService {
                     .map_err(|err| AppError::RedisError(err.to_string()))
             }
         )?;
-
-        let account = Account {
-            account_id: account_row.account_id,
-            nickname: account_row.nickname,
-            image_uri: account_row.image_uri,
-            bio: account_row.bio,
-            follower_count: account_row.follower_count,
-            following_count: account_row.following_count,
-            mutual: None,
-        };
 
         Ok((AuthSessionResponse { account }, session_id))
     }

@@ -7,12 +7,8 @@ use crate::{
     services::account::AccountService,
     state::AppState,
     types::account::{
-        AccountResponse, UpdateAccountRequest,
-        wallet::{AccountWalletResponse, RegisterWalletRequest},
-        x::{
-            ConnectXRequest, ConnectedXAccountResponse, DisconnectXRequest,
-            DisconnectedXAccountResponse, GetXHandleResponse, UpdateXRequest,
-        },
+        AccountResponse, ConnectXRequest, GetWalletResponse, RegisterWalletRequest,
+        UpdateAccountRequest, UpdateXRequest,
     },
 };
 
@@ -23,16 +19,9 @@ use super::path::AccountPath;
     patch,
     path = AccountPath::UpdateAccount.docs_str(),
     request_body = UpdateAccountRequest,
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     responses(
-        (status = 200, description = "Account updated successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
+        (status = 200, description = "Account updated successfully", body = AccountResponse)
     ),
-
     tag="Account"
 )]
 #[instrument(skip(state, session_address, payload))]
@@ -48,21 +37,12 @@ pub async fn update_account(
     Ok(Json(response))
 }
 
-/// Get account session check
+/// Get account
 #[utoipa::path(
     get,
     path = AccountPath::GetAccount.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     responses(
-        (status = 200, description = "Get account successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
-    ),
-    security(
-        ("session_token" = [])
+        (status = 200, description = "Get account successfully", body = AccountResponse)
     ),
     tag="Account"
 )]
@@ -77,133 +57,98 @@ pub async fn get_account(
     Ok(Json(response))
 }
 
-// Account Connect X
+/// Connect X account
 #[utoipa::path(
     put,
     path = AccountPath::ConnectX.docs_str(),
     request_body = ConnectXRequest,
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     responses(
-        (status = 200, description = "Get account successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
+        (status = 200, description = "X account connected successfully", body = AccountResponse)
     ),
-
     tag="Account"
 )]
 pub async fn connect_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
     Json(payload): Json<ConnectXRequest>,
-) -> AppJsonResult<ConnectedXAccountResponse> {
+) -> AppJsonResult<AccountResponse> {
     let service = AccountService::new(state.postgres.clone());
     let response = service.connect_x(&session_address, payload).await?;
     Ok(Json(response))
 }
 
-// Account Disconnect X
+/// Disconnect X account
 #[utoipa::path(
     delete,
     path = AccountPath::DisconnectX.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     responses(
-        (status = 200, description = "Get account successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
+        (status = 200, description = "X account disconnected successfully", body = AccountResponse)
     ),
-
     tag="Account"
 )]
 pub async fn disconnect_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-) -> AppJsonResult<DisconnectedXAccountResponse> {
+) -> AppJsonResult<AccountResponse> {
     let service = AccountService::new(state.postgres.clone());
     let response = service.disconnect_x(session_address).await?;
     Ok(Json(response))
 }
 
+/// Update X account
 #[utoipa::path(
     patch,
     path = AccountPath::UpdateX.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     request_body = UpdateXRequest,
     responses(
-        (status = 200, description = "Update x successfully", body = GetXHandleResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
-    ),
-    security(
-        ("session_token" = [])
+        (status = 200, description = "X account updated successfully", body = AccountResponse)
     ),
     tag="Account"
 )]
-
 pub async fn update_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
     Json(payload): Json<UpdateXRequest>,
-) -> AppJsonResult<GetXHandleResponse> {
+) -> AppJsonResult<AccountResponse> {
     let service = AccountService::new(state.postgres.clone());
     let response = service.update_x(session_address, payload).await?;
     Ok(Json(response))
 }
 
+/// Register wallet
 #[utoipa::path(
     patch,
     path = AccountPath::RegisterWallet.docs_str(),
     request_body = RegisterWalletRequest,
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     responses(
-        (status = 200, description = "Get account successfully", body = AccountResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
+        (status = 200, description = "Wallet registered successfully", body = AccountResponse)
     ),
-
     tag="Account"
 )]
 pub async fn register_wallet(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
     Json(payload): Json<RegisterWalletRequest>,
-) -> AppJsonResult<AccountWalletResponse> {
+) -> AppJsonResult<AccountResponse> {
     let service = AccountService::new(state.postgres.clone());
     let response = service.register_wallet(session_address, payload).await?;
 
     Ok(Json(response))
 }
 
+/// Get wallet
 #[utoipa::path(
     get,
     path = AccountPath::GetWallet.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     responses(
-        (status = 200, description = "Get account successfully", body = AccountWalletResponse),
-        (status = 400, description = "Bad request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 500, description = "Internal server error")
+        (status = 200, description = "Wallet retrieved successfully", body = GetWalletResponse)
     ),
-
     tag="Account"
 )]
 pub async fn get_wallet(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-) -> AppJsonResult<AccountWalletResponse> {
+) -> AppJsonResult<GetWalletResponse> {
     let service = AccountService::new(state.postgres.clone());
     let response = service.get_wallet(session_address).await?;
 

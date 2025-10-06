@@ -1,76 +1,48 @@
-pub mod wallet;
-pub mod x;
-use std::env;
-
-use rand::Rng;
 use serde::{Deserialize, Serialize};
-
-use sqlx::FromRow;
 use utoipa::ToSchema;
+
+use super::common::info::AccountInfo;
+
+// ==================== Common Response ====================
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AccountResponse {
+    pub account_info: AccountInfo,
+}
+
+// ==================== Requests ====================
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ConnectXRequest {
+    pub is_blue_label: bool,
+    pub x_handle: String,
+    pub x_image_uri: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RegisterWalletRequest {
+    pub wallet: String,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateAccountRequest {
-    pub nickname: Option<String>,
+    #[serde(default)]
     pub bio: Option<String>,
+    #[serde(default)]
     pub image_uri: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct AccountResponse {
-    pub account: Account,
-}
-
-#[derive(Deserialize, ToSchema)]
-pub struct AccountParams {
-    pub account_id: String,
-    pub request_account_id: Option<String>,
+    #[serde(default)]
+    pub nickname: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct RequestAccountIdParam {
-    pub request_account_id: Option<String>,
+pub struct UpdateXRequest {
+    pub x_image_uri: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct MutualFriend {
+// ==================== GET /account/wallet ====================
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetWalletResponse {
     pub account_id: String,
-    pub nickname: String,
-    pub image_uri: String,
-    pub follower_count: i32,
-    pub following_count: i32,
-}
-
-#[derive(Debug, Clone, Serialize, FromRow, Deserialize, ToSchema)]
-pub struct Mutual {
-    pub mutual_friends: Option<Vec<MutualFriend>>,
-    pub mutual_friends_count: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct Account {
-    pub account_id: String,
-    pub nickname: String,
-    pub image_uri: String,
-    pub bio: String,
-    pub follower_count: i32,
-    pub following_count: i32,
-    pub mutual: Option<Mutual>,
-}
-
-impl Account {
-    pub fn new(account_id: String) -> Self {
-        //random_number 는 1~5까지의 숫자가 나와야함.
-        let random_number = rand::thread_rng().gen_range(1..=5);
-        let image_key = format!("DEFAULT_IMAGE_{}", random_number);
-        let image_uri = env::var(&image_key).expect("DEFAULT_IMAGE must be set");
-        Self {
-            account_id: account_id.clone(),
-            image_uri,
-            nickname: account_id,
-            bio: "".to_string(),
-            follower_count: 0,
-            following_count: 0,
-            mutual: None,
-        }
-    }
+    pub wallet: String,
 }
