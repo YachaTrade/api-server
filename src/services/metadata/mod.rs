@@ -92,11 +92,12 @@ impl MetadataService {
         metadata: TokenMetadata,
     ) -> Result<UploadMetadataResponse, AppError> {
         let metadata_id = Uuid::new_v4().to_string();
-        let metadata_url = self
+        let mut metadata_url = self
             .r2
             .upload_metadata_file(&metadata_id, &metadata)
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
+        metadata_url.push_str(".json");
 
         MetadataController::new(self.postgres.clone())
             .save_token_metadata(&metadata, &metadata_url)
