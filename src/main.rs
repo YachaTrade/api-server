@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, bot, follow, hype, metadata, metrics, new_content, order, profile,
+        self, account, auth, bot, follow, hype, metadata, metrics, new_event, order, profile,
         search, token, trade,
     },
     state::AppState,
@@ -77,9 +77,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::trade::handler::get_swap_history,
         router::trade::handler::get_market,
         router::trade::handler::get_prices,
-        router::trade::handler::get_price,
         router::trade::handler::get_holder,
-        router::trade::handler::get_metrics,
         router::trade::handler::get_metrics_batch,
 
         // ----------------Search----------------
@@ -98,8 +96,8 @@ use utoipa_swagger_ui::SwaggerUi;
         router::follow::handler::get_followers,
         router::follow::handler::get_followings,
 
-        // ----------------New Content----------------
-        router::new_content::handler::get_new_content,
+        // ----------------New Event----------------
+        router::new_event::handler::get_new_event,
 
         // ----------------Metadata----------------
         router::metadata::handler::upload_image,
@@ -110,13 +108,13 @@ use utoipa_swagger_ui::SwaggerUi;
         schemas(
             // Common
             types::common::info::TokenInfo,
-            types::common::info::TokenInfoWithCreatedAtAndDescription,
             types::common::info::AccountInfo,
-            types::common::info::AccountInfoWithX,
             types::common::info::MarketInfo,
-            types::common::info::PositionInfo,
-            types::common::info::PositionTokenInfo,
-            types::common::info::XInfo,
+            types::common::info::BalanceInfo,
+            types::common::info::SwapInfo,
+            types::common::info::TokenWithBalanceInfo,
+            types::common::info::TokenSwapInfo,
+            types::common::info::TokenCreatedInfo,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
             // Auth
@@ -126,28 +124,19 @@ use utoipa_swagger_ui::SwaggerUi;
             types::auth::AuthSessionResponse,
 
             // Account
-            types::account::Account,
             types::account::AccountResponse,
             types::account::UpdateAccountRequest,
-
-            types::account::x::ConnectXRequest,
-            types::account::x::ConnectedXAccountResponse,
-            types::account::x::GetXHandleResponse,
-            types::account::x::UpdateXRequest,
-            types::account::wallet::RegisterWalletRequest,
-            types::account::wallet::AccountWalletResponse,
-            types::account::wallet::Wallet,
+            types::account::ConnectXRequest,
+            types::account::UpdateXRequest,
+            types::account::RegisterWalletRequest,
+            types::account::GetWalletResponse,
 
             // Token
-            types::token::TokenWithAccountInfo,
             types::token::TokenResponse,
-            types::token::create_token::TokenCreated,
-            types::token::create_token::TokenCreatedResponse,
             types::token::order::TokenOrderType,
-            types::token::order::OrderTokenInfo,
             types::token::order::OrderToken,
+            types::token::order::OrderTokenResponse,
             types::token::order::OrderMessage,
-            types::token::metadata::TokenMetadata,
             types::token::metadata::TokenMetadataResponse,
 
             // Metadata
@@ -178,45 +167,40 @@ use utoipa_swagger_ui::SwaggerUi;
             //Trading
             types::trading::chart::Chart,
             types::trading::chart::ChartResponse,
-
-            types::trading::position::Position,
-            types::trading::position::PositionResponse,
             types::trading::position::TokenHolder,
             types::trading::position::TokenHolderResponse,
-            types::trading::position::HoldToken,
-            types::trading::position::HoldTokenResponse,
-            types::trading::swap_history::PositionSwap,
-            types::trading::swap_history::PositionSwapResponse,
             types::trading::swap_history::TokenSwap,
             types::trading::swap_history::TokenSwapResponse,
-            types::trading::market::Market,
-            types::trading::price::PriceResponse,
+            types::trading::market::MarketResponse,
             types::trading::chart::BarResponse,
             types::trading::chart::GetBarsRequest,
-            types::trading::metrics::TimeFrame,
-            types::trading::metrics::TokenTradingMetrics,
-            types::trading::metrics::TokenTradingMetricsBatch,
+            types::trading::metrics::TransactionCount,
+            types::trading::metrics::VolumeAmount,
+            types::trading::metrics::MakerCount,
+            types::trading::metrics::MetricItem,
+            types::trading::metrics::MetricsBatchResponse,
 
+            //Profile
+            types::profile::ProfileResponse,
+            types::profile::HoldTokenResponse,
+            types::profile::SwapHistoryResponse,
+            types::profile::CreatedTokensResponse,
 
             //Search
-            types::search::SearchToken,
-            types::search::SearchTokenResponse,
-            types::search::SearchAccount,
-            types::search::SearchAccountResponse,
+            types::search::TokenSearchResult,
+            types::search::TokenSearchResponse,
+            types::search::AccountSearchResult,
+            types::search::AccountSearchResponse,
             types::search::SearchResponse,
             // Social
-            types::social::follow::Follow,
-            types::social::follow::FollowResponse,
             types::social::follow::UpdateFollowRequest,
             types::social::follow::UpdateFollowResponse,
-            types::social::follow::FollowsResponse,
-            types::social::follow::FollowResponse,
             types::social::follow::CheckFollowResponse,
+            types::social::follow::FollowersResponse,
+            types::social::follow::FollowingResponse,
 
-            // New Content
-            types::new_content::NewContentResponse,
-            types::new_content::NewSwapMessage,
-            types::new_content::NewTokenMessage,
+            // New Event
+            types::new_event::NewEventResponse,
 
         )
     ),
@@ -231,7 +215,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Hype",description="Hype Token endpoints"),
         (name="Bot",description="Bot endpoints"),
         (name="Token Management",description="Token Management endpoints"),
-        (name="New Content",description="New Content endpoints"),
+        (name="New Event",description="New Event endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -287,7 +271,7 @@ async fn main() -> Result<()> {
         .merge(hype::router(app_state.clone()))
         .merge(follow::router(app_state.clone()))
         .merge(bot::router())
-        .merge(new_content::router())
+        .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))

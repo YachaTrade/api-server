@@ -9,10 +9,13 @@ use crate::{
     measure_postgres,
     types::common::{
         CountRow,
-        info::{AccountInfo, TokenInfo},
+        info::{AccountInfo, BalanceInfo, TokenInfo, TokenWithBalanceInfo},
         pagination::PaginationParams,
     },
-    types::trading::position::{HoldToken, HoldTokenResponse, TokenHolder, TokenHolderResponse},
+    types::{
+        profile::HoldTokenResponse,
+        trading::position::{TokenHolder, TokenHolderResponse},
+    },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -78,35 +81,45 @@ impl PositionController {
 
         #[derive(sqlx::FromRow)]
         struct TokenHolderRow {
-            current_token_amount: BigDecimal,
+            balance: BigDecimal,
+            token_price: BigDecimal,
+            native_price: BigDecimal,
             account_id: String,
             nickname: String,
+            bio: String,
             image_uri: String,
             follower_count: i32,
             following_count: i32,
-            x_handle: Option<String>,
-            x_image_uri: Option<String>,
-            is_blue_label: Option<bool>,
         }
 
         let records = measure_postgres!(
             "position.fetch_holders_by_token",
             sqlx::query_as::<_, TokenHolderRow>(
                 r#"
-                SELECT 
-                    b.balance as current_token_amount,
+                SELECT
+                    b.balance,
+                    (m.price * COALESCE(p.price, 0)) as token_price,
+                    COALESCE(p.price, 0) as native_price,
                     a.account_id,
-                    a.nickname,
-                    a.image_uri,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as nickname,
+                    a.bio,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                     a.follower_count,
-                    a.following_count,
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                    ax.x_image_uri,
-                    ax.is_blue_label
+                    a.following_count
                 FROM balance b
                 JOIN account a ON b.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                JOIN market m ON b.token_id = m.token_id
+                LEFT JOIN LATERAL (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) p ON true
                 WHERE b.token_id = $1 AND b.balance > 0
                 ORDER BY b.balance DESC
                 OFFSET $2 LIMIT $3
@@ -125,47 +138,21 @@ impl PositionController {
             self.get_total_count_by_token_holder(token_id).await?
         };
 
-        #[derive(sqlx::FromRow)]
-        struct CreatorRow {
-            creator: String,
-        }
-
-        let token_creator = measure_postgres!(
-            "position.fetch_token_creator",
-            sqlx::query_as::<_, CreatorRow>(
-                r#"
-                SELECT 
-                    t.creator
-                FROM token t
-                WHERE t.token_id = $1   
-                "#,
-            )
-            .bind(token_id)
-            .fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|err| anyhow!("Failed to fetch token creator: {}", err))?;
-
-        let token_creator = token_creator.creator;
-
         let holders = records
             .into_iter()
             .map(|row| TokenHolder {
-                current_amount: row.current_token_amount.to_plain_string(),
-                is_dev: row.account_id == token_creator,
                 account_info: AccountInfo {
                     account_id: row.account_id,
-                    nickname: row
-                        .x_handle
-                        .clone()
-                        .filter(|handle| !handle.is_empty())
-                        .unwrap_or(row.nickname),
-                    image_uri: row
-                        .x_image_uri
-                        .clone()
-                        .filter(|img| !img.is_empty())
-                        .unwrap_or(row.image_uri),
+                    nickname: row.nickname,
+                    bio: row.bio,
+                    image_uri: row.image_uri,
                     follower_count: row.follower_count,
                     following_count: row.following_count,
+                },
+                balance_info: BalanceInfo {
+                    balance: row.balance.to_plain_string(),
+                    token_price: row.token_price.to_plain_string(),
+                    native_price: row.native_price.to_plain_string(),
                 },
             })
             .collect();
@@ -207,26 +194,64 @@ impl PositionController {
             name: String,
             symbol: String,
             image_uri: String,
+            description: Option<String>,
+            twitter: Option<String>,
+            telegram: Option<String>,
+            website: Option<String>,
+            is_listing: bool,
+            created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_bio: String,
+            creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
             balance: BigDecimal,
-            price: BigDecimal,
+            token_price: BigDecimal,
+            native_price: BigDecimal,
         }
 
         let records = measure_postgres!(
             "position.get_hold_token_by_account",
             sqlx::query_as::<_, HoldTokenRow>(
                 r#"
-                SELECT 
+                SELECT
                     t.token_id,
                     t.name,
                     t.symbol,
                     t.image_uri,
+                    t.description,
+                    t.twitter,
+                    t.telegram,
+                    t.website,
+                    t.is_listing,
+                    t.created_at,
+                    t.creator,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as creator_nickname,
+                    a.bio as creator_bio,
+                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    a.follower_count as creator_follower_count,
+                    a.following_count as creator_following_count,
                     b.balance,
-                    m.price
+                    (m.price * COALESCE(p.price, 0)) as token_price,
+                    COALESCE(p.price, 0) as native_price
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
                 JOIN market m ON t.token_id = m.token_id
+                JOIN account a ON t.creator = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                LEFT JOIN LATERAL (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) p ON true
                 WHERE b.account_id = $1 AND b.balance > 0
-                ORDER BY (b.balance * m.price) DESC
+                ORDER BY (b.balance * m.price * COALESCE(p.price, 0)) DESC
                 LIMIT $2 OFFSET $3
                 "#,
             )
@@ -245,15 +270,32 @@ impl PositionController {
 
         let tokens = records
             .into_iter()
-            .map(|row| HoldToken {
+            .map(|row| TokenWithBalanceInfo {
                 token_info: TokenInfo {
                     token_id: row.token_id,
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
+                    description: row.description,
+                    is_listing: row.is_listing,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
-                balance: row.balance.to_string(),
-                value: (row.balance * row.price).to_string(),
+                balance_info: BalanceInfo {
+                    balance: row.balance.to_string(),
+                    token_price: row.token_price.to_string(),
+                    native_price: row.native_price.to_string(),
+                },
             })
             .collect();
 

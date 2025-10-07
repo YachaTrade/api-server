@@ -12,7 +12,8 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         social::follow::{
-            CheckFollowResponse, FollowsResponse, UpdateFollowRequest, UpdateFollowResponse,
+            CheckFollowResponse, FollowersResponse, FollowingResponse, UpdateFollowRequest,
+            UpdateFollowResponse,
         },
     },
 };
@@ -137,21 +138,21 @@ pub async fn check_follow(
         ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved followers", body = FollowsResponse),
+        (status = 200, description = "Successfully retrieved followers", body = FollowersResponse),
         (status = 400, description = "Invalid request parameters"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Profile"
+    tag = "Follow"
 )]
 #[instrument(skip(state))]
 pub async fn get_followers(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<FollowsResponse> {
+) -> AppJsonResult<FollowersResponse> {
     let service = SocialService::new(state.postgres.clone());
-    let follows = service.get_follows(&account_id, false, pagination).await?;
-    Ok(Json(FollowsResponse { accounts: follows }))
+    let response = service.get_followers(&account_id, pagination).await?;
+    Ok(Json(response))
 }
 
 /// Get following accounts with pagination
@@ -164,19 +165,19 @@ pub async fn get_followers(
         ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved following accounts", body = FollowsResponse),
+        (status = 200, description = "Successfully retrieved following accounts", body = FollowingResponse),
         (status = 400, description = "Invalid request parameters"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Profile"
+    tag = "Follow"
 )]
 #[instrument(skip(state))]
 pub async fn get_followings(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<FollowsResponse> {
+) -> AppJsonResult<FollowingResponse> {
     let service = SocialService::new(state.postgres.clone());
-    let follows = service.get_follows(&account_id, true, pagination).await?;
-    Ok(Json(FollowsResponse { accounts: follows }))
+    let response = service.get_following(&account_id, pagination).await?;
+    Ok(Json(response))
 }

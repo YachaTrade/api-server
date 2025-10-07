@@ -6,7 +6,7 @@ use crate::{
     controllers::token::create::TokenCreatedController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    types::{common::pagination::PaginationParams, token::create_token::TokenCreatedResponse},
+    types::{common::pagination::PaginationParams, profile::CreatedTokensResponse},
 };
 
 pub struct TokenCreatedService {
@@ -23,7 +23,7 @@ impl TokenCreatedService {
         &self,
         account_id: &str,
         pagination: &PaginationParams,
-    ) -> Result<TokenCreatedResponse, AppError> {
+    ) -> Result<CreatedTokensResponse, AppError> {
         if let Ok(cached) = self
             .redis
             .get_account_token_created(account_id, pagination)

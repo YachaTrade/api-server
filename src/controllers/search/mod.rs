@@ -7,9 +7,10 @@ use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
     types::{
-        common::info::{AccountInfo, TokenInfo},
+        common::info::{AccountInfo, MarketInfo, MarketType, TokenInfo},
         search::{
-            SearchAccount, SearchAccountResponse, SearchResponse, SearchToken, SearchTokenResponse,
+            AccountSearchResponse, AccountSearchResult, SearchResponse, TokenSearchResponse,
+            TokenSearchResult,
         },
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -27,11 +28,11 @@ impl SearchController {
     pub async fn search(&self, query: &str) -> Result<SearchResponse> {
         if query.trim().is_empty() {
             return Ok(SearchResponse {
-                tokens: SearchTokenResponse {
+                token_result: TokenSearchResponse {
                     total_count: 0,
                     tokens: vec![],
                 },
-                accounts: SearchAccountResponse {
+                account_result: AccountSearchResponse {
                     total_count: 0,
                     accounts: vec![],
                 },
@@ -87,28 +88,53 @@ impl SearchController {
 
         let tokens_vec = token_records
             .into_iter()
-            .map(|row| SearchToken {
+            .map(|row| TokenSearchResult {
                 token_info: TokenInfo {
-                    token_id: row.token_id,
+                    token_id: row.token_id.clone(),
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
+                    description: row.description,
+                    is_listing: row.is_listing,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
-                market_cap: (row.total_supply.clone() * row.price.clone()).to_string(),
-                price: row.price.to_plain_string(),
-                created_at: row.created_at,
+                market_info: MarketInfo {
+                    market_type: match row.market_type.as_str() {
+                        "CURVE" => MarketType::Curve,
+                        "DEX" => MarketType::Dex,
+                        _ => MarketType::Curve,
+                    },
+                    token_id: row.token_id,
+                    market_id: row.market_id,
+                    token_price: row.token_price.to_string(),
+                    native_price: row.native_price.to_string(),
+                    price: row.price.to_string(),
+                    total_supply: row.total_supply.to_string(),
+                },
             })
             .collect::<Vec<_>>();
 
         let accounts_vec = account_records
             .into_iter()
-            .map(|row| SearchAccount {
+            .map(|row| AccountSearchResult {
                 account_info: AccountInfo {
                     account_id: row.account_id,
                     nickname: match &row.x_handle {
                         Some(handle) if !handle.is_empty() => handle.clone(),
                         _ => row.nickname,
                     },
+                    bio: row.bio,
                     image_uri: match &row.x_image_uri {
                         Some(img) if !img.is_empty() => img.clone(),
                         _ => row.image_uri,
@@ -121,11 +147,11 @@ impl SearchController {
             .collect::<Vec<_>>();
 
         Ok(SearchResponse {
-            tokens: SearchTokenResponse {
+            token_result: TokenSearchResponse {
                 total_count: tokens_vec.len() as i64,
                 tokens: tokens_vec,
             },
-            accounts: SearchAccountResponse {
+            account_result: AccountSearchResponse {
                 total_count: accounts_vec.len() as i64,
                 accounts: accounts_vec,
             },
@@ -157,10 +183,43 @@ impl SearchController {
             SearchPattern::TwitterHandle => Ok(vec![]),
             SearchPattern::EvmAddress => sqlx::query_as::<_, SearchTokenRow>(
                 r#"
-                    SELECT t.token_id, t.name, t.symbol, t.image_uri,
-                           t.created_at, t.total_supply, m.market_type, m.price
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.is_listing,
+                        t.created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        m.market_type,
+                        m.market_id,
+                        (m.price * COALESCE(p.price, 0)) as token_price,
+                        COALESCE(p.price, 0) as native_price,
+                        m.price,
+                        t.total_supply
                     FROM token t
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN LATERAL (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) p ON true
                     WHERE LOWER(t.token_id) = LOWER($1)
                     LIMIT 1
                     "#,
@@ -175,12 +234,45 @@ impl SearchController {
                 let (symbol_future, name_future) = (
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
-                        SELECT t.token_id, t.name, t.symbol, t.image_uri,
-                               t.created_at, t.total_supply, m.market_type, m.price
+                        SELECT
+                            t.token_id,
+                            t.name,
+                            t.symbol,
+                            t.image_uri,
+                            t.description,
+                            t.twitter,
+                            t.telegram,
+                            t.website,
+                            t.is_listing,
+                            t.created_at,
+                            t.creator,
+                            COALESCE(
+                                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                                a.nickname
+                            ) as creator_nickname,
+                            a.bio as creator_bio,
+                            COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                            a.follower_count as creator_follower_count,
+                            a.following_count as creator_following_count,
+                            m.market_type,
+                            m.market_id,
+                            (m.price * COALESCE(p.price, 0)) as token_price,
+                            COALESCE(p.price, 0) as native_price,
+                            m.price,
+                            t.total_supply
                         FROM token t
+                        JOIN account a ON t.creator = a.account_id
+                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                         JOIN market m ON t.token_id = m.token_id
+                        LEFT JOIN LATERAL (
+                            SELECT price
+                            FROM price
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        ) p ON true
                         WHERE t.symbol ILIKE '%' || $1 || '%'
-                        ORDER BY m.price DESC, t.symbol DESC
+                        ORDER BY (m.price * COALESCE(p.price, 0)) DESC, t.symbol DESC
                         LIMIT 25
                         "#,
                     )
@@ -188,12 +280,45 @@ impl SearchController {
                     .fetch_all(pool),
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
-                        SELECT t.token_id, t.name, t.symbol, t.image_uri,
-                               t.created_at, t.total_supply, m.market_type, m.price
+                        SELECT
+                            t.token_id,
+                            t.name,
+                            t.symbol,
+                            t.image_uri,
+                            t.description,
+                            t.twitter,
+                            t.telegram,
+                            t.website,
+                            t.is_listing,
+                            t.created_at,
+                            t.creator,
+                            COALESCE(
+                                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                                a.nickname
+                            ) as creator_nickname,
+                            a.bio as creator_bio,
+                            COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                            a.follower_count as creator_follower_count,
+                            a.following_count as creator_following_count,
+                            m.market_type,
+                            m.market_id,
+                            (m.price * COALESCE(p.price, 0)) as token_price,
+                            COALESCE(p.price, 0) as native_price,
+                            m.price,
+                            t.total_supply
                         FROM token t
+                        JOIN account a ON t.creator = a.account_id
+                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                        LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                         JOIN market m ON t.token_id = m.token_id
+                        LEFT JOIN LATERAL (
+                            SELECT price
+                            FROM price
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        ) p ON true
                         WHERE t.name ILIKE '%' || $1 || '%'
-                        ORDER BY m.price DESC, t.name DESC
+                        ORDER BY (m.price * COALESCE(p.price, 0)) DESC, t.name DESC
                         LIMIT 25
                         "#,
                     )
@@ -218,7 +343,7 @@ impl SearchController {
                     }
                 }
 
-                combined_results.sort_by(|a, b| b.price.cmp(&a.price));
+                combined_results.sort_by(|a, b| b.token_price.cmp(&a.token_price));
                 combined_results.truncate(50);
                 Ok(combined_results)
             }
@@ -239,6 +364,7 @@ impl SearchController {
                     SELECT
                         a.account_id,
                         a.nickname,
+                        a.bio,
                         a.image_uri,
                         a.follower_count,
                         a.following_count,
@@ -272,6 +398,7 @@ impl SearchController {
                     SELECT
                         a.account_id,
                         a.nickname,
+                        a.bio,
                         a.image_uri,
                         a.follower_count,
                         a.following_count,
@@ -310,6 +437,7 @@ impl SearchController {
                         SELECT
                             a.account_id,
                             a.nickname,
+                            a.bio,
                             a.image_uri,
                             a.follower_count,
                             a.following_count,
@@ -344,6 +472,7 @@ impl SearchController {
                         SELECT
                             a.account_id,
                             a.nickname,
+                            a.bio,
                             a.image_uri,
                             a.follower_count,
                             a.following_count,
@@ -403,16 +532,31 @@ struct SearchTokenRow {
     name: String,
     symbol: String,
     image_uri: String,
+    description: Option<String>,
+    twitter: Option<String>,
+    telegram: Option<String>,
+    website: Option<String>,
+    is_listing: bool,
     created_at: i64,
-    total_supply: BigDecimal,
+    creator: String,
+    creator_nickname: String,
+    creator_bio: String,
+    creator_image_uri: String,
+    creator_follower_count: i32,
+    creator_following_count: i32,
     market_type: String,
+    market_id: String,
+    token_price: BigDecimal,
+    native_price: BigDecimal,
     price: BigDecimal,
+    total_supply: BigDecimal,
 }
 
 #[derive(sqlx::FromRow)]
 struct SearchAccountRow {
     account_id: String,
     nickname: String,
+    bio: String,
     image_uri: String,
     follower_count: i32,
     following_count: i32,

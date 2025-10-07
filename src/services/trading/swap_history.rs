@@ -8,7 +8,8 @@ use crate::{
     result::AppError,
     types::{
         common::pagination::PaginationParams,
-        trading::swap_history::{PositionSwapResponse, SwapQuery, TokenSwapResponse},
+        profile::SwapHistoryResponse,
+        trading::swap_history::{SwapQuery, TokenSwapResponse},
     },
 };
 
@@ -55,11 +56,32 @@ impl SwapService {
         &self,
         account_id: &str,
         pagination: PaginationParams,
-    ) -> Result<PositionSwapResponse, AppError> {
+    ) -> Result<SwapHistoryResponse, AppError> {
+        if let Ok(cached) = self
+            .redis
+            .get_account_swap_history(account_id, &pagination)
+            .await
+        {
+            return Ok(cached);
+        }
+
         let controller = SwapController::new(self.postgres.clone());
-        controller
+        let response = controller
             .get_swaps_by_account(account_id, pagination)
             .await
-            .map_err(|err| AppError::InternalError(err.to_string()))
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        if let Err(err) = self
+            .redis
+            .set_account_swap_history(account_id, &pagination, &response)
+            .await
+        {
+            warn!(
+                "Failed to set account swap history cache: account_id={}, error={}",
+                account_id, err
+            );
+        }
+
+        Ok(response)
     }
 }

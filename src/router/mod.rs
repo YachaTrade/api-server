@@ -15,4 +15,4 @@ pub mod hype;
 
 pub mod metadata;
 pub mod metrics;
-pub mod new_content;
+pub mod new_event;

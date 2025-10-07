@@ -8,8 +8,8 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::{CountRow, info::AccountInfo, pagination::PaginationParams},
-        token::order::{OrderMessage, OrderToken, OrderTokenInfo, TokenOrderType},
+        common::{CountRow, info::{AccountInfo, MarketInfo, MarketType, TokenInfo}, pagination::PaginationParams},
+        token::order::{OrderMessage, OrderToken, TokenOrderType},
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -17,24 +17,27 @@ use crate::{
 #[derive(Debug, sqlx::FromRow)]
 struct OrderTokenRow {
     token_id: String,
-    account_id: String,
-    nickname: String,
-    follower_count: i32,
-    following_count: i32,
-    account_image_uri: String,
     name: String,
     symbol: String,
     token_image_uri: String,
     description: Option<String>,
-    total_supply: BigDecimal,
-    price: BigDecimal,
-    reserve_token: BigDecimal,
-    market_type: String,
+    twitter: Option<String>,
+    telegram: Option<String>,
+    website: Option<String>,
+    is_listing: bool,
     created_at: i64,
-    score: f64,
-    x_handle: Option<String>,
-    x_image_uri: Option<String>,
-    is_blue_label: Option<bool>,
+    creator: String,
+    creator_nickname: String,
+    creator_bio: String,
+    creator_image_uri: String,
+    creator_follower_count: i32,
+    creator_following_count: i32,
+    market_type: String,
+    market_id: String,
+    token_price: BigDecimal,
+    native_price: BigDecimal,
+    price: BigDecimal,
+    total_supply: BigDecimal,
 }
 
 pub struct OrderController {
@@ -80,22 +83,43 @@ impl OrderController {
             TokenOrderType::CreationTime => {
                 let query = format!(
                     r#"
-                     SELECT 
-                        t.token_id, a.account_id, a.follower_count, a.following_count, 
-                        a.nickname, a.image_uri as account_image_uri, t.name, t.symbol, 
-                        t.image_uri as token_image_uri, t.description, 
-                        t.total_supply as total_supply,
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri as token_image_uri,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.is_listing,
+                        t.created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        m.market_type,
+                        m.market_id,
+                        (m.price * COALESCE(p.price, 0)) as token_price,
+                        COALESCE(p.price, 0) as native_price,
                         m.price,
-                        m.reserve_token,
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                        ax.x_image_uri,
-                        ax.is_blue_label,
-                        m.market_type, t.created_at, t.created_at::FLOAT8 as score
+                        t.total_supply
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    INNER JOIN market m ON t.token_id = m.token_id
+                    JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN LATERAL (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) p ON true
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -114,22 +138,43 @@ impl OrderController {
             TokenOrderType::LatestTrade => {
                 let query = format!(
                     r#"
-                    SELECT 
-                        t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
-                        a.follower_count, a.following_count, t.name, t.symbol,
-                        t.image_uri as token_image_uri, t.description,
-                        t.total_supply as total_supply,
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri as token_image_uri,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.is_listing,
+                        t.created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        m.market_type,
+                        m.market_id,
+                        (m.price * COALESCE(p.price, 0)) as token_price,
+                        COALESCE(p.price, 0) as native_price,
                         m.price,
-                        m.reserve_token,
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                        ax.x_image_uri,
-                        ax.is_blue_label,
-                        m.market_type, t.created_at, m.latest_trade_at::FLOAT8 as score
+                        t.total_supply
                     FROM market m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    LEFT JOIN LATERAL (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) p ON true
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -148,27 +193,48 @@ impl OrderController {
             TokenOrderType::MarketCap => {
                 let query = format!(
                     r#"
-                   SELECT 
-                        t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
-                        a.follower_count, a.following_count, t.name, t.symbol,
-                        t.image_uri as token_image_uri, t.description,
-                        t.total_supply as total_supply,
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri as token_image_uri,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.is_listing,
+                        t.created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        m.market_type,
+                        m.market_id,
+                        (m.price * COALESCE(p.price, 0)) as token_price,
+                        COALESCE(p.price, 0) as native_price,
                         m.price,
-                        m.reserve_token,
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                        ax.x_image_uri,
-                        ax.is_blue_label,
-                        m.market_type, t.created_at, m.price::FLOAT8 as score
+                        t.total_supply
                     FROM (
-                        SELECT token_id, price, reserve_token, market_type
+                        SELECT token_id, price, market_type, market_id
                         FROM market
                         ORDER BY price {}
                         LIMIT $1 OFFSET $2
                     ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON t.creator = ax.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    LEFT JOIN LATERAL (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) p ON true
                     ORDER BY m.price {}
                     "#,
                     order_direction, order_direction
@@ -186,22 +252,40 @@ impl OrderController {
             TokenOrderType::Verified => {
                 let query = format!(
                     r#"
-                   SELECT 
-                        t.token_id, a.account_id, a.nickname, a.image_uri as account_image_uri,
-                        a.follower_count, a.following_count, t.name, t.symbol,
-                        t.image_uri as token_image_uri, t.description,
-                        t.total_supply as total_supply,
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri as token_image_uri,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.is_listing,
+                        t.created_at,
+                        t.creator,
+                        REPLACE(ax.x_handle, '@', '#') as creator_nickname,
+                        a.bio as creator_bio,
+                        ax.x_image_uri as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        m.market_type,
+                        m.market_id,
+                        (m.price * COALESCE(p.price, 0)) as token_price,
+                        COALESCE(p.price, 0) as native_price,
                         m.price,
-                        m.reserve_token,
-                        REPLACE(ax.x_handle, '@', '#') as x_handle,
-                        ax.x_image_uri,
-                        ax.is_blue_label,
-                        m.market_type, t.created_at, m.price::FLOAT8 as score
+                        t.total_supply
                     FROM account_verified av
                     JOIN account_x ax ON av.x_handle = ax.x_handle
                     JOIN account a ON ax.account_id = a.account_id
                     JOIN token t ON t.creator = a.account_id
                     JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN LATERAL (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) p ON true
                     ORDER BY m.price {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -238,32 +322,44 @@ impl OrderController {
             "token_order.fetch_latest_king",
             sqlx::query_as::<_, OrderTokenRow>(
                 r#"
-                SELECT 
+                SELECT
                     t.token_id,
-                    a.account_id,
-                    a.nickname,
-                    a.image_uri as account_image_uri,
-                    a.follower_count,
-                    a.following_count,
                     t.name,
                     t.symbol,
                     t.image_uri as token_image_uri,
                     t.description,
-                    t.total_supply as total_supply,
-                    COALESCE(m.price, '0') as price,
-                    COALESCE(m.reserve_token, '0') as reserve_token,
-                    m.market_type,
+                    t.twitter,
+                    t.telegram,
+                    t.website,
+                    t.is_listing,
                     t.created_at,
-                    k.created_at::FLOAT8 as score,
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                    ax.x_image_uri,
-                    ax.is_blue_label
+                    t.creator,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as creator_nickname,
+                    a.bio as creator_bio,
+                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    a.follower_count as creator_follower_count,
+                    a.following_count as creator_following_count,
+                    COALESCE(m.market_type, 'CURVE') as market_type,
+                    COALESCE(m.market_id, '') as market_id,
+                    (COALESCE(m.price, 0) * COALESCE(p.price, 0)) as token_price,
+                    COALESCE(p.price, 0) as native_price,
+                    COALESCE(m.price, 0) as price,
+                    COALESCE(t.total_supply, 0) as total_supply
                 FROM king k
                 JOIN token t ON t.token_id = k.token_id
                 JOIN account a ON t.creator = a.account_id
-                LEFT JOIN account_x ax ON t.creator = ax.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 LEFT JOIN market m ON t.token_id = m.token_id
+                LEFT JOIN LATERAL (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) p ON true
                 WHERE k.created_at = (SELECT MAX(created_at) FROM king)
                 "#,
             )
@@ -313,30 +409,46 @@ impl OrderController {
 impl From<OrderTokenRow> for OrderToken {
     fn from(row: OrderTokenRow) -> Self {
         OrderToken {
-            token_info: OrderTokenInfo {
-                token_id: row.token_id,
+            account_info: AccountInfo {
+                account_id: row.creator.clone(),
+                nickname: row.creator_nickname.clone(),
+                bio: row.creator_bio.clone(),
+                image_uri: row.creator_image_uri.clone(),
+                follower_count: row.creator_follower_count,
+                following_count: row.creator_following_count,
+            },
+            token_info: TokenInfo {
+                token_id: row.token_id.clone(),
                 name: row.name,
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
-                description: row.description.unwrap_or_default(),
-                market_cap: (row.total_supply * row.price).to_plain_string(),
-                reserve_token: row.reserve_token.to_plain_string(),
+                description: row.description,
+                is_listing: row.is_listing,
+                twitter: row.twitter,
+                telegram: row.telegram,
+                website: row.website,
                 created_at: row.created_at,
-                market_type: row.market_type,
-                score: row.score,
+                creator: AccountInfo {
+                    account_id: row.creator,
+                    nickname: row.creator_nickname,
+                    bio: row.creator_bio,
+                    image_uri: row.creator_image_uri,
+                    follower_count: row.creator_follower_count,
+                    following_count: row.creator_following_count,
+                },
             },
-            account_info: AccountInfo {
-                account_id: row.account_id,
-                image_uri: row
-                    .x_image_uri
-                    .filter(|uri| !uri.is_empty())
-                    .unwrap_or(row.account_image_uri),
-                nickname: row
-                    .x_handle
-                    .filter(|handle| !handle.is_empty())
-                    .unwrap_or(row.nickname),
-                follower_count: row.follower_count,
-                following_count: row.following_count,
+            market_info: MarketInfo {
+                market_type: match row.market_type.as_str() {
+                    "CURVE" => MarketType::Curve,
+                    "DEX" => MarketType::Dex,
+                    _ => MarketType::Curve,
+                },
+                token_id: row.token_id,
+                market_id: row.market_id,
+                token_price: row.token_price.to_plain_string(),
+                native_price: row.native_price.to_plain_string(),
+                price: row.price.to_plain_string(),
+                total_supply: row.total_supply.to_plain_string(),
             },
         }
     }

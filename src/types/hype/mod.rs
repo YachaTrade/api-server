@@ -18,7 +18,6 @@ pub struct HypeInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeToken {
     pub token_info: TokenInfo,
-    pub account_info: AccountInfo,
     pub hype_info: HypeInfo,
 }
 

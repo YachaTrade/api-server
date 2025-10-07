@@ -8,7 +8,10 @@ use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::trading::market::Market,
+    types::{
+        common::info::{MarketInfo, MarketType},
+        trading::market::MarketResponse,
+    },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -16,7 +19,9 @@ use crate::{
 struct MarketRow {
     market_type: String,
     token_id: String,
-    pool_id: Option<String>,
+    market_id: String,
+    token_price: BigDecimal,
+    native_price: BigDecimal,
     price: BigDecimal,
     total_supply: BigDecimal,
 }
@@ -30,7 +35,7 @@ impl MarketController {
         MarketController { db }
     }
 
-    pub async fn get_market_by_token(&self, token_id: &str) -> Result<Market> {
+    pub async fn get_market_by_token(&self, token_id: &str) -> Result<MarketResponse> {
         let cache_key = cache_key!("market", token_id);
 
         let market = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
@@ -41,19 +46,27 @@ impl MarketController {
         Ok(market)
     }
 
-    async fn fetch_market_by_token(&self, token_id: &str) -> Result<Market> {
-        let market = measure_postgres!(
+    async fn fetch_market_by_token(&self, token_id: &str) -> Result<MarketResponse> {
+        let row = measure_postgres!(
             "market.fetch_market_by_token",
             sqlx::query_as::<_, MarketRow>(
                 r#"
-                SELECT 
+                SELECT
                     m.market_type,
                     m.token_id,
-                    m.pool_id,
+                    COALESCE(m.pool_id, '') as market_id,
+                    (m.price * COALESCE(p.price, 0)) as token_price,
+                    COALESCE(p.price, 0) as native_price,
                     m.price,
                     t.total_supply
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
+                LEFT JOIN LATERAL (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) p ON true
                 WHERE m.token_id = $1
                 "#,
             )
@@ -62,22 +75,25 @@ impl MarketController {
         )
         .map_err(|err| anyhow!("Failed to fetch market by token: {}", err))?;
 
-        Ok(Self::map_market(market))
-    }
-
-    fn map_market(raw: MarketRow) -> Market {
-        let mut market = Market {
-            market_type: raw.market_type,
-            token_id: raw.token_id,
-            market_id: raw.pool_id,
-            price: raw.price.to_plain_string(),
-            total_supply: raw.total_supply.to_plain_string(),
-        };
-
-        if market.market_type == "CURVE" {
-            market.market_id = env::var("BONDING_CURVE").ok();
+        let mut market_id = row.market_id;
+        if row.market_type == "CURVE" {
+            market_id = env::var("BONDING_CURVE").unwrap_or(market_id);
         }
 
-        market
+        Ok(MarketResponse {
+            market_info: MarketInfo {
+                market_type: match row.market_type.as_str() {
+                    "CURVE" => MarketType::Curve,
+                    "DEX" => MarketType::Dex,
+                    _ => MarketType::Curve,
+                },
+                token_id: row.token_id,
+                market_id,
+                token_price: row.token_price.to_plain_string(),
+                native_price: row.native_price.to_plain_string(),
+                price: row.price.to_plain_string(),
+                total_supply: row.total_supply.to_plain_string(),
+            },
+        })
     }
 }
