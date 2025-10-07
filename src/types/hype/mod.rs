@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::common::info::{AccountInfo, TokenInfo};
+use crate::types::common::info::TokenInfo;
 
 #[derive(Debug, Deserialize)]
 pub struct HypeTokenQuery {
