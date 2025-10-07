@@ -236,25 +236,28 @@ impl SearchController {
             SearchPattern::TwitterHandle => {
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
-                    SELECT a.account_id, a.nickname, a.image_uri,
-                           a.follower_count, a.following_count,
-                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                           ax.x_image_uri, ax.is_blue_label,
-                           COALESCE(bv.total_value, 0) as total_value
+                    SELECT
+                        a.account_id,
+                        a.nickname,
+                        a.image_uri,
+                        a.follower_count,
+                        a.following_count,
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                        ax.x_image_uri,
+                        ax.is_blue_label,
+                        COALESCE(total_value.value, 0) as total_value
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    LEFT JOIN (
-                        SELECT 
-                            b.account_id,
-                            SUM(b.balance * m.price) as total_value
+                    LEFT JOIN LATERAL (
+                        SELECT SUM(b.balance * m.price) as value
                         FROM balance b
-                        JOIN market m ON b.token_id = m.token_id
-                        WHERE b.balance >= 1000000000000000000
-                        GROUP BY b.account_id
-                    ) bv ON a.account_id = bv.account_id
+                        INNER JOIN market m ON b.token_id = m.token_id
+                        WHERE b.account_id = a.account_id
+                          AND b.balance >= 1000000000000000000
+                    ) total_value ON true
                     WHERE ax.x_handle ILIKE '%' || $1 || '%'
-                    ORDER BY total_value DESC
+                    ORDER BY total_value.value DESC NULLS LAST
                     LIMIT 50
                     "#,
                 )
@@ -266,31 +269,33 @@ impl SearchController {
             SearchPattern::EvmAddress => {
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
-                    WITH target_account AS (
-                        SELECT a.account_id, a.nickname, a.image_uri,
-                               a.follower_count, a.following_count
-                        FROM account a
-                        WHERE LOWER(a.account_id) = LOWER($1)
+                    SELECT
+                        a.account_id,
+                        a.nickname,
+                        a.image_uri,
+                        a.follower_count,
+                        a.following_count,
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                        ax.x_image_uri,
+                        ax.is_blue_label,
+                        COALESCE(total_value.value, 0) as total_value
+                    FROM account a
+                    LEFT JOIN LATERAL (
+                        SELECT x_handle, x_image_uri, is_blue_label
+                        FROM account_x
+                        WHERE account_id = a.account_id
                         LIMIT 1
-                    ),
-                    account_balance AS (
-                        SELECT 
-                            ta.account_id,
-                            COALESCE(SUM(b.balance * m.price), 0) as total_value
-                        FROM target_account ta
-                        LEFT JOIN balance b ON ta.account_id = b.account_id AND b.balance >= 1000000000000000000
-                        LEFT JOIN market m ON b.token_id = m.token_id
-                        GROUP BY ta.account_id
-                    )
-                    SELECT ta.account_id, ta.nickname, ta.image_uri,
-                           ta.follower_count, ta.following_count,
-                           CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                           ax.x_image_uri, ax.is_blue_label,
-                           COALESCE(ab.total_value, 0) as total_value
-                    FROM target_account ta
-                    LEFT JOIN account_x ax ON ta.account_id = ax.account_id
+                    ) ax ON true
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    LEFT JOIN account_balance ab ON ta.account_id = ab.account_id
+                    LEFT JOIN LATERAL (
+                        SELECT SUM(b.balance * m.price) as value
+                        FROM balance b
+                        INNER JOIN market m ON b.token_id = m.token_id
+                        WHERE b.account_id = a.account_id
+                          AND b.balance >= 1000000000000000000
+                    ) total_value ON true
+                    WHERE LOWER(a.account_id) = LOWER($1)
+                    LIMIT 1
                     "#,
                 )
                 .bind(query)
@@ -302,58 +307,62 @@ impl SearchController {
                 let (nickname_future, x_handle_future) = (
                     sqlx::query_as::<_, SearchAccountRow>(
                         r#"
-                        WITH limited_accounts AS (
-                            SELECT a.account_id, a.nickname, a.image_uri,
-                                   a.follower_count, a.following_count
-                            FROM account a
-                            WHERE a.nickname ILIKE '%' || $1 || '%'
-                            ORDER BY follower_count DESC
-                            LIMIT 20
-                        )
-                        SELECT la.account_id, la.nickname, la.image_uri,
-                               la.follower_count, la.following_count,
-                               CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                               ax.x_image_uri, ax.is_blue_label,
-                               COALESCE(bv.total_value, 0) as total_value
-                        FROM limited_accounts la
-                        LEFT JOIN account_x ax ON la.account_id = ax.account_id
+                        SELECT
+                            a.account_id,
+                            a.nickname,
+                            a.image_uri,
+                            a.follower_count,
+                            a.following_count,
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                            ax.x_image_uri,
+                            ax.is_blue_label,
+                            COALESCE(total_value.value, 0) as total_value
+                        FROM account a
+                        LEFT JOIN LATERAL (
+                            SELECT x_handle, x_image_uri, is_blue_label
+                            FROM account_x
+                            WHERE account_id = a.account_id
+                            LIMIT 1
+                        ) ax ON true
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        LEFT JOIN (
-                            SELECT 
-                                b.account_id,
-                                SUM(b.balance * m.price) as total_value
+                        LEFT JOIN LATERAL (
+                            SELECT SUM(b.balance * m.price) as value
                             FROM balance b
-                            JOIN market m ON b.token_id = m.token_id
-                            WHERE b.balance >= 1000000000000000000
-                            GROUP BY b.account_id
-                        ) bv ON la.account_id = bv.account_id
-                        ORDER BY total_value DESC
-                        LIMIT 20
+                            INNER JOIN market m ON b.token_id = m.token_id
+                            WHERE b.account_id = a.account_id
+                              AND b.balance >= 1000000000000000000
+                        ) total_value ON true
+                        WHERE a.nickname ILIKE '%' || $1 || '%'
+                        ORDER BY total_value.value DESC NULLS LAST, a.follower_count DESC
+                        LIMIT 5
                         "#,
                     )
                     .bind(query)
                     .fetch_all(pool),
                     sqlx::query_as::<_, SearchAccountRow>(
                         r#"
-                        SELECT a.account_id, a.nickname, a.image_uri,
-                               a.follower_count, a.following_count,
-                               CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                               ax.x_image_uri, ax.is_blue_label,
-                               COALESCE(bv.total_value, 0) as total_value
+                        SELECT
+                            a.account_id,
+                            a.nickname,
+                            a.image_uri,
+                            a.follower_count,
+                            a.following_count,
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                            ax.x_image_uri,
+                            ax.is_blue_label,
+                            COALESCE(total_value.value, 0) as total_value
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                        LEFT JOIN (
-                            SELECT 
-                                b.account_id,
-                                SUM(b.balance * m.price) as total_value
+                        LEFT JOIN LATERAL (
+                            SELECT SUM(b.balance * m.price) as value
                             FROM balance b
-                            JOIN market m ON b.token_id = m.token_id
-                            WHERE b.balance >= 1000000000000000000
-                            GROUP BY b.account_id
-                        ) bv ON ax.account_id = bv.account_id
+                            INNER JOIN market m ON b.token_id = m.token_id
+                            WHERE b.account_id = a.account_id
+                              AND b.balance >= 1000000000000000000
+                        ) total_value ON true
                         WHERE ax.x_handle ILIKE '%' || $1 || '%'
-                        ORDER BY total_value DESC
+                        ORDER BY total_value.value DESC NULLS LAST
                         LIMIT 20
                         "#,
                     )
