@@ -67,7 +67,7 @@ impl SwapService {
 
         let controller = SwapController::new(self.postgres.clone());
         let response = controller
-            .get_swaps_by_account(account_id, pagination)
+            .get_swaps_by_account(account_id, pagination.clone())
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 

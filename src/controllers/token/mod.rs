@@ -5,7 +5,6 @@ pub mod order;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,

@@ -3,7 +3,6 @@ use crate::{
     utils::valid_evm_address,
 };
 use serde::{Deserialize, Deserializer, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

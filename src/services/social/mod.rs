@@ -5,7 +5,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     result::AppError,
     types::{
-        common::{info::AccountInfo, pagination::PaginationParams},
+        common::pagination::PaginationParams,
         social::follow::{
             FollowersResponse, FollowingResponse, UpdateFollowResponse,
         },

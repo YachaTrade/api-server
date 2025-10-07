@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use sqlx::{Postgres, QueryBuilder, Row, postgres::PgRow};
+use sqlx::{Postgres, QueryBuilder};
 use tracing::warn;
 
 use crate::{

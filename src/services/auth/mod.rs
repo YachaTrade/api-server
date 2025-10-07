@@ -12,7 +12,6 @@ use crate::{
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::auth::{AuthNonceRequest, AuthNonceResponse, AuthSessionRequest, AuthSessionResponse},
-    types::common::info::AccountInfo,
 };
 
 pub struct AuthService {
