@@ -1,6 +1,6 @@
 [package]
 name = "api-server"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -47,7 +47,6 @@ tower-cookies = "0.10.0"
 utoipa = { version = "4.2.3", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "7.1.0", features = ["axum"] }
 anyhow = "1.0.92"
-
 
 
 #DOTENV
