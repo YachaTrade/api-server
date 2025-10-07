@@ -11,7 +11,7 @@ use crate::{
     state::AppState,
     types::{
         common::pagination::PaginationParams,
-        token::order::{OrderMessage, TokenOrderType},
+        token::order::{OrderTokenResponse, TokenOrderType},
     },
 };
 
@@ -27,7 +27,7 @@ use super::path::OrderPath;
         ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved tokens ordered by creation time", body = OrderMessage),
+        (status = 200, description = "Successfully retrieved tokens ordered by creation time", body = OrderTokenResponse),
         (status = 400, description = "Bad request - Invalid pagination parameters"),
         (status = 500, description = "Internal server error")
     ),
@@ -37,7 +37,7 @@ use super::path::OrderPath;
 pub async fn get_creation_time_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
-) -> AppJsonResult<OrderMessage> {
+) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service
         .get_order(TokenOrderType::CreationTime, &query)
@@ -56,7 +56,7 @@ pub async fn get_creation_time_order(
         ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved tokens ordered by market cap", body = OrderMessage),
+        (status = 200, description = "Successfully retrieved tokens ordered by market cap", body = OrderTokenResponse),
         (status = 400, description = "Bad request - Invalid pagination parameters"),
         (status = 500, description = "Internal server error")
     ),
@@ -66,7 +66,7 @@ pub async fn get_creation_time_order(
 pub async fn get_market_cap_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
-) -> AppJsonResult<OrderMessage> {
+) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_order(TokenOrderType::MarketCap, &query).await?;
 
@@ -83,7 +83,7 @@ pub async fn get_market_cap_order(
         ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved tokens ordered by latest trade", body = OrderMessage),
+        (status = 200, description = "Successfully retrieved tokens ordered by latest trade", body = OrderTokenResponse),
         (status = 400, description = "Bad request - Invalid pagination parameters"),
         (status = 500, description = "Internal server error")
     ),
@@ -93,7 +93,7 @@ pub async fn get_market_cap_order(
 pub async fn get_latest_trade_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
-) -> AppJsonResult<OrderMessage> {
+) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service
         .get_order(TokenOrderType::LatestTrade, &query)
@@ -112,7 +112,7 @@ pub async fn get_latest_trade_order(
         ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved tokens from verified creators ordered by price", body = OrderMessage),
+        (status = 200, description = "Successfully retrieved tokens from verified creators ordered by price", body = OrderTokenResponse),
         (status = 400, description = "Bad request - Invalid pagination parameters"),
         (status = 500, description = "Internal server error")
     ),
@@ -122,7 +122,7 @@ pub async fn get_latest_trade_order(
 pub async fn get_verified_order(
     State(state): State<AppState>,
     Query(query): Query<PaginationParams>,
-) -> AppJsonResult<OrderMessage> {
+) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_order(TokenOrderType::Verified, &query).await?;
 

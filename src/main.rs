@@ -136,7 +136,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::token::order::TokenOrderType,
             types::token::order::OrderToken,
             types::token::order::OrderTokenResponse,
-            types::token::order::OrderMessage,
             types::token::metadata::TokenMetadataResponse,
 
             // Metadata
