@@ -1,4 +1,3 @@
-use std::env;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
@@ -6,6 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
@@ -76,8 +76,8 @@ impl MarketController {
         .map_err(|err| anyhow!("Failed to fetch market by token: {}", err))?;
 
         let mut market_id = row.market_id;
-        if row.market_type == "CURVE" {
-            market_id = env::var("BONDING_CURVE").unwrap_or(market_id);
+        if row.market_type == "CURVE" && market_id.is_empty() {
+            market_id = BONDING_CURVE.clone();
         }
 
         Ok(MarketResponse {

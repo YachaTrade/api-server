@@ -91,6 +91,8 @@ lazy_static! {
     pub static ref RPC_URL: String = env::var("RPC_URL")
         .expect("RPC_URL must be set");
 
+    pub static ref BONDING_CURVE:String = env::var("BONDING_CURVE")
+        .expect("BONDING_CURVE must be set");
     pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")
         .expect("METRICS_REPORT_INTERVAL must be set")
         .parse::<u64>()

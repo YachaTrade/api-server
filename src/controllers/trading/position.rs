@@ -292,9 +292,9 @@ impl PositionController {
                     },
                 },
                 balance_info: BalanceInfo {
-                    balance: row.balance.to_string(),
-                    token_price: row.token_price.to_string(),
-                    native_price: row.native_price.to_string(),
+                    balance: row.balance.to_plain_string(),
+                    token_price: row.token_price.to_plain_string(),
+                    native_price: row.native_price.to_plain_string(),
                 },
             })
             .collect();
