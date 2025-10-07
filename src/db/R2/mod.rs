@@ -105,7 +105,7 @@ impl R2Client {
         metadata: &crate::types::metadata::TokenMetadata,
     ) -> Result<String> {
         let start_time = Instant::now();
-        let key = format!("metadata/{}", metadata_id);
+        let key = format!("metadata/{}.json", metadata_id);
         info!(
             "Uploading metadata to R2: key={}, name={}, symbol={}",
             key, metadata.name, metadata.symbol

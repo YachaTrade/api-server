@@ -330,7 +330,8 @@ async fn method_based_timeout(
 ) -> Result<axum::response::Response, StatusCode> {
     // Exempt upload endpoints from timeout restrictions
     let path = req.uri().path();
-    let is_upload_endpoint = path.starts_with("/metadata/image") || path.starts_with("/metadata/metadata");
+    let is_upload_endpoint =
+        path.starts_with("/metadata/image") || path.starts_with("/metadata/metadata");
 
     if is_upload_endpoint {
         // No timeout for upload endpoints
@@ -338,7 +339,7 @@ async fn method_based_timeout(
     }
 
     let timeout_duration = match method {
-        Method::GET => Duration::from_millis(3000),
+        Method::GET => Duration::from_millis(5000),
         _ => Duration::from_millis(10000), // POST, PUT, DELETE 등은 10초
     };
 

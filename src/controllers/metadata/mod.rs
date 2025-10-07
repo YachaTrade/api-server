@@ -31,7 +31,7 @@ impl MetadataController {
             metadata.name,
             metadata.symbol,
             metadata.description,
-            metadata.image_url,
+            metadata.image_uri,
             metadata.website,
             metadata.twitter,
             metadata.telegram,
