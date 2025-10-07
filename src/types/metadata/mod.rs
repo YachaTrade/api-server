@@ -13,12 +13,12 @@ pub struct UploadImageMultipart {
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UploadImageResponse {
     pub is_nsfw: bool,
-    pub image_url: String,
+    pub image_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UploadMetadataRequest {
-    pub image_url: String,
+    pub image_uri: String,
     pub name: String,
     pub symbol: String,
     pub description: String,
@@ -29,7 +29,7 @@ pub struct UploadMetadataRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UploadMetadataResponse {
-    pub metadata_url: String,
+    pub metadata_uri: String,
     pub metadata: TokenMetadata,
 }
 
@@ -38,7 +38,7 @@ pub struct TokenMetadata {
     pub name: String,
     pub symbol: String,
     pub description: String,
-    pub image_url: String,
+    pub image_uri: String,
     pub website: Option<String>,
     pub twitter: Option<String>,
     pub telegram: Option<String>,
@@ -110,9 +110,9 @@ impl TokenMetadata {
             ));
         }
 
-        if self.image_url.trim().is_empty() {
+        if self.image_uri.trim().is_empty() {
             return Err(AppError::BadRequest(
-                "Image URL cannot be empty".to_string(),
+                "Image URI cannot be empty".to_string(),
             ));
         }
 
@@ -120,9 +120,9 @@ impl TokenMetadata {
         let allowed_image_domain = env::var("ALLOWED_IMAGE_DOMAIN")
             .unwrap_or_else(|_| "https://storage.nadapp.net/".to_string());
 
-        if !self.image_url.starts_with(&allowed_image_domain) {
+        if !self.image_uri.starts_with(&allowed_image_domain) {
             return Err(AppError::BadRequest(format!(
-                "Invalid image URL - must be from {}",
+                "Invalid image URI - must be from {}",
                 allowed_image_domain
             )));
         }

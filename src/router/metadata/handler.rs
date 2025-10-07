@@ -283,8 +283,8 @@ pub async fn upload_image(
 
     let total_duration = start_time.elapsed();
     info!(
-        "🎉 Image upload completed - Total time: {:?}, Image URL: {}, NSFW: {}",
-        total_duration, response.image_url, response.is_nsfw
+        "🎉 Image upload completed - Total time: {:?}, Image URI: {}, NSFW: {}",
+        total_duration, response.image_uri, response.is_nsfw
     );
 
     Ok(Json(response))
@@ -319,8 +319,8 @@ pub async fn upload_metadata(
 
     let total_duration = start_time.elapsed();
     info!(
-        "🎉 Metadata upload completed - Total time: {:?}, Metadata URL: {}",
-        total_duration, response.metadata_url
+        "🎉 Metadata upload completed - Total time: {:?}, Metadata URI: {}",
+        total_duration, response.metadata_uri
     );
 
     Ok(Json(response))
