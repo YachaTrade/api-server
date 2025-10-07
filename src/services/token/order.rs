@@ -8,7 +8,7 @@ use crate::{
     result::AppError,
     types::{
         common::pagination::PaginationParams,
-        token::order::{OrderMessage, TokenOrderType},
+        token::order::{OrderTokenResponse, TokenOrderType},
     },
 };
 
@@ -26,7 +26,7 @@ impl TokenOrderService {
         &self,
         order_type: TokenOrderType,
         pagination: &PaginationParams,
-    ) -> Result<OrderMessage, AppError> {
+    ) -> Result<OrderTokenResponse, AppError> {
         if let Ok(cached) = self
             .redis
             .get_order_response(&order_type, Some(pagination))
@@ -37,13 +37,8 @@ impl TokenOrderService {
 
         let controller = OrderController::new(self.postgres.clone());
 
-        let order_tokens = controller
+        let tokens = controller
             .get_order_tokens(order_type, pagination)
-            .await
-            .map_err(|err| AppError::InternalError(err.to_string()))?;
-
-        let king_of_the_hill = controller
-            .get_latest_king_of_the_hill()
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 
@@ -52,12 +47,7 @@ impl TokenOrderService {
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 
-        let response = OrderController::build_order_message(
-            order_type,
-            Some(order_tokens),
-            king_of_the_hill,
-            total_count,
-        );
+        let response = OrderController::build_order_response(tokens, total_count);
 
         if let Err(err) = self
             .redis

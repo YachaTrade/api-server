@@ -10,7 +10,7 @@ use crate::{
     measure_postgres,
     types::{
         common::{CountRow, info::{AccountInfo, MarketInfo, MarketType, TokenInfo}, pagination::PaginationParams},
-        token::order::{OrderMessage, OrderToken, TokenOrderType},
+        token::order::{OrderToken, OrderTokenResponse, TokenOrderType},
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -392,16 +392,12 @@ impl OrderController {
         Ok(row.count)
     }
 
-    pub fn build_order_message(
-        order_type: TokenOrderType,
-        order_tokens: Option<Vec<OrderToken>>,
-        king_of_the_hill: Option<OrderToken>,
+    pub fn build_order_response(
+        tokens: Vec<OrderToken>,
         total_count: i64,
-    ) -> OrderMessage {
-        OrderMessage {
-            order_type,
-            order_token: order_tokens,
-            king_of_the_hill,
+    ) -> OrderTokenResponse {
+        OrderTokenResponse {
+            tokens,
             total_count,
         }
     }

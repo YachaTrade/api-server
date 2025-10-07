@@ -30,7 +30,7 @@ use crate::{
         token::{
             TokenResponse,
             metadata::TokenMetadataResponse,
-            order::{OrderMessage, TokenOrderType},
+            order::{OrderTokenResponse, TokenOrderType},
         },
         trading::{
             chart::{BarResponse, GetBarsRequest},
@@ -285,7 +285,7 @@ impl RedisDatabase {
     pub async fn set_order_response(
         &self,
         order_type: &TokenOrderType,
-        response: &OrderMessage,
+        response: &OrderTokenResponse,
         pagination: Option<&PaginationParams>,
     ) -> Result<()> {
         let start_time = Instant::now();
@@ -321,7 +321,7 @@ impl RedisDatabase {
         &self,
         order_type: &TokenOrderType,
         pagination: Option<&PaginationParams>,
-    ) -> Result<OrderMessage> {
+    ) -> Result<OrderTokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
@@ -338,7 +338,7 @@ impl RedisDatabase {
 
         let response_json: String =
             measure_redis!("redis.get_order_response", conn.get::<_, String>(key))?;
-        let response: OrderMessage = serde_json::from_str(&response_json)?;
+        let response: OrderTokenResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
         debug!(
