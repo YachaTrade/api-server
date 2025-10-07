@@ -5,6 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
@@ -104,7 +105,7 @@ impl OrderController {
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         m.market_type,
-                        m.market_id,
+                        COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(p.price, 0)) as token_price,
                         COALESCE(p.price, 0) as native_price,
                         m.price,
@@ -159,7 +160,7 @@ impl OrderController {
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         m.market_type,
-                        m.market_id,
+                        COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(p.price, 0)) as token_price,
                         COALESCE(p.price, 0) as native_price,
                         m.price,
@@ -214,7 +215,7 @@ impl OrderController {
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         m.market_type,
-                        m.market_id,
+                        COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(p.price, 0)) as token_price,
                         COALESCE(p.price, 0) as native_price,
                         m.price,
@@ -270,7 +271,7 @@ impl OrderController {
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         m.market_type,
-                        m.market_id,
+                        COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(p.price, 0)) as token_price,
                         COALESCE(p.price, 0) as native_price,
                         m.price,
@@ -343,7 +344,7 @@ impl OrderController {
                     a.follower_count as creator_follower_count,
                     a.following_count as creator_following_count,
                     COALESCE(m.market_type, 'CURVE') as market_type,
-                    COALESCE(m.market_id, '') as market_id,
+                    COALESCE(m.pool_id, '') as market_id,
                     (COALESCE(m.price, 0) * COALESCE(p.price, 0)) as token_price,
                     COALESCE(p.price, 0) as native_price,
                     COALESCE(m.price, 0) as price,
@@ -408,6 +409,11 @@ impl OrderController {
 
 impl From<OrderTokenRow> for OrderToken {
     fn from(row: OrderTokenRow) -> Self {
+        let mut market_id = row.market_id.clone();
+        if row.market_type == "CURVE" && market_id.is_empty() {
+            market_id = BONDING_CURVE.clone();
+        }
+
         OrderToken {
             account_info: AccountInfo {
                 account_id: row.creator.clone(),
@@ -444,7 +450,7 @@ impl From<OrderTokenRow> for OrderToken {
                     _ => MarketType::Curve,
                 },
                 token_id: row.token_id,
-                market_id: row.market_id,
+                market_id,
                 token_price: row.token_price.to_plain_string(),
                 native_price: row.native_price.to_plain_string(),
                 price: row.price.to_plain_string(),

@@ -5,6 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     types::{
         common::info::{AccountInfo, MarketInfo, MarketType, TokenInfo},
@@ -88,40 +89,47 @@ impl SearchController {
 
         let tokens_vec = token_records
             .into_iter()
-            .map(|row| TokenSearchResult {
-                token_info: TokenInfo {
-                    token_id: row.token_id.clone(),
-                    name: row.name,
-                    symbol: row.symbol,
-                    image_uri: row.image_uri,
-                    description: row.description,
-                    is_listing: row.is_listing,
-                    twitter: row.twitter,
-                    telegram: row.telegram,
-                    website: row.website,
-                    created_at: row.created_at,
-                    creator: AccountInfo {
-                        account_id: row.creator,
-                        nickname: row.creator_nickname,
-                        bio: row.creator_bio,
-                        image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
+            .map(|row| {
+                let mut market_id = row.market_id.clone();
+                if row.market_type == "CURVE" && market_id.is_empty() {
+                    market_id = BONDING_CURVE.clone();
+                }
+
+                TokenSearchResult {
+                    token_info: TokenInfo {
+                        token_id: row.token_id.clone(),
+                        name: row.name,
+                        symbol: row.symbol,
+                        image_uri: row.image_uri,
+                        description: row.description,
+                        is_listing: row.is_listing,
+                        twitter: row.twitter,
+                        telegram: row.telegram,
+                        website: row.website,
+                        created_at: row.created_at,
+                        creator: AccountInfo {
+                            account_id: row.creator,
+                            nickname: row.creator_nickname,
+                            bio: row.creator_bio,
+                            image_uri: row.creator_image_uri,
+                            follower_count: row.creator_follower_count,
+                            following_count: row.creator_following_count,
+                        },
                     },
-                },
-                market_info: MarketInfo {
-                    market_type: match row.market_type.as_str() {
-                        "CURVE" => MarketType::Curve,
-                        "DEX" => MarketType::Dex,
-                        _ => MarketType::Curve,
+                    market_info: MarketInfo {
+                        market_type: match row.market_type.as_str() {
+                            "CURVE" => MarketType::Curve,
+                            "DEX" => MarketType::Dex,
+                            _ => MarketType::Curve,
+                        },
+                        token_id: row.token_id,
+                        market_id,
+                        token_price: row.token_price.to_plain_string(),
+                        native_price: row.native_price.to_plain_string(),
+                        price: row.price.to_plain_string(),
+                        total_supply: row.total_supply.to_plain_string(),
                     },
-                    token_id: row.token_id,
-                    market_id: row.market_id,
-                    token_price: row.token_price.to_string(),
-                    native_price: row.native_price.to_string(),
-                    price: row.price.to_string(),
-                    total_supply: row.total_supply.to_string(),
-                },
+                }
             })
             .collect::<Vec<_>>();
 
@@ -204,7 +212,7 @@ impl SearchController {
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         m.market_type,
-                        m.market_id,
+                        COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(p.price, 0)) as token_price,
                         COALESCE(p.price, 0) as native_price,
                         m.price,
@@ -255,7 +263,7 @@ impl SearchController {
                             a.follower_count as creator_follower_count,
                             a.following_count as creator_following_count,
                             m.market_type,
-                            m.market_id,
+                            COALESCE(m.pool_id, '') as market_id,
                             (m.price * COALESCE(p.price, 0)) as token_price,
                             COALESCE(p.price, 0) as native_price,
                             m.price,
@@ -301,7 +309,7 @@ impl SearchController {
                             a.follower_count as creator_follower_count,
                             a.following_count as creator_following_count,
                             m.market_type,
-                            m.market_id,
+                            COALESCE(m.pool_id, '') as market_id,
                             (m.price * COALESCE(p.price, 0)) as token_price,
                             COALESCE(p.price, 0) as native_price,
                             m.price,

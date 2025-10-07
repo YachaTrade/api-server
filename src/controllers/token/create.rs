@@ -5,6 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
@@ -153,7 +154,7 @@ impl TokenCreatedController {
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         m.market_type,
-                        m.market_id,
+                        COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(p.price, 0)) as token_price,
                         COALESCE(p.price, 0) as native_price,
                         m.price,
@@ -213,45 +214,52 @@ impl TokenCreatedController {
 
         let tokens: Vec<TokenCreatedInfo> = tokens
             .into_iter()
-            .map(|row| TokenCreatedInfo {
-                token_info: TokenInfo {
-                    token_id: row.token_id.clone(),
-                    name: row.token_name,
-                    symbol: row.token_symbol,
-                    image_uri: row.token_image_uri,
-                    description: row.token_description,
-                    is_listing: row.is_listing,
-                    twitter: row.token_twitter,
-                    telegram: row.token_telegram,
-                    website: row.token_website,
-                    created_at: row.token_created_at,
-                    creator: AccountInfo {
-                        account_id: row.creator,
-                        nickname: row.creator_nickname,
-                        bio: row.creator_bio,
-                        image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
+            .map(|row| {
+                let mut market_id = row.market_id.clone();
+                if row.market_type == "CURVE" && market_id.is_empty() {
+                    market_id = BONDING_CURVE.clone();
+                }
+
+                TokenCreatedInfo {
+                    token_info: TokenInfo {
+                        token_id: row.token_id.clone(),
+                        name: row.token_name,
+                        symbol: row.token_symbol,
+                        image_uri: row.token_image_uri,
+                        description: row.token_description,
+                        is_listing: row.is_listing,
+                        twitter: row.token_twitter,
+                        telegram: row.token_telegram,
+                        website: row.token_website,
+                        created_at: row.token_created_at,
+                        creator: AccountInfo {
+                            account_id: row.creator,
+                            nickname: row.creator_nickname,
+                            bio: row.creator_bio,
+                            image_uri: row.creator_image_uri,
+                            follower_count: row.creator_follower_count,
+                            following_count: row.creator_following_count,
+                        },
                     },
-                },
-                market_info: MarketInfo {
-                    market_type: match row.market_type.as_str() {
-                        "CURVE" => MarketType::Curve,
-                        "DEX" => MarketType::Dex,
-                        _ => MarketType::Curve,
+                    market_info: MarketInfo {
+                        market_type: match row.market_type.as_str() {
+                            "CURVE" => MarketType::Curve,
+                            "DEX" => MarketType::Dex,
+                            _ => MarketType::Curve,
+                        },
+                        token_id: row.token_id,
+                        market_id,
+                        token_price: row.token_price.to_plain_string(),
+                        native_price: row.native_price.to_plain_string(),
+                        price: row.price.to_plain_string(),
+                        total_supply: row.total_supply.to_plain_string(),
                     },
-                    token_id: row.token_id,
-                    market_id: row.market_id,
-                    token_price: row.token_price.to_string(),
-                    native_price: row.native_price.to_string(),
-                    price: row.price.to_string(),
-                    total_supply: row.total_supply.to_string(),
-                },
-                balance_info: BalanceInfo {
-                    balance: row.balance.to_string(),
-                    token_price: row.token_price.to_string(),
-                    native_price: row.native_price.to_string(),
-                },
+                    balance_info: BalanceInfo {
+                        balance: row.balance.to_plain_string(),
+                        token_price: row.token_price.to_plain_string(),
+                        native_price: row.native_price.to_plain_string(),
+                    },
+                }
             })
             .collect();
 
