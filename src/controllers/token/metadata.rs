@@ -7,7 +7,10 @@ use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::token::metadata::{TokenMetadata, TokenMetadataResponse},
+    types::{
+        common::info::{AccountInfo, MarketInfo, MarketType, TokenInfo},
+        token::metadata::TokenMetadataResponse,
+    },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -49,39 +52,107 @@ impl TokenMetadataController {
             website: Option<String>,
             is_listing: bool,
             created_at: i64,
-            transaction_hash: String,
             creator: String,
+            creator_nickname: String,
+            creator_image_uri: String,
+            creator_bio: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
+            market_type: String,
+            market_id: String,
+            token_price: BigDecimal,
+            native_price: BigDecimal,
+            price: BigDecimal,
             total_supply: BigDecimal,
         }
 
         let row = measure_postgres!(
             "token.fetch_token_metadata",
             sqlx::query_as::<_, TokenMetadataRow>(
-                "SELECT token_id, name, symbol, image_uri, description, twitter, telegram, website, is_listing, created_at, transaction_hash, creator, total_supply FROM token WHERE token_id = $1",
+                r#"
+                SELECT
+                    t.token_id,
+                    t.name,
+                    t.symbol,
+                    t.image_uri,
+                    t.description,
+                    t.twitter,
+                    t.telegram,
+                    t.website,
+                    t.is_listing,
+                    t.created_at,
+                    t.creator,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as creator_nickname,
+                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    a.bio as creator_bio,
+                    a.follower_count as creator_follower_count,
+                    a.following_count as creator_following_count,
+                    m.market_type,
+                    m.market_id,
+                    (m.price * COALESCE(p.price, 0)) as token_price,
+                    COALESCE(p.price, 0) as native_price,
+                    m.price,
+                    t.total_supply
+                FROM token t
+                JOIN account a ON t.creator = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                JOIN market m ON t.token_id = m.token_id
+                LEFT JOIN LATERAL (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) p ON true
+                WHERE t.token_id = $1
+                "#,
             )
             .bind(token_id)
             .fetch_one(&*self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to get token metadata: {}", err))?;
 
-        let token = TokenMetadata {
-            token_id: row.token_id,
+        let token_info = TokenInfo {
+            token_id: row.token_id.clone(),
             name: row.name,
             symbol: row.symbol,
             image_uri: row.image_uri,
-            description: row.description.unwrap_or_default(),
-            twitter: row.twitter.unwrap_or_default(),
-            telegram: row.telegram.unwrap_or_default(),
-            website: row.website.unwrap_or_default(),
+            description: row.description,
             is_listing: row.is_listing,
+            twitter: row.twitter,
+            telegram: row.telegram,
+            website: row.website,
             created_at: row.created_at,
-            transaction_hash: row.transaction_hash,
-            creator: row.creator,
-            total_supply: row.total_supply.to_string(),
+            creator: AccountInfo {
+                account_id: row.creator,
+                nickname: row.creator_nickname,
+                bio: row.creator_bio,
+                image_uri: row.creator_image_uri,
+                follower_count: row.creator_follower_count,
+                following_count: row.creator_following_count,
+            },
+        };
+
+        let market_info = MarketInfo {
+            market_type: match row.market_type.as_str() {
+                "CURVE" => MarketType::Curve,
+                "DEX" => MarketType::Dex,
+                _ => MarketType::Curve,
+            },
+            token_id: row.token_id,
+            market_id: row.market_id,
+            token_price: row.token_price.to_plain_string(),
+            native_price: row.native_price.to_plain_string(),
+            price: row.price.to_plain_string(),
+            total_supply: row.total_supply.to_plain_string(),
         };
 
         Ok(TokenMetadataResponse {
-            token_metadata: token,
+            token_info,
+            market_info,
         })
     }
 }

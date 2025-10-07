@@ -10,7 +10,7 @@ use crate::{
     types::{
         common::{
             CountRow,
-            info::{AccountInfo, TokenInfoWithCreatedAtAndDescription},
+            info::{AccountInfo, TokenInfo},
             pagination::PaginationParams,
         },
         hype::{
@@ -35,9 +35,14 @@ struct HypeTokenRow {
     symbol: String,
     image_uri: String,
     description: Option<String>,
+    is_listing: bool,
+    twitter: Option<String>,
+    telegram: Option<String>,
+    website: Option<String>,
     created_at: i64,
-    creator_account_id: String,
+    creator: String,
     creator_nickname: String,
+    creator_bio: String,
     creator_image_uri: String,
     creator_follower_count: i32,
     creator_following_count: i32,
@@ -108,21 +113,26 @@ impl HypeController {
                 "hype.fetch_hype_token.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
-                    SELECT 
+                    SELECT
                         h.vote,
                         t.token_id,
                         t.name,
                         t.symbol,
                         t.image_uri,
                         t.description,
+                        t.is_listing,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
                         t.total_supply,
                         t.created_at,
-                        a.account_id as creator_account_id,
-                        CASE 
+                        t.creator,
+                        CASE
                             WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
                             WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
-                            ELSE a.nickname 
+                            ELSE a.nickname
                         END as creator_nickname,
+                        a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
@@ -170,20 +180,25 @@ impl HypeController {
         let tokens = token_rows
             .into_par_iter()
             .map(|row| HypeToken {
-                token_info: TokenInfoWithCreatedAtAndDescription {
+                token_info: TokenInfo {
                     token_id: row.token_id,
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
-                    created_at: row.created_at,
                     description: row.description,
-                },
-                account_info: AccountInfo {
-                    account_id: row.creator_account_id,
-                    nickname: row.creator_nickname,
-                    image_uri: row.creator_image_uri,
-                    follower_count: row.creator_follower_count,
-                    following_count: row.creator_following_count,
+                    is_listing: row.is_listing,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.to_plain_string(),
@@ -237,22 +252,27 @@ impl HypeController {
                 "hype.fetch_hype_token_epoch.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
-                    SELECT 
+                    SELECT
                         h.vote,
                         t.token_id,
                         t.name,
                         t.symbol,
                         t.image_uri,
                         t.description,
+                        t.is_listing,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
                         t.total_supply,
                         t.created_at,
-                        a.account_id as creator_account_id,
-                        CASE 
+                        t.creator,
+                        CASE
                             WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
                             WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
-                            ELSE a.nickname 
+                            ELSE a.nickname
                         END as creator_nickname,
-                        CASE WHEN av.x_handle IS NOT NULL THEN ax.x_image_uri ELSE a.image_uri END as creator_image_uri,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
                         COALESCE(thc.holder_count, 0) as holder_count,
@@ -301,20 +321,25 @@ impl HypeController {
         let tokens = token_rows
             .into_par_iter()
             .map(|row| HypeToken {
-                token_info: TokenInfoWithCreatedAtAndDescription {
+                token_info: TokenInfo {
                     token_id: row.token_id,
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
-                    created_at: row.created_at,
                     description: row.description,
-                },
-                account_info: AccountInfo {
-                    account_id: row.creator_account_id,
-                    nickname: row.creator_nickname,
-                    image_uri: row.creator_image_uri,
-                    follower_count: row.creator_follower_count,
-                    following_count: row.creator_following_count,
+                    is_listing: row.is_listing,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.to_plain_string(),
@@ -523,13 +548,18 @@ impl HypeController {
             .into_iter()
             .map(|row| HypeVoteHistory {
                 epoch: row.epoch,
-                token_info: TokenInfoWithCreatedAtAndDescription {
-                    token_id: row.token_id,
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
-                    created_at: row.token_created_at,
                     description: None,
+                    is_listing: false,
+                    twitter: None,
+                    telegram: None,
+                    website: None,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo::new(row.token_id),
                 },
                 vote_amount: row.vote.to_string(),
                 total_vote_amount: row.total_vote_amount.to_string(),
@@ -757,13 +787,18 @@ impl HypeController {
             .into_iter()
             .map(|row| HypeReward {
                 epoch: row.epoch,
-                token_info: TokenInfoWithCreatedAtAndDescription {
-                    token_id: row.token_id,
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
-                    created_at: row.token_created_at,
                     description: None,
+                    is_listing: false,
+                    twitter: None,
+                    telegram: None,
+                    website: None,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo::new(row.token_id),
                 },
                 amount: row.amount.to_string(),
                 claimable: row.status == "AWAITING",
@@ -1066,13 +1101,18 @@ impl HypeController {
             .into_iter()
             .map(|row| RewardAdd {
                 epoch: row.epoch,
-                token_info: TokenInfoWithCreatedAtAndDescription {
-                    token_id: row.token_id,
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
                     name: row.name,
                     symbol: row.symbol,
                     image_uri: row.image_uri,
-                    created_at: row.token_created_at,
                     description: None,
+                    is_listing: false,
+                    twitter: None,
+                    telegram: None,
+                    website: None,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo::new(row.token_id),
                 },
                 amount: row.amount.to_string(),
                 total_amount: row.total_amount.to_string(),

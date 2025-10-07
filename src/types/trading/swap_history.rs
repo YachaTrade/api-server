@@ -23,14 +23,10 @@ pub struct PositionSwapResponse {
     pub total_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenSwap {
     pub account_info: AccountInfo,
-    pub is_buy: bool,
-    pub native_amount: String,
-    pub token_amount: String,
-    pub created_at: i64,
-    pub transaction_hash: String,
+    pub swap_info: crate::types::common::info::SwapInfo,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenSwapResponse {

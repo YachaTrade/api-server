@@ -5,8 +5,7 @@ use anyhow::{Result, anyhow};
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::common::{ExistsRow, info::AccountInfo, pagination::PaginationParams},
-    types::social::follow::Follow,
+    types::common::{CountRow, ExistsRow, info::AccountInfo, pagination::PaginationParams},
 };
 
 pub struct FollowController {
@@ -23,10 +22,29 @@ impl FollowController {
         account_id: &str,
         is_following: bool,
         pagination: PaginationParams,
-    ) -> Result<Vec<Follow>> {
+    ) -> Result<(Vec<AccountInfo>, i64)> {
         let offset = (pagination.page - 1) * pagination.limit;
 
-        let follows = measure_postgres!(
+        let total_count = measure_postgres!(
+            "follow.get_follows_count",
+            sqlx::query_as::<_, CountRow>(
+                r#"
+                SELECT COUNT(*) as total_count
+                FROM follow f
+                WHERE CASE
+                    WHEN $2 = true THEN f.follower_id = $1
+                    ELSE f.following_id = $1
+                END
+                "#,
+            )
+            .bind(account_id)
+            .bind(is_following)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch follow count: {}", err))?
+        .count;
+
+        let accounts = measure_postgres!(
             "follow.get_follows",
             sqlx::query_as::<_, AccountInfo>(
                 r#"
@@ -64,10 +82,7 @@ impl FollowController {
         )
         .map_err(|err| anyhow!("Failed to fetch follows: {}", err))?;
 
-        Ok(follows
-            .into_iter()
-            .map(|account| Follow { account })
-            .collect())
+        Ok((accounts, total_count))
     }
 
     pub async fn add_follow(

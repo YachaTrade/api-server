@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
-use sqlx::Row;
 
 use crate::{
     cache_key,
@@ -11,11 +10,12 @@ use crate::{
     measure_postgres,
     types::common::{
         CountRow,
-        info::{AccountInfo, TokenInfo},
+        info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
         pagination::PaginationParams,
     },
-    types::trading::swap_history::{
-        PositionSwap, PositionSwapResponse, SwapQuery, TokenSwap, TokenSwapResponse,
+    types::{
+        profile::SwapHistoryResponse,
+        trading::swap_history::{SwapQuery, TokenSwap, TokenSwapResponse},
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -62,7 +62,7 @@ impl SwapController {
         &self,
         account_id: &str,
         pagination: PaginationParams,
-    ) -> Result<PositionSwapResponse> {
+    ) -> Result<SwapHistoryResponse> {
         let cache_key = cache_key!(
             "swaps_by_account",
             account_id,
@@ -82,19 +82,31 @@ impl SwapController {
         &self,
         account_id: &str,
         pagination: PaginationParams,
-    ) -> Result<PositionSwapResponse> {
+    ) -> Result<SwapHistoryResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         #[derive(sqlx::FromRow)]
         struct SwapRow {
-            account_id: String,
             token_id: String,
-            token_symbol: String,
-            token_image: String,
             token_name: String,
+            token_symbol: String,
+            token_image_uri: String,
+            token_description: Option<String>,
+            token_twitter: Option<String>,
+            token_telegram: Option<String>,
+            token_website: Option<String>,
+            is_listing: bool,
+            token_created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_bio: String,
+            creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
             is_buy: bool,
             native_amount: BigDecimal,
             token_amount: BigDecimal,
+            native_price: BigDecimal,
             created_at: i64,
             transaction_hash: String,
         }
@@ -104,8 +116,7 @@ impl SwapController {
             sqlx::query_as::<_, SwapRow>(
                 r#"
                 WITH recent_swaps AS (
-                    SELECT 
-                        s.account_id,
+                    SELECT
                         s.token_id,
                         s.is_buy,
                         s.native_amount,
@@ -118,19 +129,43 @@ impl SwapController {
                     LIMIT $2
                     OFFSET $3
                 )
-                SELECT 
-                    rs.account_id,
-                    rs.token_id,
-                    t.symbol as token_symbol,
-                    t.image_uri as token_image,
+                SELECT
+                    t.token_id,
                     t.name as token_name,
+                    t.symbol as token_symbol,
+                    t.image_uri as token_image_uri,
+                    t.description as token_description,
+                    t.twitter as token_twitter,
+                    t.telegram as token_telegram,
+                    t.website as token_website,
+                    t.is_listing,
+                    t.created_at as token_created_at,
+                    t.creator,
+                    COALESCE(
+                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                        a.nickname
+                    ) as creator_nickname,
+                    a.bio as creator_bio,
+                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    a.follower_count as creator_follower_count,
+                    a.following_count as creator_following_count,
                     rs.is_buy,
                     rs.native_amount,
                     rs.token_amount,
+                    COALESCE(p.price, 0) as native_price,
                     rs.created_at,
                     rs.transaction_hash
                 FROM recent_swaps rs
                 JOIN token t ON rs.token_id = t.token_id
+                JOIN account a ON t.creator = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                LEFT JOIN LATERAL (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) p ON true
                 ORDER BY rs.created_at DESC
                 "#,
             )
@@ -149,23 +184,43 @@ impl SwapController {
 
         let swaps = swaps
             .into_iter()
-            .map(|row| PositionSwap {
-                token: TokenInfo {
+            .map(|row| TokenSwapInfo {
+                token_info: TokenInfo {
                     token_id: row.token_id,
-                    symbol: row.token_symbol,
                     name: row.token_name,
-                    image_uri: row.token_image,
+                    symbol: row.token_symbol,
+                    image_uri: row.token_image_uri,
+                    description: row.token_description,
+                    is_listing: row.is_listing,
+                    twitter: row.token_twitter,
+                    telegram: row.token_telegram,
+                    website: row.token_website,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
-                account_id: row.account_id,
-                is_buy: row.is_buy,
-                native_amount: row.native_amount.to_plain_string(),
-                token_amount: row.token_amount.to_plain_string(),
-                created_at: row.created_at,
-                transaction_hash: row.transaction_hash,
+                swap_info: SwapInfo {
+                    event_type: if row.is_buy {
+                        SwapType::Buy
+                    } else {
+                        SwapType::Sell
+                    },
+                    native_amount: row.native_amount.to_string(),
+                    token_amount: row.token_amount.to_string(),
+                    native_price: row.native_price.to_string(),
+                    transaction_hash: row.transaction_hash,
+                    created_at: row.created_at,
+                },
             })
             .collect();
 
-        Ok(PositionSwapResponse { swaps, total_count })
+        Ok(SwapHistoryResponse { swaps, total_count })
     }
 
     pub async fn get_swaps_by_token(
@@ -175,35 +230,58 @@ impl SwapController {
     ) -> Result<TokenSwapResponse> {
         let offset = (query.page - 1) * query.limit;
 
+        #[derive(sqlx::FromRow)]
+        struct TokenSwapRow {
+            account_id: String,
+            account_nickname: String,
+            bio: String,
+            account_image: String,
+            follower_count: i32,
+            following_count: i32,
+            is_buy: bool,
+            native_amount: BigDecimal,
+            token_amount: BigDecimal,
+            native_price: BigDecimal,
+            created_at: i64,
+            transaction_hash: String,
+            x_handle: Option<String>,
+            x_image_uri: Option<String>,
+        }
+
         let mut next_param = 2;
         let mut query_sql = r#"
-        SELECT 
-            s.token_id,
+        SELECT
+            a.account_id,
+            a.nickname as account_nickname,
+            a.bio,
+            a.image_uri as account_image,
+            a.follower_count,
+            a.following_count,
             s.is_buy,
             s.native_amount,
             s.token_amount,
             s.created_at,
             s.transaction_hash,
-            a.account_id,
-            a.nickname as account_nickname,
-            a.image_uri as account_image,
-            a.follower_count,
-            a.following_count,
             ax.x_handle,
             ax.x_image_uri,
-            ax.is_blue_label
+            COALESCE(p.price, 0) as native_price
         FROM swap s
         JOIN account a ON s.account_id = a.account_id
         LEFT JOIN LATERAL (
-            SELECT 
+            SELECT
                 CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
-                x_image_uri, 
-                is_blue_label 
+                x_image_uri
             FROM account_x ax
             LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-            WHERE ax.account_id = a.account_id 
+            WHERE ax.account_id = a.account_id
             LIMIT 1
         ) ax ON true
+        LEFT JOIN LATERAL (
+            SELECT price
+            FROM price
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) p ON true
         WHERE s.token_id = $1"#
             .to_string();
 
@@ -225,7 +303,7 @@ impl SwapController {
         query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
         query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
 
-        let mut query_builder = sqlx::query(&query_sql);
+        let mut query_builder = sqlx::query_as::<_, TokenSwapRow>(&query_sql);
         query_builder = query_builder.bind(token_id);
 
         if let Some(account_id) = &query.account_id {
@@ -246,38 +324,29 @@ impl SwapController {
         let swaps: Vec<TokenSwap> = rows
             .into_iter()
             .map(|row| {
-                let account_id: String = row.try_get("account_id").unwrap();
-                let account_nickname: String = row.try_get("account_nickname").unwrap();
-                let account_image: String = row.try_get("account_image").unwrap();
-                let follower_count: i32 = row.try_get("follower_count").unwrap();
-                let following_count: i32 = row.try_get("following_count").unwrap();
-                let is_buy: bool = row.try_get("is_buy").unwrap();
-                let native_amount: BigDecimal = row.try_get("native_amount").unwrap();
-                let token_amount: BigDecimal = row.try_get("token_amount").unwrap();
-                let created_at: i64 = row.try_get("created_at").unwrap();
-                let transaction_hash: String = row.try_get("transaction_hash").unwrap();
-                let x_handle: Option<String> = row.try_get("x_handle").unwrap();
-                let x_image_uri: Option<String> = row.try_get("x_image_uri").unwrap();
-
                 TokenSwap {
                     account_info: AccountInfo {
-                        account_id,
-                        nickname: x_handle
+                        account_id: row.account_id,
+                        nickname: row.x_handle
                             .clone()
                             .filter(|h| !h.is_empty())
-                            .unwrap_or(account_nickname),
-                        image_uri: x_image_uri
+                            .unwrap_or(row.account_nickname),
+                        bio: row.bio,
+                        image_uri: row.x_image_uri
                             .clone()
                             .filter(|img| !img.is_empty())
-                            .unwrap_or(account_image),
-                        follower_count,
-                        following_count,
+                            .unwrap_or(row.account_image),
+                        follower_count: row.follower_count,
+                        following_count: row.following_count,
                     },
-                    is_buy,
-                    native_amount: native_amount.to_plain_string(),
-                    token_amount: token_amount.to_plain_string(),
-                    created_at,
-                    transaction_hash,
+                    swap_info: SwapInfo {
+                        event_type: if row.is_buy { SwapType::Buy } else { SwapType::Sell },
+                        native_amount: row.native_amount.to_plain_string(),
+                        token_amount: row.token_amount.to_plain_string(),
+                        native_price: row.native_price.to_plain_string(),
+                        transaction_hash: row.transaction_hash,
+                        created_at: row.created_at,
+                    },
                 }
             })
             .collect();
@@ -336,7 +405,7 @@ impl SwapController {
             _ => {}
         }
 
-        let mut query_builder = sqlx::query(&query);
+        let mut query_builder = sqlx::query_as::<_, CountRow>(&query);
         query_builder = query_builder.bind(token_id);
 
         if let Some(account_id) = &query_params.account_id {
@@ -353,8 +422,8 @@ impl SwapController {
             query_builder.fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch swap count with filters: {}", err))?;
-        let count: i64 = row.try_get("count").unwrap();
-        Ok(count)
+
+        Ok(row.count)
     }
 
     async fn get_cached_count(&self, token_id: &str, column: &str) -> Result<i64> {
@@ -365,12 +434,12 @@ impl SwapController {
 
         let row = measure_postgres!(
             "swap.get_cached_count",
-            sqlx::query(&query)
+            sqlx::query_as::<_, CountRow>(&query)
                 .bind(token_id)
                 .fetch_optional(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch cached swap count: {}", err))?;
 
-        Ok(row.map(|r| r.get::<i64, _>("count")).unwrap_or(0))
+        Ok(row.map(|r| r.count).unwrap_or(0))
     }
 }

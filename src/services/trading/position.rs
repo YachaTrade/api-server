@@ -8,7 +8,8 @@ use crate::{
     result::AppError,
     types::{
         common::pagination::PaginationParams,
-        trading::position::{HoldTokenResponse, TokenHolderResponse},
+        profile::HoldTokenResponse,
+        trading::position::TokenHolderResponse,
     },
 };
 

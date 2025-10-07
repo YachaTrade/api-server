@@ -3,9 +3,7 @@ pub enum TradePath {
     GetHolder,
     GetMarket,
     GetChart,
-    GetPrice,
     GetManagementHistory,
-    GetMetrics,
     GetMetricsBatch,
 }
 
@@ -16,9 +14,7 @@ impl TradePath {
             TradePath::GetHolder => "/trade/holder/:token_id",
             TradePath::GetMarket => "/trade/market/:token_id",
             TradePath::GetChart => "/trade/chart/:token_id",
-            TradePath::GetPrice => "/trade/price/:token_id",
             TradePath::GetManagementHistory => "/trade/management-history/:token_id",
-            TradePath::GetMetrics => "/trade/metrics/:token_id",
             TradePath::GetMetricsBatch => "/trade/metrics-batch/:token_id",
         }
     }
@@ -28,9 +24,7 @@ impl TradePath {
             TradePath::GetHolder => "/trade/holder/{token_id}",
             TradePath::GetMarket => "/trade/market/{token_id}",
             TradePath::GetChart => "/trade/chart/{token_id}",
-            TradePath::GetPrice => "/trade/price/{token_id}",
             TradePath::GetManagementHistory => "/trade/management-history/{token_id}",
-            TradePath::GetMetrics => "/trade/metrics/{token_id}",
             TradePath::GetMetricsBatch => "/trade/metrics-batch/{token_id}",
         }
     }

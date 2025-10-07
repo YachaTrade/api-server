@@ -112,3 +112,25 @@ pub struct BalanceInfo {
     /// MON/USD price
     pub native_price: String,
 }
+
+/// Token with balance information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TokenWithBalanceInfo {
+    pub token_info: TokenInfo,
+    pub balance_info: BalanceInfo,
+}
+
+/// Token with swap information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TokenSwapInfo {
+    pub token_info: TokenInfo,
+    pub swap_info: SwapInfo,
+}
+
+/// Token created information with market and balance
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TokenCreatedInfo {
+    pub token_info: TokenInfo,
+    pub market_info: MarketInfo,
+    pub balance_info: BalanceInfo,
+}

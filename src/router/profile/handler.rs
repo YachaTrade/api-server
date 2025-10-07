@@ -7,10 +7,8 @@ use crate::{
     },
     state::AppState,
     types::{
-        account::{AccountResponse, RequestAccountIdParam},
         common::pagination::PaginationParams,
-        token::create_token::TokenCreatedResponse,
-        trading::{position::HoldTokenResponse, swap_history::PositionSwapResponse},
+        profile::{CreatedTokensResponse, HoldTokenResponse, ProfileResponse, SwapHistoryResponse},
     },
     utils::valid_evm_address,
 };
@@ -28,11 +26,10 @@ use super::path::ProfilePath;
     get,
     path = ProfilePath::GetProfile.docs_str(),
     params(
-        ("account_id" = String, Path, description = "User's nickname or Ethereum address"),
-        ("request_account_id" = Option<String>, Query, description = "Viewer's account ID to calculate mutual friends")
+        ("account_id" = String, Path, description = "User's nickname or Ethereum address")
     ),
     responses(
-        (status = 200, description = "User profile retrieved successfully", body = AccountResponse),
+        (status = 200, description = "User profile retrieved successfully", body = ProfileResponse),
         (status = 404, description = "User not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -41,15 +38,14 @@ use super::path::ProfilePath;
 #[instrument(skip(state))]
 pub async fn get_profile(
     Path(account_id): Path<String>,
-    Query(params): Query<RequestAccountIdParam>,
     State(state): State<AppState>,
-) -> AppJsonResult<AccountResponse> {
+) -> AppJsonResult<ProfileResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
 
     let account_controller = AccountController::new(state.postgres.clone());
-    let account = account_controller
+    let account_info = account_controller
         .get_account(&account_id)
         .await
         .map_err(|err| {
@@ -59,7 +55,7 @@ pub async fn get_profile(
             );
             AppError::InternalError(err.to_string())
         })?;
-    Ok(Json(AccountResponse { account }))
+    Ok(Json(ProfileResponse { account_info }))
 }
 
 /// Get profile positions with pagination
@@ -104,7 +100,7 @@ pub async fn get_hold_token(
         ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved created tokens", body = TokenCreatedResponse),
+        (status = 200, description = "Successfully retrieved created tokens", body = CreatedTokensResponse),
         (status = 404, description = "Account invalid"),
         (status = 500, description = "Internal server error")
     ),
@@ -115,7 +111,7 @@ pub async fn get_token_created(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<TokenCreatedResponse> {
+) -> AppJsonResult<CreatedTokensResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }
@@ -137,7 +133,7 @@ pub async fn get_token_created(
         ("limit" = i32, Query, description = "Number of items per page")
     ),
     responses(
-        (status = 200, description = "Successfully retrieved trade history", body = PositionSwapResponse),
+        (status = 200, description = "Successfully retrieved trade history", body = SwapHistoryResponse),
         (status = 400, description = "Invalid request parameters"),
         (status = 500, description = "Internal server error")
     ),
@@ -148,7 +144,7 @@ pub async fn get_swap_history(
     Path(account_id): Path<String>,
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
-) -> AppJsonResult<PositionSwapResponse> {
+) -> AppJsonResult<SwapHistoryResponse> {
     if !valid_evm_address(&account_id) {
         return Err(AppError::BadRequest("Invalid account ID".to_string()));
     }

@@ -5,8 +5,10 @@ use crate::{
     db::postgres::PostgresDatabase,
     result::AppError,
     types::{
-        common::pagination::PaginationParams,
-        social::follow::{Follow, UpdateFollowResponse},
+        common::{info::AccountInfo, pagination::PaginationParams},
+        social::follow::{
+            FollowersResponse, FollowingResponse, UpdateFollowResponse,
+        },
     },
 };
 
@@ -63,16 +65,37 @@ impl SocialService {
             .map_err(|err| AppError::BadRequest(err.to_string()))
     }
 
-    pub async fn get_follows(
+    pub async fn get_followers(
         &self,
         account_id: &str,
-        is_following: bool,
         pagination: PaginationParams,
-    ) -> Result<Vec<Follow>, AppError> {
+    ) -> Result<FollowersResponse, AppError> {
         let controller = FollowController::new(self.postgres.clone());
-        controller
-            .get_follows(account_id, is_following, pagination)
+        let (accounts, total_count) = controller
+            .get_follows(account_id, false, pagination)
             .await
-            .map_err(|err| AppError::InternalError(err.to_string()))
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        Ok(FollowersResponse {
+            accounts,
+            total_count,
+        })
+    }
+
+    pub async fn get_following(
+        &self,
+        account_id: &str,
+        pagination: PaginationParams,
+    ) -> Result<FollowingResponse, AppError> {
+        let controller = FollowController::new(self.postgres.clone());
+        let (accounts, total_count) = controller
+            .get_follows(account_id, true, pagination)
+            .await
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        Ok(FollowingResponse {
+            accounts,
+            total_count,
+        })
     }
 }

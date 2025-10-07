@@ -3,11 +3,11 @@ pub mod path;
 
 use crate::state::AppState;
 use axum::{Router, routing::get};
-use path::NewContentPath;
+use path::NewEventPath;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
-        NewContentPath::NewContent.as_str(),
-        get(handler::get_new_content),
+        NewEventPath::NewEvent.as_str(),
+        get(handler::get_new_event),
     )
 }

@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use utoipa::ToSchema;
 
-use crate::types::common::info::AccountInfo;
+use crate::types::common::info::{AccountInfo, MarketInfo, TokenInfo};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -24,23 +23,17 @@ impl TokenOrderType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct OrderTokenInfo {
-    pub token_id: String,
-    pub name: String,
-    pub symbol: String,
-    pub image_uri: String,
-    pub description: String,
-    pub market_cap: String,
-    pub reserve_token: String,
-    pub created_at: i64,
-    pub market_type: String,
-    pub score: f64,
-}
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderToken {
-    pub token_info: OrderTokenInfo,
     pub account_info: AccountInfo,
+    pub token_info: TokenInfo,
+    pub market_info: MarketInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct OrderTokenResponse {
+    pub tokens: Vec<OrderToken>,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

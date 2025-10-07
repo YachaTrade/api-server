@@ -24,18 +24,18 @@ use crate::{
             HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenResponse,
             HypeVoteHistoryResponse,
         },
-        new_content::NewContentResponse,
-        search::{SearchAccountResponse, SearchResponse, SearchTokenResponse},
+        new_event::NewEventResponse,
+        profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
+        search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
         token::{
             TokenResponse,
-            create_token::TokenCreatedResponse,
             metadata::TokenMetadataResponse,
             order::{OrderMessage, TokenOrderType},
         },
         trading::{
             chart::{BarResponse, GetBarsRequest},
-            market::Market,
-            position::{HoldTokenResponse, TokenHolderResponse},
+            market::MarketResponse,
+            position::TokenHolderResponse,
             swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
@@ -184,8 +184,8 @@ impl RedisDatabase {
         let account_key = format!("search:{}:accounts", query);
 
         // Serialize token and account responses separately
-        let token_json = serde_json::to_string(&response.tokens)?;
-        let account_json = serde_json::to_string(&response.accounts)?;
+        let token_json = serde_json::to_string(&response.token_result)?;
+        let account_json = serde_json::to_string(&response.account_result)?;
 
         // Use pipeline to set both values atomically
         let mut pipe = pipe();
@@ -227,8 +227,8 @@ impl RedisDatabase {
             return Ok(None);
         }
 
-        let token_response: SearchTokenResponse = {
-            let full_response: SearchTokenResponse = serde_json::from_str(&token_json.unwrap())?;
+        let token_response: TokenSearchResponse = {
+            let full_response: TokenSearchResponse = serde_json::from_str(&token_json.unwrap())?;
             let start_idx = (pagination.page - 1) * pagination.limit;
 
             // If no tokens in cache, return None
@@ -236,7 +236,7 @@ impl RedisDatabase {
                 return Ok(None);
             }
 
-            SearchTokenResponse {
+            TokenSearchResponse {
                 total_count: full_response.total_count,
                 tokens: full_response
                     .tokens
@@ -247,8 +247,8 @@ impl RedisDatabase {
             }
         };
 
-        let account_response: SearchAccountResponse = {
-            let full_response: SearchAccountResponse =
+        let account_response: AccountSearchResponse = {
+            let full_response: AccountSearchResponse =
                 serde_json::from_str(&account_json.unwrap())?;
             let start_idx = (pagination.page - 1) * pagination.limit;
 
@@ -257,7 +257,7 @@ impl RedisDatabase {
                 return Ok(None);
             }
 
-            SearchAccountResponse {
+            AccountSearchResponse {
                 total_count: full_response.total_count,
                 accounts: full_response
                     .accounts
@@ -274,8 +274,8 @@ impl RedisDatabase {
             query, pagination.page, pagination.limit, elapsed
         );
         Ok(Some(SearchResponse {
-            tokens: token_response,
-            accounts: account_response,
+            token_result: token_response,
+            account_result: account_response,
         }))
     }
 }
@@ -402,7 +402,7 @@ impl RedisDatabase {
         &self,
         address: &str,
         pagination: &PaginationParams,
-        response: &TokenCreatedResponse,
+        response: &CreatedTokensResponse,
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
@@ -427,7 +427,7 @@ impl RedisDatabase {
         &self,
         address: &str,
         pagination: &PaginationParams,
-    ) -> Result<TokenCreatedResponse> {
+    ) -> Result<CreatedTokensResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
@@ -438,7 +438,7 @@ impl RedisDatabase {
             "redis.get_account_token_created",
             conn.get::<_, String>(key)
         )?;
-        let response: TokenCreatedResponse = serde_json::from_str(&response_json)?;
+        let response: CreatedTokensResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -1079,7 +1079,7 @@ impl RedisDatabase {
         Ok(())
     }
 
-    pub async fn set_market(&self, token_id: &str, response: &Market) -> Result<()> {
+    pub async fn set_market(&self, token_id: &str, response: &MarketResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
@@ -1097,12 +1097,12 @@ impl RedisDatabase {
         Ok(())
     }
 
-    pub async fn get_market(&self, token_id: &str) -> Result<Market> {
+    pub async fn get_market(&self, token_id: &str) -> Result<MarketResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("market:{}", token_id);
         let response_json: String = measure_redis!("redis.get_market", conn.get::<_, String>(key))?;
-        let response: Market = serde_json::from_str(&response_json)?;
+        let response: MarketResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -1113,33 +1113,33 @@ impl RedisDatabase {
     }
 }
 
-//New Content
+//New Event
 impl RedisDatabase {
-    pub async fn get_new_content(&self) -> Result<NewContentResponse> {
+    pub async fn get_new_event(&self) -> Result<NewEventResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = "new_content:latest";
+        let key = "new_event:latest";
         let response_json: String =
-            measure_redis!("redis.get_new_content", conn.get::<_, String>(key))?;
-        let response: NewContentResponse = serde_json::from_str(&response_json)?;
+            measure_redis!("redis.get_new_event", conn.get::<_, String>(key))?;
+        let response: NewEventResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
-        debug!("get_new_content() completed in {:?}", elapsed);
+        debug!("get_new_event() completed in {:?}", elapsed);
         Ok(response)
     }
 
-    pub async fn set_new_content(&self, response: &NewContentResponse) -> Result<()> {
+    pub async fn set_new_event(&self, response: &NewEventResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = "new_content:latest";
+        let key = "new_event:latest";
         let json = serde_json::to_string(response)?;
         measure_redis!(
-            "redis.set_new_content",
+            "redis.set_new_event",
             conn.pset_ex::<String, String, ()>(key.to_string(), json, *NEW_CONTENT_EXPIRATION)
         )?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_new_content() completed in {:?}", elapsed);
+        debug!("set_new_event() completed in {:?}", elapsed);
         Ok(())
     }
 }
@@ -1178,6 +1178,53 @@ impl RedisDatabase {
             image_url, is_nsfw, elapsed
         );
         Ok(())
+    }
+
+    pub async fn set_account_swap_history(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+        response: &SwapHistoryResponse,
+    ) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!(
+            "account:{}:swap_history:page:{}:limit:{}",
+            account_id, pagination.page, pagination.limit
+        );
+        let history_json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_account_swap_history",
+            conn.pset_ex::<_, _, ()>(key, history_json, *TOKEN_TRADE_EXPIRATION)
+        )?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_account_swap_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, pagination.page, pagination.limit, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_account_swap_history(
+        &self,
+        account_id: &str,
+        pagination: &PaginationParams,
+    ) -> Result<SwapHistoryResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!(
+            "account:{}:swap_history:page:{}:limit:{}",
+            account_id, pagination.page, pagination.limit
+        );
+        let history_json: String =
+            measure_redis!("redis.get_account_swap_history", conn.get::<_, String>(key))?;
+        let history: SwapHistoryResponse = serde_json::from_str(&history_json)?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_account_swap_history(account_id: {}, page: {}, limit: {}) completed in {:?}",
+            account_id, pagination.page, pagination.limit, elapsed
+        );
+        Ok(history)
     }
 
     pub async fn delete_nsfw_status(&self, image_url: &str) -> Result<()> {

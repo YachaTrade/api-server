@@ -8,8 +8,12 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::{CountRow, info::TokenInfo, pagination::PaginationParams},
-        token::create_token::{TokenCreated, TokenCreatedResponse},
+        common::{
+            CountRow,
+            info::{AccountInfo, BalanceInfo, MarketInfo, MarketType, TokenCreatedInfo, TokenInfo},
+            pagination::PaginationParams,
+        },
+        profile::CreatedTokensResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -61,7 +65,7 @@ impl TokenCreatedController {
         &self,
         account_id: &str,
         pagination: &PaginationParams,
-    ) -> Result<TokenCreatedResponse> {
+    ) -> Result<CreatedTokensResponse> {
         let cache_key = cache_key!(
             "tokens_created",
             account_id,
@@ -93,22 +97,34 @@ impl TokenCreatedController {
         &self,
         account_id: &str,
         pagination: &PaginationParams,
-    ) -> Result<TokenCreatedResponse> {
+    ) -> Result<CreatedTokensResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
 
         #[derive(sqlx::FromRow)]
         struct TokenCreatedRow {
             token_id: String,
-            symbol: String,
-            image_uri: String,
-            name: String,
+            token_name: String,
+            token_symbol: String,
+            token_image_uri: String,
+            token_description: Option<String>,
+            token_twitter: Option<String>,
+            token_telegram: Option<String>,
+            token_website: Option<String>,
             is_listing: bool,
-            created_at: i64,
+            token_created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_bio: String,
+            creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
+            market_type: String,
+            market_id: String,
+            token_price: BigDecimal,
+            native_price: BigDecimal,
             price: BigDecimal,
             total_supply: BigDecimal,
-            market_cap: BigDecimal,
-            current_amount: BigDecimal,
-            description: Option<String>,
+            balance: BigDecimal,
         }
 
         let tokens = measure_postgres!(
@@ -116,36 +132,72 @@ impl TokenCreatedController {
             sqlx::query_as::<_, TokenCreatedRow>(
                 r#"
                 WITH created_tokens AS (
-                    SELECT 
+                    SELECT
                         t.token_id,
-                        t.symbol,
-                        t.image_uri,
-                        t.name,
-                        t.total_supply,
-                        t.description,
-                        t.created_at,
-                        t.creator,
+                        t.name as token_name,
+                        t.symbol as token_symbol,
+                        t.image_uri as token_image_uri,
+                        t.description as token_description,
+                        t.twitter as token_twitter,
+                        t.telegram as token_telegram,
+                        t.website as token_website,
                         t.is_listing,
-                        COALESCE(m.price, 0) as price,
-                        COALESCE(b.balance, 0) as current_amount,
-                        COALESCE(m.price * b.balance, 0) as current_value
+                        t.created_at as token_created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count,
+                        m.market_type,
+                        m.market_id,
+                        (m.price * COALESCE(p.price, 0)) as token_price,
+                        COALESCE(p.price, 0) as native_price,
+                        m.price,
+                        t.total_supply,
+                        COALESCE(b.balance, 0) as balance,
+                        COALESCE(m.price * b.balance * COALESCE(p.price, 0), 0) as current_value
                     FROM token t
-                    LEFT JOIN market m ON t.token_id = m.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
+                    JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
+                    LEFT JOIN LATERAL (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) p ON true
                     WHERE t.creator = $1
                 )
-                SELECT 
+                SELECT
                     token_id,
-                    symbol,
-                    image_uri,
-                    name,
+                    token_name,
+                    token_symbol,
+                    token_image_uri,
+                    token_description,
+                    token_twitter,
+                    token_telegram,
+                    token_website,
                     is_listing,
-                    created_at,
-                    COALESCE(price, 0) as price,
+                    token_created_at,
+                    creator,
+                    creator_nickname,
+                    creator_bio,
+                    creator_image_uri,
+                    creator_follower_count,
+                    creator_following_count,
+                    market_type,
+                    market_id,
+                    token_price,
+                    native_price,
+                    price,
                     total_supply,
-                    COALESCE(price * total_supply, 0) as market_cap,
-                    COALESCE(current_amount, 0) as current_amount,
-                    description
+                    balance
                 FROM created_tokens
                 ORDER BY current_value DESC
                 LIMIT $2
@@ -159,28 +211,53 @@ impl TokenCreatedController {
         )
         .map_err(|err| anyhow!("Failed to fetch tokens created: {}", err))?;
 
-        let tokens: Vec<TokenCreated> = tokens
+        let tokens: Vec<TokenCreatedInfo> = tokens
             .into_iter()
-            .map(|row| TokenCreated {
-                token: TokenInfo {
-                    token_id: row.token_id,
-                    name: row.name,
-                    symbol: row.symbol,
-                    image_uri: row.image_uri,
+            .map(|row| TokenCreatedInfo {
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
+                    name: row.token_name,
+                    symbol: row.token_symbol,
+                    image_uri: row.token_image_uri,
+                    description: row.token_description,
+                    is_listing: row.is_listing,
+                    twitter: row.token_twitter,
+                    telegram: row.token_telegram,
+                    website: row.token_website,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
-                is_listing: row.is_listing,
-                created_at: row.created_at,
-                market_cap: row.market_cap.to_plain_string(),
-                total_supply: row.total_supply.to_plain_string(),
-                price: row.price.to_plain_string(),
-                current_amount: row.current_amount.to_plain_string(),
-                description: row.description,
+                market_info: MarketInfo {
+                    market_type: match row.market_type.as_str() {
+                        "CURVE" => MarketType::Curve,
+                        "DEX" => MarketType::Dex,
+                        _ => MarketType::Curve,
+                    },
+                    token_id: row.token_id,
+                    market_id: row.market_id,
+                    token_price: row.token_price.to_string(),
+                    native_price: row.native_price.to_string(),
+                    price: row.price.to_string(),
+                    total_supply: row.total_supply.to_string(),
+                },
+                balance_info: BalanceInfo {
+                    balance: row.balance.to_string(),
+                    token_price: row.token_price.to_string(),
+                    native_price: row.native_price.to_string(),
+                },
             })
             .collect();
 
         let total_count = self.fetch_total_count(account_id).await?;
 
-        Ok(TokenCreatedResponse {
+        Ok(CreatedTokensResponse {
             tokens,
             total_count,
         })

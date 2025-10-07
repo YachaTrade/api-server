@@ -68,19 +68,35 @@ impl TimeFrame {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct TokenTradingMetrics {
-    pub token_id: String,
-    pub buy_count: i64,
-    pub sell_count: i64,
-    pub volume: String,
-    pub timeframe: String,
-    pub price_change_percent: String,
-    pub current_price: Option<String>,
-    pub start_price: Option<String>,
+pub struct TransactionCount {
+    pub buy: i64,
+    pub sell: i64,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct TokenTradingMetricsBatch {
-    pub token_id: String,
-    pub metrics: Vec<TokenTradingMetrics>,
+pub struct VolumeAmount {
+    pub buy: String,
+    pub sell: String,
+    pub total: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MakerCount {
+    pub buy: i64,
+    pub sell: i64,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MetricItem {
+    pub percent: f64,
+    pub transactions: TransactionCount,
+    pub volume: VolumeAmount,
+    pub makers: MakerCount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MetricsBatchResponse {
+    pub metrics: Vec<MetricItem>,
 }

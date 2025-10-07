@@ -6,7 +6,7 @@ use crate::{
     controllers::trading::market::MarketController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    types::trading::market::Market,
+    types::trading::market::MarketResponse,
 };
 
 pub struct MarketService {
@@ -19,7 +19,7 @@ impl MarketService {
         Self { postgres, redis }
     }
 
-    pub async fn get_market(&self, token_id: &str) -> Result<Market, AppError> {
+    pub async fn get_market(&self, token_id: &str) -> Result<MarketResponse, AppError> {
         if let Ok(cached) = self.redis.get_market(token_id).await {
             return Ok(cached);
         }

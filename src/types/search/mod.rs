@@ -1,35 +1,33 @@
-use super::common::info::{AccountInfo, TokenInfo};
+use super::common::info::{AccountInfo, MarketInfo, TokenInfo};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct SearchToken {
+pub struct TokenSearchResult {
     pub token_info: TokenInfo,
-    pub price: String,
-    pub market_cap: String,
-    pub created_at: i64,
+    pub market_info: MarketInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct SearchTokenResponse {
-    pub tokens: Vec<SearchToken>,
+pub struct TokenSearchResponse {
+    pub tokens: Vec<TokenSearchResult>,
     pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct SearchAccount {
+pub struct AccountSearchResult {
     pub account_info: AccountInfo,
     pub total_value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct SearchAccountResponse {
-    pub accounts: Vec<SearchAccount>,
+pub struct AccountSearchResponse {
+    pub accounts: Vec<AccountSearchResult>,
     pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchResponse {
-    pub tokens: SearchTokenResponse,
-    pub accounts: SearchAccountResponse,
+    pub account_result: AccountSearchResponse,
+    pub token_result: TokenSearchResponse,
 }

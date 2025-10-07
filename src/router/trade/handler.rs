@@ -13,17 +13,16 @@ use crate::{
     router::trade::path::TradePath,
     services::trading::{
         chart::ChartService, market::MarketService, metrics::MetricsService,
-        position::PositionService, price::PriceService, swap_history::SwapService,
+        position::PositionService, swap_history::SwapService,
     },
     state::AppState,
     types::{
         common::pagination::PaginationParams,
         trading::{
             chart::{BarResponse, GetBarsRequest},
-            market::Market,
-            metrics::{TimeFrame, TokenTradingMetrics, TokenTradingMetricsBatch},
+            market::MarketResponse,
+            metrics::{MetricsBatchResponse, TimeFrame},
             position::TokenHolderResponse,
-            price::PriceResponse,
             swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
@@ -109,7 +108,7 @@ pub async fn get_holder(
     get,
     path = TradePath::GetMarket.docs_str(),
     responses(
-        (status = 200, description = "Success", body = Market),
+        (status = 200, description = "Success", body = MarketResponse),
         (status = 400, description = "Invalid token ID"),
         (status = 500, description = "Internal server error")
     ),
@@ -122,7 +121,7 @@ pub async fn get_holder(
 pub async fn get_market(
     Path(token_id): Path<String>,
     State(state): State<AppState>,
-) -> AppJsonResult<Market> {
+) -> AppJsonResult<MarketResponse> {
     if !valid_evm_address(&token_id) {
         error!("Invalid token ID format: {}", token_id);
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
@@ -169,35 +168,6 @@ pub async fn get_prices(
     Ok(Json(bar_data))
 }
 
-///Get price for a token
-#[utoipa::path(
-    get,
-    path = TradePath::GetPrice.docs_str(),
-    responses(
-        (status = 200, description = "Success", body = PriceResponse),
-        (status = 400, description = "Invalid token ID"),
-        (status = 500, description = "Internal server error")
-    ),
-    params(
-        ("token_id" = String, Path, description = "Token ID")
-    ),
-    tag = "Trade"
-)]
-#[instrument(skip(state))]
-pub async fn get_price(
-    State(state): State<AppState>,
-    Path(token): Path<String>,
-) -> AppJsonResult<PriceResponse> {
-    let price_service = PriceService::new(state.postgres.clone());
-    let price_response = price_service.get_price(&token).await?;
-    Ok(Json(price_response))
-}
-
-#[derive(Debug, Deserialize, IntoParams)]
-pub struct MetricsQuery {
-    /// Timeframe for metrics (1, 5, 15, 30, 60, 4H, D, W, M)
-    pub timeframe: TimeFrame,
-}
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct MetricsBatchQuery {
@@ -245,57 +215,6 @@ where
     Ok(timeframes)
 }
 
-/// Get trading metrics for a token within a specific timeframe
-#[utoipa::path(
-    get,
-    path = TradePath::GetMetrics.docs_str(),
-    params(
-        ("token_id" = String, Path, description = "Token ID"),
-        MetricsQuery
-    ),
-    responses(
-        (status = 200, description = "Trading metrics retrieved successfully", body = TokenTradingMetrics),
-        (status = 400, description = "Bad request - Invalid token_id or timeframe"),
-        (status = 500, description = "Internal server error - Database query failed")
-    ),
-    tag = "Trade"
-)]
-pub async fn get_metrics(
-    State(state): State<AppState>,
-    Path(token_id): Path<String>,
-    Query(params): Query<MetricsQuery>,
-) -> AppJsonResult<TokenTradingMetrics> {
-    let start_time = Instant::now();
-    info!(
-        "🚀 Getting trading metrics for token: {}, timeframe: {}",
-        token_id,
-        params.timeframe.to_display_string()
-    );
-
-    if !valid_evm_address(&token_id) {
-        error!("Invalid token ID format: {}", token_id);
-        return Err(AppError::BadRequest("Invalid token ID".to_string()));
-    }
-
-    let metrics_service = MetricsService::new(state.postgres.clone());
-
-    let metrics = metrics_service
-        .get_metrics(&token_id, params.timeframe)
-        .await
-        .map_err(|err| {
-            error!("Failed to get trading metrics: {:?}", err);
-            err
-        })?;
-
-    let elapsed = start_time.elapsed();
-    info!(
-        "🎉 Trading metrics retrieved successfully in {:?} - Token: {}, Volume: {}",
-        elapsed, token_id, metrics.volume
-    );
-
-    Ok(Json(metrics))
-}
-
 /// Get trading metrics for multiple timeframes for a token
 #[utoipa::path(
     get,
@@ -305,7 +224,7 @@ pub async fn get_metrics(
         ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., 'D,1H,5' or 'D,W,M'). Available values: 1, 5, 15, 30, 60, 4H, D, W, M", example = "D,1H,5")
     ),
     responses(
-        (status = 200, description = "Trading metrics retrieved successfully for multiple timeframes", body = Vec<TokenTradingMetrics>),
+        (status = 200, description = "Trading metrics retrieved successfully for multiple timeframes", body = MetricsBatchResponse),
         (status = 400, description = "Bad request - Invalid token_id or timeframes"),
         (status = 500, description = "Internal server error - Database query failed")
     ),
@@ -315,7 +234,7 @@ pub async fn get_metrics_batch(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
     Query(params): Query<MetricsBatchQuery>,
-) -> AppJsonResult<TokenTradingMetricsBatch> {
+) -> AppJsonResult<MetricsBatchResponse> {
     let start_time = Instant::now();
     info!(
         "🚀 Getting batch trading metrics for token: {}, timeframes: {:?}",
