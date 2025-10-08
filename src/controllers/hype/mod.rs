@@ -489,10 +489,16 @@ impl HypeController {
             vote: BigDecimal,
             total_vote_amount: BigDecimal,
             created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_bio: String,
+            creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
         }
 
         let query = r#"
-            SELECT 
+            SELECT
                 vh.epoch,
                 vh.token_id,
                 vh.vote,
@@ -501,9 +507,21 @@ impl HypeController {
                 t.name,
                 t.symbol,
                 t.image_uri,
-                t.created_at as token_created_at
+                t.created_at as token_created_at,
+                t.creator,
+                COALESCE(
+                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                    a.nickname
+                ) as creator_nickname,
+                a.bio as creator_bio,
+                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                a.follower_count as creator_follower_count,
+                a.following_count as creator_following_count
             FROM vote_history vh
             JOIN token t ON vh.token_id = t.token_id
+            JOIN account a ON t.creator = a.account_id
+            LEFT JOIN account_x ax ON a.account_id = ax.account_id
+            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE vh.account_id = $1
             ORDER BY vh.created_at DESC
             LIMIT $2 OFFSET $3
@@ -559,7 +577,14 @@ impl HypeController {
                     telegram: None,
                     website: None,
                     created_at: row.token_created_at,
-                    creator: AccountInfo::new(row.token_id),
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
                 vote_amount: row.vote.to_string(),
                 total_vote_amount: row.total_vote_amount.to_string(),
@@ -725,6 +750,12 @@ impl HypeController {
             claim_at: Option<i64>,
             vote_amount: BigDecimal,
             created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_bio: String,
+            creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
         }
 
         let rows_future = async {
@@ -745,9 +776,21 @@ impl HypeController {
                         r.proof,
                         r.transaction_hash,
                         r.claim_at,
-                        r.created_at
+                        r.created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count
                     FROM reward r
                     JOIN token t ON r.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE r.account_id = $1 AND epoch < 3
                     ORDER BY r.created_at DESC
                     LIMIT $2 OFFSET $3
@@ -798,14 +841,21 @@ impl HypeController {
                     telegram: None,
                     website: None,
                     created_at: row.token_created_at,
-                    creator: AccountInfo::new(row.token_id),
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
-                amount: row.amount.to_string(),
+                amount: row.amount.to_plain_string(),
                 claimable: row.status == "AWAITING",
                 proof: row.proof,
                 transaction_hash: row.transaction_hash,
                 claim_at: row.claim_at,
-                vote_amount: row.vote_amount.to_string(),
+                vote_amount: row.vote_amount.to_plain_string(),
                 created_at: row.created_at,
             })
             .collect();
@@ -1041,6 +1091,12 @@ impl HypeController {
             total_amount: BigDecimal,
             transaction_hash: String,
             created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_bio: String,
+            creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
         }
 
         let rows_future = async {
@@ -1048,7 +1104,7 @@ impl HypeController {
                 "hype.fetch_hype_reward_add_history.rows",
                 sqlx::query_as::<_, RewardAddHistoryRow>(
                     r#"
-                    SELECT 
+                    SELECT
                         rah.epoch,
                         rah.token_id,
                         rah.amount,
@@ -1058,9 +1114,21 @@ impl HypeController {
                         t.name,
                         t.symbol,
                         t.image_uri,
-                        t.created_at as token_created_at
+                        t.created_at as token_created_at,
+                        t.creator,
+                        COALESCE(
+                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
+                            a.nickname
+                        ) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.follower_count as creator_follower_count,
+                        a.following_count as creator_following_count
                     FROM reward_add_history rah
                     JOIN token t ON rah.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE rah.account_id = $1
                     ORDER BY rah.created_at DESC
                     LIMIT $2 OFFSET $3
@@ -1112,10 +1180,17 @@ impl HypeController {
                     telegram: None,
                     website: None,
                     created_at: row.token_created_at,
-                    creator: AccountInfo::new(row.token_id),
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                        follower_count: row.creator_follower_count,
+                        following_count: row.creator_following_count,
+                    },
                 },
-                amount: row.amount.to_string(),
-                total_amount: row.total_amount.to_string(),
+                amount: row.amount.to_plain_string(),
+                total_amount: row.total_amount.to_plain_string(),
                 created_at: row.created_at,
                 transaction_hash: row.transaction_hash,
             })
