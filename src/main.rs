@@ -204,7 +204,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
             // New Event
             types::new_event::NewEventResponse,
-            types::new_event::NewTokenEvent,
+            types::new_event::NewEvent,
             types::new_event::EventType,
 
         )

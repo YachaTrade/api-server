@@ -8,7 +8,7 @@ use crate::{
     measure_postgres,
     types::{
         common::info::{AccountInfo, TokenInfo},
-        new_event::{EventType, NewEventResponse, NewTokenEvent},
+        new_event::{EventType, NewEvent, NewEventResponse},
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -111,7 +111,7 @@ impl NewEventController {
         Ok(NewEventResponse { new_events })
     }
 
-    async fn fetch_latest_buy_event(&self) -> Result<Option<NewTokenEvent>> {
+    async fn fetch_latest_buy_event(&self) -> Result<Option<NewEvent>> {
         let query = r#"
             SELECT
                 s.native_amount,
@@ -162,7 +162,7 @@ impl NewEventController {
         )
         .map_err(|err| anyhow!("Failed to get latest buy event: {}", err))?;
 
-        Ok(row_opt.map(|row| NewTokenEvent {
+        Ok(row_opt.map(|row| NewEvent {
             event_type: EventType::Buy,
             amount: row.native_amount.to_plain_string(),
             token_info: TokenInfo {
@@ -196,7 +196,7 @@ impl NewEventController {
         }))
     }
 
-    async fn fetch_latest_sell_event(&self) -> Result<Option<NewTokenEvent>> {
+    async fn fetch_latest_sell_event(&self) -> Result<Option<NewEvent>> {
         let query = r#"
             SELECT
                 s.native_amount,
@@ -247,7 +247,7 @@ impl NewEventController {
         )
         .map_err(|err| anyhow!("Failed to get latest sell event: {}", err))?;
 
-        Ok(row_opt.map(|row| NewTokenEvent {
+        Ok(row_opt.map(|row| NewEvent {
             event_type: EventType::Sell,
             amount: row.native_amount.to_plain_string(),
             token_info: TokenInfo {
@@ -281,7 +281,7 @@ impl NewEventController {
         }))
     }
 
-    async fn fetch_latest_create_event(&self) -> Result<Option<NewTokenEvent>> {
+    async fn fetch_latest_create_event(&self) -> Result<Option<NewEvent>> {
         let query = r#"
             SELECT
                 t.token_id,
@@ -326,7 +326,7 @@ impl NewEventController {
         )
         .map_err(|err| anyhow!("Failed to get latest create event: {}", err))?;
 
-        Ok(row_opt.map(|row| NewTokenEvent {
+        Ok(row_opt.map(|row| NewEvent {
             event_type: EventType::Create,
             amount: "0".to_string(),
             token_info: TokenInfo {
