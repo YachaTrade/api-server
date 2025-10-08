@@ -12,7 +12,7 @@ pub enum EventType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct NewTokenEvent {
+pub struct NewEvent {
     #[serde(rename = "type")]
     pub event_type: EventType,
     pub amount: String,
@@ -22,5 +22,5 @@ pub struct NewTokenEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct NewEventResponse {
-    pub new_events: Vec<NewTokenEvent>,
+    pub new_events: Vec<NewEvent>,
 }
