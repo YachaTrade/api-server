@@ -30,10 +30,12 @@ use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 use tracing::info;
 use utoipa::OpenApi;
+
 use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(OpenApi)]
 #[openapi(
+
     paths(
         // ----------------Auth----------------
         router::auth::handler::auth_nonce,
@@ -110,8 +112,10 @@ use utoipa_swagger_ui::SwaggerUi;
             types::common::info::TokenInfo,
             types::common::info::AccountInfo,
             types::common::info::MarketInfo,
+            types::common::info::MarketType,
             types::common::info::BalanceInfo,
             types::common::info::SwapInfo,
+            types::common::info::SwapType,
             types::common::info::TokenWithBalanceInfo,
             types::common::info::TokenSwapInfo,
             types::common::info::TokenCreatedInfo,
@@ -200,6 +204,8 @@ use utoipa_swagger_ui::SwaggerUi;
 
             // New Event
             types::new_event::NewEventResponse,
+            types::new_event::NewTokenEvent,
+            types::new_event::EventType,
 
         )
     ),
@@ -212,8 +218,6 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Search",description="Search endpoints"),
         (name="Order",description="Order endpoints"),
         (name="Hype",description="Hype Token endpoints"),
-        (name="Bot",description="Bot endpoints"),
-        (name="Token Management",description="Token Management endpoints"),
         (name="New Event",description="New Event endpoints"),
     ),
     security(
