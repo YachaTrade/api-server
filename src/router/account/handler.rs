@@ -41,6 +41,9 @@ pub async fn update_account(
 #[utoipa::path(
     get,
     path = AccountPath::GetAccount.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "Get account successfully", body = AccountResponse)
     ),
@@ -61,6 +64,9 @@ pub async fn get_account(
 #[utoipa::path(
     put,
     path = AccountPath::ConnectX.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     request_body = ConnectXRequest,
     responses(
         (status = 200, description = "X account connected successfully", body = AccountResponse)
@@ -81,6 +87,9 @@ pub async fn connect_x(
 #[utoipa::path(
     delete,
     path = AccountPath::DisconnectX.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "X account disconnected successfully", body = AccountResponse)
     ),
@@ -99,6 +108,9 @@ pub async fn disconnect_x(
 #[utoipa::path(
     patch,
     path = AccountPath::UpdateX.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     request_body = UpdateXRequest,
     responses(
         (status = 200, description = "X account updated successfully", body = AccountResponse)
@@ -119,6 +131,9 @@ pub async fn update_x(
 #[utoipa::path(
     patch,
     path = AccountPath::RegisterWallet.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     request_body = RegisterWalletRequest,
     responses(
         (status = 200, description = "Wallet registered successfully", body = AccountResponse)
@@ -140,6 +155,9 @@ pub async fn register_wallet(
 #[utoipa::path(
     get,
     path = AccountPath::GetWallet.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     responses(
         (status = 200, description = "Wallet retrieved successfully", body = GetWalletResponse)
     ),
