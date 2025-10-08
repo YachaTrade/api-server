@@ -18,6 +18,9 @@ use super::path::AccountPath;
 #[utoipa::path(
     patch,
     path = AccountPath::UpdateAccount.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
     request_body = UpdateAccountRequest,
     responses(
         (status = 200, description = "Account updated successfully", body = AccountResponse)
