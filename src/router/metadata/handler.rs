@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
     response::Json,
 };
@@ -15,7 +15,7 @@ use crate::{
     router::metadata::MetadataPath,
     services::metadata::MetadataService,
     state::AppState,
-    types::metadata::{UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
+    types::metadata::{GeckoMetadataResponse, UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
 };
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_rekognition::Client;
@@ -322,6 +322,40 @@ pub async fn upload_metadata(
         "🎉 Metadata upload completed - Total time: {:?}, Metadata URI: {}",
         total_duration, response.metadata_uri
     );
+
+    Ok(Json(response))
+}
+
+/// Get gecko metadata for token
+#[utoipa::path(
+    get,
+    path = MetadataPath::GetGeckoMetadata.docs_str(),
+    params(
+        ("chain" = String, Path, description = "Chain identifier"),
+        ("token_address" = String, Path, description = "Token contract address")
+    ),
+    responses(
+        (status = 200, description = "Gecko metadata retrieved successfully", body = GeckoMetadataResponse),
+        (status = 404, description = "Token not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Metadata"
+)]
+pub async fn get_gecko_metadata(
+    State(state): State<AppState>,
+    Path((chain, token_address)): Path<(String, String)>,
+) -> AppJsonResult<GeckoMetadataResponse> {
+    info!("🔍 Getting gecko metadata for chain: {}, token: {}", chain, token_address);
+
+    let service = MetadataService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.r2.clone(),
+    );
+
+    let response = service.get_gecko_metadata(&token_address).await?;
+
+    info!("✅ Gecko metadata retrieved for token: {}", token_address);
 
     Ok(Json(response))
 }

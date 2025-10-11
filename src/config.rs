@@ -60,6 +60,10 @@ lazy_static! {
         .parse::<u64>()
         .expect("NSFW_STATUS_EXPIRATION must be a valid u64");
 
+    pub static ref GECKO_METADATA_EXPIRATION: u64 = env::var("GECKO_METADATA_EXPIRATION")
+        .expect("GECKO_METADATA_EXPIRATION must be set")
+        .parse::<u64>()
+        .expect("GECKO_METADATA_EXPIRATION must be a valid u64");
 
     // Treasury related expirations
     pub static ref GET_DEV_POSITIONS_EXPIRATION: u64 = env::var("GET_DEV_POSITIONS_EXPIRATION")

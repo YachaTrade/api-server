@@ -7,7 +7,7 @@ use crate::{
     db::{R2::R2Client, postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::metadata::{
-        TokenMetadata, UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse,
+        GeckoMetadataResponse, TokenMetadata, UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse,
     },
 };
 
@@ -107,5 +107,26 @@ impl MetadataService {
             metadata_uri,
             metadata,
         })
+    }
+
+    pub async fn get_gecko_metadata(
+        &self,
+        token_address: &str,
+    ) -> Result<GeckoMetadataResponse, AppError> {
+        // Try to get from Redis cache first
+        if let Ok(Some(cached_response)) = self.redis.get_gecko_metadata(token_address).await {
+            return Ok(cached_response);
+        }
+
+        // If not in cache, fetch from database
+        let response = MetadataController::new(self.postgres.clone())
+            .get_gecko_metadata(token_address)
+            .await
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        // Cache the result in Redis (ignore cache errors)
+        let _ = self.redis.set_gecko_metadata(token_address, &response).await;
+
+        Ok(response)
     }
 }
