@@ -6,7 +6,7 @@ use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::trading::chart::{BarResponse, Chart, GetBarsRequest},
+    types::trading::chart::{BarResponse, Chart, ChartType, GetBarsRequest},
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -24,13 +24,21 @@ impl ChartController {
         token_id: &str,
         request: &GetBarsRequest,
     ) -> Result<BarResponse> {
+        let chart_type_str = match request.chart_type {
+            ChartType::Price => "price",
+            ChartType::PriceUsd => "price_usd",
+            ChartType::MarketCap => "market_cap",
+            ChartType::MarketCapUsd => "market_cap_usd",
+        };
+
         let cache_key = cache_key!(
             "chart",
             token_id,
             &request.resolution,
             request.from,
             request.to,
-            request.countback
+            request.countback,
+            chart_type_str
         );
 
         let result = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async {
@@ -53,24 +61,89 @@ impl ChartController {
             Some(count) => count,
         };
 
-        let query = r#"
-            SELECT 
-                interval_type,
-                token_id,
-                open_price,
-                close_price,
-                high_price,
-                low_price,
-                volume,
-                time_stamp
-            FROM chart
-            WHERE token_id = $1
-            AND interval_type = $2
-            AND time_stamp >= $3
-            AND time_stamp <= $4
-            ORDER BY time_stamp DESC
-            LIMIT $5
-        "#;
+        // Build query based on chart_type
+        let query = match request.chart_type {
+            ChartType::Price => {
+                r#"
+                SELECT
+                    interval_type,
+                    token_id,
+                    open_price,
+                    close_price,
+                    high_price,
+                    low_price,
+                    volume,
+                    time_stamp
+                FROM chart
+                WHERE token_id = $1
+                AND interval_type = $2
+                AND time_stamp >= $3
+                AND time_stamp <= $4
+                ORDER BY time_stamp DESC
+                LIMIT $5
+                "#
+            }
+            ChartType::PriceUsd => {
+                r#"
+                SELECT
+                    interval_type,
+                    token_id,
+                    usd_open_price as open_price,
+                    usd_close_price as close_price,
+                    usd_high_price as high_price,
+                    usd_low_price as low_price,
+                    usd_volume as volume,
+                    time_stamp
+                FROM chart
+                WHERE token_id = $1
+                AND interval_type = $2
+                AND time_stamp >= $3
+                AND time_stamp <= $4
+                ORDER BY time_stamp DESC
+                LIMIT $5
+                "#
+            }
+            ChartType::MarketCap => {
+                r#"
+                SELECT
+                    interval_type,
+                    token_id,
+                    (open_price * total_supply) as open_price,
+                    (close_price * total_supply) as close_price,
+                    (high_price * total_supply) as high_price,
+                    (low_price * total_supply) as low_price,
+                    volume,
+                    time_stamp
+                FROM chart
+                WHERE token_id = $1
+                AND interval_type = $2
+                AND time_stamp >= $3
+                AND time_stamp <= $4
+                ORDER BY time_stamp DESC
+                LIMIT $5
+                "#
+            }
+            ChartType::MarketCapUsd => {
+                r#"
+                SELECT
+                    interval_type,
+                    token_id,
+                    (usd_open_price * total_supply) as open_price,
+                    (usd_close_price * total_supply) as close_price,
+                    (usd_high_price * total_supply) as high_price,
+                    (usd_low_price * total_supply) as low_price,
+                    usd_volume as volume,
+                    time_stamp
+                FROM chart
+                WHERE token_id = $1
+                AND interval_type = $2
+                AND time_stamp >= $3
+                AND time_stamp <= $4
+                ORDER BY time_stamp DESC
+                LIMIT $5
+                "#
+            }
+        };
 
         let mut charts = measure_postgres!(
             "chart.fetch_chart_data",
