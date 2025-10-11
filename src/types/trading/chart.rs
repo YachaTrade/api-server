@@ -16,6 +16,21 @@ pub struct Chart {
     pub time_stamp: i64,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChartType {
+    Price,        // MON/TOKEN 가격 (기본)
+    PriceUsd,     // USD 가격
+    MarketCap,    // 시가총액 (MON) = price * total_supply
+    MarketCapUsd, // 시가총액 (USD) = usd_price * total_supply
+}
+
+impl Default for ChartType {
+    fn default() -> Self {
+        ChartType::Price
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct GetBarsRequest {
     #[serde(default = "default_resolution")]
@@ -24,6 +39,8 @@ pub struct GetBarsRequest {
     pub to: i64,   // 끝 타임스탬프 (초 단위)
     #[serde(default = "default_countback")]
     pub countback: Option<i32>, // 반환할 최대 캔들 수
+    #[serde(default)]
+    pub chart_type: ChartType, // 차트 타입 (price, price_usd, market_cap, market_cap_usd)
 }
 fn default_resolution() -> String {
     "5".to_string()
