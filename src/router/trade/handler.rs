@@ -142,7 +142,8 @@ pub async fn get_market(
         ("resolution" = String, Query, description = "Chart resolution (1, 5, 15, 30, 60/1H, 4H, D, W, M)"),
         ("from" = i64, Query, description = "Start timestamp (seconds)"),
         ("to" = i64, Query, description = "End timestamp (seconds)"),
-        ("countback" = Option<i32>, Query, description = "Maximum number of candles to return (default: 500)")
+        ("countback" = Option<i32>, Query, description = "Maximum number of candles to return (default: 500)"),
+        ("chart_type" = Option<String>, Query, description = "Chart type: price (MON/TOKEN), price_usd (USD price), market_cap (MON market cap), market_cap_usd (USD market cap). Default: price")
     ),
     responses(
         (status = 200, description = "Success", body = BarResponse),
