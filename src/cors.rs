@@ -31,7 +31,7 @@ pub fn get_cors() -> CorsLayer {
                 origins.push(test_client);
             }
         }
-    }
+    }     
 
     let cors = CorsLayer::new()
         .allow_methods([

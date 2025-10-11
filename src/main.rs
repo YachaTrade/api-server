@@ -62,6 +62,7 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------Token----------------
         router::token::handler::get_token,
         router::token::handler::get_token_metadata,
+        router::token::handler::mine_salt,
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
@@ -141,6 +142,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::token::order::OrderToken,
             types::token::order::OrderTokenResponse,
             types::token::metadata::TokenMetadataResponse,
+            types::token::mine_salt::MineSaltRequest,
+            types::token::mine_salt::MineSaltResponse,
+            types::token::mine_salt::MineSaltError,
 
             // Metadata
             types::metadata::UploadImageMultipart,
