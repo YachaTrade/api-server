@@ -1,4 +1,5 @@
 pub mod single_flight;
+pub mod create2;
 
 pub fn valid_evm_address(account_id: &str) -> bool {
     account_id.starts_with("0x")

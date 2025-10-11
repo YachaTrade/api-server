@@ -1,6 +1,7 @@
 pub mod create_token;
 pub mod metadata;
 pub mod order;
+pub mod mine_salt;
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
