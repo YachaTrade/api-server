@@ -130,3 +130,12 @@ impl TokenMetadata {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct GeckoMetadataResponse {
+    pub image: String,
+    pub description: String,
+    pub website: String,
+    pub twitter: Option<String>,
+    pub telegram: Option<String>,
+}
