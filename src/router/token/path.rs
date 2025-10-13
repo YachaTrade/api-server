@@ -2,7 +2,7 @@
 pub enum TokenPath {
     GetToken,
     GetMetadata,
-    MineSalt,
+    Salt,
 }
 
 impl TokenPath {
@@ -10,14 +10,14 @@ impl TokenPath {
         match self {
             TokenPath::GetToken => "/token/:token",
             TokenPath::GetMetadata => "/token/metadata/:token_id",
-            TokenPath::MineSalt => "/token/mine-salt",
+            TokenPath::Salt => "/token/salt",
         }
     }
     pub fn docs_str(&self) -> &'static str {
         match self {
             TokenPath::GetToken => "/token/{token}",
             TokenPath::GetMetadata => "/token/metadata/{token}",
-            TokenPath::MineSalt => "/token/mine-salt",
+            TokenPath::Salt => "/token/salt",
         }
     }
 }
