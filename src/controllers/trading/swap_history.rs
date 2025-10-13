@@ -115,7 +115,13 @@ impl SwapController {
             "swap.fetch_swaps_by_account",
             sqlx::query_as::<_, SwapRow>(
                 r#"
-                WITH recent_swaps AS (
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ),
+                recent_swaps AS (
                     SELECT
                         s.token_id,
                         s.is_buy,
@@ -152,7 +158,7 @@ impl SwapController {
                     rs.is_buy,
                     rs.native_amount,
                     rs.token_amount,
-                    COALESCE(p.price, 0) as native_price,
+                    COALESCE(lp.price, 0) as native_price,
                     rs.created_at,
                     rs.transaction_hash
                 FROM recent_swaps rs
@@ -160,12 +166,7 @@ impl SwapController {
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                LEFT JOIN LATERAL (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ) p ON true
+                CROSS JOIN latest_price lp
                 ORDER BY rs.created_at DESC
                 "#,
             )
@@ -250,6 +251,12 @@ impl SwapController {
 
         let mut next_param = 2;
         let mut query_sql = r#"
+        WITH latest_price AS (
+            SELECT price
+            FROM price
+            ORDER BY created_at DESC
+            LIMIT 1
+        )
         SELECT
             a.account_id,
             a.nickname as account_nickname,
@@ -264,7 +271,7 @@ impl SwapController {
             s.transaction_hash,
             ax.x_handle,
             ax.x_image_uri,
-            COALESCE(p.price, 0) as native_price
+            COALESCE(lp.price, 0) as native_price
         FROM swap s
         JOIN account a ON s.account_id = a.account_id
         LEFT JOIN LATERAL (
@@ -276,12 +283,7 @@ impl SwapController {
             WHERE ax.account_id = a.account_id
             LIMIT 1
         ) ax ON true
-        LEFT JOIN LATERAL (
-            SELECT price
-            FROM price
-            ORDER BY created_at DESC
-            LIMIT 1
-        ) p ON true
+        CROSS JOIN latest_price lp
         WHERE s.token_id = $1"#
             .to_string();
 

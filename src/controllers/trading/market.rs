@@ -51,22 +51,23 @@ impl MarketController {
             "market.fetch_market_by_token",
             sqlx::query_as::<_, MarketRow>(
                 r#"
-                SELECT
-                    m.market_type,
-                    m.token_id,
-                    COALESCE(m.pool_id, '') as market_id,
-                    (m.price * COALESCE(p.price, 0)) as token_price,
-                    COALESCE(p.price, 0) as native_price,
-                    m.price,
-                    t.total_supply
-                FROM market m
-                JOIN token t ON m.token_id = t.token_id
-                LEFT JOIN LATERAL (
+                WITH latest_price AS (
                     SELECT price
                     FROM price
                     ORDER BY created_at DESC
                     LIMIT 1
-                ) p ON true
+                )
+                SELECT
+                    m.market_type,
+                    m.token_id,
+                    COALESCE(m.pool_id, '') as market_id,
+                    (m.price * COALESCE(lp.price, 0)) as token_price,
+                    COALESCE(lp.price, 0) as native_price,
+                    m.price,
+                    t.total_supply
+                FROM market m
+                JOIN token t ON m.token_id = t.token_id
+                CROSS JOIN latest_price lp
                 WHERE m.token_id = $1
                 "#,
             )

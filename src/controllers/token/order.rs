@@ -84,6 +84,12 @@ impl OrderController {
             TokenOrderType::CreationTime => {
                 let query = format!(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -106,8 +112,8 @@ impl OrderController {
                         a.following_count as creator_following_count,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(p.price, 0)) as token_price,
-                        COALESCE(p.price, 0) as native_price,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply
                     FROM token t
@@ -115,12 +121,7 @@ impl OrderController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN LATERAL (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ) p ON true
+                    CROSS JOIN latest_price lp
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -139,6 +140,12 @@ impl OrderController {
             TokenOrderType::LatestTrade => {
                 let query = format!(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -161,8 +168,8 @@ impl OrderController {
                         a.following_count as creator_following_count,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(p.price, 0)) as token_price,
-                        COALESCE(p.price, 0) as native_price,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply
                     FROM market m
@@ -170,12 +177,7 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    LEFT JOIN LATERAL (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ) p ON true
+                    CROSS JOIN latest_price lp
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -194,6 +196,12 @@ impl OrderController {
             TokenOrderType::MarketCap => {
                 let query = format!(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -216,8 +224,8 @@ impl OrderController {
                         a.following_count as creator_following_count,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(p.price, 0)) as token_price,
-                        COALESCE(p.price, 0) as native_price,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply
                     FROM (
@@ -230,12 +238,7 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    LEFT JOIN LATERAL (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ) p ON true
+                    CROSS JOIN latest_price lp
                     ORDER BY m.price {}
                     "#,
                     order_direction, order_direction
@@ -253,6 +256,12 @@ impl OrderController {
             TokenOrderType::Verified => {
                 let query = format!(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -272,8 +281,8 @@ impl OrderController {
                         a.following_count as creator_following_count,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(p.price, 0)) as token_price,
-                        COALESCE(p.price, 0) as native_price,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply
                     FROM account_verified av
@@ -281,12 +290,7 @@ impl OrderController {
                     JOIN account a ON ax.account_id = a.account_id
                     JOIN token t ON t.creator = a.account_id
                     JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN LATERAL (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ) p ON true
+                    CROSS JOIN latest_price lp
                     ORDER BY m.price {}
                     LIMIT $1 OFFSET $2
                     "#,
@@ -323,6 +327,12 @@ impl OrderController {
             "token_order.fetch_latest_king",
             sqlx::query_as::<_, OrderTokenRow>(
                 r#"
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
                 SELECT
                     t.token_id,
                     t.name,
@@ -345,8 +355,8 @@ impl OrderController {
                     a.following_count as creator_following_count,
                     COALESCE(m.market_type, 'CURVE') as market_type,
                     COALESCE(m.pool_id, '') as market_id,
-                    (COALESCE(m.price, 0) * COALESCE(p.price, 0)) as token_price,
-                    COALESCE(p.price, 0) as native_price,
+                    (COALESCE(m.price, 0) * COALESCE(lp.price, 0)) as token_price,
+                    COALESCE(lp.price, 0) as native_price,
                     COALESCE(m.price, 0) as price,
                     COALESCE(t.total_supply, 0) as total_supply
                 FROM king k
@@ -355,12 +365,7 @@ impl OrderController {
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 LEFT JOIN market m ON t.token_id = m.token_id
-                LEFT JOIN LATERAL (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ) p ON true
+                CROSS JOIN latest_price lp
                 WHERE k.created_at = (SELECT MAX(created_at) FROM king)
                 "#,
             )
