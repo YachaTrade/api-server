@@ -1,7 +1,10 @@
 pub mod path;
 
 pub mod handler;
-use axum::{Router, routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 
 use path::TokenPath;
 
@@ -14,5 +17,5 @@ pub fn router() -> Router<AppState> {
             TokenPath::GetMetadata.as_str(),
             get(handler::get_token_metadata),
         )
-        .route(TokenPath::MineSalt.as_str(), post(handler::mine_salt))
+        .route(TokenPath::Salt.as_str(), post(handler::mine_salt))
 }
