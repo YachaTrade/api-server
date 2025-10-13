@@ -12,7 +12,7 @@ use crate::{
     types::token::{
         TokenResponse,
         metadata::TokenMetadataResponse,
-        mine_salt::{MineSaltRequest, MineSaltResponse},
+        salt::{MineSaltRequest, MineSaltResponse},
     },
     utils::valid_evm_address,
 };
