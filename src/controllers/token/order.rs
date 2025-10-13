@@ -261,6 +261,20 @@ impl OrderController {
                         FROM price
                         ORDER BY created_at DESC
                         LIMIT 1
+                    ),
+                    verified_creators AS (
+                        SELECT a.account_id
+                        FROM account_verified av
+                        JOIN account_x ax ON av.x_handle = ax.x_handle
+                        JOIN account a ON ax.account_id = a.account_id
+                    ),
+                    top_verified_markets AS (
+                        SELECT m.token_id, m.price, m.market_type, m.pool_id
+                        FROM market m
+                        JOIN token t ON m.token_id = t.token_id
+                        WHERE t.creator IN (SELECT account_id FROM verified_creators)
+                        ORDER BY m.price {}
+                        LIMIT $1 OFFSET $2
                     )
                     SELECT
                         t.token_id,
@@ -279,22 +293,20 @@ impl OrderController {
                         ax.x_image_uri as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
-                        m.market_type,
-                        COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        tvm.market_type,
+                        COALESCE(tvm.pool_id, '') as market_id,
+                        (tvm.price * COALESCE(lp.price, 0)) as token_price,
                         COALESCE(lp.price, 0) as native_price,
-                        m.price,
+                        tvm.price,
                         t.total_supply
-                    FROM account_verified av
-                    JOIN account_x ax ON av.x_handle = ax.x_handle
-                    JOIN account a ON ax.account_id = a.account_id
-                    JOIN token t ON t.creator = a.account_id
-                    JOIN market m ON t.token_id = m.token_id
+                    FROM top_verified_markets tvm
+                    JOIN token t ON tvm.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    JOIN account_x ax ON a.account_id = ax.account_id
                     CROSS JOIN latest_price lp
-                    ORDER BY m.price {}
-                    LIMIT $1 OFFSET $2
+                    ORDER BY tvm.price {}
                     "#,
-                    order_direction
+                    order_direction, order_direction
                 );
 
                 measure_postgres!(
