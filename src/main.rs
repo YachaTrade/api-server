@@ -142,9 +142,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::token::order::OrderToken,
             types::token::order::OrderTokenResponse,
             types::token::metadata::TokenMetadataResponse,
-            types::token::mine_salt::MineSaltRequest,
-            types::token::mine_salt::MineSaltResponse,
-            types::token::mine_salt::MineSaltError,
+            types::token::salt::MineSaltRequest,
+            types::token::salt::MineSaltResponse,
+            types::token::salt::MineSaltError,
 
             // Metadata
             types::metadata::UploadImageMultipart,

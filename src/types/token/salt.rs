@@ -17,9 +17,11 @@ pub struct MineSaltRequest {
     #[schema(example = "MTK")]
     pub symbol: String,
 
-    /// Token URI (metadata URI)
-    #[schema(example = "ipfs://QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")]
-    pub token_uri: String,
+    /// Token metadata URI
+    #[schema(
+        example = "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+    )]
+    pub metadata_uri: String,
 }
 
 /// Response containing the mined salt and resulting address

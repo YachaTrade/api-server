@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     result::AppError,
-    types::token::mine_salt::{MineSaltRequest, MineSaltResponse},
+    types::token::salt::{MineSaltRequest, MineSaltResponse},
     utils::valid_evm_address,
 };
 
@@ -115,7 +115,7 @@ impl SaltService {
         let creator = request.creator.clone();
         let name = request.name.clone();
         let symbol = request.symbol.clone();
-        let token_uri = request.token_uri.clone();
+        let metadata_uri = request.metadata_uri.clone();
         let uuid = uuid.to_string();
 
         // CPU 집약적 작업을 별도 스레드에서 실행 (async 런타임 블로킹 방지)
@@ -127,7 +127,7 @@ impl SaltService {
                 &creator,
                 &name,
                 &symbol,
-                &token_uri,
+                &metadata_uri,
                 &uuid,
             )
         })
@@ -254,7 +254,7 @@ impl SaltService {
     ///
     /// # 충돌 방지
     /// - 각 사용자의 요청마다 unique한 시작 salt 사용
-    /// - creator + name + symbol + token_uri + UUID를 해시
+    /// - creator + name + symbol + metadata_uri + UUID를 해시
     /// - 동시에 여러 사용자가 마이닝해도 같은 salt 시도 안 함
     fn mine_salt_with_suffix(
         deployer: Address,
@@ -263,7 +263,7 @@ impl SaltService {
         creator: &str,
         name: &str,
         symbol: &str,
-        token_uri: &str,
+        metadata_uri: &str,
         uuid: &str,
     ) -> Option<MinedSalt> {
         // suffix를 소문자로 변환 (대소문자 구분 안 함)
@@ -277,9 +277,9 @@ impl SaltService {
             Arc::new(parking_lot::Mutex::new(None));
 
         // 1단계: 이 사용자만의 unique한 시작 salt 생성
-        // hash(creator + name + symbol + token_uri + uuid)
+        // hash(creator + name + symbol + metadata_uri + uuid)
         // → 다른 사용자와 겹치지 않음!
-        let start_salt = Self::generate_starting_salt(creator, name, symbol, token_uri, uuid);
+        let start_salt = Self::generate_starting_salt(creator, name, symbol, metadata_uri, uuid);
         let start_u256 = U256::from_be_bytes(*start_salt);
 
         // 2단계: 청크 개수 계산
@@ -349,7 +349,7 @@ impl SaltService {
     /// - creator: 토큰 생성자 주소
     /// - name: 토큰 이름
     /// - symbol: 토큰 심볼
-    /// - token_uri: 토큰 메타데이터 URI
+    /// - metadata_uri: 토큰 메타데이터 URI
     /// - uuid: 이 요청의 고유 식별자
     ///
     /// # 출력
@@ -362,7 +362,7 @@ impl SaltService {
         creator: &str,
         name: &str,
         symbol: &str,
-        token_uri: &str,
+        metadata_uri: &str,
         uuid: &str,
     ) -> B256 {
         // 모든 파라미터를 이어붙여서 하나의 바이트 배열 생성
@@ -370,7 +370,7 @@ impl SaltService {
         params_data.extend_from_slice(creator.as_bytes());
         params_data.extend_from_slice(name.as_bytes());
         params_data.extend_from_slice(symbol.as_bytes());
-        params_data.extend_from_slice(token_uri.as_bytes());
+        params_data.extend_from_slice(metadata_uri.as_bytes());
         params_data.extend_from_slice(uuid.as_bytes());
 
         // 전체를 keccak256 해시 → 32바이트 unique salt
@@ -524,8 +524,7 @@ mod tests {
         let address = Address::from_slice(&hash[12..]);
 
         // 우리 함수와 결과가 같은지 확인
-        let address_from_fn =
-            SaltService::compute_create2_address(deployer, implementation, salt);
+        let address_from_fn = SaltService::compute_create2_address(deployer, implementation, salt);
         assert_eq!(address, address_from_fn);
     }
 
