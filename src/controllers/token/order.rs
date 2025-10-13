@@ -9,7 +9,11 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::{CountRow, info::{AccountInfo, MarketInfo, MarketType, TokenInfo}, pagination::PaginationParams},
+        common::{
+            CountRow,
+            info::{AccountInfo, MarketInfo, MarketType, TokenInfo},
+            pagination::PaginationParams,
+        },
         token::order::{OrderToken, OrderTokenResponse, TokenOrderType},
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -325,71 +329,6 @@ impl OrderController {
         Ok(rows.into_iter().map(OrderToken::from).collect())
     }
 
-    pub async fn get_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
-        let cache_key = "king_of_the_hill:latest";
-
-        let king = with_cache(&GLOBAL_CACHE.cache, cache_key, || async {
-            self.fetch_latest_king_of_the_hill().await
-        })
-        .await?;
-
-        Ok(king)
-    }
-
-    async fn fetch_latest_king_of_the_hill(&self) -> Result<Option<OrderToken>> {
-        let row = measure_postgres!(
-            "token_order.fetch_latest_king",
-            sqlx::query_as::<_, OrderTokenRow>(
-                r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                )
-                SELECT
-                    t.token_id,
-                    t.name,
-                    t.symbol,
-                    t.image_uri as token_image_uri,
-                    t.description,
-                    t.twitter,
-                    t.telegram,
-                    t.website,
-                    t.is_listing,
-                    t.created_at,
-                    t.creator,
-                    COALESCE(
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
-                    ) as creator_nickname,
-                    a.bio as creator_bio,
-                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                    a.follower_count as creator_follower_count,
-                    a.following_count as creator_following_count,
-                    COALESCE(m.market_type, 'CURVE') as market_type,
-                    COALESCE(m.pool_id, '') as market_id,
-                    (COALESCE(m.price, 0) * COALESCE(lp.price, 0)) as token_price,
-                    COALESCE(lp.price, 0) as native_price,
-                    COALESCE(m.price, 0) as price,
-                    COALESCE(t.total_supply, 0) as total_supply
-                FROM king k
-                JOIN token t ON t.token_id = k.token_id
-                JOIN account a ON t.creator = a.account_id
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                LEFT JOIN market m ON t.token_id = m.token_id
-                CROSS JOIN latest_price lp
-                WHERE k.created_at = (SELECT MAX(created_at) FROM king)
-                "#,
-            )
-            .fetch_optional(self.db.get_read_pool())
-        )
-        .map_err(|e| anyhow!("Failed to get king: {}", e))?;
-
-        Ok(row.map(OrderToken::from))
-    }
-
     pub async fn get_total_count_by_type(&self, order_type: &TokenOrderType) -> Result<i64> {
         let (query, log_type) = match order_type {
             TokenOrderType::Verified => (
@@ -411,10 +350,7 @@ impl OrderController {
         Ok(row.count)
     }
 
-    pub fn build_order_response(
-        tokens: Vec<OrderToken>,
-        total_count: i64,
-    ) -> OrderTokenResponse {
+    pub fn build_order_response(tokens: Vec<OrderToken>, total_count: i64) -> OrderTokenResponse {
         OrderTokenResponse {
             tokens,
             total_count,
