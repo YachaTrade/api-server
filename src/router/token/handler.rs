@@ -86,7 +86,7 @@ pub async fn get_token_metadata(
     tag = "Token"
 )]
 #[instrument(skip(_state))]
-pub async fn mine_salt(
+pub async fn salt(
     State(_state): State<AppState>,
     Json(payload): Json<MineSaltRequest>,
 ) -> AppJsonResult<MineSaltResponse> {

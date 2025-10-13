@@ -62,7 +62,7 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------Token----------------
         router::token::handler::get_token,
         router::token::handler::get_token_metadata,
-        router::token::handler::mine_salt,
+        router::token::handler::salt,
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
