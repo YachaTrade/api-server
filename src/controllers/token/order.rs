@@ -229,7 +229,7 @@ impl OrderController {
                         m.price,
                         t.total_supply
                     FROM (
-                        SELECT token_id, price, market_type, market_id
+                        SELECT token_id, price, market_type, pool_id
                         FROM market
                         ORDER BY price {}
                         LIMIT $1 OFFSET $2
@@ -254,6 +254,8 @@ impl OrderController {
                 .map_err(|err| anyhow!("Failed to fetch tokens by market cap: {}", err))?
             }
             TokenOrderType::Verified => {
+                // Optimized with MATERIALIZED CTEs to force correct execution order
+                // This prevents PostgreSQL from scanning the entire market table
                 let query = format!(
                     r#"
                     WITH latest_price AS (
@@ -262,13 +264,13 @@ impl OrderController {
                         ORDER BY created_at DESC
                         LIMIT 1
                     ),
-                    verified_creators AS (
+                    verified_creators AS MATERIALIZED (
                         SELECT a.account_id
                         FROM account_verified av
                         JOIN account_x ax ON av.x_handle = ax.x_handle
                         JOIN account a ON ax.account_id = a.account_id
                     ),
-                    top_verified_markets AS (
+                    top_verified_markets AS MATERIALIZED (
                         SELECT m.token_id, m.price, m.market_type, m.pool_id
                         FROM market m
                         JOIN token t ON m.token_id = t.token_id
