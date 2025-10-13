@@ -73,19 +73,6 @@ pub async fn get_token_metadata(
 }
 
 /// Mine a salt value to generate a token address ending with a specific suffix
-///
-/// This endpoint uses CREATE2 address calculation with EIP-1167 minimal proxy pattern
-/// to find a salt value that produces a token address ending with the desired suffix.
-/// The mining process runs in parallel for optimal performance.
-///
-/// Uses environment variables:
-/// - BONDING_CURVE: deployer/factory contract address
-/// - TOKEN_IMPLEMENT: implementation contract address
-/// - VANITY_ADDRESS_SUFFIX: desired suffix (e.g., "143")
-///
-/// # Example
-/// For VANITY_ADDRESS_SUFFIX="143", this will find a salt that produces an address like:
-/// `0x742d35Cc6634C0532925a3b844Bc9e7595f0143`
 #[utoipa::path(
     post,
     path = TokenPath::Salt.docs_str(),
