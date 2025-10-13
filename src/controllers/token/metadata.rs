@@ -71,6 +71,12 @@ impl TokenMetadataController {
             "token.fetch_token_metadata",
             sqlx::query_as::<_, TokenMetadataRow>(
                 r#"
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
                 SELECT
                     t.token_id,
                     t.name,
@@ -93,8 +99,8 @@ impl TokenMetadataController {
                     a.following_count as creator_following_count,
                     m.market_type,
                     COALESCE(m.pool_id, '') as market_id,
-                    (m.price * COALESCE(p.price, 0)) as token_price,
-                    COALESCE(p.price, 0) as native_price,
+                    (m.price * COALESCE(lp.price, 0)) as token_price,
+                    COALESCE(lp.price, 0) as native_price,
                     m.price,
                     t.total_supply
                 FROM token t
@@ -102,12 +108,7 @@ impl TokenMetadataController {
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 JOIN market m ON t.token_id = m.token_id
-                LEFT JOIN LATERAL (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ) p ON true
+                CROSS JOIN latest_price lp
                 WHERE t.token_id = $1
                 "#,
             )

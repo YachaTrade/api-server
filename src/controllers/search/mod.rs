@@ -191,6 +191,12 @@ impl SearchController {
             SearchPattern::TwitterHandle => Ok(vec![]),
             SearchPattern::EvmAddress => sqlx::query_as::<_, SearchTokenRow>(
                 r#"
+                    WITH latest_price AS (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -213,8 +219,8 @@ impl SearchController {
                         a.following_count as creator_following_count,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(p.price, 0)) as token_price,
-                        COALESCE(p.price, 0) as native_price,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply
                     FROM token t
@@ -222,12 +228,7 @@ impl SearchController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN LATERAL (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ) p ON true
+                    CROSS JOIN latest_price lp
                     WHERE LOWER(t.token_id) = LOWER($1)
                     LIMIT 1
                     "#,
@@ -242,6 +243,12 @@ impl SearchController {
                 let (symbol_future, name_future) = (
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
+                        WITH latest_price AS (
+                            SELECT price
+                            FROM price
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        )
                         SELECT
                             t.token_id,
                             t.name,
@@ -264,8 +271,8 @@ impl SearchController {
                             a.following_count as creator_following_count,
                             m.market_type,
                             COALESCE(m.pool_id, '') as market_id,
-                            (m.price * COALESCE(p.price, 0)) as token_price,
-                            COALESCE(p.price, 0) as native_price,
+                            (m.price * COALESCE(lp.price, 0)) as token_price,
+                            COALESCE(lp.price, 0) as native_price,
                             m.price,
                             t.total_supply
                         FROM token t
@@ -273,14 +280,9 @@ impl SearchController {
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                         JOIN market m ON t.token_id = m.token_id
-                        LEFT JOIN LATERAL (
-                            SELECT price
-                            FROM price
-                            ORDER BY created_at DESC
-                            LIMIT 1
-                        ) p ON true
+                        CROSS JOIN latest_price lp
                         WHERE t.symbol ILIKE '%' || $1 || '%'
-                        ORDER BY (m.price * COALESCE(p.price, 0)) DESC, t.symbol DESC
+                        ORDER BY (m.price * COALESCE(lp.price, 0)) DESC, t.symbol DESC
                         LIMIT 25
                         "#,
                     )
@@ -288,6 +290,12 @@ impl SearchController {
                     .fetch_all(pool),
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
+                        WITH latest_price AS (
+                            SELECT price
+                            FROM price
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                        )
                         SELECT
                             t.token_id,
                             t.name,
@@ -310,8 +318,8 @@ impl SearchController {
                             a.following_count as creator_following_count,
                             m.market_type,
                             COALESCE(m.pool_id, '') as market_id,
-                            (m.price * COALESCE(p.price, 0)) as token_price,
-                            COALESCE(p.price, 0) as native_price,
+                            (m.price * COALESCE(lp.price, 0)) as token_price,
+                            COALESCE(lp.price, 0) as native_price,
                             m.price,
                             t.total_supply
                         FROM token t
@@ -319,14 +327,9 @@ impl SearchController {
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                         JOIN market m ON t.token_id = m.token_id
-                        LEFT JOIN LATERAL (
-                            SELECT price
-                            FROM price
-                            ORDER BY created_at DESC
-                            LIMIT 1
-                        ) p ON true
+                        CROSS JOIN latest_price lp
                         WHERE t.name ILIKE '%' || $1 || '%'
-                        ORDER BY (m.price * COALESCE(p.price, 0)) DESC, t.name DESC
+                        ORDER BY (m.price * COALESCE(lp.price, 0)) DESC, t.name DESC
                         LIMIT 25
                         "#,
                     )

@@ -96,10 +96,16 @@ impl PositionController {
             "position.fetch_holders_by_token",
             sqlx::query_as::<_, TokenHolderRow>(
                 r#"
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
                 SELECT
                     b.balance,
-                    (m.price * COALESCE(p.price, 0)) as token_price,
-                    COALESCE(p.price, 0) as native_price,
+                    (m.price * COALESCE(lp.price, 0)) as token_price,
+                    COALESCE(lp.price, 0) as native_price,
                     a.account_id,
                     COALESCE(
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
@@ -114,12 +120,7 @@ impl PositionController {
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 JOIN market m ON b.token_id = m.token_id
-                LEFT JOIN LATERAL (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ) p ON true
+                CROSS JOIN latest_price lp
                 WHERE b.token_id = $1 AND b.balance > 0
                 ORDER BY b.balance DESC
                 OFFSET $2 LIMIT $3
@@ -215,6 +216,12 @@ impl PositionController {
             "position.get_hold_token_by_account",
             sqlx::query_as::<_, HoldTokenRow>(
                 r#"
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
                 SELECT
                     t.token_id,
                     t.name,
@@ -236,22 +243,17 @@ impl PositionController {
                     a.follower_count as creator_follower_count,
                     a.following_count as creator_following_count,
                     b.balance,
-                    (m.price * COALESCE(p.price, 0)) as token_price,
-                    COALESCE(p.price, 0) as native_price
+                    (m.price * COALESCE(lp.price, 0)) as token_price,
+                    COALESCE(lp.price, 0) as native_price
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
                 JOIN market m ON t.token_id = m.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                LEFT JOIN LATERAL (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ) p ON true
+                CROSS JOIN latest_price lp
                 WHERE b.account_id = $1 AND b.balance > 0
-                ORDER BY (b.balance * m.price * COALESCE(p.price, 0)) DESC
+                ORDER BY (b.balance * m.price * COALESCE(lp.price, 0)) DESC
                 LIMIT $2 OFFSET $3
                 "#,
             )

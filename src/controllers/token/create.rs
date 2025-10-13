@@ -132,7 +132,13 @@ impl TokenCreatedController {
             "token_created.fetch_tokens_created",
             sqlx::query_as::<_, TokenCreatedRow>(
                 r#"
-                WITH created_tokens AS (
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ),
+                created_tokens AS (
                     SELECT
                         t.token_id,
                         t.name as token_name,
@@ -155,24 +161,19 @@ impl TokenCreatedController {
                         a.following_count as creator_following_count,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
-                        (m.price * COALESCE(p.price, 0)) as token_price,
-                        COALESCE(p.price, 0) as native_price,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply,
                         COALESCE(b.balance, 0) as balance,
-                        COALESCE(m.price * b.balance * COALESCE(p.price, 0), 0) as current_value
+                        COALESCE(m.price * b.balance * COALESCE(lp.price, 0), 0) as current_value
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
-                    LEFT JOIN LATERAL (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ) p ON true
+                    CROSS JOIN latest_price lp
                     WHERE t.creator = $1
                 )
                 SELECT
