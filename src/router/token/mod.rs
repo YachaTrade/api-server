@@ -17,5 +17,5 @@ pub fn router() -> Router<AppState> {
             TokenPath::GetMetadata.as_str(),
             get(handler::get_token_metadata),
         )
-        .route(TokenPath::Salt.as_str(), post(handler::mine_salt))
+        .route(TokenPath::Salt.as_str(), post(handler::salt))
 }
