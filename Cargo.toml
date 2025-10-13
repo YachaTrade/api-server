@@ -4,8 +4,10 @@ version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-#DB
-##POSTGRES
+# =====================================================
+# Database
+# =====================================================
+# PostgreSQL database driver with async support
 sqlx = { version = "0.8.1", features = [
     "runtime-tokio",
     "postgres",
@@ -15,8 +17,7 @@ sqlx = { version = "0.8.1", features = [
     "json",
 ] }
 
-
-##REDIS
+# Redis cache and session store
 redis = { version = "0.29.0", features = [
     "tokio-comp",
     "tokio-native-tls-comp",
@@ -25,41 +26,109 @@ redis = { version = "0.29.0", features = [
     "connection-manager",
 ] }
 
-
-#ASYNC
+# =====================================================
+# Async Runtime
+# =====================================================
 tokio = { version = "1.38.0", features = ["full"] }
 
-#CACHE
+# =====================================================
+# Caching & Memory Management
+# =====================================================
+# In-memory cache with TTL support
 moka = { version = "0.12", features = ["future"] }
+# Thread-safe lazy static initialization
 once_cell = "1.19"
+lazy_static = "1.5.0"
+# Binary serialization for cache
 bincode = "1.3"
+# High-performance read-write locks
+parking_lot = "0.12"
 
-#SERVER
+# =====================================================
+# Web Server & HTTP
+# =====================================================
+# Web framework
 axum = { version = "0.7.5", features = ["multipart", "macros"] }
-tower-http = { version = "0.5.2", features = ["full"] }
 axum-server = { version = "0.6", features = ["tls-rustls"] }
-tower = { version = "0.4", features = ["full"] }
-tower_governor = "0.4.2"
-tower-sessions-core = "0.12.2"
-tower-cookies = "0.10.0"
 
-#SWAGGER
+# Middleware and utilities
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5.2", features = ["full"] }
+tower_governor = "0.4.2"                                # Rate limiting
+tower-sessions-core = "0.12.2"                          # Session management
+tower-cookies = "0.10.0"                                # Cookie handling
+
+# HTTP client
+reqwest = { version = "0.12.15", features = ["multipart", "json"] }
+
+# =====================================================
+# API Documentation (Swagger/OpenAPI)
+# =====================================================
 utoipa = { version = "4.2.3", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "7.1.0", features = ["axum"] }
+
+# =====================================================
+# Blockchain (EVM)
+# =====================================================
+# Ethereum library for smart contract interaction
+alloy = { version = "1.0.24", features = [
+    "contract",
+    "providers",
+    "rpc-types-eth",
+    "sol-types",
+] }
+hex = "0.4"
+
+# =====================================================
+# Cloud Services (AWS)
+# =====================================================
+aws-config = "1.8.6"
+aws-sdk-rekognition = "1.87.0" # Image moderation
+aws-sdk-s3 = "1.105.0"         # Object storage
+
+# =====================================================
+# Image Processing
+# =====================================================
+image = "0.25.8"
+
+# =====================================================
+# Serialization & Data Formats
+# =====================================================
+serde = "1.0.203"
+serde_json = "1.0.117"
+bigdecimal = { version = "0.4.6", features = ["serde-json"] }
+chrono = { version = "0.4", features = ["serde"] }
+bytes = "1.8.0"
+base64 = "0.22.1"
+
+# =====================================================
+# Utilities
+# =====================================================
+# Error handling
 anyhow = "1.0.92"
 
+# CLI argument parsing
+clap = { version = "4.4.11", features = ["derive"] }
 
-#DOTENV
+# Configuration
 dotenv = "0.15.0"
 
-#REGEX
+# String processing
 regex = "1.10.3"
+urlencoding = "2.1"
+url = "2.5.4"
 
-#RAYON
+# Random & UUID
+uuid = "1.11.0"
+rand = "0.8.5"
+
+# Parallel processing
 rayon = "1.10.0"
 
-
-#TRACING
+# =====================================================
+# Logging & Observability
+# =====================================================
+tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = [
     "time",
     "env-filter",
@@ -67,42 +136,3 @@ tracing-subscriber = { version = "0.3.18", features = [
     "registry",
     "ansi",
 ] }
-tracing = "0.1.40"
-
-
-bytes = "1.8.0"
-
-
-lazy_static = "1.5.0"
-
-
-#SERDE
-serde = "1.0.203"
-serde_json = "1.0.117"
-uuid = "1.11.0"
-rand = "0.8.5"
-chrono = { version = "0.4", features = ["serde"] }
-base64 = "0.22.1"
-
-
-alloy = { version = "1.0.24", features = [
-    "contract",
-    "providers",
-    "rpc-types-eth",
-    "sol-types",
-] } #alloy
-
-
-bigdecimal = { version = "0.4.6", features = ["serde-json"] } # '-' not '_'
-
-urlencoding = "2.1"
-
-clap = { version = "4.4.11", features = ["derive"] }
-url = "2.5.4"
-reqwest = { version = "0.12.15", features = ["multipart", "json"] }
-aws-config = "1.8.6"
-aws-sdk-rekognition = "1.87.0"
-aws-sdk-s3 = "1.105.0"
-image = "0.25.8"
-hex = "0.4"
-parking_lot = "0.12"
