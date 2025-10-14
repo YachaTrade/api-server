@@ -206,7 +206,7 @@ fn resolution_to_interval_type(resolution: &str) -> Result<&'static str> {
         "15" => Ok("15"),
         "30" => Ok("30"),
         "60" | "1H" => Ok("1H"),
-        "4H" => Ok("4H"),
+        "240" | "4H" => Ok("4H"),
         "D" | "1D" => Ok("D"),
         "W" | "1W" => Ok("W"),
         "M" | "1M" => Ok("M"),
