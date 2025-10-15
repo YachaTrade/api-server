@@ -90,7 +90,7 @@ impl AuthService {
         let delete_nonce_future = redis.delete_sign_message(&address);
         let set_session_future = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
 
-        let (account, _, _) = try_join!(
+        let (account_info, _, _) = try_join!(
             async {
                 session_controller
                     .set_session(&session_id, &address)
@@ -109,7 +109,7 @@ impl AuthService {
             }
         )?;
 
-        Ok((AuthSessionResponse { account }, session_id))
+        Ok((AuthSessionResponse { account_info }, session_id))
     }
 
     pub async fn delete_session(&self, session_id: &str) -> Result<(), AppError> {
