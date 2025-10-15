@@ -13,14 +13,14 @@ impl MetadataPath {
         match self {
             MetadataPath::UploadImage => "/metadata/image",
             MetadataPath::UploadMetadata => "/metadata/metadata",
-            MetadataPath::GetGeckoMetadata => "/:chain/:token_address",
+            MetadataPath::GetGeckoMetadata => "/:token_address",
         }
     }
     pub fn docs_str(&self) -> &'static str {
         match self {
             MetadataPath::UploadImage => "/metadata/image",
             MetadataPath::UploadMetadata => "/metadata/metadata",
-            MetadataPath::GetGeckoMetadata => "/{chain}/{token_address}",
+            MetadataPath::GetGeckoMetadata => "/{token_address}",
         }
     }
 }
