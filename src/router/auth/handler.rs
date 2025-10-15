@@ -49,7 +49,7 @@ pub async fn auth_nonce(
     path = AuthPath::Session.as_str(),
     request_body = AuthSessionRequest,
     responses(
-        (status = 200, description = "Session created successfully", body = crate::types::auth::AuthSessionResponse),
+        (status = 200, description = "Session created successfully", body = AuthSessionResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
