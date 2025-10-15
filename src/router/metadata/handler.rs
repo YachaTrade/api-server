@@ -9,6 +9,8 @@ use std::{env, io::Cursor, time::Instant};
 use tracing::info;
 use utoipa;
 use uuid::Uuid;
+use resvg::usvg;
+use tiny_skia::Pixmap;
 
 use crate::{
     result::{AppError, AppJsonResult},
@@ -81,6 +83,55 @@ fn validate_image(data: &[u8], content_type: &Option<String>) -> Result<String, 
     Ok(actual_format.to_string())
 }
 
+/// Convert SVG to PNG
+fn convert_svg_to_png(svg_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
+    info!("🎨 Starting SVG to PNG conversion");
+    let start_time = Instant::now();
+
+    // Parse SVG
+    let opts = usvg::Options::default();
+    let tree = usvg::Tree::from_data(svg_data, &opts)
+        .map_err(|e| AppError::BadRequest(format!("Failed to parse SVG: {}", e)))?;
+
+    let svg_size = tree.size();
+    info!("📐 SVG size: {}x{}", svg_size.width(), svg_size.height());
+
+    // Calculate target size maintaining aspect ratio
+    let scale = (max_width as f32 / svg_size.width()).min(max_height as f32 / svg_size.height()).min(1.0);
+    let target_width = (svg_size.width() * scale) as u32;
+    let target_height = (svg_size.height() * scale) as u32;
+
+    info!("🔄 Rendering SVG to {}x{}", target_width, target_height);
+
+    // Create pixmap
+    let mut pixmap = Pixmap::new(target_width, target_height)
+        .ok_or_else(|| AppError::InternalError("Failed to create pixmap".to_string()))?;
+
+    // Render SVG to pixmap
+    let tree_size = tree.size().to_int_size();
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(
+            target_width as f32 / tree_size.width() as f32,
+            target_height as f32 / tree_size.height() as f32,
+        ),
+        &mut pixmap.as_mut(),
+    );
+
+    // Convert to PNG
+    let png_data = pixmap.encode_png()
+        .map_err(|e| AppError::InternalError(format!("Failed to encode PNG: {}", e)))?;
+
+    let conversion_time = start_time.elapsed();
+    info!(
+        "✅ SVG to PNG conversion completed - Time: {:?}, Output size: {} bytes",
+        conversion_time,
+        png_data.len()
+    );
+
+    Ok(png_data)
+}
+
 /// Convert any image format to PNG for validation with optional resize
 fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
     info!("🚀 Starting image conversion process");
@@ -118,20 +169,28 @@ fn convert_to_png(image_data: &[u8], max_width: u32, max_height: u32) -> Result<
 }
 
 /// Check if image is NSFW using AWS Rekognition (uses PNG converted data)
-async fn check_nsfw(image_data: &[u8]) -> Result<bool, AppError> {
+async fn check_nsfw(image_data: &[u8], format: &str) -> Result<bool, AppError> {
     info!(
-        "🔍 Starting NSFW check - Image size: {} bytes",
-        image_data.len()
+        "🔍 Starting NSFW check - Image size: {} bytes, format: {}",
+        image_data.len(),
+        format
     );
 
-    // Convert to PNG and resize for Rekognition (max 512x512)
+    // Convert to PNG and resize for Rekognition (max 1024x1024)
     // Run conversion in blocking thread pool to avoid blocking async runtime
     let start_conversion = Instant::now();
     let image_data_owned = image_data.to_vec();
-    let png_data =
-        tokio::task::spawn_blocking(move || convert_to_png(&image_data_owned, 1024, 1024))
-            .await
-            .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
+    let format_owned = format.to_string();
+
+    let png_data = tokio::task::spawn_blocking(move || {
+        if format_owned == "image/svg+xml" {
+            convert_svg_to_png(&image_data_owned, 1024, 1024)
+        } else {
+            convert_to_png(&image_data_owned, 1024, 1024)
+        }
+    })
+    .await
+    .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
 
     info!(
         "⏱️  Image conversion took: {:?}",
@@ -270,7 +329,7 @@ pub async fn upload_image(
     let validated_format = validate_image(&body, &content_type)?;
     info!("✅ Image format validated: {}", validated_format);
 
-    let is_nsfw = check_nsfw(&body).await?;
+    let is_nsfw = check_nsfw(&body, &validated_format).await?;
 
     let service = MetadataService::new(
         state.postgres.clone(),
@@ -331,7 +390,6 @@ pub async fn upload_metadata(
     get,
     path = MetadataPath::GetGeckoMetadata.docs_str(),
     params(
-        ("chain" = String, Path, description = "Chain identifier"),
         ("token_address" = String, Path, description = "Token contract address")
     ),
     responses(
@@ -343,9 +401,9 @@ pub async fn upload_metadata(
 )]
 pub async fn get_gecko_metadata(
     State(state): State<AppState>,
-    Path((chain, token_address)): Path<(String, String)>,
+    Path(token_address): Path<String>,
 ) -> AppJsonResult<GeckoMetadataResponse> {
-    info!("🔍 Getting gecko metadata for chain: {}, token: {}", chain, token_address);
+    info!("🔍 Getting gecko metadata for token: {}", token_address);
 
     let service = MetadataService::new(
         state.postgres.clone(),
