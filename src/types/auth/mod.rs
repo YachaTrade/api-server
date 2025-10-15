@@ -27,5 +27,5 @@ pub struct AuthSessionRequest {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthSessionResponse {
-    pub account: AccountInfo,
+    pub account_info: AccountInfo,
 }
