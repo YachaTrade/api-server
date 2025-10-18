@@ -1,4 +1,3 @@
-
 /// PostgreSQL 전용 매크로 (기본 1000ms 타임아웃)
 #[macro_export]
 macro_rules! measure_postgres {
@@ -6,7 +5,7 @@ macro_rules! measure_postgres {
         let start_time = tokio::time::Instant::now();
 
         // 실제 timeout과 메트릭 수집을 함께 적용
-        let result = tokio::time::timeout(std::time::Duration::from_millis(1000), $query).await;
+        let result = tokio::time::timeout(std::time::Duration::from_millis(2000), $query).await;
 
         let elapsed = start_time.elapsed().as_millis() as u64;
         $crate::metrics::METRICS.db.record_postgres_query(elapsed);
