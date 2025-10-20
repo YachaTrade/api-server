@@ -129,8 +129,20 @@ impl MetricsController {
                     SELECT
                         price,
                         created_at,
-                        ROW_NUMBER() OVER (ORDER BY ABS(created_at - $2)) as closest_to_start,
-                        ROW_NUMBER() OVER (ORDER BY created_at DESC) as latest
+                        tx_index,
+                        log_index,
+                        ROW_NUMBER() OVER (
+                            ORDER BY
+                                ABS(created_at - $2),
+                                tx_index DESC NULLS LAST,
+                                log_index DESC
+                        ) as closest_to_start,
+                        ROW_NUMBER() OVER (
+                            ORDER BY
+                                created_at DESC,
+                                tx_index DESC NULLS LAST,
+                                log_index DESC
+                        ) as latest
                     FROM price_history
                     WHERE token_id = $1
                     AND created_at > $2
