@@ -60,9 +60,9 @@ impl TimeFrame {
             TimeFrame::ThirtyMinutes => "30",
             TimeFrame::OneHour => "1H",
             TimeFrame::FourHours => "4H",
-            TimeFrame::OneDay => "D",
-            TimeFrame::OneWeek => "W",
-            TimeFrame::OneMonth => "M",
+            TimeFrame::OneDay => "1H",  // Use 1H interval for 24h metrics
+            TimeFrame::OneWeek => "4H", // Use 4H interval for 1W metrics
+            TimeFrame::OneMonth => "D", // Use D interval for 1M metrics
         }
     }
 }
