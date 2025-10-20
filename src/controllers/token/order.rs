@@ -46,6 +46,7 @@ struct OrderTokenRow {
     total_supply: BigDecimal,
     liquidity: BigDecimal,
     volume: BigDecimal,
+    price_24h_ago: Option<BigDecimal>,
 }
 
 pub struct OrderController {
@@ -89,6 +90,9 @@ impl OrderController {
 
         let rows = match order_by {
             TokenOrderType::CreationTime => {
+                let current_time = current_unix_timestamp();
+                let time_24h_ago = current_time - 86400;
+
                 let query = format!(
                     r#"
                     WITH latest_price AS (
@@ -125,7 +129,18 @@ impl OrderController {
                         m.price,
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
-                        m.volume
+                        m.volume,
+                        (
+                            SELECT ph.price
+                            FROM price_history ph
+                            WHERE ph.token_id = t.token_id
+                            AND ph.created_at <= $3
+                            ORDER BY
+                                ph.created_at DESC,
+                                ph.tx_index DESC NULLS LAST,
+                                ph.log_index DESC
+                            LIMIT 1
+                        ) as price_24h_ago
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -143,11 +158,15 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit as i64)
                         .bind(offset)
+                        .bind(time_24h_ago)
                         .fetch_all(self.db.get_read_pool())
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by creation time: {}", err))?
             }
             TokenOrderType::LatestTrade => {
+                let current_time = current_unix_timestamp();
+                let time_24h_ago = current_time - 86400;
+
                 let query = format!(
                     r#"
                     WITH latest_price AS (
@@ -184,7 +203,18 @@ impl OrderController {
                         m.price,
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
-                        m.volume
+                        m.volume,
+                        (
+                            SELECT ph.price
+                            FROM price_history ph
+                            WHERE ph.token_id = t.token_id
+                            AND ph.created_at <= $3
+                            ORDER BY
+                                ph.created_at DESC,
+                                ph.tx_index DESC NULLS LAST,
+                                ph.log_index DESC
+                            LIMIT 1
+                        ) as price_24h_ago
                     FROM market m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
@@ -202,11 +232,15 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
+                        .bind(time_24h_ago)
                         .fetch_all(&*self.db.get_read_pool())
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by latest trade: {}", err))?
             }
             TokenOrderType::MarketCap => {
+                let current_time = current_unix_timestamp();
+                let time_24h_ago = current_time - 86400;
+
                 let query = format!(
                     r#"
                     WITH latest_price AS (
@@ -243,7 +277,18 @@ impl OrderController {
                         m.price,
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
-                        m.volume
+                        m.volume,
+                        (
+                            SELECT ph.price
+                            FROM price_history ph
+                            WHERE ph.token_id = t.token_id
+                            AND ph.created_at <= $3
+                            ORDER BY
+                                ph.created_at DESC,
+                                ph.tx_index DESC NULLS LAST,
+                                ph.log_index DESC
+                            LIMIT 1
+                        ) as price_24h_ago
                     FROM (
                         SELECT token_id, price, market_type, pool_id
                         FROM market
@@ -265,6 +310,7 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
+                        .bind(time_24h_ago)
                         .fetch_all(&*self.db.get_read_pool())
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by market cap: {}", err))?
@@ -272,6 +318,9 @@ impl OrderController {
             TokenOrderType::Verified => {
                 // Optimized with MATERIALIZED CTEs to force correct execution order
                 // This prevents PostgreSQL from scanning the entire market table
+                let current_time = current_unix_timestamp();
+                let time_24h_ago = current_time - 86400;
+
                 let query = format!(
                     r#"
                     WITH latest_price AS (
@@ -319,7 +368,18 @@ impl OrderController {
                         tvm.price,
                         t.total_supply,
                         COALESCE(tvm.reserve_native, 0) as liquidity,
-                        tvm.volume
+                        tvm.volume,
+                        (
+                            SELECT ph.price
+                            FROM price_history ph
+                            WHERE ph.token_id = t.token_id
+                            AND ph.created_at <= $3
+                            ORDER BY
+                                ph.created_at DESC,
+                                ph.tx_index DESC NULLS LAST,
+                                ph.log_index DESC
+                            LIMIT 1
+                        ) as price_24h_ago
                     FROM top_verified_markets tvm
                     JOIN token t ON tvm.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
@@ -335,6 +395,7 @@ impl OrderController {
                     sqlx::query_as::<_, OrderTokenRow>(&query)
                         .bind(pagination.limit)
                         .bind(offset)
+                        .bind(time_24h_ago)
                         .fetch_all(&*self.db.get_read_pool())
                 )
                 .map_err(|err| anyhow!("Failed to fetch verified tokens: {}", err))?
@@ -379,6 +440,17 @@ impl From<OrderTokenRow> for OrderToken {
         if row.market_type == "CURVE" && market_id.is_empty() {
             market_id = BONDING_CURVE.clone();
         }
+
+        let percent = match &row.price_24h_ago {
+            Some(price_24h_ago) => {
+                calculate_price_change_percent(
+                    &price_24h_ago.to_plain_string(),
+                    &row.price.to_plain_string(),
+                )
+                .unwrap_or(0.0)
+            }
+            None => 0.0,
+        };
 
         OrderToken {
             account_info: AccountInfo {
@@ -425,6 +497,27 @@ impl From<OrderTokenRow> for OrderToken {
                 liquidity: row.liquidity.to_plain_string(),
                 volume: row.volume.to_plain_string(),
             },
+            percent,
         }
     }
+}
+
+
+fn current_unix_timestamp() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
+fn calculate_price_change_percent(start_price: &str, current_price: &str) -> Option<f64> {
+    let start: f64 = start_price.parse().ok()?;
+    let current: f64 = current_price.parse().ok()?;
+
+    if (start - 0.0).abs() < f64::EPSILON {
+        return None;
+    }
+
+    let change_percent = ((current - start) / start) * 100.0;
+    Some(change_percent)
 }

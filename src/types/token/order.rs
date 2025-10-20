@@ -28,6 +28,7 @@ pub struct OrderToken {
     pub account_info: AccountInfo,
     pub token_info: TokenInfo,
     pub market_info: MarketInfo,
+    pub percent: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
