@@ -41,7 +41,8 @@ impl MetricsController {
         timeframe: TimeFrame,
     ) -> Result<MetricItem> {
         let period_seconds = timeframe.to_seconds();
-        let timeframe_ago = current_unix_timestamp() - period_seconds;
+        let current_time = current_unix_timestamp();
+        let timeframe_ago = current_time - period_seconds;
 
         #[derive(sqlx::FromRow)]
         struct MetricRow {
@@ -67,10 +68,12 @@ impl MetricsController {
                 FROM swap
                 WHERE token_id = $1
                 AND created_at > $2
+                AND created_at <= $3
                 "#,
             )
             .bind(token_id)
             .bind(timeframe_ago)
+            .bind(current_time)
             .fetch_one(self.db.get_read_pool())
         )?;
 
