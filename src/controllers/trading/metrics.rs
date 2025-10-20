@@ -116,34 +116,39 @@ impl MetricsController {
     ) -> Result<(Option<String>, Option<String>)> {
         let interval_type = timeframe.to_chart_interval();
         let period_seconds = timeframe.to_seconds();
-        let timeframe_ago = current_unix_timestamp() - period_seconds;
+        let current_time = current_unix_timestamp();
+        let timeframe_ago = current_time - period_seconds;
 
         let result = measure_postgres!(
             "trading_metrics.get_price_from_chart",
             sqlx::query!(
                 r#"
-                WITH price_data AS (
-                    SELECT
-                        open_price,
-                        close_price,
-                        time_stamp,
-                        ROW_NUMBER() OVER (ORDER BY time_stamp ASC) as first_row,
-                        ROW_NUMBER() OVER (ORDER BY time_stamp DESC) as last_row
+                WITH price_at_start AS (
+                    SELECT open_price
                     FROM chart
                     WHERE token_id = $1
                     AND interval_type = $2
-                    AND time_stamp >= $3
+                    AND time_stamp <= $3
+                    ORDER BY time_stamp DESC
+                    LIMIT 1
+                ),
+                price_at_current AS (
+                    SELECT close_price
+                    FROM chart
+                    WHERE token_id = $1
+                    AND interval_type = $2
+                    AND time_stamp <= $4
+                    ORDER BY time_stamp DESC
+                    LIMIT 1
                 )
                 SELECT
-                    FIRST_VALUE(open_price) OVER (ORDER BY first_row) as start_price,
-                    FIRST_VALUE(close_price) OVER (ORDER BY last_row) as current_price
-                FROM price_data
-                WHERE first_row = 1 OR last_row = 1
-                LIMIT 1
+                    (SELECT open_price FROM price_at_start) as start_price,
+                    (SELECT close_price FROM price_at_current) as current_price
                 "#,
                 token_id,
                 interval_type,
-                timeframe_ago
+                timeframe_ago,
+                current_time
             )
             .fetch_optional(self.db.get_read_pool())
         )?;
