@@ -290,7 +290,7 @@ impl OrderController {
                             LIMIT 1
                         ) as price_24h_ago
                     FROM (
-                        SELECT token_id, price, market_type, pool_id
+                        SELECT token_id, price, market_type, pool_id, reserve_native, volume
                         FROM market
                         ORDER BY price {}
                         LIMIT $1 OFFSET $2
