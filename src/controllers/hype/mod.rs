@@ -47,7 +47,7 @@ struct HypeTokenRow {
     creator_follower_count: i32,
     creator_following_count: i32,
     vote: BigDecimal,
-    holder_count: Option<i64>,
+    holder_count: i64,
     market_cap: BigDecimal,
     reward_amount: Option<BigDecimal>,
 }
@@ -136,7 +136,7 @@ impl HypeController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
-                        COALESCE(thc.holder_count, 0) as holder_count,
+                        t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
                     FROM hype_token h
@@ -145,7 +145,6 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON h.token_id = m.token_id
-                    LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                     WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
                     ORDER BY h.vote DESC, market_cap DESC
@@ -191,6 +190,7 @@ impl HypeController {
                     telegram: row.telegram,
                     website: row.website,
                     created_at: row.created_at,
+                    holder_count: row.holder_count,
                     creator: AccountInfo {
                         account_id: row.creator,
                         nickname: row.creator_nickname,
@@ -202,7 +202,7 @@ impl HypeController {
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.to_plain_string(),
-                    holder_count: row.holder_count.unwrap_or_default() as u64,
+                    holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.to_plain_string(),
                     reward_amount: row.reward_amount.unwrap_or_default().to_plain_string(),
                 },
@@ -275,7 +275,7 @@ impl HypeController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
-                        COALESCE(thc.holder_count, 0) as holder_count,
+                        t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
                     FROM hype_token h
@@ -284,7 +284,6 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON h.token_id = m.token_id
-                    LEFT JOIN token_holder_count thc ON h.token_id = thc.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                     WHERE h.epoch = $1
                     ORDER BY h.vote DESC, market_cap DESC
@@ -332,6 +331,7 @@ impl HypeController {
                     telegram: row.telegram,
                     website: row.website,
                     created_at: row.created_at,
+                    holder_count: row.holder_count,
                     creator: AccountInfo {
                         account_id: row.creator,
                         nickname: row.creator_nickname,
@@ -343,7 +343,7 @@ impl HypeController {
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.to_plain_string(),
-                    holder_count: row.holder_count.unwrap_or_default() as u64,
+                    holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.to_plain_string(),
                     reward_amount: row.reward_amount.unwrap_or_default().to_plain_string(),
                 },
@@ -490,6 +490,7 @@ impl HypeController {
             total_vote_amount: BigDecimal,
             created_at: i64,
             creator: String,
+            holder_count: i64,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
@@ -509,6 +510,7 @@ impl HypeController {
                 t.image_uri,
                 t.created_at as token_created_at,
                 t.creator,
+                t.token_holder_count as holder_count,
                 COALESCE(
                     CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                     a.nickname
@@ -577,6 +579,7 @@ impl HypeController {
                     telegram: None,
                     website: None,
                     created_at: row.token_created_at,
+                    holder_count: row.holder_count,
                     creator: AccountInfo {
                         account_id: row.creator,
                         nickname: row.creator_nickname,
@@ -751,6 +754,7 @@ impl HypeController {
             vote_amount: BigDecimal,
             created_at: i64,
             creator: String,
+            holder_count: i64,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
@@ -778,6 +782,7 @@ impl HypeController {
                         r.claim_at,
                         r.created_at,
                         t.creator,
+                        t.token_holder_count as holder_count,
                         COALESCE(
                             CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                             a.nickname
@@ -841,6 +846,7 @@ impl HypeController {
                     telegram: None,
                     website: None,
                     created_at: row.token_created_at,
+                    holder_count: row.holder_count,
                     creator: AccountInfo {
                         account_id: row.creator,
                         nickname: row.creator_nickname,
@@ -1092,6 +1098,7 @@ impl HypeController {
             transaction_hash: String,
             created_at: i64,
             creator: String,
+            holder_count: i64,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
@@ -1116,6 +1123,7 @@ impl HypeController {
                         t.image_uri,
                         t.created_at as token_created_at,
                         t.creator,
+                        t.token_holder_count as holder_count,
                         COALESCE(
                             CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                             a.nickname
@@ -1180,6 +1188,7 @@ impl HypeController {
                     telegram: None,
                     website: None,
                     created_at: row.token_created_at,
+                    holder_count: row.holder_count,
                     creator: AccountInfo {
                         account_id: row.creator,
                         nickname: row.creator_nickname,

@@ -21,6 +21,7 @@ pub struct TokenInfo {
     #[serde(default)]
     pub website: Option<String>,
     pub created_at: i64,
+    pub holder_count: i64,
     pub creator: AccountInfo,
 }
 
