@@ -9,6 +9,7 @@ use crate::{
     types::trading::metrics::{
         MakerCount, MetricItem, MetricsBatchResponse, TimeFrame, TransactionCount, VolumeAmount,
     },
+    utils::{calculate_price_change_percent, current_unix_timestamp},
 };
 
 pub struct MetricsController {
@@ -169,23 +170,4 @@ impl MetricsController {
 
         Ok((start_price, current_price))
     }
-}
-
-fn current_unix_timestamp() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
-
-fn calculate_price_change_percent(start_price: &str, current_price: &str) -> Option<f64> {
-    let start: f64 = start_price.parse().ok()?;
-    let current: f64 = current_price.parse().ok()?;
-
-    if (start - 0.0).abs() < f64::EPSILON {
-        return None;
-    }
-
-    let change_percent = ((current - start) / start) * 100.0;
-    Some(change_percent)
 }
