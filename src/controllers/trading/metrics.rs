@@ -117,33 +117,30 @@ impl MetricsController {
         token_id: &str,
         timeframe: &TimeFrame,
     ) -> Result<(Option<String>, Option<String>)> {
-        let interval_type = timeframe.to_chart_interval();
         let period_seconds = timeframe.to_seconds();
         let current_time = current_unix_timestamp();
         let timeframe_ago = current_time - period_seconds;
 
         let result = measure_postgres!(
-            "trading_metrics.get_price_from_chart",
+            "trading_metrics.get_price_from_price_history",
             sqlx::query!(
                 r#"
                 WITH price_data AS (
                     SELECT
-                        close_price,
-                        time_stamp,
-                        ROW_NUMBER() OVER (ORDER BY ABS(time_stamp - $3)) as closest_to_start,
-                        ROW_NUMBER() OVER (ORDER BY time_stamp DESC) as latest
-                    FROM chart
+                        price,
+                        created_at,
+                        ROW_NUMBER() OVER (ORDER BY ABS(created_at - $2)) as closest_to_start,
+                        ROW_NUMBER() OVER (ORDER BY created_at DESC) as latest
+                    FROM price_history
                     WHERE token_id = $1
-                    AND interval_type = $2
-                    AND time_stamp > $3
-                    AND time_stamp <= $4
+                    AND created_at > $2
+                    AND created_at <= $3
                 )
                 SELECT
-                    (SELECT close_price FROM price_data WHERE closest_to_start = 1) as start_price,
-                    (SELECT close_price FROM price_data WHERE latest = 1) as current_price
+                    (SELECT price FROM price_data WHERE closest_to_start = 1) as start_price,
+                    (SELECT price FROM price_data WHERE latest = 1) as current_price
                 "#,
                 token_id,
-                interval_type,
                 timeframe_ago,
                 current_time
             )
