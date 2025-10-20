@@ -84,6 +84,7 @@ impl PositionController {
             balance: BigDecimal,
             token_price: BigDecimal,
             native_price: BigDecimal,
+            balance_created_at: i64,
             account_id: String,
             nickname: String,
             bio: String,
@@ -106,6 +107,7 @@ impl PositionController {
                     b.balance,
                     (m.price * COALESCE(lp.price, 0)) as token_price,
                     COALESCE(lp.price, 0) as native_price,
+                    b.created_at as balance_created_at,
                     a.account_id,
                     COALESCE(
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
@@ -154,6 +156,7 @@ impl PositionController {
                     balance: row.balance.to_plain_string(),
                     token_price: row.token_price.to_plain_string(),
                     native_price: row.native_price.to_plain_string(),
+                    created_at: row.balance_created_at,
                 },
             })
             .collect();
@@ -209,6 +212,7 @@ impl PositionController {
             creator_follower_count: i32,
             creator_following_count: i32,
             balance: BigDecimal,
+            balance_created_at: i64,
             token_price: BigDecimal,
             native_price: BigDecimal,
         }
@@ -245,6 +249,7 @@ impl PositionController {
                     a.follower_count as creator_follower_count,
                     a.following_count as creator_following_count,
                     b.balance,
+                    b.created_at as balance_created_at,
                     (m.price * COALESCE(lp.price, 0)) as token_price,
                     COALESCE(lp.price, 0) as native_price
                 FROM token t
@@ -300,6 +305,7 @@ impl PositionController {
                     balance: row.balance.to_plain_string(),
                     token_price: row.token_price.to_plain_string(),
                     native_price: row.native_price.to_plain_string(),
+                    created_at: row.balance_created_at,
                 },
             })
             .collect();

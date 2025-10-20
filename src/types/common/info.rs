@@ -112,6 +112,9 @@ pub struct BalanceInfo {
     pub token_price: String,
     /// MON/USD price
     pub native_price: String,
+
+    // holding period
+    pub created_at: i64,
 }
 
 /// Token with balance information

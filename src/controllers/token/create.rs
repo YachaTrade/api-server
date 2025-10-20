@@ -127,6 +127,7 @@ impl TokenCreatedController {
             price: BigDecimal,
             total_supply: BigDecimal,
             balance: BigDecimal,
+            balance_created_at: i64,
         }
 
         let tokens = measure_postgres!(
@@ -168,6 +169,7 @@ impl TokenCreatedController {
                         m.price,
                         t.total_supply,
                         COALESCE(b.balance, 0) as balance,
+                        COALESCE(b.created_at, 0) as balance_created_at,
                         COALESCE(m.price * b.balance * COALESCE(lp.price, 0), 0) as current_value
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
@@ -262,6 +264,7 @@ impl TokenCreatedController {
                         balance: row.balance.to_plain_string(),
                         token_price: row.token_price.to_plain_string(),
                         native_price: row.native_price.to_plain_string(),
+                        created_at: row.balance_created_at,
                     },
                 }
             })
