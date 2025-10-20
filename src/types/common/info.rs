@@ -80,6 +80,10 @@ pub struct MarketInfo {
     pub price: String,
     /// Total supply (used for market cap calculation in bonding curve)
     pub total_supply: String,
+    /// Liquidity (used for pool liquidity in dex)
+    pub liquidity: String,
+    /// Volume (used for tokne total volume)
+    pub volume: String,
 }
 
 /// Swap event type enum
@@ -112,7 +116,6 @@ pub struct BalanceInfo {
     pub token_price: String,
     /// MON/USD price
     pub native_price: String,
-
     // holding period
     pub created_at: i64,
 }

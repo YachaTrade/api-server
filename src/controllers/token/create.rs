@@ -126,6 +126,8 @@ impl TokenCreatedController {
             native_price: BigDecimal,
             price: BigDecimal,
             total_supply: BigDecimal,
+            liquidity: BigDecimal,
+            volume: BigDecimal,
             balance: BigDecimal,
             balance_created_at: i64,
         }
@@ -168,6 +170,8 @@ impl TokenCreatedController {
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply,
+                        COALESCE(m.reserve_native, 0) as liquidity,
+                        m.volume,
                         COALESCE(b.balance, 0) as balance,
                         COALESCE(b.created_at, 0) as balance_created_at,
                         COALESCE(m.price * b.balance * COALESCE(lp.price, 0), 0) as current_value
@@ -259,6 +263,8 @@ impl TokenCreatedController {
                         native_price: row.native_price.to_plain_string(),
                         price: row.price.to_plain_string(),
                         total_supply: row.total_supply.to_plain_string(),
+                        liquidity: row.liquidity.to_plain_string(),
+                        volume: row.volume.to_plain_string(),
                     },
                     balance_info: BalanceInfo {
                         balance: row.balance.to_plain_string(),
