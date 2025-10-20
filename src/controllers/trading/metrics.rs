@@ -127,7 +127,7 @@ impl MetricsController {
             sqlx::query!(
                 r#"
                 WITH price_at_start AS (
-                    SELECT open_price
+                    SELECT close_price
                     FROM chart
                     WHERE token_id = $1
                     AND interval_type = $2
@@ -145,7 +145,7 @@ impl MetricsController {
                     LIMIT 1
                 )
                 SELECT
-                    (SELECT open_price FROM price_at_start) as start_price,
+                    (SELECT close_price FROM price_at_start) as start_price,
                     (SELECT close_price FROM price_at_current) as current_price
                 "#,
                 token_id,
