@@ -90,6 +90,7 @@ pub struct MakerCount {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MetricItem {
+    pub timeframe: String,
     pub percent: f64,
     pub transactions: TransactionCount,
     pub volume: VolumeAmount,
