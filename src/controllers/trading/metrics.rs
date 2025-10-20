@@ -126,27 +126,21 @@ impl MetricsController {
             "trading_metrics.get_price_from_chart",
             sqlx::query!(
                 r#"
-                WITH price_at_start AS (
-                    SELECT close_price
+                WITH price_data AS (
+                    SELECT
+                        close_price,
+                        time_stamp,
+                        ROW_NUMBER() OVER (ORDER BY ABS(time_stamp - $3)) as closest_to_start,
+                        ROW_NUMBER() OVER (ORDER BY time_stamp DESC) as latest
                     FROM chart
                     WHERE token_id = $1
                     AND interval_type = $2
-                    AND time_stamp <= $3
-                    ORDER BY time_stamp DESC
-                    LIMIT 1
-                ),
-                price_at_current AS (
-                    SELECT close_price
-                    FROM chart
-                    WHERE token_id = $1
-                    AND interval_type = $2
+                    AND time_stamp > $3
                     AND time_stamp <= $4
-                    ORDER BY time_stamp DESC
-                    LIMIT 1
                 )
                 SELECT
-                    (SELECT close_price FROM price_at_start) as start_price,
-                    (SELECT close_price FROM price_at_current) as current_price
+                    (SELECT close_price FROM price_data WHERE closest_to_start = 1) as start_price,
+                    (SELECT close_price FROM price_data WHERE latest = 1) as current_price
                 "#,
                 token_id,
                 interval_type,
