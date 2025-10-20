@@ -17,9 +17,8 @@ use crate::{
         token::order::{OrderToken, OrderTokenResponse, TokenOrderType},
     },
     utils::{
+        calculate_price_change_percent, current_unix_timestamp,
         single_flight::{GLOBAL_CACHE, with_cache},
-        calculate_price_change_percent,
-        current_unix_timestamp,
     },
 };
 
@@ -446,13 +445,11 @@ impl From<OrderTokenRow> for OrderToken {
         }
 
         let percent = match &row.price_24h_ago {
-            Some(price_24h_ago) => {
-                calculate_price_change_percent(
-                    &price_24h_ago.to_plain_string(),
-                    &row.price.to_plain_string(),
-                )
-                .unwrap_or(0.0)
-            }
+            Some(price_24h_ago) => calculate_price_change_percent(
+                &price_24h_ago.to_plain_string(),
+                &row.price.to_plain_string(),
+            )
+            .unwrap_or(0.0),
             None => 0.0,
         };
 
