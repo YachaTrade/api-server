@@ -202,8 +202,6 @@ where
                 "1H" => timeframes.push(TimeFrame::OneHour),
                 "4H" => timeframes.push(TimeFrame::FourHours),
                 "D" => timeframes.push(TimeFrame::OneDay),
-                "W" => timeframes.push(TimeFrame::OneWeek),
-                "M" => timeframes.push(TimeFrame::OneMonth),
                 _ => return Err(D::Error::custom(format!("Invalid timeframe: {}", trimmed))),
             }
         }
@@ -222,7 +220,7 @@ where
     path = TradePath::GetMetricsBatch.docs_str(),
     params(
         ("token_id" = String, Path, description = "Token ID"),
-        ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., 'D,1H,5' or 'D,W,M'). Available values: 1, 5, 15, 30, 60, 4H, D, W, M", example = "D,1H,5")
+        ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., 'D,4H,1H'). Available values: 1, 5, 15, 30, 60, 4H, D", example = "D,4H,60")
     ),
     responses(
         (status = 200, description = "Trading metrics retrieved successfully for multiple timeframes", body = MetricsBatchResponse),
