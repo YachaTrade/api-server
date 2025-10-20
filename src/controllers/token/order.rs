@@ -287,7 +287,7 @@ impl OrderController {
                         JOIN account a ON ax.account_id = a.account_id
                     ),
                     top_verified_markets AS MATERIALIZED (
-                        SELECT m.token_id, m.price, m.market_type, m.pool_id
+                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.volume
                         FROM market m
                         JOIN token t ON m.token_id = t.token_id
                         WHERE t.creator IN (SELECT account_id FROM verified_creators)
@@ -317,7 +317,9 @@ impl OrderController {
                         (tvm.price * COALESCE(lp.price, 0)) as token_price,
                         COALESCE(lp.price, 0) as native_price,
                         tvm.price,
-                        t.total_supply
+                        t.total_supply,
+                        COALESCE(tvm.reserve_native, 0) as liquidity,
+                        tvm.volume
                     FROM top_verified_markets tvm
                     JOIN token t ON tvm.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id

@@ -281,7 +281,9 @@ impl SearchController {
                             (m.price * COALESCE(lp.price, 0)) as token_price,
                             COALESCE(lp.price, 0) as native_price,
                             m.price,
-                            t.total_supply
+                            t.total_supply,
+                            COALESCE(m.reserve_native, 0) as liquidity,
+                            m.volume
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -329,7 +331,9 @@ impl SearchController {
                             (m.price * COALESCE(lp.price, 0)) as token_price,
                             COALESCE(lp.price, 0) as native_price,
                             m.price,
-                            t.total_supply
+                            t.total_supply,
+                            COALESCE(m.reserve_native, 0) as liquidity,
+                            m.volume
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
