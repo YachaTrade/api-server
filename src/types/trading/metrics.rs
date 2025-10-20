@@ -17,10 +17,6 @@ pub enum TimeFrame {
     FourHours,
     #[serde(rename = "D")]
     OneDay,
-    #[serde(rename = "W")]
-    OneWeek,
-    #[serde(rename = "M")]
-    OneMonth,
 }
 
 impl TimeFrame {
@@ -33,8 +29,6 @@ impl TimeFrame {
             TimeFrame::OneHour => 3600,
             TimeFrame::FourHours => 14400,
             TimeFrame::OneDay => 86400,
-            TimeFrame::OneWeek => 604800,
-            TimeFrame::OneMonth => 2592000,
         }
     }
 
@@ -47,8 +41,6 @@ impl TimeFrame {
             TimeFrame::OneHour => "1h",
             TimeFrame::FourHours => "4h",
             TimeFrame::OneDay => "1d",
-            TimeFrame::OneWeek => "1w",
-            TimeFrame::OneMonth => "1M",
         }
     }
 
@@ -61,8 +53,6 @@ impl TimeFrame {
             TimeFrame::OneHour => "1H",
             TimeFrame::FourHours => "4H",
             TimeFrame::OneDay => "1H",  // Use 1H interval for 24h metrics
-            TimeFrame::OneWeek => "4H", // Use 4H interval for 1W metrics
-            TimeFrame::OneMonth => "D", // Use D interval for 1M metrics
         }
     }
 }
