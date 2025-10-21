@@ -70,7 +70,7 @@ impl MarketController {
                     t.total_supply,
                     COALESCE(m.reserve_native, 0) as liquidity,
                     m.volume,
-                    m.token_holder_count as holder_count
+                    t.token_holder_count as holder_count
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 CROSS JOIN latest_price lp

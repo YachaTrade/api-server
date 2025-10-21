@@ -136,7 +136,7 @@ impl HypeController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
-                        m.token_holder_count as holder_count,
+                        t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
                     FROM hype_token h
@@ -274,7 +274,7 @@ impl HypeController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
                         a.following_count as creator_following_count,
-                        m.token_holder_count as holder_count,
+                        t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
                     FROM hype_token h
@@ -776,7 +776,7 @@ impl HypeController {
                         r.claim_at,
                         r.created_at,
                         t.creator,
-                        m.token_holder_count as holder_count,
+                        t.token_holder_count as holder_count,
                         COALESCE(
                             CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                             a.nickname
@@ -1115,7 +1115,7 @@ impl HypeController {
                         t.image_uri,
                         t.created_at as token_created_at,
                         t.creator,
-                        m.token_holder_count as holder_count,
+                        t.token_holder_count as holder_count,
                         COALESCE(
                             CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                             a.nickname

@@ -92,7 +92,7 @@ impl TokenMetadataController {
                     t.is_listing,
                     t.created_at,
                     t.creator,
-                    m.token_holder_count as holder_count,
+                    t.token_holder_count as holder_count,
                     COALESCE(
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                         a.nickname
