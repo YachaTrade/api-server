@@ -196,6 +196,7 @@ impl TokenCreatedController {
                     is_listing,
                     token_created_at,
                     creator,
+                    holder_count,
                     creator_nickname,
                     creator_bio,
                     creator_image_uri,
