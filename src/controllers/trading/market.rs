@@ -26,6 +26,7 @@ struct MarketRow {
     total_supply: BigDecimal,
     liquidity: BigDecimal,
     volume: BigDecimal,
+    holder_count: i64,
 }
 
 pub struct MarketController {
@@ -68,7 +69,8 @@ impl MarketController {
                     m.price,
                     t.total_supply,
                     COALESCE(m.reserve_native, 0) as liquidity,
-                    m.volume
+                    m.volume,
+                    m.token_holder_count as holder_count
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 CROSS JOIN latest_price lp
@@ -100,6 +102,7 @@ impl MarketController {
                 total_supply: row.total_supply.to_plain_string(),
                 liquidity: row.liquidity.to_plain_string(),
                 volume: row.volume.to_plain_string(),
+                holder_count: row.holder_count,
             },
         })
     }

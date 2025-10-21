@@ -21,7 +21,6 @@ pub struct TokenInfo {
     #[serde(default)]
     pub website: Option<String>,
     pub created_at: i64,
-    pub holder_count: i64,
     pub creator: AccountInfo,
 }
 
@@ -84,6 +83,8 @@ pub struct MarketInfo {
     pub liquidity: String,
     /// Volume (used for tokne total volume)
     pub volume: String,
+    /// Holder count (used for tokne total holder count)
+    pub holder_count: i64,
 }
 
 /// Swap event type enum
