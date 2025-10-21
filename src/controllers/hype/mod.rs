@@ -790,7 +790,7 @@ impl HypeController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                    WHERE r.account_id = $1 AND epoch < 3
+                    WHERE r.account_id = $1 
                     ORDER BY r.created_at DESC
                     LIMIT $2 OFFSET $3
                     "#,
