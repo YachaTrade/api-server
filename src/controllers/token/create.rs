@@ -208,7 +208,10 @@ impl TokenCreatedController {
                     native_price,
                     price,
                     total_supply,
-                    balance
+                    liquidity,
+                    volume,
+                    balance,
+                    balance_created_at
                 FROM created_tokens
                 ORDER BY current_value DESC
                 LIMIT $2
