@@ -212,9 +212,9 @@ impl SwapController {
                     } else {
                         SwapType::Sell
                     },
-                    native_amount: row.native_amount.to_string(),
-                    token_amount: row.token_amount.to_string(),
-                    native_price: row.native_price.to_string(),
+                    native_amount: row.native_amount.to_plain_string(),
+                    token_amount: row.token_amount.to_plain_string(),
+                    native_price: row.native_price.to_plain_string(),
                     transaction_hash: row.transaction_hash,
                     created_at: row.created_at,
                 },
@@ -325,31 +325,35 @@ impl SwapController {
 
         let swaps: Vec<TokenSwap> = rows
             .into_iter()
-            .map(|row| {
-                TokenSwap {
-                    account_info: AccountInfo {
-                        account_id: row.account_id,
-                        nickname: row.x_handle
-                            .clone()
-                            .filter(|h| !h.is_empty())
-                            .unwrap_or(row.account_nickname),
-                        bio: row.bio,
-                        image_uri: row.x_image_uri
-                            .clone()
-                            .filter(|img| !img.is_empty())
-                            .unwrap_or(row.account_image),
-                        follower_count: row.follower_count,
-                        following_count: row.following_count,
+            .map(|row| TokenSwap {
+                account_info: AccountInfo {
+                    account_id: row.account_id,
+                    nickname: row
+                        .x_handle
+                        .clone()
+                        .filter(|h| !h.is_empty())
+                        .unwrap_or(row.account_nickname),
+                    bio: row.bio,
+                    image_uri: row
+                        .x_image_uri
+                        .clone()
+                        .filter(|img| !img.is_empty())
+                        .unwrap_or(row.account_image),
+                    follower_count: row.follower_count,
+                    following_count: row.following_count,
+                },
+                swap_info: SwapInfo {
+                    event_type: if row.is_buy {
+                        SwapType::Buy
+                    } else {
+                        SwapType::Sell
                     },
-                    swap_info: SwapInfo {
-                        event_type: if row.is_buy { SwapType::Buy } else { SwapType::Sell },
-                        native_amount: row.native_amount.to_plain_string(),
-                        token_amount: row.token_amount.to_plain_string(),
-                        native_price: row.native_price.to_plain_string(),
-                        transaction_hash: row.transaction_hash,
-                        created_at: row.created_at,
-                    },
-                }
+                    native_amount: row.native_amount.to_plain_string(),
+                    token_amount: row.token_amount.to_plain_string(),
+                    native_price: row.native_price.to_plain_string(),
+                    transaction_hash: row.transaction_hash,
+                    created_at: row.created_at,
+                },
             })
             .collect();
 
