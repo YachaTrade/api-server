@@ -107,7 +107,6 @@ impl SearchController {
                         telegram: row.telegram,
                         website: row.website,
                         created_at: row.created_at,
-                        holder_count: row.holder_count,
                         creator: AccountInfo {
                             account_id: row.creator,
                             nickname: row.creator_nickname,
@@ -131,6 +130,7 @@ impl SearchController {
                         total_supply: row.total_supply.to_plain_string(),
                         liquidity: row.liquidity.to_plain_string(),
                         volume: row.volume.to_plain_string(),
+                        holder_count: row.holder_count,
                     },
                 }
             })
@@ -212,7 +212,7 @@ impl SearchController {
                         t.is_listing,
                         t.created_at,
                         t.creator,
-                        t.token_holder_count as holder_count,
+                        m.token_holder_count as holder_count,
                         COALESCE(
                             CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                             a.nickname
@@ -267,7 +267,7 @@ impl SearchController {
                             t.is_listing,
                             t.created_at,
                             t.creator,
-                            t.token_holder_count as holder_count,
+                            m.token_holder_count as holder_count,
                             COALESCE(
                                 CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                                 a.nickname
@@ -317,7 +317,7 @@ impl SearchController {
                             t.is_listing,
                             t.created_at,
                             t.creator,
-                            t.token_holder_count as holder_count,
+                            m.token_holder_count as holder_count,
                             COALESCE(
                                 CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                                 a.nickname

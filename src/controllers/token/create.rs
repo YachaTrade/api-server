@@ -155,7 +155,7 @@ impl TokenCreatedController {
                         t.is_listing,
                         t.created_at as token_created_at,
                         t.creator,
-                        t.token_holder_count as holder_count,
+                        m.token_holder_count as holder_count,
                         COALESCE(
                             CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                             a.nickname
@@ -241,7 +241,6 @@ impl TokenCreatedController {
                         telegram: row.token_telegram,
                         website: row.token_website,
                         created_at: row.token_created_at,
-                        holder_count: row.holder_count,
                         creator: AccountInfo {
                             account_id: row.creator,
                             nickname: row.creator_nickname,
@@ -265,6 +264,7 @@ impl TokenCreatedController {
                         total_supply: row.total_supply.to_plain_string(),
                         liquidity: row.liquidity.to_plain_string(),
                         volume: row.volume.to_plain_string(),
+                        holder_count: row.holder_count,
                     },
                     balance_info: BalanceInfo {
                         balance: row.balance.to_plain_string(),

@@ -98,7 +98,6 @@ impl SwapController {
             is_listing: bool,
             token_created_at: i64,
             creator: String,
-            holder_count: i64,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
@@ -148,7 +147,6 @@ impl SwapController {
                     t.is_listing,
                     t.created_at as token_created_at,
                     t.creator,
-                    t.token_holder_count as holder_count,
                     COALESCE(
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                         a.nickname
@@ -199,7 +197,6 @@ impl SwapController {
                     telegram: row.token_telegram,
                     website: row.token_website,
                     created_at: row.token_created_at,
-                    holder_count: row.holder_count,
                     creator: AccountInfo {
                         account_id: row.creator,
                         nickname: row.creator_nickname,
