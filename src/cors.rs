@@ -23,9 +23,6 @@ pub fn get_cors() -> CorsLayer {
             if let Ok(localhost_origin) = format!("http://localhost:{}", allow_cors_port).parse() {
                 origins.push(localhost_origin);
             }
-            if let Ok(dev_client) = format!("https://*.cloudfront.net").parse() {
-                origins.push(dev_client);
-            }
         }
     }
 
@@ -48,6 +45,7 @@ pub fn get_cors() -> CorsLayer {
                         .iter()
                         .any(|allowed_origin| allowed_origin == origin)
                         || origin_string.ends_with(".nad.fun")
+                        || origin_string.ends_with(".cloudfront.net")
                 })
                 .unwrap_or(false)
         }))
