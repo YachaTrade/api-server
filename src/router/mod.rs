@@ -11,6 +11,7 @@ pub mod search;
 pub mod token;
 pub mod trade;
 
+pub mod gecko;
 pub mod hype;
 
 pub mod metadata;
