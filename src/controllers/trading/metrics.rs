@@ -109,9 +109,9 @@ impl MetricsController {
                 total: buy_count + sell_count,
             },
             volume: VolumeAmount {
-                buy: buy_volume.to_plain_string(),
-                sell: sell_volume.to_plain_string(),
-                total: total_volume.to_plain_string(),
+                buy: buy_volume.normalized().to_plain_string(),
+                sell: sell_volume.normalized().to_plain_string(),
+                total: total_volume.normalized().to_plain_string(),
             },
             makers: MakerCount {
                 buy: buy_makers,
@@ -170,8 +170,8 @@ impl MetricsController {
 
         let (start_price, current_price) = match result {
             Some(row) => (
-                row.start_price.map(|p| p.to_plain_string()),
-                row.current_price.map(|p| p.to_plain_string()),
+                row.start_price.map(|p| p.normalized().to_plain_string()),
+                row.current_price.map(|p| p.normalized().to_plain_string()),
             ),
             None => (None, None),
         };

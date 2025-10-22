@@ -200,10 +200,10 @@ impl HypeController {
                     },
                 },
                 hype_info: HypeInfo {
-                    vote: row.vote.to_plain_string(),
+                    vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
-                    market_cap: row.market_cap.to_plain_string(),
-                    reward_amount: row.reward_amount.unwrap_or_default().to_plain_string(),
+                    market_cap: row.market_cap.normalized().to_plain_string(),
+                    reward_amount: row.reward_amount.unwrap_or_default().normalized().to_plain_string(),
                 },
             })
             .collect::<Vec<HypeToken>>();
@@ -340,10 +340,10 @@ impl HypeController {
                     },
                 },
                 hype_info: HypeInfo {
-                    vote: row.vote.to_plain_string(),
+                    vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
-                    market_cap: row.market_cap.to_plain_string(),
-                    reward_amount: row.reward_amount.unwrap_or_default().to_plain_string(),
+                    market_cap: row.market_cap.normalized().to_plain_string(),
+                    reward_amount: row.reward_amount.unwrap_or_default().normalized().to_plain_string(),
                 },
             })
             .collect::<Vec<HypeToken>>();
@@ -849,12 +849,12 @@ impl HypeController {
                         following_count: row.creator_following_count,
                     },
                 },
-                amount: row.amount.to_plain_string(),
+                amount: row.amount.normalized().to_plain_string(),
                 claimable: row.status == "AWAITING",
                 proof: row.proof,
                 transaction_hash: row.transaction_hash,
                 claim_at: row.claim_at,
-                vote_amount: row.vote_amount.to_plain_string(),
+                vote_amount: row.vote_amount.normalized().to_plain_string(),
                 created_at: row.created_at,
             })
             .collect();
@@ -1189,8 +1189,8 @@ impl HypeController {
                         following_count: row.creator_following_count,
                     },
                 },
-                amount: row.amount.to_plain_string(),
-                total_amount: row.total_amount.to_plain_string(),
+                amount: row.amount.normalized().to_plain_string(),
+                total_amount: row.total_amount.normalized().to_plain_string(),
                 created_at: row.created_at,
                 transaction_hash: row.transaction_hash,
             })

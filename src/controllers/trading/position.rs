@@ -153,9 +153,9 @@ impl PositionController {
                     following_count: row.following_count,
                 },
                 balance_info: BalanceInfo {
-                    balance: row.balance.to_plain_string(),
-                    token_price: row.token_price.to_plain_string(),
-                    native_price: row.native_price.to_plain_string(),
+                    balance: row.balance.normalized().to_plain_string(),
+                    token_price: row.token_price.normalized().to_plain_string(),
+                    native_price: row.native_price.normalized().to_plain_string(),
                     created_at: row.balance_created_at,
                 },
             })
@@ -299,9 +299,9 @@ impl PositionController {
                     },
                 },
                 balance_info: BalanceInfo {
-                    balance: row.balance.to_plain_string(),
-                    token_price: row.token_price.to_plain_string(),
-                    native_price: row.native_price.to_plain_string(),
+                    balance: row.balance.normalized().to_plain_string(),
+                    token_price: row.token_price.normalized().to_plain_string(),
+                    native_price: row.native_price.normalized().to_plain_string(),
                     created_at: row.balance_created_at,
                 },
             })

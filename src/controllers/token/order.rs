@@ -446,8 +446,8 @@ impl From<OrderTokenRow> for OrderToken {
 
         let percent = match &row.price_24h_ago {
             Some(price_24h_ago) => calculate_price_change_percent(
-                &price_24h_ago.to_plain_string(),
-                &row.price.to_plain_string(),
+                &price_24h_ago.normalized().to_plain_string(),
+                &row.price.normalized().to_plain_string(),
             )
             .unwrap_or(0.0),
             None => 0.0,
