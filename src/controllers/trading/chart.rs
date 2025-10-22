@@ -180,11 +180,11 @@ impl ChartController {
 
         for chart in charts {
             t.push(chart.time_stamp);
-            c.push(chart.close_price.to_plain_string());
-            o.push(chart.open_price.to_plain_string());
-            h.push(chart.high_price.to_plain_string());
-            l.push(chart.low_price.to_plain_string());
-            v.push(chart.volume.to_plain_string());
+            c.push(chart.close_price.normalized().to_plain_string());
+            o.push(chart.open_price.normalized().to_plain_string());
+            h.push(chart.high_price.normalized().to_plain_string());
+            l.push(chart.low_price.normalized().to_plain_string());
+            v.push(chart.volume.normalized().to_plain_string());
         }
 
         Ok(BarResponse {

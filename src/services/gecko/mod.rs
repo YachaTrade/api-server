@@ -84,8 +84,8 @@ impl GeckoService {
             name: asset_row.name,
             symbol: asset_row.symbol,
             decimals: 18,
-            total_supply: Some(total_supply.to_plain_string()),
-            circulating_supply: Some(circulating_supply.to_plain_string()),
+            total_supply: Some(total_supply.normalized().to_plain_string()),
+            circulating_supply: Some(circulating_supply.normalized().to_plain_string()),
             coin_gecko_id: Some("monad".to_string()),
         };
 
@@ -185,31 +185,31 @@ impl GeckoService {
                     match (is_native_token0, row.is_buy) {
                         // token0 = WMON (native), token1 = token, Buy: native in, token out
                         (true, true) => (
-                            Some(native_amount_decimalized.to_plain_string()),
+                            Some(native_amount_decimalized.normalized().to_plain_string()),
                             None,
                             None,
-                            Some(token_amount_decimalized.to_plain_string()),
+                            Some(token_amount_decimalized.normalized().to_plain_string()),
                         ),
                         // token0 = WMON (native), token1 = token, Sell: token in, native out
                         (true, false) => (
                             None,
-                            Some(token_amount_decimalized.to_plain_string()),
-                            Some(native_amount_decimalized.to_plain_string()),
+                            Some(token_amount_decimalized.normalized().to_plain_string()),
+                            Some(native_amount_decimalized.normalized().to_plain_string()),
                             None,
                         ),
                         // token0 = token, token1 = WMON (native), Buy: native in, token out
                         (false, true) => (
                             None,
-                            Some(native_amount_decimalized.to_plain_string()),
-                            Some(token_amount_decimalized.to_plain_string()),
+                            Some(native_amount_decimalized.normalized().to_plain_string()),
+                            Some(token_amount_decimalized.normalized().to_plain_string()),
                             None,
                         ),
                         // token0 = token, token1 = WMON (native), Sell: token in, native out
                         (false, false) => (
-                            Some(token_amount_decimalized.to_plain_string()),
+                            Some(token_amount_decimalized.normalized().to_plain_string()),
                             None,
                             None,
-                            Some(native_amount_decimalized.to_plain_string()),
+                            Some(native_amount_decimalized.normalized().to_plain_string()),
                         ),
                     };
 
@@ -217,13 +217,13 @@ impl GeckoService {
                 let (reserve_asset0, reserve_asset1) = match is_native_token0 {
                     // token0 = native, token1 = token
                     true => (
-                        reserve_native_decimalized.to_plain_string(),
-                        reserve_token_decimalized.to_plain_string(),
+                        reserve_native_decimalized.normalized().to_plain_string(),
+                        reserve_token_decimalized.normalized().to_plain_string(),
                     ),
                     // token0 = token, token1 = native
                     false => (
-                        reserve_token_decimalized.to_plain_string(),
-                        reserve_native_decimalized.to_plain_string(),
+                        reserve_token_decimalized.normalized().to_plain_string(),
+                        reserve_native_decimalized.normalized().to_plain_string(),
                     ),
                 };
 
@@ -234,11 +234,11 @@ impl GeckoService {
                         // token0 = native, token1 = token
                         // priceNative = amount(asset1) / amount(asset0) = token_amount / native_amount
                         true => (&token_amount_decimalized / &native_amount_decimalized)
-                            .to_plain_string(),
+                            .normalized().to_plain_string(),
                         // token0 = token, token1 = native
                         // priceNative = amount(asset1) / amount(asset0) = native_amount / token_amount
                         false => (&native_amount_decimalized / &token_amount_decimalized)
-                            .to_plain_string(),
+                            .normalized().to_plain_string(),
                     };
 
                 Event::Swap {

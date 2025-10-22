@@ -212,9 +212,9 @@ impl SwapController {
                     } else {
                         SwapType::Sell
                     },
-                    native_amount: row.native_amount.to_plain_string(),
-                    token_amount: row.token_amount.to_plain_string(),
-                    native_price: row.native_price.to_plain_string(),
+                    native_amount: row.native_amount.normalized().to_plain_string(),
+                    token_amount: row.token_amount.normalized().to_plain_string(),
+                    native_price: row.native_price.normalized().to_plain_string(),
                     transaction_hash: row.transaction_hash,
                     created_at: row.created_at,
                 },
@@ -348,9 +348,9 @@ impl SwapController {
                     } else {
                         SwapType::Sell
                     },
-                    native_amount: row.native_amount.to_plain_string(),
-                    token_amount: row.token_amount.to_plain_string(),
-                    native_price: row.native_price.to_plain_string(),
+                    native_amount: row.native_amount.normalized().to_plain_string(),
+                    token_amount: row.token_amount.normalized().to_plain_string(),
+                    native_price: row.native_price.normalized().to_plain_string(),
                     transaction_hash: row.transaction_hash,
                     created_at: row.created_at,
                 },

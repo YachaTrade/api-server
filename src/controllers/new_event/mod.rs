@@ -164,7 +164,7 @@ impl NewEventController {
 
         Ok(row_opt.map(|row| NewEvent {
             event_type: EventType::Buy,
-            amount: row.native_amount.to_plain_string(),
+            amount: row.native_amount.normalized().to_plain_string(),
             token_info: TokenInfo {
                 token_id: row.token_id.clone(),
                 name: row.name,
@@ -249,7 +249,7 @@ impl NewEventController {
 
         Ok(row_opt.map(|row| NewEvent {
             event_type: EventType::Sell,
-            amount: row.native_amount.to_plain_string(),
+            amount: row.native_amount.normalized().to_plain_string(),
             token_info: TokenInfo {
                 token_id: row.token_id.clone(),
                 name: row.name,
