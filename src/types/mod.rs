@@ -6,6 +6,7 @@ pub mod bot;
 
 pub mod new_event;
 
+pub mod gecko;
 pub mod hype;
 pub mod metadata;
 pub mod profile;
