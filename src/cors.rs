@@ -26,13 +26,6 @@ pub fn get_cors() -> CorsLayer {
             if let Ok(dev_client) = format!("https://*.cloudfront.net").parse() {
                 origins.push(dev_client);
             }
-            if let Ok(test_client) = env::var("CORS_ALLOWED_ORIGINS")
-                .expect("CORS_ALLOWED_ORIGINS must be set")
-                .parse()
-            {
-                info!("CORS_ALLOWED_ORIGINS: {:?}", test_client);
-                origins.push(test_client);
-            }
         }
     }
 
