@@ -22,8 +22,8 @@ use crate::{
     path = MetadataPath::UploadImage.docs_str(),
     request_body(
         content = Vec<u8>,
-        description = "Raw image binary data (JPEG, PNG, WebP, or SVG)",
-        content_type = "application/octet-stream"
+        description = "Raw image binary data (supported formats: image/jpeg, image/png, image/webp, image/svg+xml)",
+        content_type = "image/png"
     ),
     responses(
         (status = 200, description = "Image uploaded successfully", body = UploadImageResponse),
