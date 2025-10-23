@@ -21,7 +21,6 @@ use crate::{
 
 // 허용된 이미지 타입 상수 정의
 const ALLOWED_IMAGE_TYPES: [&str; 4] = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
-const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 pub struct MetadataService {
     postgres: Arc<PostgresDatabase>,
@@ -44,15 +43,6 @@ impl MetadataService {
 
     /// Validate image with both MIME type and actual format
     fn validate_image(&self, data: &[u8], content_type: &Option<String>) -> Result<String, AppError> {
-        // Check size limit
-        if data.len() > MAX_IMAGE_SIZE {
-            return Err(AppError::BadRequest(format!(
-                "Image too large: {} bytes. Maximum allowed size is {} bytes (5MB)",
-                data.len(),
-                MAX_IMAGE_SIZE
-            )));
-        }
-
         // First check if declared content type is allowed
         if let Some(ct) = content_type {
             if !ALLOWED_IMAGE_TYPES.contains(&ct.as_str()) {
