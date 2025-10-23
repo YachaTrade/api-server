@@ -32,6 +32,18 @@ impl TimeFrame {
         }
     }
 
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            TimeFrame::OneMinute => "1",
+            TimeFrame::FiveMinutes => "5",
+            TimeFrame::FifteenMinutes => "15",
+            TimeFrame::ThirtyMinutes => "30",
+            TimeFrame::OneHour => "60",
+            TimeFrame::FourHours => "4H",
+            TimeFrame::OneDay => "D",
+        }
+    }
+
     pub fn to_display_string(&self) -> &'static str {
         match self {
             TimeFrame::OneMinute => "1m",
