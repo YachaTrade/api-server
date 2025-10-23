@@ -21,12 +21,14 @@ use crate::{
     post,
     path = MetadataPath::UploadImage.docs_str(),
     request_body(
-        content = crate::types::metadata::UploadImageMultipart,
-        content_type = "multipart/form-data"
+        content = Vec<u8>,
+        description = "Raw image binary data (JPEG, PNG, WebP, or SVG)",
+        content_type = "application/octet-stream"
     ),
     responses(
         (status = 200, description = "Image uploaded successfully", body = UploadImageResponse),
         (status = 400, description = "Bad request - Invalid image format or missing image"),
+        (status = 413, description = "Payload too large - Image exceeds 5MB limit"),
         (status = 500, description = "Internal server error - NSFW check failed or upload failed")
     ),
     tag = "Metadata"
