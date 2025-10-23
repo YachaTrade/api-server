@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, bot, follow, hype, metadata, metrics, new_event, order, profile,
+        self, account, auth, bot, follow, gecko, hype, metadata, metrics, new_event, order, profile,
         search, token, trade,
     },
     state::AppState,
@@ -106,6 +106,13 @@ use utoipa_swagger_ui::SwaggerUi;
         router::metadata::handler::upload_image,
         router::metadata::handler::upload_metadata,
 
+        // ----------------Gecko----------------
+        router::gecko::handler::get_latest_block,
+        router::gecko::handler::get_asset,
+        router::gecko::handler::get_pair,
+        router::gecko::handler::get_events,
+        router::gecko::handler::get_gecko_metadata,
+
     ),
     components(
         schemas(
@@ -152,6 +159,21 @@ use utoipa_swagger_ui::SwaggerUi;
             types::metadata::UploadMetadataRequest,
             types::metadata::UploadMetadataResponse,
             types::metadata::TokenMetadata,
+            types::metadata::GeckoMetadataResponse,
+
+            // Gecko
+            types::gecko::Block,
+            types::gecko::LatestBlockResponse,
+            types::gecko::Asset,
+            types::gecko::AssetResponse,
+            types::gecko::AssetQuery,
+            types::gecko::Pair,
+            types::gecko::PairResponse,
+            types::gecko::PairQuery,
+            types::gecko::Reserves,
+            types::gecko::Event,
+            types::gecko::EventsResponse,
+            types::gecko::EventsQuery,
 
             //Hype
             types::hype::HypeToken,
@@ -223,6 +245,8 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Order",description="Order endpoints"),
         (name="Hype",description="Hype Token endpoints"),
         (name="New Event",description="New Event endpoints"),
+        (name="Metadata",description="Metadata upload endpoints"),
+        (name="Gecko",description="Gecko Terminal API endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -281,6 +305,7 @@ async fn main() -> Result<()> {
         .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
+        .merge(gecko::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())

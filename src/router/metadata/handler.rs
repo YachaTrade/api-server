@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::State,
     http::HeaderMap,
     response::Json,
 };
@@ -13,7 +13,7 @@ use crate::{
     router::metadata::MetadataPath,
     services::metadata::MetadataService,
     state::AppState,
-    types::metadata::{GeckoMetadataResponse, UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
+    types::metadata::{UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
 };
 
 /// Upload image with NSFW validation
@@ -95,39 +95,6 @@ pub async fn upload_metadata(
         "🎉 Metadata upload completed - Total time: {:?}, Metadata URI: {}",
         total_duration, response.metadata_uri
     );
-
-    Ok(Json(response))
-}
-
-/// Get gecko metadata for token
-#[utoipa::path(
-    get,
-    path = MetadataPath::GetGeckoMetadata.docs_str(),
-    params(
-        ("token_address" = String, Path, description = "Token contract address")
-    ),
-    responses(
-        (status = 200, description = "Gecko metadata retrieved successfully", body = GeckoMetadataResponse),
-        (status = 404, description = "Token not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Metadata"
-)]
-pub async fn get_gecko_metadata(
-    State(state): State<AppState>,
-    Path(token_address): Path<String>,
-) -> AppJsonResult<GeckoMetadataResponse> {
-    info!("🔍 Getting gecko metadata for token: {}", token_address);
-
-    let service = MetadataService::new(
-        state.postgres.clone(),
-        state.redis.clone(),
-        state.r2.clone(),
-    );
-
-    let response = service.get_gecko_metadata(&token_address).await?;
-
-    info!("✅ Gecko metadata retrieved for token: {}", token_address);
 
     Ok(Json(response))
 }
