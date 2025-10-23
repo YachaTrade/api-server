@@ -139,7 +139,7 @@ pub async fn get_market(
     path = TradePath::GetChart.docs_str(),
     params(
         ("token_id" = String, Path, description = "Token ID"),
-        ("resolution" = String, Query, description = "Chart resolution (1, 5, 15, 30, 60/1H, 4H, D, W, M)"),
+        ("resolution" = String, Query, description = "Chart resolution - Minutes: 1, 5, 15, 30 | Hours (in minutes): 60, 240 | Days: 1D"),
         ("from" = i64, Query, description = "Start timestamp (seconds)"),
         ("to" = i64, Query, description = "End timestamp (seconds)"),
         ("countback" = Option<i32>, Query, description = "Maximum number of candles to return (default: 500)"),
@@ -172,8 +172,8 @@ pub async fn get_prices(
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct MetricsBatchQuery {
-    /// Comma-separated timeframes string (e.g., "D,1H,5" or "D,W,M")
-    /// Available values: 1, 5, 15, 30, 60, 4H, D, W, M
+    /// Comma-separated timeframes string (e.g., "1D,240,60")
+    /// Minutes: 1, 5, 15, 30 | Hours (in minutes): 60, 240 | Days: 1D
     #[serde(deserialize_with = "deserialize_comma_separated_timeframes")]
     pub timeframes: Vec<TimeFrame>,
 }
@@ -199,10 +199,9 @@ where
                 "15" => timeframes.push(TimeFrame::FifteenMinutes),
                 "30" => timeframes.push(TimeFrame::ThirtyMinutes),
                 "60" => timeframes.push(TimeFrame::OneHour),
-                "1H" => timeframes.push(TimeFrame::OneHour),
-                "4H" => timeframes.push(TimeFrame::FourHours),
-                "D" => timeframes.push(TimeFrame::OneDay),
-                _ => return Err(D::Error::custom(format!("Invalid timeframe: {}", trimmed))),
+                "240" => timeframes.push(TimeFrame::FourHours),
+                "1D" => timeframes.push(TimeFrame::OneDay),
+                _ => return Err(D::Error::custom(format!("Invalid timeframe: {}. Valid values: 1, 5, 15, 30, 60, 240, 1D", trimmed))),
             }
         }
     }
@@ -220,7 +219,7 @@ where
     path = TradePath::GetMetricsBatch.docs_str(),
     params(
         ("token_id" = String, Path, description = "Token ID"),
-        ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., 'D,4H,1H'). Available values: 1, 5, 15, 30, 60, 4H, D", example = "D,4H,60")
+        ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., '1,5,15,30,60,240,1D'). Minutes: 1, 5, 15, 30 | Hours (in minutes): 60, 240 | Days: 1D", example = "1,5,15,30,60,240,1D")
     ),
     responses(
         (status = 200, description = "Trading metrics retrieved successfully for multiple timeframes", body = MetricsBatchResponse),
