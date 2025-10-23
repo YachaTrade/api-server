@@ -88,7 +88,9 @@ impl MetricsController {
         let (start_price, current_price) = price_result?;
 
         let percent = match (start_price, current_price) {
-            (Some(start), Some(current)) => calculate_price_change_percent(&start, &current).unwrap_or(0.0),
+            (Some(start), Some(current)) => {
+                calculate_price_change_percent(&start, &current).unwrap_or(0.0)
+            }
             _ => 0.0,
         };
 

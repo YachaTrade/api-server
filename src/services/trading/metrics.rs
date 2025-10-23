@@ -16,7 +16,7 @@ impl MetricsService {
         Self { postgres }
     }
 
-    pub async fn get_metrics_batch(
+    pub async fn get_metrics(
         &self,
         token_id: &str,
         timeframes: Vec<TimeFrame>,

@@ -81,7 +81,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::trade::handler::get_market,
         router::trade::handler::get_prices,
         router::trade::handler::get_holder,
-        router::trade::handler::get_metrics_batch,
+        router::trade::handler::get_metrics,
 
         // ----------------Search----------------
         router::search::handler::search,

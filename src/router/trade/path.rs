@@ -4,7 +4,7 @@ pub enum TradePath {
     GetMarket,
     GetChart,
     GetManagementHistory,
-    GetMetricsBatch,
+    GetMetrics,
 }
 
 impl TradePath {
@@ -15,7 +15,7 @@ impl TradePath {
             TradePath::GetMarket => "/trade/market/:token_id",
             TradePath::GetChart => "/trade/chart/:token_id",
             TradePath::GetManagementHistory => "/trade/management-history/:token_id",
-            TradePath::GetMetricsBatch => "/trade/metrics-batch/:token_id",
+            TradePath::GetMetrics => "/trade/metrics/:token_id",
         }
     }
     pub fn docs_str(&self) -> &'static str {
@@ -25,7 +25,7 @@ impl TradePath {
             TradePath::GetMarket => "/trade/market/{token_id}",
             TradePath::GetChart => "/trade/chart/{token_id}",
             TradePath::GetManagementHistory => "/trade/management-history/{token_id}",
-            TradePath::GetMetricsBatch => "/trade/metrics-batch/{token_id}",
+            TradePath::GetMetrics => "/trade/metrics/{token_id}",
         }
     }
 }
