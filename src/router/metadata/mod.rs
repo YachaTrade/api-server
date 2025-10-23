@@ -1,7 +1,7 @@
 pub mod handler;
 pub mod path;
 
-use axum::{Router, extract::DefaultBodyLimit, routing::{get, post}};
+use axum::{Router, extract::DefaultBodyLimit, routing::post};
 pub use path::MetadataPath;
 
 use crate::state::AppState;
@@ -15,9 +15,5 @@ pub fn router() -> Router<AppState> {
         .route(
             MetadataPath::UploadMetadata.as_str(),
             post(handler::upload_metadata),
-        )
-        .route(
-            MetadataPath::GetGeckoMetadata.as_str(),
-            get(handler::get_gecko_metadata),
         )
 }
