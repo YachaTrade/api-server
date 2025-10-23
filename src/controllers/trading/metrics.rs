@@ -101,7 +101,7 @@ impl MetricsController {
         let sell_makers = row.sell_makers.unwrap_or(0);
 
         Ok(MetricItem {
-            timeframe: timeframe.to_display_string().to_string(),
+            timeframe: timeframe.to_string().to_string(),
             percent,
             transactions: TransactionCount {
                 buy: buy_count,
