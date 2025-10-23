@@ -13,9 +13,9 @@ pub enum TimeFrame {
     ThirtyMinutes,
     #[serde(rename = "60")]
     OneHour,
-    #[serde(rename = "4H")]
+    #[serde(rename = "240")]
     FourHours,
-    #[serde(rename = "D")]
+    #[serde(rename = "1D")]
     OneDay,
 }
 
@@ -39,8 +39,8 @@ impl TimeFrame {
             TimeFrame::FifteenMinutes => "15",
             TimeFrame::ThirtyMinutes => "30",
             TimeFrame::OneHour => "60",
-            TimeFrame::FourHours => "4H",
-            TimeFrame::OneDay => "D",
+            TimeFrame::FourHours => "240",
+            TimeFrame::OneDay => "1D",
         }
     }
 
@@ -50,8 +50,8 @@ impl TimeFrame {
             TimeFrame::FiveMinutes => "5m",
             TimeFrame::FifteenMinutes => "15m",
             TimeFrame::ThirtyMinutes => "30m",
-            TimeFrame::OneHour => "1h",
-            TimeFrame::FourHours => "4h",
+            TimeFrame::OneHour => "60m",
+            TimeFrame::FourHours => "240m",
             TimeFrame::OneDay => "1d",
         }
     }
@@ -62,9 +62,9 @@ impl TimeFrame {
             TimeFrame::FiveMinutes => "5",
             TimeFrame::FifteenMinutes => "15",
             TimeFrame::ThirtyMinutes => "30",
-            TimeFrame::OneHour => "1H",
-            TimeFrame::FourHours => "4H",
-            TimeFrame::OneDay => "1H",  // Use 1H interval for 24h metrics
+            TimeFrame::OneHour => "60",
+            TimeFrame::FourHours => "240",
+            TimeFrame::OneDay => "60",  // Use 60min interval for 24h metrics
         }
     }
 }
