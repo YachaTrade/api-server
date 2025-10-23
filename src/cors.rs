@@ -4,7 +4,6 @@ use axum::http::{
 };
 use std::{env, time::Duration};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::info;
 
 pub fn get_cors() -> CorsLayer {
     // Allow CORS
