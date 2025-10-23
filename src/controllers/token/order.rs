@@ -454,14 +454,6 @@ impl From<OrderTokenRow> for OrderToken {
         };
 
         OrderToken {
-            account_info: AccountInfo {
-                account_id: row.creator.clone(),
-                nickname: row.creator_nickname.clone(),
-                bio: row.creator_bio.clone(),
-                image_uri: row.creator_image_uri.clone(),
-                follower_count: row.creator_follower_count,
-                following_count: row.creator_following_count,
-            },
             token_info: TokenInfo {
                 token_id: row.token_id.clone(),
                 name: row.name,
