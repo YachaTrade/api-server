@@ -171,7 +171,7 @@ pub async fn get_prices(
 
 
 #[derive(Debug, Deserialize, IntoParams)]
-pub struct MetricsBatchQuery {
+pub struct MetricsQuery {
     /// Comma-separated timeframes string (e.g., "1D,240,60")
     /// Minutes: 1, 5, 15, 30 | Hours (in minutes): 60, 240 | Days: 1D
     #[serde(deserialize_with = "deserialize_comma_separated_timeframes")]
@@ -216,7 +216,7 @@ where
 /// Get trading metrics for multiple timeframes for a token
 #[utoipa::path(
     get,
-    path = TradePath::GetMetricsBatch.docs_str(),
+    path = TradePath::GetMetrics.docs_str(),
     params(
         ("token_id" = String, Path, description = "Token ID"),
         ("timeframes" = String, Query, description = "Comma-separated timeframes (e.g., '1,5,15,30,60,240,1D'). Minutes: 1, 5, 15, 30 | Hours (in minutes): 60, 240 | Days: 1D", example = "1,5,15,30,60,240,1D")
@@ -228,14 +228,14 @@ where
     ),
     tag = "Trade"
 )]
-pub async fn get_metrics_batch(
+pub async fn get_metrics(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
-    Query(params): Query<MetricsBatchQuery>,
+    Query(params): Query<MetricsQuery>,
 ) -> AppJsonResult<MetricsBatchResponse> {
     let start_time = Instant::now();
     info!(
-        "🚀 Getting batch trading metrics for token: {}, timeframes: {:?}",
+        "🚀 Getting trading metrics for token: {}, timeframes: {:?}",
         token_id,
         params
             .timeframes
@@ -257,21 +257,21 @@ pub async fn get_metrics_batch(
 
     let metrics_service = MetricsService::new(state.postgres.clone());
 
-    let metrics_batch = metrics_service
-        .get_metrics_batch(&token_id, params.timeframes)
+    let metrics = metrics_service
+        .get_metrics(&token_id, params.timeframes)
         .await
         .map_err(|err| {
-            error!("Failed to get batch trading metrics: {:?}", err);
+            error!("Failed to get trading metrics: {:?}", err);
             err
         })?;
 
     let elapsed = start_time.elapsed();
     info!(
-        "🎉 Batch trading metrics retrieved successfully in {:?} - Token: {}, Count: {}",
+        "🎉 Trading metrics retrieved successfully in {:?} - Token: {}, Count: {}",
         elapsed,
         token_id,
-        metrics_batch.metrics.len()
+        metrics.metrics.len()
     );
 
-    Ok(Json(metrics_batch))
+    Ok(Json(metrics))
 }
