@@ -308,7 +308,7 @@ async fn main() -> Result<()> {
         .merge(metrics::router())
         .merge(gecko::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .layer(DefaultBodyLimit::max(5 * 1024 * 1024)) // 5MB global limit
+        .layer(DefaultBodyLimit::max(5_000_000)) // 5MB (decimal) global limit
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
