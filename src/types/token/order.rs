@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::common::info::{AccountInfo, MarketInfo, TokenInfo};
+use crate::types::common::info::{MarketInfo, TokenInfo};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -25,7 +25,6 @@ impl TokenOrderType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderToken {
-    pub account_info: AccountInfo,
     pub token_info: TokenInfo,
     pub market_info: MarketInfo,
     pub percent: f64,
