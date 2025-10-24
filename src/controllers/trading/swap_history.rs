@@ -409,16 +409,14 @@ impl SwapController {
         query_params: &SwapQuery,
     ) -> Result<i64> {
         // Check if we can use cached count (no filters applied)
-        if query_params.min_volume.is_none()
-            && query_params.volume_ranges.is_none()
+        if query_params.volume_ranges.is_none()
             && query_params.account_id.is_none()
             && query_params.trade_type == "ALL"
         {
             return self.get_cached_count(token_id, "count").await;
         }
 
-        if query_params.min_volume.is_none()
-            && query_params.volume_ranges.is_none()
+        if query_params.volume_ranges.is_none()
             && query_params.account_id.is_none() {
             let column = match query_params.trade_type.as_str() {
                 "BUY" => "buy_count",
