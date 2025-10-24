@@ -201,6 +201,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::trading::position::TokenHolderResponse,
             types::trading::swap_history::TokenSwap,
             types::trading::swap_history::TokenSwapResponse,
+            types::trading::swap_history::VolumeRange,
             types::trading::market::MarketResponse,
             types::trading::chart::BarResponse,
             types::trading::chart::GetBarsRequest,

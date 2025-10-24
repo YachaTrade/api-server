@@ -5,6 +5,38 @@ use crate::{
 use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
 
+/// Volume range filter for swap history
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VolumeRange {
+    /// $1 ~ $1000
+    Small,
+    /// $1000 ~ $10000
+    Medium,
+    /// $10000+
+    Large,
+}
+
+impl VolumeRange {
+    /// Get the minimum value for this range
+    pub fn min_value(&self) -> &str {
+        match self {
+            VolumeRange::Small => "1",
+            VolumeRange::Medium => "1000",
+            VolumeRange::Large => "10000",
+        }
+    }
+
+    /// Get the maximum value for this range (None means no upper limit)
+    pub fn max_value(&self) -> Option<&str> {
+        match self {
+            VolumeRange::Small => Some("1000"),
+            VolumeRange::Medium => Some("10000"),
+            VolumeRange::Large => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PositionSwap {
     pub token: TokenInfo,
@@ -43,9 +75,10 @@ pub struct SwapQuery {
     pub limit: i64,
     #[serde(default = "default_direction", deserialize_with = "validate_direction")]
     pub direction: String,
-    /// Minimum volume filter (native amount)
+
+    /// Volume range filters - can select multiple ranges (e.g., ?volume_ranges=small&volume_ranges=large)
     #[serde(default)]
-    pub min_volume: Option<String>,
+    pub volume_ranges: Option<Vec<VolumeRange>>,
 
     /// Account ID for own trades filter
     #[serde(default)]
@@ -59,13 +92,6 @@ pub struct SwapQuery {
 impl SwapQuery {
     /// Validate the query parameters
     pub fn validate(&self) -> Result<(), String> {
-        // Validate min_volume if provided
-        if let Some(min_vol) = &self.min_volume {
-            if min_vol.parse::<f64>().is_err() {
-                return Err("Invalid min_volume: must be a valid number".to_string());
-            }
-        }
-
         if self.account_id.is_some() {
             if !valid_evm_address(self.account_id.as_ref().unwrap()) {
                 return Err("Invalid account ID format".to_string());

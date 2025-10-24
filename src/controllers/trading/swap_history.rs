@@ -298,8 +298,28 @@ impl SwapController {
             _ => {}
         }
 
-        if query.min_volume.is_some() {
-            query_sql.push_str(&format!(" AND s.native_amount >= ${}", next_param));
+        // Handle volume_ranges (multi-range filter using value field)
+        if let Some(ranges) = &query.volume_ranges {
+            if !ranges.is_empty() {
+                query_sql.push_str(" AND (");
+                for (i, range) in ranges.iter().enumerate() {
+                    if i > 0 {
+                        query_sql.push_str(" OR ");
+                    }
+                    if range.max_value().is_some() {
+                        // Range with upper limit: min <= value < max
+                        query_sql.push_str(&format!("(s.value >= ${}", next_param));
+                        next_param += 1;
+                        query_sql.push_str(&format!(" AND s.value < ${})", next_param));
+                        next_param += 1;
+                    } else {
+                        // Range without upper limit (Large): value >= min
+                        query_sql.push_str(&format!("s.value >= ${}", next_param));
+                        next_param += 1;
+                    }
+                }
+                query_sql.push_str(")");
+            }
         }
 
         query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
@@ -312,9 +332,18 @@ impl SwapController {
             query_builder = query_builder.bind(account_id);
         }
 
-        if let Some(min_vol) = &query.min_volume {
-            let min_vol_decimal = BigDecimal::from_str(min_vol)?;
-            query_builder = query_builder.bind(min_vol_decimal);
+        // Bind volume_ranges parameters
+        if let Some(ranges) = &query.volume_ranges {
+            for range in ranges {
+                let min_val = BigDecimal::from_str(range.min_value())?;
+                query_builder = query_builder.bind(min_val);
+
+                if let Some(max_val_str) = range.max_value() {
+                    let max_val = BigDecimal::from_str(max_val_str)?;
+                    query_builder = query_builder.bind(max_val);
+                }
+                // No max binding needed for Large range
+            }
         }
 
         let rows = measure_postgres!(
@@ -372,14 +401,18 @@ impl SwapController {
         token_id: &str,
         query_params: &SwapQuery,
     ) -> Result<i64> {
+        // Check if we can use cached count (no filters applied)
         if query_params.min_volume.is_none()
+            && query_params.volume_ranges.is_none()
             && query_params.account_id.is_none()
             && query_params.trade_type == "ALL"
         {
             return self.get_cached_count(token_id, "count").await;
         }
 
-        if query_params.min_volume.is_none() && query_params.account_id.is_none() {
+        if query_params.min_volume.is_none()
+            && query_params.volume_ranges.is_none()
+            && query_params.account_id.is_none() {
             let column = match query_params.trade_type.as_str() {
                 "BUY" => "buy_count",
                 "SELL" => "sell_count",
@@ -401,8 +434,28 @@ impl SwapController {
             next_param += 1;
         }
 
-        if query_params.min_volume.is_some() {
-            query.push_str(&format!(" AND s.native_amount >= ${}", next_param));
+        // Handle volume_ranges (multi-range filter using value field)
+        if let Some(ranges) = &query_params.volume_ranges {
+            if !ranges.is_empty() {
+                query.push_str(" AND (");
+                for (i, range) in ranges.iter().enumerate() {
+                    if i > 0 {
+                        query.push_str(" OR ");
+                    }
+                    if range.max_value().is_some() {
+                        // Range with upper limit: min <= value < max
+                        query.push_str(&format!("(s.value >= ${}", next_param));
+                        next_param += 1;
+                        query.push_str(&format!(" AND s.value < ${})", next_param));
+                        next_param += 1;
+                    } else {
+                        // Range without upper limit (Large): value >= min
+                        query.push_str(&format!("s.value >= ${}", next_param));
+                        next_param += 1;
+                    }
+                }
+                query.push_str(")");
+            }
         }
 
         match query_params.trade_type.as_str() {
@@ -418,9 +471,18 @@ impl SwapController {
             query_builder = query_builder.bind(account_id);
         }
 
-        if let Some(min_vol) = &query_params.min_volume {
-            let min_vol_decimal = BigDecimal::from_str(min_vol)?;
-            query_builder = query_builder.bind(min_vol_decimal);
+        // Bind volume_ranges parameters
+        if let Some(ranges) = &query_params.volume_ranges {
+            for range in ranges {
+                let min_val = BigDecimal::from_str(range.min_value())?;
+                query_builder = query_builder.bind(min_val);
+
+                if let Some(max_val_str) = range.max_value() {
+                    let max_val = BigDecimal::from_str(max_val_str)?;
+                    query_builder = query_builder.bind(max_val);
+                }
+                // No max binding needed for Large range
+            }
         }
 
         let row = measure_postgres!(
