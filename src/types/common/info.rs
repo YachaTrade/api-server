@@ -104,6 +104,8 @@ pub struct SwapInfo {
     pub native_amount: String,
     pub token_amount: String,
     pub native_price: String,
+    /// USD value at execution time
+    pub value: String,
     pub transaction_hash: String,
     pub created_at: i64,
 }
