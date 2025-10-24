@@ -107,6 +107,7 @@ impl SwapController {
             native_amount: BigDecimal,
             token_amount: BigDecimal,
             native_price: BigDecimal,
+            value: BigDecimal,
             created_at: i64,
             transaction_hash: String,
         }
@@ -127,6 +128,7 @@ impl SwapController {
                         s.is_buy,
                         s.native_amount,
                         s.token_amount,
+                        s.value,
                         s.created_at,
                         s.transaction_hash
                     FROM swap s
@@ -158,6 +160,7 @@ impl SwapController {
                     rs.is_buy,
                     rs.native_amount,
                     rs.token_amount,
+                    rs.value,
                     COALESCE(lp.price, 0) as native_price,
                     rs.created_at,
                     rs.transaction_hash
@@ -215,6 +218,7 @@ impl SwapController {
                     native_amount: row.native_amount.normalized().to_plain_string(),
                     token_amount: row.token_amount.normalized().to_plain_string(),
                     native_price: row.native_price.normalized().to_plain_string(),
+                    value: row.value.normalized().to_plain_string(),
                     transaction_hash: row.transaction_hash,
                     created_at: row.created_at,
                 },
@@ -243,6 +247,7 @@ impl SwapController {
             native_amount: BigDecimal,
             token_amount: BigDecimal,
             native_price: BigDecimal,
+            value: BigDecimal,
             created_at: i64,
             transaction_hash: String,
             x_handle: Option<String>,
@@ -267,6 +272,7 @@ impl SwapController {
             s.is_buy,
             s.native_amount,
             s.token_amount,
+            s.value,
             s.created_at,
             s.transaction_hash,
             ax.x_handle,
@@ -380,6 +386,7 @@ impl SwapController {
                     native_amount: row.native_amount.normalized().to_plain_string(),
                     token_amount: row.token_amount.normalized().to_plain_string(),
                     native_price: row.native_price.normalized().to_plain_string(),
+                    value: row.value.normalized().to_plain_string(),
                     transaction_hash: row.transaction_hash,
                     created_at: row.created_at,
                 },
