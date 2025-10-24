@@ -43,7 +43,7 @@ use crate::{
         ("page" = i64, Query, description = "Page number"),
         ("limit" = i64, Query, description = "Number of items per page"),
         ("direction" = Option<String>, Query, description = "Sort direction (ASC or DESC) Default DESC"),
-        ("volume_ranges" = Option<Vec<String>>, Query, description = "Volume range filters based on USD value at execution time: 'small' ($1-$1000), 'medium' ($1000-$10000), 'large' ($10000+). Can select multiple (e.g., ?volume_ranges=small&volume_ranges=large)"),
+        ("volume_ranges" = Option<String>, Query, description = "Volume range filters based on USD value at execution time: 'small' ($1-$1000), 'medium' ($1000-$10000), 'large' ($10000+). Single value (?volume_ranges=small) or comma-separated (?volume_ranges=small,large,medium)"),
         ("account_id" = Option<String>, Query, description = "Account ID for own trades filter"),
         ("trade_type" = Option<String>, Query, description = "Trade type filter: (BUY, SELL) Default ALL")
     ),

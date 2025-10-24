@@ -77,7 +77,7 @@ pub struct SwapQuery {
     pub direction: String,
 
     /// Volume range filters - can select multiple ranges (e.g., ?volume_ranges=small&volume_ranges=large)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_volume_ranges")]
     pub volume_ranges: Option<Vec<VolumeRange>>,
 
     /// Account ID for own trades filter
@@ -148,4 +148,37 @@ where
         ));
     }
     Ok(direction_upper)
+}
+
+fn deserialize_volume_ranges<'de, D>(deserializer: D) -> Result<Option<Vec<VolumeRange>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    let opt = Option::<String>::deserialize(deserializer)?;
+    match opt {
+        None => Ok(None),
+        Some(s) => {
+            let mut ranges = Vec::new();
+            for part in s.split(',') {
+                let trimmed = part.trim();
+                if !trimmed.is_empty() {
+                    let range = match trimmed.to_lowercase().as_str() {
+                        "small" => VolumeRange::Small,
+                        "medium" => VolumeRange::Medium,
+                        "large" => VolumeRange::Large,
+                        _ => {
+                            return Err(Error::custom(format!(
+                                "Invalid volume range: '{}'. Valid values: small, medium, large",
+                                trimmed
+                            )))
+                        }
+                    };
+                    ranges.push(range);
+                }
+            }
+            Ok(if ranges.is_empty() { None } else { Some(ranges) })
+        }
+    }
 }
