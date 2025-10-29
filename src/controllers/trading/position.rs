@@ -5,11 +5,12 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::common::{
         CountRow,
-        info::{AccountInfo, BalanceInfo, TokenInfo, TokenWithBalanceInfo},
+        info::{AccountInfo, BalanceInfo, MarketInfo, MarketType, TokenInfo, TokenWithBalanceInfo},
         pagination::PaginationParams,
     },
     types::{
@@ -214,6 +215,13 @@ impl PositionController {
             balance_created_at: i64,
             token_price: BigDecimal,
             native_price: BigDecimal,
+            market_type: String,
+            market_id: String,
+            price: BigDecimal,
+            total_supply: BigDecimal,
+            liquidity: BigDecimal,
+            volume: BigDecimal,
+            holder_count: i64,
         }
 
         let records = measure_postgres!(
@@ -249,7 +257,14 @@ impl PositionController {
                     b.balance,
                     b.created_at as balance_created_at,
                     (m.price * COALESCE(lp.price, 0)) as token_price,
-                    COALESCE(lp.price, 0) as native_price
+                    COALESCE(lp.price, 0) as native_price,
+                    m.market_type,
+                    COALESCE(m.pool_id, '') as market_id,
+                    m.price,
+                    t.total_supply,
+                    COALESCE(m.reserve_native, 0) as liquidity,
+                    m.volume,
+                    t.token_holder_count as holder_count
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
                 JOIN market m ON t.token_id = m.token_id
@@ -277,33 +292,56 @@ impl PositionController {
 
         let tokens = records
             .into_iter()
-            .map(|row| TokenWithBalanceInfo {
-                token_info: TokenInfo {
-                    token_id: row.token_id,
-                    name: row.name,
-                    symbol: row.symbol,
-                    image_uri: row.image_uri,
-                    description: row.description,
-                    is_listing: row.is_listing,
-                    twitter: row.twitter,
-                    telegram: row.telegram,
-                    website: row.website,
-                    created_at: row.created_at,
-                    creator: AccountInfo {
-                        account_id: row.creator,
-                        nickname: row.creator_nickname,
-                        bio: row.creator_bio,
-                        image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
+            .map(|row| {
+                let mut market_id = row.market_id.clone();
+                if row.market_type == "CURVE" && market_id.is_empty() {
+                    market_id = BONDING_CURVE.clone();
+                }
+
+                TokenWithBalanceInfo {
+                    token_info: TokenInfo {
+                        token_id: row.token_id.clone(),
+                        name: row.name,
+                        symbol: row.symbol,
+                        image_uri: row.image_uri,
+                        description: row.description,
+                        is_listing: row.is_listing,
+                        twitter: row.twitter,
+                        telegram: row.telegram,
+                        website: row.website,
+                        created_at: row.created_at,
+                        creator: AccountInfo {
+                            account_id: row.creator,
+                            nickname: row.creator_nickname,
+                            bio: row.creator_bio,
+                            image_uri: row.creator_image_uri,
+                            follower_count: row.creator_follower_count,
+                            following_count: row.creator_following_count,
+                        },
                     },
-                },
-                balance_info: BalanceInfo {
-                    balance: row.balance.normalized().to_plain_string(),
-                    token_price: row.token_price.normalized().to_plain_string(),
-                    native_price: row.native_price.normalized().to_plain_string(),
-                    created_at: row.balance_created_at,
-                },
+                    balance_info: BalanceInfo {
+                        balance: row.balance.normalized().to_plain_string(),
+                        token_price: row.token_price.normalized().to_plain_string(),
+                        native_price: row.native_price.normalized().to_plain_string(),
+                        created_at: row.balance_created_at,
+                    },
+                    market_info: MarketInfo {
+                        market_type: match row.market_type.as_str() {
+                            "CURVE" => MarketType::Curve,
+                            "DEX" => MarketType::Dex,
+                            _ => MarketType::Curve,
+                        },
+                        token_id: row.token_id,
+                        market_id,
+                        token_price: row.token_price.normalized().to_plain_string(),
+                        native_price: row.native_price.normalized().to_plain_string(),
+                        price: row.price.normalized().to_plain_string(),
+                        total_supply: row.total_supply.normalized().to_plain_string(),
+                        liquidity: row.liquidity.normalized().to_plain_string(),
+                        volume: row.volume.normalized().to_plain_string(),
+                        holder_count: row.holder_count,
+                    },
+                }
             })
             .collect();
 

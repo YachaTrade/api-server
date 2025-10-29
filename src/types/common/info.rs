@@ -128,6 +128,7 @@ pub struct BalanceInfo {
 pub struct TokenWithBalanceInfo {
     pub token_info: TokenInfo,
     pub balance_info: BalanceInfo,
+    pub market_info: MarketInfo,
 }
 
 /// Token with swap information
