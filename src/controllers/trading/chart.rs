@@ -35,7 +35,6 @@ impl ChartController {
             "chart",
             token_id,
             &request.resolution,
-            request.from,
             request.to,
             request.countback,
             chart_type_str
@@ -77,10 +76,9 @@ impl ChartController {
                 FROM chart
                 WHERE token_id = $1
                 AND interval_type = $2
-                AND time_stamp >= $3
-                AND time_stamp <= $4
+                AND time_stamp < $3
                 ORDER BY time_stamp DESC
-                LIMIT $5
+                LIMIT $4
                 "#
             }
             ChartType::PriceUsd => {
@@ -97,10 +95,9 @@ impl ChartController {
                 FROM chart
                 WHERE token_id = $1
                 AND interval_type = $2
-                AND time_stamp >= $3
-                AND time_stamp <= $4
+                AND time_stamp < $3
                 ORDER BY time_stamp DESC
-                LIMIT $5
+                LIMIT $4
                 "#
             }
             ChartType::MarketCap => {
@@ -117,10 +114,9 @@ impl ChartController {
                 FROM chart
                 WHERE token_id = $1
                 AND interval_type = $2
-                AND time_stamp >= $3
-                AND time_stamp <= $4
+                AND time_stamp < $3
                 ORDER BY time_stamp DESC
-                LIMIT $5
+                LIMIT $4
                 "#
             }
             ChartType::MarketCapUsd => {
@@ -137,10 +133,9 @@ impl ChartController {
                 FROM chart
                 WHERE token_id = $1
                 AND interval_type = $2
-                AND time_stamp >= $3
-                AND time_stamp <= $4
+                AND time_stamp < $3
                 ORDER BY time_stamp DESC
-                LIMIT $5
+                LIMIT $4
                 "#
             }
         };
@@ -150,7 +145,6 @@ impl ChartController {
             sqlx::query_as::<_, Chart>(&query)
                 .bind(token_id)
                 .bind(interval_type)
-                .bind(request.from)
                 .bind(request.to)
                 .bind(limit as i32)
                 .fetch_all(self.db.get_read_pool())
