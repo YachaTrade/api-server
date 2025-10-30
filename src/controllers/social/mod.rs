@@ -106,24 +106,22 @@ impl FollowController {
                         follower_count = follower_count + CASE WHEN account_id = $2 THEN 1 ELSE 0 END
                     WHERE (account_id = $1 OR account_id = $2)
                     AND EXISTS (SELECT 1 FROM follow_insert)
-                    RETURNING account_id
+                    RETURNING account_id, nickname, image_uri, bio, follower_count, following_count
                 )
                 SELECT
-                    a.account_id,
+                    au.account_id,
                     COALESCE(
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
+                        au.nickname
                     ) as nickname,
-                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                    a.bio,
-                    a.follower_count,
-                    a.following_count
-                FROM account a
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    COALESCE(ax.x_image_uri, au.image_uri) as image_uri,
+                    au.bio,
+                    au.follower_count,
+                    au.following_count
+                FROM account_update au
+                LEFT JOIN account_x ax ON au.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                WHERE a.account_id IN ($1, $2)
-                AND EXISTS (SELECT 1 FROM account_update)
-                ORDER BY CASE WHEN a.account_id = $1 THEN 0 ELSE 1 END
+                ORDER BY CASE WHEN au.account_id = $1 THEN 0 ELSE 1 END
                 "#,
             )
             .bind(&follower)
@@ -159,24 +157,22 @@ impl FollowController {
                         follower_count = GREATEST(follower_count - CASE WHEN account_id = $2 THEN 1 ELSE 0 END, 0)
                     WHERE (account_id = $1 OR account_id = $2)
                     AND EXISTS (SELECT 1 FROM follow_delete)
-                    RETURNING account_id
+                    RETURNING account_id, nickname, image_uri, bio, follower_count, following_count
                 )
                 SELECT
-                    a.account_id,
+                    au.account_id,
                     COALESCE(
                         CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
+                        au.nickname
                     ) as nickname,
-                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                    a.bio,
-                    a.follower_count,
-                    a.following_count
-                FROM account a
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    COALESCE(ax.x_image_uri, au.image_uri) as image_uri,
+                    au.bio,
+                    au.follower_count,
+                    au.following_count
+                FROM account_update au
+                LEFT JOIN account_x ax ON au.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
-                WHERE a.account_id IN ($1, $2)
-                AND EXISTS (SELECT 1 FROM account_update)
-                ORDER BY CASE WHEN a.account_id = $1 THEN 0 ELSE 1 END
+                ORDER BY CASE WHEN au.account_id = $1 THEN 0 ELSE 1 END
                 "#,
             )
             .bind(&follower)
