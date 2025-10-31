@@ -12,3 +12,5 @@ migrations.*
 
 tests/
 deploy/
+
+stress-test/
