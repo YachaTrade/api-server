@@ -85,6 +85,8 @@ pub struct MarketInfo {
     pub volume: String,
     /// Holder count (used for tokne total holder count)
     pub holder_count: i64,
+    // Ath price
+    pub ath_price: String,
 }
 
 /// Swap event type enum

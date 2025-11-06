@@ -49,6 +49,7 @@ struct OrderTokenRow {
     total_supply: BigDecimal,
     liquidity: BigDecimal,
     volume: BigDecimal,
+    ath_price: BigDecimal,
     price_24h_ago: Option<BigDecimal>,
 }
 
@@ -133,6 +134,7 @@ impl OrderController {
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
                         m.volume,
+                        m.ath_price,
                         (
                             SELECT ph.price
                             FROM price_history ph
@@ -207,6 +209,7 @@ impl OrderController {
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
                         m.volume,
+                        m.ath_price,
                         (
                             SELECT ph.price
                             FROM price_history ph
@@ -281,6 +284,7 @@ impl OrderController {
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
                         m.volume,
+                        m.ath_price,
                         (
                             SELECT ph.price
                             FROM price_history ph
@@ -372,6 +376,7 @@ impl OrderController {
                         t.total_supply,
                         COALESCE(tvm.reserve_native, 0) as liquidity,
                         tvm.volume,
+                        tvm.ath_price,
                         (
                             SELECT ph.price
                             FROM price_history ph
@@ -488,6 +493,7 @@ impl From<OrderTokenRow> for OrderToken {
                 total_supply: row.total_supply.normalized().to_plain_string(),
                 liquidity: row.liquidity.normalized().to_plain_string(),
                 volume: row.volume.normalized().to_plain_string(),
+                ath_price: row.ath_price.normalized().to_plain_string(),
                 holder_count: row.holder_count,
             },
             percent,
