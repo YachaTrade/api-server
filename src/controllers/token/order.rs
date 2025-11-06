@@ -293,7 +293,7 @@ impl OrderController {
                             LIMIT 1
                         ) as price_24h_ago
                     FROM (
-                        SELECT token_id, price, market_type, pool_id, reserve_native, volume
+                        SELECT token_id, price, market_type, pool_id, reserve_native, volume, ath_price
                         FROM market
                         ORDER BY price {}
                         LIMIT $1 OFFSET $2
@@ -339,7 +339,7 @@ impl OrderController {
                         JOIN account a ON ax.account_id = a.account_id
                     ),
                     top_verified_markets AS MATERIALIZED (
-                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.volume
+                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.volume, m.ath_price
                         FROM market m
                         JOIN token t ON m.token_id = t.token_id
                         WHERE t.creator IN (SELECT account_id FROM verified_creators)

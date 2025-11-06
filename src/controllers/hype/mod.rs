@@ -773,6 +773,8 @@ impl HypeController {
                         t.symbol,
                         t.image_uri,
                         t.created_at as token_created_at,
+                        t.is_graduated,
+                        t.is_nsfw,
                         r.epoch,
                         r.vote_amount,
                         r.amount,

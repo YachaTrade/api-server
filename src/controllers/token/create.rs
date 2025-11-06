@@ -211,7 +211,8 @@ impl TokenCreatedController {
                     volume,
                     ath_price,
                     balance,
-                    balance_created_at
+                    balance_created_at,
+                    current_value
                 FROM created_tokens
                 ORDER BY current_value DESC
                 LIMIT $2
