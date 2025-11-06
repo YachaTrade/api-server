@@ -194,6 +194,7 @@ impl TokenCreatedController {
                     token_telegram,
                     token_website,
                     is_graduated,
+                    is_nsfw,
                     token_created_at,
                     creator,
                     holder_count,

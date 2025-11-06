@@ -40,6 +40,7 @@ struct HypeTokenRow {
     telegram: Option<String>,
     website: Option<String>,
     is_nsfw: bool,
+    total_supply: BigDecimal,
     created_at: i64,
     creator: String,
     creator_nickname: String,
@@ -274,7 +275,6 @@ impl HypeController {
                         END as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                
                         t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
@@ -518,7 +518,7 @@ impl HypeController {
                     a.nickname
                 ) as creator_nickname,
                 a.bio as creator_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri
             FROM vote_history vh
             JOIN token t ON vh.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
@@ -754,9 +754,12 @@ impl HypeController {
             vote_amount: BigDecimal,
             created_at: i64,
             creator: String,
+            holder_count: i64,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
+            creator_follower_count: i32,
+            creator_following_count: i32,
         }
 
         let rows_future = async {
@@ -1095,11 +1098,10 @@ impl HypeController {
             transaction_hash: String,
             created_at: i64,
             creator: String,
+            holder_count: i64,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
-            creator_follower_count: i32,
-            creator_following_count: i32,
         }
 
         let rows_future = async {
@@ -1127,8 +1129,7 @@ impl HypeController {
                             a.nickname
                         ) as creator_nickname,
                         a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                       
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri
                     FROM reward_add_history rah
                     JOIN token t ON rah.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id

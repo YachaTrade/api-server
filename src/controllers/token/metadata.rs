@@ -100,7 +100,6 @@ impl TokenMetadataController {
                     ) as creator_nickname,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                     a.bio as creator_bio,
-                 
                     m.market_type,
                     COALESCE(m.pool_id, '') as market_id,
                     (m.price * COALESCE(lp.price, 0)) as token_price,

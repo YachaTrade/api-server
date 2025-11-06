@@ -46,7 +46,7 @@ impl AccountController {
                     a.nickname
                 ) as nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                a.bio,
+                a.bio
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
@@ -146,7 +146,7 @@ impl AccountController {
                     a.nickname
                 ) as nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                a.bio,
+                a.bio
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
