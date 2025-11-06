@@ -198,7 +198,6 @@ impl OrderController {
                         ) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                       
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
                         (m.price * COALESCE(lp.price, 0)) as token_price,

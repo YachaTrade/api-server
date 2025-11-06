@@ -280,7 +280,8 @@ impl SearchController {
                             m.price,
                             t.total_supply,
                             COALESCE(m.reserve_native, 0) as liquidity,
-                            m.volume
+                            m.volume,
+                            m.ath_price
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -288,7 +289,7 @@ impl SearchController {
                         JOIN market m ON t.token_id = m.token_id
                         CROSS JOIN latest_price lp
                         WHERE t.symbol ILIKE '%' || $1 || '%'
-                        ORDER BY (m.price * COALESCE(lp.price, 0)) DESC, t.symbol DESC
+                        ORDER BY (m.price * t.total_supply * COALESCE(lp.price, 0)) DESC, t.symbol DESC
                         LIMIT 25
                         "#,
                     )
@@ -329,7 +330,8 @@ impl SearchController {
                             m.price,
                             t.total_supply,
                             COALESCE(m.reserve_native, 0) as liquidity,
-                            m.volume
+                            m.volume,
+                            m.ath_price
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -337,7 +339,7 @@ impl SearchController {
                         JOIN market m ON t.token_id = m.token_id
                         CROSS JOIN latest_price lp
                         WHERE t.name ILIKE '%' || $1 || '%'
-                        ORDER BY (m.price * COALESCE(lp.price, 0)) DESC, t.name DESC
+                        ORDER BY (m.price * t.total_supply * COALESCE(lp.price, 0)) DESC, t.name DESC
                         LIMIT 25
                         "#,
                     )

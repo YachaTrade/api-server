@@ -113,7 +113,7 @@ impl PositionController {
                         a.nickname
                     ) as nickname,
                     a.bio,
-                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri
                 FROM balance b
                 JOIN account a ON b.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id

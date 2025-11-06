@@ -32,7 +32,7 @@ pub struct MineSaltResponse {
     pub salt: String,
 
     /// The resulting token address (ending with the desired suffix)
-    #[schema(example = "0x742d35Cc6634C0532925a3b844Bc9e7595f0143")]
+    #[schema(example = "0x742d35Cc6634C0532925a3b844Bc9e7595f7777")]
     pub address: String,
 }
 
