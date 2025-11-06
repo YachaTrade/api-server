@@ -11,7 +11,7 @@ pub struct TokenCreatedResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreated {
     pub token: TokenInfo,
-    pub is_listing: bool,
+    pub is_graduated: bool,
     pub created_at: i64,
     pub market_cap: String,     //market cap -> price * total_supply
     pub total_supply: String,   // token table total_supply

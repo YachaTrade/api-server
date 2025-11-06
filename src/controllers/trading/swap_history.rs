@@ -95,14 +95,13 @@ impl SwapController {
             token_twitter: Option<String>,
             token_telegram: Option<String>,
             token_website: Option<String>,
-            is_listing: bool,
+            is_graduated: bool,
+            is_nsfw: bool,
             token_created_at: i64,
             creator: String,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
-            creator_follower_count: i32,
-            creator_following_count: i32,
             is_buy: bool,
             native_amount: BigDecimal,
             token_amount: BigDecimal,
@@ -146,7 +145,8 @@ impl SwapController {
                     t.twitter as token_twitter,
                     t.telegram as token_telegram,
                     t.website as token_website,
-                    t.is_listing,
+                    t.is_graduated,
+                    t.is_nsfw,
                     t.created_at as token_created_at,
                     t.creator,
                     COALESCE(
@@ -155,8 +155,6 @@ impl SwapController {
                     ) as creator_nickname,
                     a.bio as creator_bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                    a.follower_count as creator_follower_count,
-                    a.following_count as creator_following_count,
                     rs.is_buy,
                     rs.native_amount,
                     rs.token_amount,
@@ -195,7 +193,8 @@ impl SwapController {
                     symbol: row.token_symbol,
                     image_uri: row.token_image_uri,
                     description: row.token_description,
-                    is_listing: row.is_listing,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
                     twitter: row.token_twitter,
                     telegram: row.token_telegram,
                     website: row.token_website,
@@ -205,8 +204,6 @@ impl SwapController {
                         nickname: row.creator_nickname,
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
                     },
                 },
                 swap_info: SwapInfo {
@@ -241,8 +238,6 @@ impl SwapController {
             account_nickname: String,
             bio: String,
             account_image: String,
-            follower_count: i32,
-            following_count: i32,
             is_buy: bool,
             native_amount: BigDecimal,
             token_amount: BigDecimal,
@@ -267,8 +262,6 @@ impl SwapController {
             a.nickname as account_nickname,
             a.bio,
             a.image_uri as account_image,
-            a.follower_count,
-            a.following_count,
             s.is_buy,
             s.native_amount,
             s.token_amount,
@@ -374,8 +367,6 @@ impl SwapController {
                         .clone()
                         .filter(|img| !img.is_empty())
                         .unwrap_or(row.account_image),
-                    follower_count: row.follower_count,
-                    following_count: row.following_count,
                 },
                 swap_info: SwapInfo {
                     event_type: if row.is_buy {
@@ -416,8 +407,7 @@ impl SwapController {
             return self.get_cached_count(token_id, "count").await;
         }
 
-        if query_params.volume_ranges.is_none()
-            && query_params.account_id.is_none() {
+        if query_params.volume_ranges.is_none() && query_params.account_id.is_none() {
             let column = match query_params.trade_type.as_str() {
                 "BUY" => "buy_count",
                 "SELL" => "sell_count",

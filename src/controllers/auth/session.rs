@@ -26,8 +26,8 @@ impl SessionController {
             sqlx::query_as::<_, AccountInfo>(
                 r#"
                 WITH account_upsert AS (
-                    INSERT INTO account (account_id, nickname, image_uri, bio, follower_count, following_count)
-                    VALUES ($2, $3, $4, $5, $6, $7)
+                    INSERT INTO account (account_id, nickname, image_uri, bio)
+                    VALUES ($2, $3, $4, $5)
                     ON CONFLICT (account_id) DO UPDATE
                     SET account_id = EXCLUDED.account_id
                     RETURNING *
@@ -47,8 +47,6 @@ impl SessionController {
                     ) as nickname,
                     COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                     a.bio,
-                    a.follower_count,
-                    a.following_count
                 FROM account a
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
@@ -61,8 +59,7 @@ impl SessionController {
             .bind(&account.nickname)
             .bind(&account.image_uri)
             .bind(&account.bio)
-            .bind(account.follower_count)
-            .bind(account.following_count)
+       
             .fetch_one(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to set session: {}", err))?;

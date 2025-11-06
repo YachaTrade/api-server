@@ -90,8 +90,6 @@ impl PositionController {
             nickname: String,
             bio: String,
             image_uri: String,
-            follower_count: i32,
-            following_count: i32,
         }
 
         let records = measure_postgres!(
@@ -116,8 +114,6 @@ impl PositionController {
                     ) as nickname,
                     a.bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                    a.follower_count,
-                    a.following_count
                 FROM balance b
                 JOIN account a ON b.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -150,8 +146,6 @@ impl PositionController {
                     nickname: row.nickname,
                     bio: row.bio,
                     image_uri: row.image_uri,
-                    follower_count: row.follower_count,
-                    following_count: row.following_count,
                 },
                 balance_info: BalanceInfo {
                     balance: row.balance.normalized().to_plain_string(),
@@ -203,14 +197,13 @@ impl PositionController {
             twitter: Option<String>,
             telegram: Option<String>,
             website: Option<String>,
-            is_listing: bool,
+            is_graduated: bool,
+            is_nsfw: bool,
             created_at: i64,
             creator: String,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
-            creator_follower_count: i32,
-            creator_following_count: i32,
             balance: BigDecimal,
             balance_created_at: i64,
             token_price: BigDecimal,
@@ -244,7 +237,8 @@ impl PositionController {
                     t.twitter,
                     t.telegram,
                     t.website,
-                    t.is_listing,
+                    t.is_graduated,
+                    t.is_nsfw,
                     t.created_at,
                     t.creator,
                     COALESCE(
@@ -253,8 +247,6 @@ impl PositionController {
                     ) as creator_nickname,
                     a.bio as creator_bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                    a.follower_count as creator_follower_count,
-                    a.following_count as creator_following_count,
                     b.balance,
                     b.created_at as balance_created_at,
                     (m.price * COALESCE(lp.price, 0)) as token_price,
@@ -307,7 +299,8 @@ impl PositionController {
                         symbol: row.symbol,
                         image_uri: row.image_uri,
                         description: row.description,
-                        is_listing: row.is_listing,
+                        is_graduated: row.is_graduated,
+                        is_nsfw: row.is_nsfw,
                         twitter: row.twitter,
                         telegram: row.telegram,
                         website: row.website,
@@ -317,8 +310,6 @@ impl PositionController {
                             nickname: row.creator_nickname,
                             bio: row.creator_bio,
                             image_uri: row.creator_image_uri,
-                            follower_count: row.creator_follower_count,
-                            following_count: row.creator_following_count,
                         },
                     },
                     balance_info: BalanceInfo {

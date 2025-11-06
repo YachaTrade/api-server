@@ -33,8 +33,8 @@ impl AccountController {
         let query = sqlx::query_as::<_, AccountInfo>(
             r#"
             WITH upsert AS (
-                INSERT INTO account (account_id, image_uri, nickname, bio, follower_count, following_count)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO account (account_id, image_uri, nickname, bio)
+                VALUES ($1, $2, $3, $4)
                 ON CONFLICT (account_id)
                 DO NOTHING
                 RETURNING account_id
@@ -47,8 +47,6 @@ impl AccountController {
                 ) as nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                 a.bio,
-                a.follower_count,
-                a.following_count
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
@@ -59,8 +57,6 @@ impl AccountController {
         .bind(&account.image_uri)
         .bind(&account.nickname)
         .bind(&account.bio)
-        .bind(account.follower_count)
-        .bind(account.following_count)
         .fetch_one(self.db.get_write_pool());
 
         let account = measure_postgres!("account.upsert_account", query)
@@ -116,7 +112,7 @@ impl AccountController {
         query_builder
             .push(" WHERE account_id = ")
             .push_bind(address)
-            .push(" RETURNING account_id) SELECT a.account_id, COALESCE(CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END, a.nickname) as nickname, COALESCE(ax.x_image_uri, a.image_uri) as image_uri, a.bio, a.follower_count, a.following_count FROM account a LEFT JOIN account_x ax ON a.account_id = ax.account_id LEFT JOIN account_verified av ON ax.x_handle = av.x_handle WHERE a.account_id = ")
+            .push(" RETURNING account_id) SELECT a.account_id, COALESCE(CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END, a.nickname) as nickname, COALESCE(ax.x_image_uri, a.image_uri) as image_uri, a.bio FROM account a LEFT JOIN account_x ax ON a.account_id = ax.account_id LEFT JOIN account_verified av ON ax.x_handle = av.x_handle WHERE a.account_id = ")
             .push_bind(address);
 
         let query = query_builder
@@ -151,8 +147,6 @@ impl AccountController {
                 ) as nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                 a.bio,
-                a.follower_count,
-                a.following_count
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
