@@ -29,7 +29,7 @@ impl FollowController {
             "follow.get_follows_count",
             sqlx::query_as::<_, CountRow>(
                 r#"
-                SELECT COUNT(*) as total_count
+                SELECT COUNT(*) as count
                 FROM follow f
                 WHERE CASE
                     WHEN $2 = true THEN f.follower_id = $1
@@ -55,9 +55,7 @@ impl FollowController {
                         a.nickname
                     ) as nickname,
                     COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                    a.bio,
-                    a.follower_count,
-                    a.following_count
+                    a.bio
                 FROM follow f
                 JOIN account a ON CASE
                     WHEN $2 = true THEN a.account_id = f.following_id
@@ -115,9 +113,7 @@ impl FollowController {
                         au.nickname
                     ) as nickname,
                     COALESCE(ax.x_image_uri, au.image_uri) as image_uri,
-                    au.bio,
-                    au.follower_count,
-                    au.following_count
+                    au.bio
                 FROM account_update au
                 LEFT JOIN account_x ax ON au.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
@@ -166,9 +162,7 @@ impl FollowController {
                         au.nickname
                     ) as nickname,
                     COALESCE(ax.x_image_uri, au.image_uri) as image_uri,
-                    au.bio,
-                    au.follower_count,
-                    au.following_count
+                    au.bio
                 FROM account_update au
                 LEFT JOIN account_x ax ON au.account_id = ax.account_id
                 LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
