@@ -27,14 +27,13 @@ struct TokenRow {
     telegram: Option<String>,
     website: Option<String>,
     image_uri: String,
-    is_listing: bool,
+    is_graduated: bool,
+    is_nsfw: bool,
     created_at: i64,
     creator: String,
     creator_nickname: String,
     creator_image_uri: String,
     creator_bio: String,
-    creator_follower_count: i32,
-    creator_following_count: i32,
 }
 
 pub struct TokenController {
@@ -71,7 +70,8 @@ impl TokenController {
                     t.telegram,
                     t.website,
                     t.image_uri,
-                    t.is_listing,
+                    t.is_graduated,
+                    t.is_nsfw,
                     t.created_at,
                     t.creator,
                     COALESCE(
@@ -100,7 +100,8 @@ impl TokenController {
             symbol: row.symbol,
             image_uri: row.image_uri,
             description: row.description,
-            is_listing: row.is_listing,
+            is_graduated: row.is_graduated,
+            is_nsfw: row.is_nsfw,
             twitter: row.twitter,
             telegram: row.telegram,
             website: row.website,
@@ -110,8 +111,6 @@ impl TokenController {
                 nickname: row.creator_nickname,
                 bio: row.creator_bio,
                 image_uri: row.creator_image_uri,
-                follower_count: row.creator_follower_count,
-                following_count: row.creator_following_count,
             },
         };
 

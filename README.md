@@ -85,12 +85,14 @@ pub struct AppState {
 #### 데이터베이스 아키텍처
 
 **PostgreSQL 설정**:
+
 - **읽기/쓰기 분리**: 프라이머리와 레플리카용 별도 연결 풀
 - **연결 풀링**: 쓰기 풀 (최대 50), 읽기 풀 (최대 1000)
 - **최적화**: 트랜잭션 풀링 모드를 위한 PgBouncer
 - **쿼리 안전성**: 컴파일 타임 쿼리 검증을 위한 SQLx
 
 **Redis 아키텍처**:
+
 - **이중 Redis 설계**:
   - **세션 Redis**: 인증 및 세션 데이터 (24시간 TTL)
   - **거래 Redis**: 시장 데이터 및 거래 캐시 (밀리초 단위 TTL)
@@ -113,6 +115,7 @@ pub struct AppState {
 ### 핵심 도메인 모델
 
 #### 계정 모델
+
 ```rust
 pub struct Account {
     pub account_id: String,      // 이더리움 주소
@@ -126,6 +129,7 @@ pub struct Account {
 ```
 
 #### 토큰 모델
+
 ```rust
 pub struct TokenWithAccountInfo {
     pub token_id: String,
@@ -136,7 +140,7 @@ pub struct TokenWithAccountInfo {
     pub twitter: Option<String>,
     pub telegram: Option<String>,
     pub website: Option<String>,
-    pub is_listing: bool,
+    pub is_graduated: bool,
     pub created_at: i64,
     pub transaction_hash: String,
     pub account_info: AccountInfo,
@@ -149,6 +153,7 @@ pub struct TokenWithAccountInfo {
 ```
 
 #### 시장 모델
+
 ```rust
 pub struct Market {
     pub market_type: String,     // "CURVE" 또는 "DEX"
@@ -163,7 +168,9 @@ pub struct Market {
 ### 공통 패턴
 
 #### 식별자 패턴 (`common/identifier.rs`)
+
 이더리움 주소와 닉네임을 자동으로 감지하는 스마트 열거형:
+
 ```rust
 pub enum Identifier {
     Nickname(String),
@@ -172,7 +179,9 @@ pub enum Identifier {
 ```
 
 #### 페이지네이션 패턴 (`common/pagination.rs`)
+
 검증이 포함된 표준화된 페이지네이션:
+
 ```rust
 pub struct PaginationParams {
     pub page: i64,        // 역순을 위한 음수 지원
@@ -213,102 +222,108 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 
 ### 인증 모듈 (`/auth/*`)
 
-| 메서드 | 경로 | 설명 | 인증 필요 |
-|--------|------|-------------|---------------|
-| POST | `/auth/nonce` | 인증 논스 생성 | ❌ |
-| POST | `/auth/session` | 인증 세션 생성 | ❌ |
-| DELETE | `/auth/delete_session` | 인증 세션 삭제 | ✅ |
+| 메서드 | 경로                   | 설명           | 인증 필요 |
+| ------ | ---------------------- | -------------- | --------- |
+| POST   | `/auth/nonce`          | 인증 논스 생성 | ❌        |
+| POST   | `/auth/session`        | 인증 세션 생성 | ❌        |
+| DELETE | `/auth/delete_session` | 인증 세션 삭제 | ✅        |
 
 ### 계정 모듈 (`/account/*`)
+
 모든 엔드포인트는 인증이 필요합니다.
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| PATCH | `/account/update` | 계정 프로필 업데이트 |
-| GET | `/account/get_account` | 현재 계정 정보 가져오기 |
-| PUT | `/account/connect_x` | X (트위터) 계정 연결 |
-| DELETE | `/account/disconnect_x` | X 계정 연결 해제 |
-| GET | `/account/x` | 연결된 X 핸들 가져오기 |
-| PATCH | `/account/register_wallet` | 지갑 등록 |
-| GET | `/account/wallet` | 등록된 지갑 가져오기 |
+| 메서드 | 경로                       | 설명                    |
+| ------ | -------------------------- | ----------------------- |
+| PATCH  | `/account/update`          | 계정 프로필 업데이트    |
+| GET    | `/account/get_account`     | 현재 계정 정보 가져오기 |
+| PUT    | `/account/connect_x`       | X (트위터) 계정 연결    |
+| DELETE | `/account/disconnect_x`    | X 계정 연결 해제        |
+| GET    | `/account/x`               | 연결된 X 핸들 가져오기  |
+| PATCH  | `/account/register_wallet` | 지갑 등록               |
+| GET    | `/account/wallet`          | 등록된 지갑 가져오기    |
 
 ### 프로필 모듈 (`/profile/*`)
+
 인증이 필요하지 않습니다.
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/profile/:account_id` | 사용자 프로필 가져오기 |
-| GET | `/profile/hold-token/:account_id` | 계정이 보유한 토큰 가져오기 |
-| GET | `/profile/tokens/created/:account_id` | 계정이 생성한 토큰 가져오기 |
-| GET | `/profile/swap-history/:account_id` | 계정의 스왑 기록 가져오기 |
+| 메서드 | 경로                                  | 설명                        |
+| ------ | ------------------------------------- | --------------------------- |
+| GET    | `/profile/:account_id`                | 사용자 프로필 가져오기      |
+| GET    | `/profile/hold-token/:account_id`     | 계정이 보유한 토큰 가져오기 |
+| GET    | `/profile/tokens/created/:account_id` | 계정이 생성한 토큰 가져오기 |
+| GET    | `/profile/swap-history/:account_id`   | 계정의 스왑 기록 가져오기   |
 
 ### 토큰 모듈 (`/token/*`)
+
 인증이 필요하지 않습니다.
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/token/:token` | 토큰 정보 가져오기 |
-| GET | `/token/metadata/:token` | 토큰 메타데이터 가져오기 |
+| 메서드 | 경로                     | 설명                     |
+| ------ | ------------------------ | ------------------------ |
+| GET    | `/token/:token`          | 토큰 정보 가져오기       |
+| GET    | `/token/metadata/:token` | 토큰 메타데이터 가져오기 |
 
 ### 거래 모듈 (`/trade/*`)
+
 인증이 필요하지 않습니다.
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/trade/swap-history/:token_id` | 토큰의 스왑 기록 가져오기 |
-| GET | `/trade/holder/:token_id` | 토큰 보유자 가져오기 |
-| GET | `/trade/market/:token_id` | 시장 데이터 가져오기 |
-| GET | `/trade/chart/:token_id` | 차트 데이터 가져오기 |
-| GET | `/trade/price/:token_id` | 가격 데이터 가져오기 |
-| GET | `/trade/management-history/:token_id` | 관리 기록 가져오기 |
+| 메서드 | 경로                                  | 설명                      |
+| ------ | ------------------------------------- | ------------------------- |
+| GET    | `/trade/swap-history/:token_id`       | 토큰의 스왑 기록 가져오기 |
+| GET    | `/trade/holder/:token_id`             | 토큰 보유자 가져오기      |
+| GET    | `/trade/market/:token_id`             | 시장 데이터 가져오기      |
+| GET    | `/trade/chart/:token_id`              | 차트 데이터 가져오기      |
+| GET    | `/trade/price/:token_id`              | 가격 데이터 가져오기      |
+| GET    | `/trade/management-history/:token_id` | 관리 기록 가져오기        |
 
 ### 주문 모듈 (`/order/*`)
+
 인증이 필요하지 않습니다.
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/order/creation_time` | 생성 시간순으로 정렬된 토큰 가져오기 |
-| GET | `/order/market_cap` | 시가총액순으로 정렬된 토큰 가져오기 |
-| GET | `/order/latest_trade` | 최신 거래순으로 정렬된 토큰 가져오기 |
+| 메서드 | 경로                   | 설명                                 |
+| ------ | ---------------------- | ------------------------------------ |
+| GET    | `/order/creation_time` | 생성 시간순으로 정렬된 토큰 가져오기 |
+| GET    | `/order/market_cap`    | 시가총액순으로 정렬된 토큰 가져오기  |
+| GET    | `/order/latest_trade`  | 최신 거래순으로 정렬된 토큰 가져오기 |
 
 ### 검색 모듈 (`/search/*`)
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/search/:name` | 토큰/계정 검색 |
+| 메서드 | 경로            | 설명           |
+| ------ | --------------- | -------------- |
+| GET    | `/search/:name` | 토큰/계정 검색 |
 
 ### 팔로우 모듈 (`/follow/*`)
 
-| 메서드 | 경로 | 설명 | 인증 필요 |
-|--------|------|-------------|---------------|
-| PUT | `/follow/add` | 팔로우 추가 | ✅ |
-| DELETE | `/follow/remove` | 팔로우 제거 | ✅ |
-| GET | `/follow/check/:account_id` | 팔로우 여부 확인 | ✅ |
-| GET | `/follow/followers/:account_id` | 팔로워 가져오기 | ❌ |
-| GET | `/follow/followings/:account_id` | 팔로잉 가져오기 | ❌ |
+| 메서드 | 경로                             | 설명             | 인증 필요 |
+| ------ | -------------------------------- | ---------------- | --------- |
+| PUT    | `/follow/add`                    | 팔로우 추가      | ✅        |
+| DELETE | `/follow/remove`                 | 팔로우 제거      | ✅        |
+| GET    | `/follow/check/:account_id`      | 팔로우 여부 확인 | ✅        |
+| GET    | `/follow/followers/:account_id`  | 팔로워 가져오기  | ❌        |
+| GET    | `/follow/followings/:account_id` | 팔로잉 가져오기  | ❌        |
 
 ### 하이프 모듈
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/hype_token` | 하이프 토큰 가져오기 |
-| GET | `/honor_token` | 명예 토큰 가져오기 |
+| 메서드 | 경로           | 설명                 |
+| ------ | -------------- | -------------------- |
+| GET    | `/hype_token`  | 하이프 토큰 가져오기 |
+| GET    | `/honor_token` | 명예 토큰 가져오기   |
 
 ### 봇 모듈 (`/bot/*`)
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| POST | `/bot/metadata` | 봇의 메타데이터 설정 (multipart/form-data) |
+| 메서드 | 경로            | 설명                                       |
+| ------ | --------------- | ------------------------------------------ |
+| POST   | `/bot/metadata` | 봇의 메타데이터 설정 (multipart/form-data) |
 
 ### 관리 모듈 (`/management/*`)
+
 모든 엔드포인트는 인증이 필요합니다.
 
-| 메서드 | 경로 | 설명 |
-|--------|------|-------------|
-| GET | `/management/dev` | 개발자 포지션 가져오기 |
-| GET | `/management/hold_token` | 보유 토큰 관리 가져오기 |
-| GET | `/management/lock` | 계정 잠금 가져오기 |
-| GET | `/management/withdraw` | 출금 가능한 잠금 가져오기 |
+| 메서드 | 경로                     | 설명                      |
+| ------ | ------------------------ | ------------------------- |
+| GET    | `/management/dev`        | 개발자 포지션 가져오기    |
+| GET    | `/management/hold_token` | 보유 토큰 관리 가져오기   |
+| GET    | `/management/lock`       | 계정 잠금 가져오기        |
+| GET    | `/management/withdraw`   | 출금 가능한 잠금 가져오기 |
 
 ### API 기능
 
@@ -325,6 +340,7 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 서버는 EIP-4361 호환 인증을 구현합니다:
 
 1. **논스 생성**:
+
    - 클라이언트가 이더리움 주소로 논스 요청
    - 서버가 UUID 기반 논스 생성
    - EIP-4361 형식의 메시지 반환
@@ -348,27 +364,32 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 ### 보안 기능
 
 #### CORS 설정
+
 - **프로덕션 오리진**: `https://nad.fun`, `https://nadapp.net`
 - **개발 환경**: 환경 변수를 통해 설정 가능
 - **메서드**: GET, PUT, POST, PATCH, DELETE, OPTIONS
 - **자격 증명**: 활성화
 
 #### SQL 인젝션 방지
+
 - 모든 쿼리는 SQLx 매개변수화된 구문 사용
 - 컴파일 타임 SQL 검증
 - 쿼리에 문자열 연결 사용 안 함
 
 #### 입력 검증
+
 - 역직렬화 수준 검증
 - 민감한 필드에 대한 커스텀 검증기
 - Rust 타입 시스템을 사용한 타입 안전 파싱
 
 #### 속도 제한 (설정 가능)
+
 - 초당 100 요청
 - 버스트 크기 10
 - IP 기반 속도 제한
 
 #### 추가 보안
+
 - 요청 타임아웃: 10초
 - 헬스 체크가 포함된 연결 풀링
 - 구조화된 에러 처리
@@ -387,17 +408,20 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 ## 서버 실행
 
 ### 개발 환경
+
 ```bash
 cargo run -- --port 8080
 ```
 
 ### 프로덕션 환경
+
 ```bash
 cargo build --release
 ./target/release/api-server
 ```
 
 ### 환경 변수
+
 - `APP_DOMAIN`: SIWE를 위한 애플리케이션 도메인
 - `CHAIN_ID`: 이더리움 체인 ID
 - `DATABASE_URL`: PostgreSQL 연결 문자열

@@ -382,11 +382,12 @@ CREATE INDEX idx_swap_is_buy_created_at ON swap(is_buy, created_at DESC);
 
 ---
 
-## 7. Search Controller 쿼리 테스트 
+## 7. Search Controller 쿼리 테스트
 
 ### 7-1. 실제 데이터로 Balance가 많은 계정 검색 테스트
 
 #### 7-15-1. 테스트 데이터 환경 (업데이트됨)
+
 - **Balance 데이터:**
   - Token 1: 100만 계정이 다양한 balance 보유
   - Account 1: 10,000개 토큰 보유 (모두 1e18 이상)
@@ -427,7 +428,7 @@ SELECT a.account_id, a.nickname, a.image_uri,
            SELECT SUM(b.balance * m.price)
            FROM balance b
            JOIN market m ON b.token_id = m.token_id
-           WHERE b.account_id = a.account_id 
+           WHERE b.account_id = a.account_id
            AND b.balance >= 1000000000000000000
        ), 0) as total_value
 FROM account a
@@ -438,6 +439,7 @@ LIMIT 5;
 ```
 
 **성능 분석:**
+
 - 실행 시간: **28.498 ms**
 - Buffers: shared hit=50856 read=310
 - Account 1 (user_1)의 경우:
@@ -464,7 +466,7 @@ SELECT a.account_id, a.nickname, a.image_uri,
            SELECT SUM(b.balance * m.price)
            FROM balance b
            JOIN market m ON b.token_id = m.token_id
-           WHERE b.account_id = a.account_id 
+           WHERE b.account_id = a.account_id
            AND b.balance >= 1000000000000000000
        ), 0) as total_value
 FROM account_x ax
@@ -474,6 +476,7 @@ LIMIT 1;
 ```
 
 **성능 분석:**
+
 - 실행 시간: **23.858 ms**
 - Buffers: shared hit=50295 read=3
 - 10,000개 토큰의 balance 계산으로 인한 오버헤드
@@ -481,17 +484,19 @@ LIMIT 1;
 #### 7-15-5. 성능 비교 및 결론
 
 | 계정 유형 | 보유 토큰 수 | 검색 시간 | 일반 대비 |
-|-----------|-------------|----------|----------|
-| 일반 계정 | 1개 | ~5ms | 1x |
-| 중형 홀더 | 100개 | ~8ms | 1.6x |
-| 대형 홀더 | 10,000개 | ~25ms | 5x |
+| --------- | ------------ | --------- | --------- |
+| 일반 계정 | 1개          | ~5ms      | 1x        |
+| 중형 홀더 | 100개        | ~8ms      | 1.6x      |
+| 대형 홀더 | 10,000개     | ~25ms     | 5x        |
 
 **주요 발견사항:**
+
 1. **선형적 성능 저하**: 보유 토큰 수에 비례하여 성능 저하
 2. **Subquery 병목**: 각 토큰의 balance × price 계산이 주요 병목
 3. **인덱스 활용**: idx_balance_account_token 인덱스가 효과적으로 작동
 
 **최적화 권장사항:**
+
 1. **Materialized View**: 계정별 total_value를 미리 계산하여 저장
 2. **캐싱 전략**: 대형 홀더의 total_value는 더 오래 캐싱
 3. **배치 처리**: 백그라운드에서 주기적으로 total_value 업데이트
@@ -504,7 +509,7 @@ LIMIT 1;
 ### 8-1. get_follows - 팔로워 조회 (Account 1의 팔로워들)
 
 ```sql
-SELECT 
+SELECT
     a.account_id,
     a.nickname,
     a.image_uri,
@@ -519,6 +524,7 @@ OFFSET 0;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 26.472 ms
 - 전체 팔로워 수: 9,999명
 - Buffers: shared hit=60,151
@@ -527,7 +533,7 @@ OFFSET 0;
 ### 8-2. get_follows - 팔로잉 조회 (Account 1이 팔로우하는 계정들)
 
 ```sql
-SELECT 
+SELECT
     a.account_id,
     a.nickname,
     a.image_uri,
@@ -542,6 +548,7 @@ OFFSET 0;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 26.207 ms
 - 전체 팔로잉 수: 9,999명
 - Buffers: shared hit=60,150
@@ -550,7 +557,7 @@ OFFSET 0;
 ### 8-3. get_follows - 페이지네이션 (OFFSET 100)
 
 ```sql
-SELECT 
+SELECT
     a.account_id,
     a.nickname,
     a.image_uri,
@@ -565,6 +572,7 @@ OFFSET 100;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 25.560 ms
 - Buffers: shared hit=60,148
 - OFFSET 영향: 미미함 (전체 정렬 후 슬라이싱)
@@ -573,13 +581,14 @@ OFFSET 100;
 
 ```sql
 SELECT EXISTS (
-    SELECT 1 FROM follow 
-    WHERE follower_id = '0xAccount000000000000000000000000000000001' 
+    SELECT 1 FROM follow
+    WHERE follower_id = '0xAccount000000000000000000000000000000001'
     AND following_id = '0xAccount000000000000000000000000000000002'
 ) as exists;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.059 ms
 - Buffers: shared hit=4
 - Index Only Scan 사용 (idx_follow_follower_following)
@@ -589,13 +598,14 @@ SELECT EXISTS (
 
 ```sql
 SELECT EXISTS (
-    SELECT 1 FROM follow 
-    WHERE follower_id = '0xAccount000000000000000000000000000000001' 
+    SELECT 1 FROM follow
+    WHERE follower_id = '0xAccount000000000000000000000000000000001'
     AND following_id = '0xAccount000000000000000000000000099999'
 ) as exists;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.019 ms
 - Buffers: shared hit=3
 - 존재하지 않는 경우가 더 빠름 (Heap Fetch 없음)
@@ -603,12 +613,13 @@ SELECT EXISTS (
 ### 8-6. add_follow - 팔로우 추가 (INSERT)
 
 ```sql
-INSERT INTO follow (follower_id, following_id) 
+INSERT INTO follow (follower_id, following_id)
 VALUES ('0xAccount000000000000000000000000000000100', '0xAccount000000000000000000000000000000200')
 ON CONFLICT (follower_id, following_id) DO NOTHING;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 1.107 ms
 - Buffers: shared hit=28 dirtied=4
 - 트리거 실행 시간:
@@ -618,12 +629,13 @@ ON CONFLICT (follower_id, following_id) DO NOTHING;
 ### 8-7. add_follow - 팔로잉 카운트 업데이트
 
 ```sql
-UPDATE account 
-SET following_count = following_count + 1 
+UPDATE account
+SET following_count = following_count + 1
 WHERE account_id = '0xAccount000000000000000000000000000000100';
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 1.586 ms
 - Buffers: shared hit=101
 - Index Scan 사용 (account_id_index)
@@ -631,12 +643,13 @@ WHERE account_id = '0xAccount000000000000000000000000000000100';
 ### 8-8. add_follow - 팔로워 카운트 업데이트
 
 ```sql
-UPDATE account 
-SET follower_count = follower_count + 1 
+UPDATE account
+SET follower_count = follower_count + 1
 WHERE account_id = '0xAccount000000000000000000000000000000200';
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.098 ms
 - Buffers: shared hit=40
 - 두 번째 UPDATE가 더 빠름 (캐시 효과)
@@ -644,12 +657,13 @@ WHERE account_id = '0xAccount000000000000000000000000000000200';
 ### 8-9. remove_follow - 팔로우 관계 삭제
 
 ```sql
-DELETE FROM follow 
-WHERE follower_id = '0xAccount000000000000000000000000000000001' 
+DELETE FROM follow
+WHERE follower_id = '0xAccount000000000000000000000000000000001'
 AND following_id = '0xAccount000000000000000000000000009999';
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.006 ms
 - Buffers: shared hit=3
 - Index Scan 사용으로 매우 빠름
@@ -657,15 +671,18 @@ AND following_id = '0xAccount000000000000000000000000009999';
 ### 8-10. 성능 분석 및 최적화 제안
 
 **주요 발견사항:**
+
 1. **팔로우 목록 조회**: 26ms 소요 (9,999개 계정 JOIN)
 2. **관계 확인**: 0.019-0.059ms (인덱스 효과적 활용)
 3. **INSERT/UPDATE/DELETE**: 모두 2ms 이하로 빠름
 
 **성능 병목:**
+
 - 대량의 팔로워/팔로잉 조회 시 account 테이블과의 JOIN이 주요 병목
 - 9,999번의 개별 Index Scan 수행
 
 **최적화 제안:**
+
 1. **Materialized View**: 자주 조회되는 팔로워/팔로잉 정보 캐싱
 2. **Batch Fetch**: 여러 계정 정보를 한 번에 가져오는 쿼리 구현
 3. **커서 기반 페이지네이션**: OFFSET 대신 last_seen_id 활용
@@ -684,11 +701,13 @@ WHERE t.creator = '0xAccount000000000000000000000000000000001';
 ```
 
 **인덱스 추가 전 (Parallel Seq Scan):**
+
 - 실행 시간: 300.284 ms
 - Buffers: shared hit=120,771 read=249,600
 - 5개 워커가 병렬로 200만 행씩 스캔
 
 **인덱스 추가 후 (Index Only Scan):**
+
 - 실행 시간: 3.114 ms (96.5배 개선)
 - Buffers: shared hit=371 read=12
 - idx_token_creator 인덱스 사용
@@ -698,7 +717,7 @@ WHERE t.creator = '0xAccount000000000000000000000000000000001';
 
 ```sql
 WITH created_tokens AS (
-    SELECT 
+    SELECT
         t.token_id,
         t.symbol,
         t.image_uri,
@@ -707,7 +726,7 @@ WITH created_tokens AS (
         t.description,
         t.created_at,
         t.creator,
-        t.is_listing,
+        t.is_graduated,
         COALESCE(m.price, 0) as price,
         COALESCE(b.balance, 0) as current_amount,
         COALESCE(m.price * b.balance, 0) as current_value
@@ -716,12 +735,12 @@ WITH created_tokens AS (
     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
     WHERE t.creator = $1
 )
-SELECT 
+SELECT
     token_id,
     symbol,
     image_uri,
     name,
-    is_listing,
+    is_graduated,
     created_at,
     COALESCE(price::TEXT, '0') as price,
     total_supply,
@@ -735,11 +754,13 @@ OFFSET 0;
 ```
 
 **인덱스 추가 전:**
+
 - 실행 시간: 337.667 ms
 - Buffers: shared hit=171,458 read=249,440
 - Parallel Seq Scan으로 전체 테이블 스캔
 
 **인덱스 추가 후:**
+
 - 실행 시간: 22.180 ms (93.4% 개선)
 - Buffers: shared hit=100,410
 - 3개의 병렬 워커 사용
@@ -751,6 +772,7 @@ OFFSET 0;
 ### 9-3. 데이터 특성
 
 **Account 1의 토큰 생성 현황:**
+
 - 생성한 토큰: 10,000개
 - 모든 생성 토큰 보유 중 (balance > 0)
 - current_value 기준 정렬로 가치 높은 토큰 우선 표시
@@ -758,15 +780,18 @@ OFFSET 0;
 ### 9-4. 성능 분석 및 최적화 효과
 
 **병목 지점:**
+
 1. **인덱스 부재**: creator 컬럼에 인덱스가 없어 전체 테이블 스캔
 2. **복잡한 JOIN**: token + market + balance 3개 테이블 JOIN
 
 **최적화 결과:**
+
 - `CREATE INDEX idx_token_creator ON token(creator)`로 극적인 성능 개선
 - COUNT 쿼리: 300ms → 3ms (100배 개선)
 - 목록 조회: 337ms → 22ms (15배 개선)
 
 **추가 최적화 제안:**
+
 1. **복합 인덱스**: (creator, created_at DESC) 또는 (creator, token_id)
 2. **Covering Index**: 자주 조회되는 컬럼 포함
 3. **Materialized View**: current_value 미리 계산
@@ -779,12 +804,13 @@ OFFSET 0;
 ### 10-1. get_token_metadata - 단일 토큰 메타데이터 조회
 
 ```sql
-SELECT token_id, name, symbol, image_uri 
-FROM token 
+SELECT token_id, name, symbol, image_uri
+FROM token
 WHERE token_id = '0xToken00000000000000000000000000000000001';
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.046 ms
 - Buffers: shared hit=5
 - Index Scan 사용 (token_id_index)
@@ -793,12 +819,13 @@ WHERE token_id = '0xToken00000000000000000000000000000000001';
 ### 10-2. 존재하지 않는 토큰 조회
 
 ```sql
-SELECT token_id, name, symbol, image_uri 
-FROM token 
+SELECT token_id, name, symbol, image_uri
+FROM token
 WHERE token_id = '0xToken99999999999999999999999999999999999';
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.030 ms
 - Buffers: shared hit=4
 - 존재하지 않는 경우가 더 빠름 (데이터 fetch 없음)
@@ -806,8 +833,8 @@ WHERE token_id = '0xToken99999999999999999999999999999999999';
 ### 10-3. 배치 조회 (여러 토큰 동시 조회)
 
 ```sql
-SELECT token_id, name, symbol, image_uri 
-FROM token 
+SELECT token_id, name, symbol, image_uri
+FROM token
 WHERE token_id IN (
     '0xToken00000000000000000000000000000000001',
     '0xToken00000000000000000000000000000000002',
@@ -818,6 +845,7 @@ WHERE token_id IN (
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 0.010 ms
 - Buffers: shared hit=5
 - Index Scan with ANY 조건
@@ -826,12 +854,13 @@ WHERE token_id IN (
 ### 10-4. LIKE 패턴 조회 (안티패턴)
 
 ```sql
-SELECT token_id, name, symbol, image_uri 
-FROM token 
+SELECT token_id, name, symbol, image_uri
+FROM token
 WHERE token_id LIKE '0xToken00000000000000000000000000000001%';
 ```
 
 **테스트 결과:**
+
 - 실행 시간: 346.554 ms
 - Buffers: shared hit=121,603 read=248,768
 - Parallel Seq Scan (전체 테이블 스캔)
@@ -840,18 +869,22 @@ WHERE token_id LIKE '0xToken00000000000000000000000000000001%';
 ### 10-5. 성능 분석
 
 **최적 사용 패턴:**
+
 1. **Primary Key 조회**: 0.046ms (권장)
 2. **IN 절 배치 조회**: 0.010ms for 5개 (매우 효율적)
 
 **안티패턴:**
+
 - LIKE 패턴: 346ms (7,500배 느림)
 - token_id는 정확한 값으로 조회해야 함
 
 **인덱스 활용:**
+
 - token_id_index (B-tree)가 효과적으로 활용됨
 - Primary Key 조회에 최적화됨
 
 **권장사항:**
+
 1. 단일 토큰: 직접 조회 (WHERE token_id = $1)
 2. 여러 토큰: IN 절 사용 (WHERE token_id IN (...))
 3. LIKE 패턴은 절대 사용하지 말 것
@@ -864,7 +897,7 @@ WHERE token_id LIKE '0xToken00000000000000000000000000000001%';
 ### 11-1. get_token - 토큰 상세 정보 조회 (킹 토큰)
 
 ```sql
-SELECT 
+SELECT
     t.token_id,
     t.name,
     t.symbol,
@@ -873,7 +906,7 @@ SELECT
     t.telegram,
     t.website,
     t.image_uri,
-    t.is_listing,
+    t.is_graduated,
     t.total_supply,
     m.price,
     t.created_at,
@@ -883,7 +916,7 @@ SELECT
     t.creator,
     a.nickname as creator_nickname,
     a.image_uri as creator_image_uri,
-    a.follower_count as creator_follower_count, 
+    a.follower_count as creator_follower_count,
     a.following_count as creator_following_count,
     ax.x_handle,
     ax.x_image_uri
@@ -896,6 +929,7 @@ WHERE t.token_id = '0xToken00000000000000000000000000000000001';
 ```
 
 **테스트 결과 (킹 토큰):**
+
 - 실행 시간: 19.018 ms
 - Buffers: shared hit=22 read=2
 - 5개 테이블 JOIN: token + king + account_x + market + account
@@ -904,6 +938,7 @@ WHERE t.token_id = '0xToken00000000000000000000000000000000001';
 ### 11-2. get_token - 일반 토큰 조회 (킹이 아닌 토큰)
 
 **테스트 결과 (일반 토큰):**
+
 - 실행 시간: 2.505 ms
 - Buffers: shared hit=15 read=7
 - king 테이블에서 매칭되지 않아 더 빠름
@@ -911,6 +946,7 @@ WHERE t.token_id = '0xToken00000000000000000000000000000000001';
 ### 11-3. get_token - 존재하지 않는 토큰 조회
 
 **테스트 결과:**
+
 - 실행 시간: 0.076 ms
 - Buffers: shared hit=4
 - token 테이블에서 조기 종료로 매우 빠름
@@ -918,13 +954,15 @@ WHERE t.token_id = '0xToken00000000000000000000000000000000001';
 ### 11-4. JOIN 성능 분석
 
 **테이블별 JOIN 비용:**
+
 1. **token (Primary)**: Index Scan (token_id_index) - 0.04ms
 2. **king**: Index Scan (king_token_id_index) - 빠름
-3. **market**: Index Only Scan (idx_market_token_id_covering) - 빠름  
+3. **market**: Index Only Scan (idx_market_token_id_covering) - 빠름
 4. **account**: Index Scan (account_id_index) - 빠름
 5. **account_x**: Bitmap Heap Scan - **주요 병목**
 
 **account_x JOIN 병목 원인:**
+
 - account_x 테이블: 1천만 레코드
 - account_x_account_id_index 사용하지만 Bitmap Heap Scan 수행
 - Cost: 1839.89..56340.93 (다른 테이블 대비 매우 높음)
@@ -932,10 +970,11 @@ WHERE t.token_id = '0xToken00000000000000000000000000000000001';
 ### 11-5. 쿼리 최적화 실험
 
 **최적화 방법 1: 서브쿼리 방식 (권장)**
+
 ```sql
-SELECT 
+SELECT
     t.token_id, t.name, t.symbol, t.description, t.twitter, t.telegram, t.website,
-    t.image_uri, t.is_listing, t.total_supply, m.price, t.created_at, t.transaction_hash,
+    t.image_uri, t.is_graduated, t.total_supply, m.price, t.created_at, t.transaction_hash,
     COALESCE(k.token_id IS NOT NULL, false)::boolean as is_king,
     k.created_at as is_king_created_at, t.creator,
     a.nickname as creator_nickname, a.image_uri as creator_image_uri,
@@ -950,11 +989,13 @@ WHERE t.token_id = $1;
 ```
 
 **성능 결과:**
+
 - 실행 시간: **0.217 ms** (원본 19ms 대비 87배 개선)
 - Buffers: shared hit=29 (원본 대비 24% 감소)
 - SubPlan으로 필요한 경우만 account_x 조회
 
 **최적화 방법 2: CTE 분리**
+
 ```sql
 WITH token_info AS (
     SELECT t.*, m.price, k.created_at as is_king_created_at,
@@ -973,41 +1014,47 @@ LEFT JOIN account_x ax ON ti.creator = ax.account_id;
 ```
 
 **성능 결과:**
+
 - 실행 시간: **0.059 ms** (원본 대비 322배 개선)
 - 가장 빠른 방식
 
 **최적화 방법 3: JOIN 조건 개선**
+
 ```sql
 -- LEFT JOIN에 명시적 조건 추가
 LEFT JOIN account_x ax ON t.creator = ax.account_id AND ax.account_id = t.creator
 ```
 
 **성능 결과:**
+
 - 실행 시간: **0.200 ms** (원본 대비 95배 개선)
 - 간단한 수정으로 큰 효과
 
 ### 11-6. 성능 비교 요약
 
-| 방식 | 실행 시간 | 개선률 | 구현 난이도 | 적용 상태 |
-|------|-----------|---------|-------------|-----------|
-| 원본 JOIN | 19.018 ms | - | 기존 | 이전 |
-| 서브쿼리 | 0.217 ms | 87배 | 쉬움 | 미적용 |
-| **CTE 분리** | **0.173 ms** | **110배** | 보통 | **✅ 적용완료** |
-| JOIN 조건 개선 | 0.200 ms | 95배 | 매우 쉬움 | 미적용 |
+| 방식           | 실행 시간    | 개선률    | 구현 난이도 | 적용 상태       |
+| -------------- | ------------ | --------- | ----------- | --------------- |
+| 원본 JOIN      | 19.018 ms    | -         | 기존        | 이전            |
+| 서브쿼리       | 0.217 ms     | 87배      | 쉬움        | 미적용          |
+| **CTE 분리**   | **0.173 ms** | **110배** | 보통        | **✅ 적용완료** |
+| JOIN 조건 개선 | 0.200 ms     | 95배      | 매우 쉬움   | 미적용          |
 
 ### 11-7. 실제 적용 결과
 
 **코드 변경사항:**
+
 - 파일: `src/types/token/mod.rs`
 - 기존 복잡한 5테이블 JOIN → CTE로 분리된 쿼리 구조
 - account_x JOIN을 별도 단계로 분리하여 최적화
 
 **실제 성능 측정:**
+
 - 실행 시간: **0.173 ms** (원본 19.018ms 대비 110배 개선)
 - Buffers: shared hit=24 (원본 대비 8% 감소)
 - PostgreSQL 옵티마이저가 CTE를 효율적으로 처리
 
 **쿼리 구조 개선:**
+
 ```sql
 -- 기본 토큰 정보를 먼저 조회 (CTE)
 WITH token_info AS (
@@ -1027,11 +1074,13 @@ FROM token_info ti LEFT JOIN account_x ax ON ti.creator = ax.account_id;
 ### 11-7. 최종 최적화 제안
 
 **즉시 적용 가능 (쿼리 수정):**
+
 1. **서브쿼리 방식**: 가장 안전하고 효과적
 2. **CTE 분리**: 최고 성능, 코드 가독성 좋음
 3. **JOIN 조건 개선**: 최소한의 수정으로 큰 효과
 
 **추가 최적화:**
+
 1. **인덱스 최적화**: Covering Index 추가
 2. **캐싱 강화**: 0.05ms면 캐싱 효과 극대화
 3. **쿼리 분리**: X 정보를 별도 API로 제공
@@ -1039,11 +1088,13 @@ FROM token_info ti LEFT JOIN account_x ax ON ti.creator = ax.account_id;
 ### 11-6. 최종 성능 평가
 
 **현재 성능:**
+
 - 킹 토큰: 19ms (account_x JOIN 포함)
-- 일반 토큰: 2.5ms 
+- 일반 토큰: 2.5ms
 - 존재하지 않는 토큰: 0.08ms
 
 **실용성 평가:**
+
 - 19ms는 사용자 경험상 문제없는 수준
 - Primary Key 기반 조회로 확장성 양호
 - 캐싱 적용으로 실제 DB 부하는 낮음
@@ -1055,6 +1106,7 @@ FROM token_info ti LEFT JOIN account_x ax ON ti.creator = ax.account_id;
 ### 12-1. 테스트 데이터 현황 (개선 후)
 
 **데이터 특성:**
+
 - 총 토큰: 1천만 개
 - 킹 토큰: 8,760개 (시간당 1개씩, 1년치)
 - created_at: 8,534,688개 고유값 (이전 374개에서 대폭 개선)
@@ -1068,8 +1120,8 @@ FROM token_info ti LEFT JOIN account_x ax ON ti.creator = ax.account_id;
 ### 12-2. get_order_tokens - CreationTime 정렬 (LIMIT 100)
 
 ```sql
-SELECT t.token_id, a.account_id, a.follower_count, a.following_count, 
-       a.nickname, a.image_uri as account_image_uri, t.name, t.symbol, 
+SELECT t.token_id, a.account_id, a.follower_count, a.following_count,
+       a.nickname, a.image_uri as account_image_uri, t.name, t.symbol,
        t.image_uri as token_image_uri, t.description, t.total_supply,
        m.price, m.reserve_token, ax.x_handle, ax.x_image_uri, ax.is_blue_label,
        m.market_type, t.created_at, t.created_at::FLOAT8 as score
@@ -1082,6 +1134,7 @@ LIMIT 100 OFFSET 0;
 ```
 
 **테스트 결과 (개선된 데이터):**
+
 - 실행 시간: **1.652 ms**
 - Buffers: shared hit=1102 read=6
 - Index Scan Backward (token_created_at_index) 사용
@@ -1105,6 +1158,7 @@ LIMIT 100 OFFSET 0;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **1.492 ms** (여전히 빠름)
 - Buffers: shared hit=1084 read=28
 - Index Scan Backward (idx_market_latest_trade_at) 사용
@@ -1130,6 +1184,7 @@ ORDER BY m.price DESC;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **9.937 ms**
 - Buffers: shared hit=1438 read=167
 - Index Scan Backward (idx_market_price) 사용
@@ -1155,6 +1210,7 @@ WHERE k.created_at = (SELECT MAX(created_at) FROM king);
 ```
 
 **테스트 결과 (개선된 데이터):**
+
 - 실행 시간: **1.292 ms**
 - Buffers: shared hit=19 read=7
 - 1개 킹 토큰 반환 (시간당 1개씩 현실적인 분포)
@@ -1165,11 +1221,13 @@ WHERE k.created_at = (SELECT MAX(created_at) FROM king);
 **Memoize**는 PostgreSQL 14부터 도입된 쿼리 최적화 기능으로, 반복적인 서브쿼리나 조인의 결과를 메모리에 캐싱합니다.
 
 **동작 원리:**
+
 - Nested Loop Join에서 내부 테이블을 반복 조회할 때 활성화
 - 동일한 입력값에 대한 결과를 메모리에 저장
 - 다음 조회 시 캐시에서 즉시 반환
 
 **예시 (위 쿼리에서):**
+
 ```
 Memoize (cost=0.56..0.69 rows=1 width=244)
   Cache Key: t.creator
@@ -1178,6 +1236,7 @@ Memoize (cost=0.56..0.69 rows=1 width=244)
 ```
 
 **성능 이점:**
+
 - 100개 토큰 조회 시 account 테이블을 100번 조회해야 함
 - Memoize가 없다면: 100번의 Index Scan 수행
 - Memoize 사용 시: 1번만 실제 조회, 99번은 캐시에서 반환
@@ -1190,6 +1249,7 @@ SELECT total_count as count FROM token_count;
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **0.221 ms**
 - Buffers: shared read=1 dirtied=1
 - 단순 테이블 조회로 매우 빠름
@@ -1206,7 +1266,8 @@ SELECT total_count as count FROM token_count;
 | 전체 개수 | 0.221 ms | 우수 |
 
 **최적화 기회:**
-1. **MarketCap 정렬 개선 필요**: 
+
+1. **MarketCap 정렬 개선 필요**:
    - LIMIT 100일 때 10ms 근접 (다른 쿼리 대비 6배 느림)
    - token 테이블 조회가 병목 (100번의 Index Scan)
 2. **Memoize 활용**: PostgreSQL이 자동으로 적용 중 (효율적)
@@ -1215,13 +1276,14 @@ SELECT total_count as count FROM token_count;
    - created_at: 374개 → 850만개 고유값
 
 **추가 인덱스 제안:**
+
 ```sql
 -- account_x 최적화를 위한 covering index
-CREATE INDEX idx_account_x_covering 
+CREATE INDEX idx_account_x_covering
 ON account_x (account_id) INCLUDE (x_handle, x_image_uri, is_blue_label);
 
 -- MarketCap 쿼리 최적화를 위한 복합 인덱스
-CREATE INDEX idx_market_price_token 
+CREATE INDEX idx_market_price_token
 ON market (price DESC, token_id);
 ```
 
@@ -1247,13 +1309,14 @@ WHERE t.creator = $1
 
 **테스트 결과:**
 
-| 계정 | 생성 토큰 수 | 실행 시간 | Buffers | 설명 |
-|------|-------------|-----------|---------|------|
-| Account 1 | 10,000개 | 4.603 ms | shared hit=382 | idx_token_creator 사용 |
-| Account 2 | 10,000개 | 3.466 ms | shared hit=382 | idx_token_creator 사용 |
-| Account 9999 | 0개 | 0.665 ms | shared hit=3 | 데이터 없어서 빠름 |
+| 계정         | 생성 토큰 수 | 실행 시간 | Buffers        | 설명                   |
+| ------------ | ------------ | --------- | -------------- | ---------------------- |
+| Account 1    | 10,000개     | 4.603 ms  | shared hit=382 | idx_token_creator 사용 |
+| Account 2    | 10,000개     | 3.466 ms  | shared hit=382 | idx_token_creator 사용 |
+| Account 9999 | 0개          | 0.665 ms  | shared hit=3   | 데이터 없어서 빠름     |
 
 **성능 분석:**
+
 - Index Only Scan 사용으로 양호한 성능
 - 10,000개 카운트에 약 4ms (매우 양호)
 - Heap Fetches 발생 (10,000회) - visibility map 업데이트 필요
@@ -1262,9 +1325,9 @@ WHERE t.creator = $1
 
 ```sql
 WITH created_tokens AS (
-    SELECT 
+    SELECT
         t.token_id, t.symbol, t.image_uri, t.name, t.total_supply,
-        t.description, t.created_at, t.creator, t.is_listing,
+        t.description, t.created_at, t.creator, t.is_graduated,
         COALESCE(m.price, 0) as price,
         COALESCE(b.balance, 0) as current_amount,
         COALESCE(m.price * b.balance, 0) as current_value
@@ -1273,7 +1336,7 @@ WITH created_tokens AS (
     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
     WHERE t.creator = $1
 )
-SELECT token_id, symbol, image_uri, name, is_listing, created_at,
+SELECT token_id, symbol, image_uri, name, is_graduated, created_at,
        COALESCE(price::TEXT, '0') as price, total_supply,
        COALESCE(price * total_supply, 0) as market_cap,
        COALESCE(current_amount, 0) as current_amount, description
@@ -1284,13 +1347,14 @@ LIMIT $2 OFFSET $3
 
 **테스트 결과 (Account 1: 10,000개 토큰):**
 
-| LIMIT | OFFSET | 실행 시간 | Buffers | Workers |
-|-------|--------|-----------|---------|---------|
-| 50 | 0 | 24.664 ms | shared hit=100,409 | 3 |
-| 100 | 0 | 22.614 ms | shared hit=100,409 | 3 |
-| 50 | 450 | 22.287 ms | shared hit=100,409 | 3 |
+| LIMIT | OFFSET | 실행 시간 | Buffers            | Workers |
+| ----- | ------ | --------- | ------------------ | ------- |
+| 50    | 0      | 24.664 ms | shared hit=100,409 | 3       |
+| 100   | 0      | 22.614 ms | shared hit=100,409 | 3       |
+| 50    | 450    | 22.287 ms | shared hit=100,409 | 3       |
 
 **성능 분석:**
+
 1. **병렬 처리 활용**: 3개 워커가 병렬로 처리
 2. **주요 병목**: 10,000개 토큰 각각에 대해:
    - market 조회: 10,000번 Index Scan
@@ -1302,21 +1366,24 @@ LIMIT $2 OFFSET $3
 ### 13-3. 성능 최적화 제안
 
 **1. Visibility Map 업데이트:**
+
 ```sql
 VACUUM (ANALYZE) token;
 ```
 
 **2. 복합 인덱스 추가:**
+
 ```sql
 -- creator와 token_id를 포함한 covering index
-CREATE INDEX idx_token_creator_covering 
-ON token(creator) INCLUDE (token_id, symbol, image_uri, name, total_supply, description, created_at, is_listing);
+CREATE INDEX idx_token_creator_covering
+ON token(creator) INCLUDE (token_id, symbol, image_uri, name, total_supply, description, created_at, is_graduated);
 ```
 
 **3. Materialized View 활용:**
+
 ```sql
 CREATE MATERIALIZED VIEW mv_creator_tokens AS
-SELECT 
+SELECT
     t.creator,
     t.token_id,
     t.symbol,
@@ -1325,7 +1392,7 @@ SELECT
     t.total_supply,
     t.description,
     t.created_at,
-    t.is_listing,
+    t.is_graduated,
     m.price,
     m.price * t.total_supply as market_cap
 FROM token t
@@ -1335,6 +1402,7 @@ CREATE INDEX idx_mv_creator_tokens ON mv_creator_tokens(creator);
 ```
 
 **4. 쿼리 최적화 (JOIN 순서 변경):**
+
 ```sql
 WITH token_market AS (
     -- 먼저 token과 market을 조인
@@ -1345,7 +1413,7 @@ WITH token_market AS (
 ),
 token_with_balance AS (
     -- 그 다음 balance 조인
-    SELECT tm.*, 
+    SELECT tm.*,
            COALESCE(b.balance, 0) as current_amount,
            COALESCE(tm.price * b.balance, 0) as current_value
     FROM token_market tm
@@ -1359,11 +1427,13 @@ LIMIT $2 OFFSET $3;
 ### 13-4. 실제 사용 시 고려사항
 
 1. **캐싱 전략**:
+
    - 500ms timeout 설정되어 있음
    - 10,000개 토큰 조회에 22-24ms는 양호
    - 캐시 적중 시 DB 부하 없음
 
 2. **페이지네이션**:
+
    - OFFSET이 커져도 성능 저하 미미함
    - 전체를 정렬 후 슬라이싱하는 방식
 
@@ -1385,16 +1455,19 @@ LIMIT $2 OFFSET $3;
 ### 14-1. fetch_hype_token - 메인 쿼리 최적화
 
 **원본 쿼리 (1,327ms):**
+
 - account_x 전체 테이블 스캔 (563ms)
 - holder_count 서브쿼리 (각 토큰마다 balance 카운트)
 - chart 서브쿼리 (파티션 테이블 16개 검색)
 
 **최적화 적용:**
+
 1. **LATERAL JOIN**: account_x 조인 최적화
 2. **token_holder_count 테이블**: holder_count 서브쿼리 제거
 3. **차트 쿼리 LATERAL JOIN**: 구조 개선
 
 **최종 성능:**
+
 - 실행 시간: **1.543 ms**
 - **884배 개선** (1,327ms → 1.5ms)
 
@@ -1409,6 +1482,7 @@ SELECT token_id, name, symbol, image_uri FROM token WHERE token_id = $1
 ```
 
 **테스트 결과:**
+
 - 존재하는 토큰: **0.047 ms**
 - 존재하지 않는 토큰: **0.155 ms**
 - 배치 조회 (10개): **0.056 ms**
@@ -1422,12 +1496,15 @@ SELECT token_id, name, symbol, image_uri FROM token WHERE token_id = $1
 ### 16-1. fetch_token - CTE 구조 최적화
 
 **원본 성능:**
+
 - 실행 시간: **1.762 ms** (Bitmap Heap Scan 사용)
 
 **최적화 적용:**
+
 - `LEFT JOIN account_x` → `LEFT JOIN LATERAL` 변경
 
 **최적화 결과:**
+
 - 실행 시간: **0.170 ms**
 - **10.4배 개선**
 
@@ -1438,8 +1515,8 @@ SELECT token_id, name, symbol, image_uri FROM token WHERE token_id = $1
 ### 17-1. fetch_order_tokens - CreationTime 정렬
 
 ```sql
-SELECT t.token_id, a.account_id, a.follower_count, a.following_count, 
-       a.nickname, a.image_uri as account_image_uri, t.name, t.symbol, 
+SELECT t.token_id, a.account_id, a.follower_count, a.following_count,
+       a.nickname, a.image_uri as account_image_uri, t.name, t.symbol,
        t.image_uri as token_image_uri, t.description, t.total_supply,
        m.price, m.reserve_token, ax.x_handle, ax.x_image_uri, ax.is_blue_label,
        m.market_type, t.created_at, t.created_at::FLOAT8 as score
@@ -1452,42 +1529,49 @@ LIMIT 50 OFFSET 0
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **1.666 ms**
 - Memoize 캐시: account (Hits: 49, Misses: 1, 99% 적중률)
 
 ### 17-2. fetch_order_tokens - LatestTrade 정렬
 
 **테스트 결과:**
+
 - 실행 시간: **1.893 ms**
 - Index Scan Backward (idx_market_latest_trade_at) 사용
 
 ### 17-3. fetch_order_tokens - MarketCap 정렬
 
 **테스트 결과:**
+
 - 실행 시간: **5.908 ms**
 - 서브쿼리로 먼저 50개만 필터링 후 JOIN
 
 ### 17-4. fetch_latest_king_of_the_hill
 
 **테스트 결과:**
+
 - 실행 시간: **1.645 ms**
 - InitPlan으로 MAX(created_at) 먼저 계산
 
 ### 17-5. LATERAL JOIN 최적화 시도 및 실패
 
 **시도한 최적화:**
+
 ```sql
 LEFT JOIN LATERAL (
-    SELECT x_handle, x_image_uri, is_blue_label 
+    SELECT x_handle, x_image_uri, is_blue_label
     FROM account_x WHERE account_id = a.account_id LIMIT 1
 ) ax ON true
 ```
 
 **결과:**
+
 - CreationTime 정렬: 1.666ms → **9.826ms** (5.9배 악화)
 - **원본이 더 효율적**임을 확인
 
 **실패 원인:**
+
 1. PostgreSQL 옵티마이저가 이미 효율적으로 처리
 2. Memoize 캐시가 자동 적용
 3. LATERAL JOIN의 서브쿼리 오버헤드
@@ -1501,18 +1585,18 @@ LEFT JOIN LATERAL (
 
 ### 18-1. 성공적인 최적화
 
-| 파일 | 원본 성능 | 최적화 후 | 개선률 |
-|------|-----------|-----------|--------|
-| **hype.rs** | 1,327 ms | 1.5 ms | **884배** |
-| **mod.rs** | 1.762 ms | 0.170 ms | **10.4배** |
+| 파일        | 원본 성능 | 최적화 후 | 개선률     |
+| ----------- | --------- | --------- | ---------- |
+| **hype.rs** | 1,327 ms  | 1.5 ms    | **884배**  |
+| **mod.rs**  | 1.762 ms  | 0.170 ms  | **10.4배** |
 
 ### 18-2. 이미 최적화된 상태 유지
 
-| 파일 | 성능 | 상태 |
-|------|------|------|
-| **create_token.rs** | 24 ms | 양호 |
-| **metadata.rs** | 0.047 ms | 매우 우수 |
-| **order.rs** | 1-6 ms | 양호 (원본 유지) |
+| 파일                | 성능     | 상태             |
+| ------------------- | -------- | ---------------- |
+| **create_token.rs** | 24 ms    | 양호             |
+| **metadata.rs**     | 0.047 ms | 매우 우수        |
+| **order.rs**        | 1-6 ms   | 양호 (원본 유지) |
 
 ### 18-3. 핵심 교훈
 
@@ -1532,9 +1616,9 @@ LEFT JOIN LATERAL (
 #### 19-1-1. fetch_chart_data - 차트 데이터 조회
 
 ```sql
-SELECT 
+SELECT
     interval_type,
-    token_id,                           
+    token_id,
     open_price,
     close_price,
     high_price,
@@ -1552,12 +1636,13 @@ LIMIT $5
 
 **테스트 결과:**
 
-| LIMIT | 실행 시간 | Buffers | 설명 |
-|-------|-----------|---------|------|
-| 500개 | **4.972 ms** | shared hit=1688 | 파티션 테이블 (chart_5) 사용 |
-| 1000개 | **6.127 ms** | shared hit=1705 | 선형적 성능 증가 |
+| LIMIT  | 실행 시간    | Buffers         | 설명                         |
+| ------ | ------------ | --------------- | ---------------------------- |
+| 500개  | **4.972 ms** | shared hit=1688 | 파티션 테이블 (chart_5) 사용 |
+| 1000개 | **6.127 ms** | shared hit=1705 | 선형적 성능 증가             |
 
 **성능 분석:**
+
 - **파티션 테이블 최적화**: chart_5 파티션에서 직접 조회
 - **인덱스 활용**: `chart_5_token_id_interval_type_time_stamp_idx` 효과적 사용
 - **시간 범위 필터링**: time_stamp 범위 조건으로 효율적 데이터 필터링
@@ -1567,7 +1652,7 @@ LIMIT $5
 #### 19-2-1. fetch_market_by_token - 토큰별 마켓 정보
 
 ```sql
-SELECT 
+SELECT
     market_type,
     token_id,
     pool_id,
@@ -1580,12 +1665,13 @@ WHERE token_id = $1
 
 **테스트 결과:**
 
-| 토큰 상태 | 실행 시간 | Buffers | 설명 |
-|-----------|-----------|---------|------|
-| 존재하는 토큰 | **0.053 ms** | shared hit=5 | Index Only Scan |
-| 존재하지 않는 토큰 | **0.616 ms** | shared hit=1 read=3 | 빠른 부재 확인 |
+| 토큰 상태          | 실행 시간    | Buffers             | 설명            |
+| ------------------ | ------------ | ------------------- | --------------- |
+| 존재하는 토큰      | **0.053 ms** | shared hit=5        | Index Only Scan |
+| 존재하지 않는 토큰 | **0.616 ms** | shared hit=1 read=3 | 빠른 부재 확인  |
 
 **성능 분석:**
+
 - **Covering Index**: `idx_market_token_id_covering` 완벽 활용
 - **매우 빠른 응답**: 0.05ms로 캐싱 효과 극대화 가능
 
@@ -1600,18 +1686,20 @@ WHERE b.token_id = $1 AND b.balance > 0
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **899.799 ms** (매우 느림)
 - Buffers: shared hit=15385 read=14993
 - 문제: 100만 홀더 카운트를 실시간 계산
 
 **최적화 필요:**
+
 - `token_holder_count` 테이블 사용 권장
 - 현재 쿼리는 대규모 토큰에서 사용 불가
 
 #### 19-3-2. fetch_holders_by_token - 홀더 목록 조회
 
 ```sql
-SELECT 
+SELECT
     b.balance as current_token_amount,
     a.account_id, a.nickname, a.image_uri,
     a.follower_count, a.following_count,
@@ -1625,6 +1713,7 @@ LIMIT 50
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **11.978 ms**
 - Buffers: shared hit=3570 read=73
 - 50개 홀더 조회에 적정한 성능
@@ -1642,6 +1731,7 @@ LIMIT 50
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **29.807 ms**
 - Workers: 병렬 처리 (2개 워커)
 - 10,000개 토큰 보유자의 value 기준 정렬에 적정한 성능
@@ -1657,6 +1747,7 @@ WHERE m.token_id = $1
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **0.060 ms**
 - Buffers: shared hit=5
 - Index Only Scan으로 최적 성능
@@ -1672,6 +1763,7 @@ WHERE s.account_id = $1
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **371.677 ms** (느림)
 - 문제: 100만 스왑 레코드 실시간 카운트
 - **최적화 필요**: swap_count 테이블 사용 권장
@@ -1690,6 +1782,7 @@ LIMIT 50
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **291.432 ms** (느림)
 - 문제: 100만 스왑 레코드에서 20개만 조회하는데 291ms
 - 인덱스: `idx_swap_account_id_created` 사용하지만 비효율적
@@ -1712,6 +1805,7 @@ LIMIT 50
 ```
 
 **테스트 결과:**
+
 - 실행 시간: **301.839 ms** (느림)
 - Workers: 병렬 처리 (2개 워커)
 - 문제: account_x JOIN이 성능 병목
@@ -1719,15 +1813,18 @@ LIMIT 50
 ### 19-6. Trading 모듈 성능 요약
 
 **우수한 성능 (10ms 이하):**
+
 - **chart.rs**: 4-6ms (파티션 테이블 최적화)
 - **market.rs**: 0.05ms (covering index 완벽 활용)
 - **price.rs**: 0.06ms (index only scan)
 
 **양호한 성능 (10-50ms):**
+
 - **position.rs 홀더 목록**: 12ms
 - **position.rs 보유 토큰**: 30ms
 
 **성능 개선 필요 (50ms 이상):**
+
 - **position.rs 홀더 카운트**: 900ms → `token_holder_count` 테이블 사용
 - **swap_history.rs 계정별 카운트**: 372ms → `swap_count` 테이블 사용
 - **swap_history.rs 스왑 목록들**: 290-300ms → 인덱스 최적화 필요
@@ -1735,10 +1832,12 @@ LIMIT 50
 ### 19-7. 최적화 제안
 
 **즉시 적용 권장:**
+
 1. **token_holder_count 테이블** 사용 (hype.rs에서 이미 구현됨)
 2. **swap_count 테이블** 사용 (코드에서 이미 참조함)
 
 **추가 최적화:**
+
 1. **account_x LATERAL JOIN** 적용
 2. **swap 테이블 인덱스** 재검토
 3. **파티셔닝** 고려 (swap 테이블이 매우 클 경우)
@@ -1752,9 +1851,11 @@ LIMIT 50
 #### 20-1-1. fetch_token_holder_count 최적화
 
 **변경사항:**
+
 - `balance` 테이블의 COUNT 쿼리 → `token_holder_count` 테이블 사용
 
 **최적화 전:**
+
 ```sql
 SELECT COALESCE(COUNT(*)::bigint, 0) as count
 FROM balance b
@@ -1762,6 +1863,7 @@ WHERE b.token_id = $1 AND b.balance > 0
 ```
 
 **최적화 후:**
+
 ```sql
 SELECT COALESCE(holder_count, 0) as count
 FROM token_holder_count
@@ -1769,6 +1871,7 @@ WHERE token_id = $1
 ```
 
 **성능 개선:**
+
 - 실행 시간: **899.799 ms → 31.222 ms** (28.8배 개선)
 - 100만 홀더의 실시간 카운트 → 미리 계산된 값 조회
 
@@ -1777,24 +1880,28 @@ WHERE token_id = $1
 #### 20-2-1. get_swaps_by_token LATERAL JOIN 최적화
 
 **변경사항:**
+
 - `LEFT JOIN account_x` → `LEFT JOIN LATERAL` 사용
 
 **최적화 전:**
+
 ```sql
 LEFT JOIN account_x ax ON a.account_id = ax.account_id
 ```
 
 **최적화 후:**
+
 ```sql
 LEFT JOIN LATERAL (
-    SELECT x_handle, x_image_uri, is_blue_label 
-    FROM account_x 
-    WHERE account_id = a.account_id 
+    SELECT x_handle, x_image_uri, is_blue_label
+    FROM account_x
+    WHERE account_id = a.account_id
     LIMIT 1
 ) ax ON true
 ```
 
 **성능 개선:**
+
 - 실행 시간: **301.839 ms → 51.847 ms** (5.8배 개선)
 - Buffers: 병렬 처리 제거, 더 효율적인 실행 계획
 
@@ -1803,9 +1910,11 @@ LEFT JOIN LATERAL (
 #### 20-3-1. fetch_total_count_by_account 최적화
 
 **변경사항:**
+
 - `swap` 테이블의 COUNT 쿼리 → `account_swap_count` 테이블 사용
 
 **최적화 전:**
+
 ```sql
 SELECT COALESCE(COUNT(*)::bigint, 0) as count
 FROM swap s
@@ -1813,6 +1922,7 @@ WHERE s.account_id = $1
 ```
 
 **최적화 후:**
+
 ```sql
 SELECT COALESCE(total_count, 0) as count
 FROM account_swap_count
@@ -1820,16 +1930,17 @@ WHERE account_id = $1
 ```
 
 **성능 개선:**
+
 - 실행 시간: **371.677 ms → 0.036 ms** (10,305배 개선!)
 - 실시간 카운트 → 미리 계산된 값 조회
 
 ### 20-4. 최적화 요약
 
-| 쿼리 | 최적화 전 | 최적화 후 | 개선률 | 방법 |
-|------|-----------|-----------|--------|------|
-| position.rs token_holder_count | 899.799 ms | 31.222 ms | **28.8배** | token_holder_count 테이블 |
-| swap_history.rs get_swaps_by_token | 301.839 ms | 51.847 ms | **5.8배** | LATERAL JOIN |
-| swap_history.rs fetch_total_count_by_account | 371.677 ms | 0.036 ms | **10,305배** | account_swap_count 테이블 |
+| 쿼리                                         | 최적화 전  | 최적화 후 | 개선률       | 방법                      |
+| -------------------------------------------- | ---------- | --------- | ------------ | ------------------------- |
+| position.rs token_holder_count               | 899.799 ms | 31.222 ms | **28.8배**   | token_holder_count 테이블 |
+| swap_history.rs get_swaps_by_token           | 301.839 ms | 51.847 ms | **5.8배**    | LATERAL JOIN              |
+| swap_history.rs fetch_total_count_by_account | 371.677 ms | 0.036 ms  | **10,305배** | account_swap_count 테이블 |
 
 ### 20-5. 활용된 집계 테이블들
 
@@ -1846,9 +1957,11 @@ WHERE account_id = $1
 #### 20-7-1. fetch_swaps_by_account CTE 최적화
 
 **변경사항:**
+
 - 쿼리를 CTE로 분리하여 swap 데이터를 먼저 가져온 후 token JOIN
 
 **최적화 전:**
+
 ```sql
 SELECT s.*, t.symbol, t.image_uri, t.name
 FROM swap s
@@ -1859,6 +1972,7 @@ LIMIT $2 OFFSET $3
 ```
 
 **최적화 후:**
+
 ```sql
 WITH recent_swaps AS (
     SELECT s.* FROM swap s
@@ -1872,12 +1986,14 @@ JOIN token t ON rs.token_id = t.token_id
 ```
 
 **성능 개선:**
+
 - 실행 시간: 약 26ms → 25ms (미미한 개선이지만 더 안정적)
 - CTE로 페이지네이션 먼저 처리 후 필요한 토큰 정보만 JOIN
 
 ### 20-8. 최종 최적화 요약
 
 **✅ 성공적으로 최적화된 쿼리들:**
+
 - chart.rs: 5ms (이미 최적)
 - market.rs: 0.05ms (이미 최적)
 - price.rs: 0.06ms (이미 최적)

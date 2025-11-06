@@ -35,17 +35,16 @@ struct HypeTokenRow {
     symbol: String,
     image_uri: String,
     description: Option<String>,
-    is_listing: bool,
+    is_graduated: bool,
     twitter: Option<String>,
     telegram: Option<String>,
     website: Option<String>,
+    is_nsfw: bool,
     created_at: i64,
     creator: String,
     creator_nickname: String,
     creator_bio: String,
     creator_image_uri: String,
-    creator_follower_count: i32,
-    creator_following_count: i32,
     vote: BigDecimal,
     holder_count: i64,
     market_cap: BigDecimal,
@@ -120,12 +119,13 @@ impl HypeController {
                         t.symbol,
                         t.image_uri,
                         t.description,
-                        t.is_listing,
+                        t.is_graduated,
                         t.twitter,
                         t.telegram,
                         t.website,
                         t.total_supply,
                         t.created_at,
+                        t.is_nsfw,
                         t.creator,
                         CASE
                             WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
@@ -134,8 +134,6 @@ impl HypeController {
                         END as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                        a.follower_count as creator_follower_count,
-                        a.following_count as creator_following_count,
                         t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
@@ -185,7 +183,8 @@ impl HypeController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                     description: row.description,
-                    is_listing: row.is_listing,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
                     twitter: row.twitter,
                     telegram: row.telegram,
                     website: row.website,
@@ -195,15 +194,17 @@ impl HypeController {
                         nickname: row.creator_nickname,
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
                     },
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.normalized().to_plain_string(),
-                    reward_amount: row.reward_amount.unwrap_or_default().normalized().to_plain_string(),
+                    reward_amount: row
+                        .reward_amount
+                        .unwrap_or_default()
+                        .normalized()
+                        .to_plain_string(),
                 },
             })
             .collect::<Vec<HypeToken>>();
@@ -258,10 +259,11 @@ impl HypeController {
                         t.symbol,
                         t.image_uri,
                         t.description,
-                        t.is_listing,
+                        t.is_graduated,
                         t.twitter,
                         t.telegram,
                         t.website,
+                        t.is_nsfw,
                         t.total_supply,
                         t.created_at,
                         t.creator,
@@ -272,8 +274,7 @@ impl HypeController {
                         END as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                        a.follower_count as creator_follower_count,
-                        a.following_count as creator_following_count,
+                
                         t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
                         r.amount as reward_amount
@@ -325,7 +326,8 @@ impl HypeController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                     description: row.description,
-                    is_listing: row.is_listing,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
                     twitter: row.twitter,
                     telegram: row.telegram,
                     website: row.website,
@@ -335,15 +337,17 @@ impl HypeController {
                         nickname: row.creator_nickname,
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
                     },
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.normalized().to_plain_string(),
-                    reward_amount: row.reward_amount.unwrap_or_default().normalized().to_plain_string(),
+                    reward_amount: row
+                        .reward_amount
+                        .unwrap_or_default()
+                        .normalized()
+                        .to_plain_string(),
                 },
             })
             .collect::<Vec<HypeToken>>();
@@ -484,6 +488,8 @@ impl HypeController {
             symbol: String,
             image_uri: String,
             token_created_at: i64,
+            is_graduated: bool,
+            is_nsfw: bool,
             vote: BigDecimal,
             total_vote_amount: BigDecimal,
             created_at: i64,
@@ -491,8 +497,6 @@ impl HypeController {
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
-            creator_follower_count: i32,
-            creator_following_count: i32,
         }
 
         let query = r#"
@@ -507,14 +511,14 @@ impl HypeController {
                 t.image_uri,
                 t.created_at as token_created_at,
                 t.creator,
+                t.is_nsfw,
+                t.is_graduated,
                 COALESCE(
                     CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                     a.nickname
                 ) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                a.follower_count as creator_follower_count,
-                a.following_count as creator_following_count
             FROM vote_history vh
             JOIN token t ON vh.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
@@ -570,7 +574,8 @@ impl HypeController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                     description: None,
-                    is_listing: false,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
                     twitter: None,
                     telegram: None,
                     website: None,
@@ -580,8 +585,6 @@ impl HypeController {
                         nickname: row.creator_nickname,
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
                     },
                 },
                 vote_amount: row.vote.to_string(),
@@ -740,6 +743,8 @@ impl HypeController {
             symbol: String,
             image_uri: String,
             token_created_at: i64,
+            is_graduated: bool,
+            is_nsfw: bool,
             epoch: i64,
             amount: BigDecimal,
             status: String,
@@ -752,8 +757,6 @@ impl HypeController {
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
-            creator_follower_count: i32,
-            creator_following_count: i32,
         }
 
         let rows_future = async {
@@ -835,7 +838,8 @@ impl HypeController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                     description: None,
-                    is_listing: false,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
                     twitter: None,
                     telegram: None,
                     website: None,
@@ -845,8 +849,6 @@ impl HypeController {
                         nickname: row.creator_nickname,
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
                     },
                 },
                 amount: row.amount.normalized().to_plain_string(),
@@ -1085,6 +1087,8 @@ impl HypeController {
             name: String,
             symbol: String,
             image_uri: String,
+            is_graduated: bool,
+            is_nsfw: bool,
             token_created_at: i64,
             amount: BigDecimal,
             total_amount: BigDecimal,
@@ -1113,6 +1117,8 @@ impl HypeController {
                         t.name,
                         t.symbol,
                         t.image_uri,
+                        t.is_graduated,
+                        t.is_nsfw,
                         t.created_at as token_created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -1122,8 +1128,7 @@ impl HypeController {
                         ) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                        a.follower_count as creator_follower_count,
-                        a.following_count as creator_following_count
+                       
                     FROM reward_add_history rah
                     JOIN token t ON rah.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
@@ -1175,7 +1180,8 @@ impl HypeController {
                     symbol: row.symbol,
                     image_uri: row.image_uri,
                     description: None,
-                    is_listing: false,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
                     twitter: None,
                     telegram: None,
                     website: None,
@@ -1185,8 +1191,6 @@ impl HypeController {
                         nickname: row.creator_nickname,
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
-                        follower_count: row.creator_follower_count,
-                        following_count: row.creator_following_count,
                     },
                 },
                 amount: row.amount.normalized().to_plain_string(),

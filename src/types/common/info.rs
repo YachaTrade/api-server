@@ -13,7 +13,8 @@ pub struct TokenInfo {
     pub image_uri: String,
     #[serde(default)]
     pub description: Option<String>,
-    pub is_listing: bool,
+    pub is_graduated: bool,
+    pub is_nsfw: bool,
     #[serde(default)]
     pub twitter: Option<String>,
     #[serde(default)]
@@ -31,8 +32,6 @@ pub struct AccountInfo {
     pub nickname: String,
     pub bio: String,
     pub image_uri: String,
-    pub follower_count: i32,
-    pub following_count: i32,
 }
 
 impl AccountInfo {
@@ -49,8 +48,6 @@ impl AccountInfo {
             nickname: account_id,
             bio: "".to_string(),
             image_uri,
-            follower_count: 0,
-            following_count: 0,
         }
     }
 }
@@ -83,10 +80,10 @@ pub struct MarketInfo {
     pub liquidity: String,
     /// Volume (used for tokne total volume)
     pub volume: String,
-    /// Holder count (used for tokne total holder count)
-    pub holder_count: i64,
     // Ath price
     pub ath_price: String,
+    /// Holder count (used for tokne total holder count)
+    pub holder_count: i64,
 }
 
 /// Swap event type enum

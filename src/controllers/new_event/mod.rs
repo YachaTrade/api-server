@@ -24,20 +24,17 @@ struct SwapEventRow {
     twitter: Option<String>,
     telegram: Option<String>,
     website: Option<String>,
-    is_listing: bool,
+    is_graduated: bool,
+    is_nsfw: bool,
     token_created_at: i64,
     creator: String,
     creator_nickname: String,
     creator_bio: String,
     creator_image_uri: String,
-    creator_follower_count: i32,
-    creator_following_count: i32,
     account_id: String,
     account_nickname: String,
     account_bio: String,
     account_image_uri: String,
-    account_follower_count: i32,
-    account_following_count: i32,
 }
 
 #[derive(sqlx::FromRow)]
@@ -50,20 +47,17 @@ struct CreateEventRow {
     twitter: Option<String>,
     telegram: Option<String>,
     website: Option<String>,
-    is_listing: bool,
+    is_graduated: bool,
+    is_nsfw: bool,
     token_created_at: i64,
     creator: String,
     creator_nickname: String,
     creator_bio: String,
     creator_image_uri: String,
-    creator_follower_count: i32,
-    creator_following_count: i32,
     account_id: String,
     account_nickname: String,
     account_bio: String,
     account_image_uri: String,
-    account_follower_count: i32,
-    account_following_count: i32,
 }
 
 pub struct NewEventController {
@@ -123,7 +117,8 @@ impl NewEventController {
                 t.twitter,
                 t.telegram,
                 t.website,
-                t.is_listing,
+                t.is_graduated,
+                t.is_nsfw,
                 t.created_at as token_created_at,
                 t.creator,
                 COALESCE(
@@ -132,17 +127,13 @@ impl NewEventController {
                 ) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                a.follower_count as creator_follower_count,
-                a.following_count as creator_following_count,
                 s.account_id,
                 COALESCE(
                     CASE WHEN av2.x_handle IS NOT NULL THEN REPLACE(ax2.x_handle, '@', '#') ELSE ax2.x_handle END,
                     a2.nickname
                 ) as account_nickname,
                 a2.bio as account_bio,
-                COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri,
-                a2.follower_count as account_follower_count,
-                a2.following_count as account_following_count
+                COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
@@ -171,7 +162,8 @@ impl NewEventController {
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
                 description: row.description,
-                is_listing: row.is_listing,
+                is_graduated: row.is_graduated,
+                is_nsfw: row.is_nsfw,
                 twitter: row.twitter,
                 telegram: row.telegram,
                 website: row.website,
@@ -181,8 +173,6 @@ impl NewEventController {
                     nickname: row.creator_nickname,
                     bio: row.creator_bio,
                     image_uri: row.creator_image_uri,
-                    follower_count: row.creator_follower_count,
-                    following_count: row.creator_following_count,
                 },
             },
             account_info: AccountInfo {
@@ -190,8 +180,6 @@ impl NewEventController {
                 nickname: row.account_nickname,
                 bio: row.account_bio,
                 image_uri: row.account_image_uri,
-                follower_count: row.account_follower_count,
-                following_count: row.account_following_count,
             },
         }))
     }
@@ -208,7 +196,8 @@ impl NewEventController {
                 t.twitter,
                 t.telegram,
                 t.website,
-                t.is_listing,
+                t.is_graduated,
+                t.is_nsfw,
                 t.created_at as token_created_at,
                 t.creator,
                 COALESCE(
@@ -217,17 +206,13 @@ impl NewEventController {
                 ) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                a.follower_count as creator_follower_count,
-                a.following_count as creator_following_count,
                 s.account_id,
                 COALESCE(
                     CASE WHEN av2.x_handle IS NOT NULL THEN REPLACE(ax2.x_handle, '@', '#') ELSE ax2.x_handle END,
                     a2.nickname
                 ) as account_nickname,
                 a2.bio as account_bio,
-                COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri,
-                a2.follower_count as account_follower_count,
-                a2.following_count as account_following_count
+                COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
@@ -256,7 +241,8 @@ impl NewEventController {
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
                 description: row.description,
-                is_listing: row.is_listing,
+                is_graduated: row.is_graduated,
+                is_nsfw: row.is_nsfw,
                 twitter: row.twitter,
                 telegram: row.telegram,
                 website: row.website,
@@ -266,8 +252,6 @@ impl NewEventController {
                     nickname: row.creator_nickname,
                     bio: row.creator_bio,
                     image_uri: row.creator_image_uri,
-                    follower_count: row.creator_follower_count,
-                    following_count: row.creator_following_count,
                 },
             },
             account_info: AccountInfo {
@@ -275,8 +259,6 @@ impl NewEventController {
                 nickname: row.account_nickname,
                 bio: row.account_bio,
                 image_uri: row.account_image_uri,
-                follower_count: row.account_follower_count,
-                following_count: row.account_following_count,
             },
         }))
     }
@@ -292,7 +274,8 @@ impl NewEventController {
                 t.twitter,
                 t.telegram,
                 t.website,
-                t.is_listing,
+                t.is_graduated,
+                t.is_nsfw,
                 t.created_at as token_created_at,
                 t.creator,
                 COALESCE(
@@ -301,17 +284,13 @@ impl NewEventController {
                 ) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                a.follower_count as creator_follower_count,
-                a.following_count as creator_following_count,
                 t.creator as account_id,
                 COALESCE(
                     CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
                     a.nickname
                 ) as account_nickname,
                 a.bio as account_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as account_image_uri,
-                a.follower_count as account_follower_count,
-                a.following_count as account_following_count
+                COALESCE(ax.x_image_uri, a.image_uri) as account_image_uri
             FROM token t
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -335,7 +314,8 @@ impl NewEventController {
                 symbol: row.symbol,
                 image_uri: row.token_image_uri,
                 description: row.description,
-                is_listing: row.is_listing,
+                is_graduated: row.is_graduated,
+                is_nsfw: row.is_nsfw,
                 twitter: row.twitter,
                 telegram: row.telegram,
                 website: row.website,
@@ -345,8 +325,6 @@ impl NewEventController {
                     nickname: row.creator_nickname,
                     bio: row.creator_bio,
                     image_uri: row.creator_image_uri,
-                    follower_count: row.creator_follower_count,
-                    following_count: row.creator_following_count,
                 },
             },
             account_info: AccountInfo {
@@ -354,8 +332,6 @@ impl NewEventController {
                 nickname: row.account_nickname,
                 bio: row.account_bio,
                 image_uri: row.account_image_uri,
-                follower_count: row.account_follower_count,
-                following_count: row.account_following_count,
             },
         }))
     }
