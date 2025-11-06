@@ -221,6 +221,7 @@ impl PositionController {
             total_supply: BigDecimal,
             liquidity: BigDecimal,
             volume: BigDecimal,
+            ath_price: BigDecimal,
             holder_count: i64,
         }
 
@@ -264,6 +265,7 @@ impl PositionController {
                     t.total_supply,
                     COALESCE(m.reserve_native, 0) as liquidity,
                     m.volume,
+                    m.ath_price,
                     t.token_holder_count as holder_count
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
@@ -339,6 +341,7 @@ impl PositionController {
                         total_supply: row.total_supply.normalized().to_plain_string(),
                         liquidity: row.liquidity.normalized().to_plain_string(),
                         volume: row.volume.normalized().to_plain_string(),
+                        ath_price: row.ath_price.normalized().to_plain_string(),
                         holder_count: row.holder_count,
                     },
                 }

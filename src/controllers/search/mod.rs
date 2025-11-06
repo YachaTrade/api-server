@@ -130,6 +130,7 @@ impl SearchController {
                         total_supply: row.total_supply.normalized().to_plain_string(),
                         liquidity: row.liquidity.normalized().to_plain_string(),
                         volume: row.volume.normalized().to_plain_string(),
+                        ath_price: row.ath_price.normalized().to_plain_string(),
                         holder_count: row.holder_count,
                     },
                 }
@@ -228,7 +229,8 @@ impl SearchController {
                         m.price,
                         t.total_supply,
                         COALESCE(m.reserve_native, 0) as liquidity,
-                        m.volume
+                        m.volume,
+                        m.ath_price
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -576,6 +578,7 @@ struct SearchTokenRow {
     total_supply: BigDecimal,
     liquidity: BigDecimal,
     volume: BigDecimal,
+    ath_price: BigDecimal,
 }
 
 #[derive(sqlx::FromRow)]
