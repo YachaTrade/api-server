@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use tracing::{error, info};
-use uuid::Uuid;
 
 use crate::{
     result::AppError,
@@ -55,8 +54,9 @@ impl SaltService {
         // 2단계: 환경 변수에서 deployer, implementation, suffix 로드
         let config = MiningConfig::load()?;
 
-        // 3단계: 이 마이닝 요청의 고유 식별자 생성
-        let request_uuid = Uuid::new_v4().to_string();
+        // 3단계: 이 마이닝 요청의 고유 식별자 생성 (256비트 랜덤)
+        let random_bytes: [u8; 32] = rand::random();
+        let request_uuid = hex::encode(random_bytes);
 
         // 로그: 마이닝 시작 정보 출력
         self.log_mining_start(&request, &config, &request_uuid);
