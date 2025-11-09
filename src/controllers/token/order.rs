@@ -140,7 +140,7 @@ impl OrderController {
                             AND ph.created_at <= $3
                             ORDER BY
                                 ph.created_at DESC,
-                                ph.tx_index DESC NULLS LAST,
+                                ph.tx_index DESC,
                                 ph.log_index DESC
                             LIMIT 1
                         ) as price_24h_ago
@@ -214,7 +214,7 @@ impl OrderController {
                             AND ph.created_at <= $3
                             ORDER BY
                                 ph.created_at DESC,
-                                ph.tx_index DESC NULLS LAST,
+                                ph.tx_index DESC,
                                 ph.log_index DESC
                             LIMIT 1
                         ) as price_24h_ago
@@ -288,7 +288,7 @@ impl OrderController {
                             AND ph.created_at <= $3
                             ORDER BY
                                 ph.created_at DESC,
-                                ph.tx_index DESC NULLS LAST,
+                                ph.tx_index DESC,
                                 ph.log_index DESC
                             LIMIT 1
                         ) as price_24h_ago
@@ -379,7 +379,7 @@ impl OrderController {
                             AND ph.created_at <= $3
                             ORDER BY
                                 ph.created_at DESC,
-                                ph.tx_index DESC NULLS LAST,
+                                ph.tx_index DESC,
                                 ph.log_index DESC
                             LIMIT 1
                         ) as price_24h_ago
