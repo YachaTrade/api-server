@@ -132,51 +132,51 @@ impl MetricsController {
         let current_time = current_unix_timestamp();
         let timeframe_ago = current_time - period_seconds;
 
-        let result = measure_postgres!(
-            "trading_metrics.get_price_from_price_history",
+        // Get start price: most recent price before or at timeframe_ago
+        let start_price_future = measure_postgres!(
+            "trading_metrics.get_start_price",
             sqlx::query!(
                 r#"
-                WITH price_data AS (
-                    SELECT
-                        price,
-                        created_at,
-                        tx_index,
-                        log_index,
-                        ROW_NUMBER() OVER (
-                            ORDER BY
-                                ABS(created_at - $2),
-                                tx_index DESC NULLS LAST,
-                                log_index DESC
-                        ) as closest_to_start,
-                        ROW_NUMBER() OVER (
-                            ORDER BY
-                                created_at DESC,
-                                tx_index DESC NULLS LAST,
-                                log_index DESC
-                        ) as latest
-                    FROM price_history
-                    WHERE token_id = $1
-                    AND created_at > $2
-                    AND created_at <= $3
-                )
-                SELECT
-                    (SELECT price FROM price_data WHERE closest_to_start = 1) as start_price,
-                    (SELECT price FROM price_data WHERE latest = 1) as current_price
+                SELECT price
+                FROM price_history
+                WHERE token_id = $1
+                AND created_at <= $2
+                ORDER BY created_at DESC, tx_index DESC, log_index DESC
+                LIMIT 1
                 "#,
                 token_id,
-                timeframe_ago,
+                timeframe_ago
+            )
+            .fetch_optional(self.db.get_read_pool())
+        );
+
+        // Get current price: most recent price at current_time
+        let current_price_future = measure_postgres!(
+            "trading_metrics.get_current_price",
+            sqlx::query!(
+                r#"
+                SELECT price
+                FROM price_history
+                WHERE token_id = $1
+                AND created_at <= $2
+                ORDER BY created_at DESC, tx_index DESC, log_index DESC
+                LIMIT 1
+                "#,
+                token_id,
                 current_time
             )
             .fetch_optional(self.db.get_read_pool())
-        )?;
+        );
 
-        let (start_price, current_price) = match result {
-            Some(row) => (
-                row.start_price.map(|p| p.normalized().to_plain_string()),
-                row.current_price.map(|p| p.normalized().to_plain_string()),
-            ),
-            None => (None, None),
-        };
+        let (start_result, current_result) = tokio::join!(start_price_future, current_price_future);
+
+        let start_price = start_result?
+            .and_then(|row| row.price)
+            .map(|p| p.normalized().to_plain_string());
+
+        let current_price = current_result?
+            .and_then(|row| row.price)
+            .map(|p| p.normalized().to_plain_string());
 
         Ok((start_price, current_price))
     }
