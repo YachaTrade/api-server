@@ -133,7 +133,7 @@ impl MetricsController {
         let timeframe_ago = current_time - period_seconds;
 
         // Get start price: most recent price before or at timeframe_ago
-        let start_price_future = measure_postgres!(
+        let start_result = measure_postgres!(
             "trading_metrics.get_start_price",
             sqlx::query!(
                 r#"
@@ -148,10 +148,10 @@ impl MetricsController {
                 timeframe_ago
             )
             .fetch_optional(self.db.get_read_pool())
-        );
+        )?;
 
         // Get current price: most recent price at current_time
-        let current_price_future = measure_postgres!(
+        let current_result = measure_postgres!(
             "trading_metrics.get_current_price",
             sqlx::query!(
                 r#"
@@ -166,17 +166,13 @@ impl MetricsController {
                 current_time
             )
             .fetch_optional(self.db.get_read_pool())
-        );
+        )?;
 
-        let (start_result, current_result) = tokio::join!(start_price_future, current_price_future);
+        let start_price = start_result
+            .map(|row| row.price.normalized().to_plain_string());
 
-        let start_price = start_result?
-            .and_then(|row| row.price)
-            .map(|p| p.normalized().to_plain_string());
-
-        let current_price = current_result?
-            .and_then(|row| row.price)
-            .map(|p| p.normalized().to_plain_string());
+        let current_price = current_result
+            .map(|row| row.price.normalized().to_plain_string());
 
         Ok((start_price, current_price))
     }
