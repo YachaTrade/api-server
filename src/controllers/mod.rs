@@ -4,6 +4,7 @@ pub mod gecko;
 pub mod hype;
 pub mod metadata;
 pub mod new_event;
+pub mod raffle;
 pub mod search;
 pub mod social;
 pub mod token;

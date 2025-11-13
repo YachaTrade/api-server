@@ -2,8 +2,8 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, bot, follow, gecko, hype, metadata, metrics, new_event, order, profile,
-        search, token, trade,
+        self, account, auth, bot, follow, gecko, health, hype, metadata, metrics, new_event, order,
+        profile, raffle, search, token, trade,
     },
     state::AppState,
     types,
@@ -102,6 +102,10 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------New Event----------------
         router::new_event::handler::get_new_event,
+
+        // ----------------Raffle----------------
+        router::raffle::handler::get_status,
+        router::raffle::handler::get_prizes,
 
         // ----------------Metadata----------------
         router::metadata::handler::upload_image,
@@ -235,6 +239,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::new_event::NewEvent,
             types::new_event::EventType,
 
+            // Raffle
+            types::raffle::RaffleStatusResponse,
+            types::raffle::Prize,
+            types::raffle::PrizeListResponse,
+
         )
     ),
     tags(
@@ -247,6 +256,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Order",description="Order endpoints"),
         (name="Hype",description="Hype Token endpoints"),
         (name="New Event",description="New Event endpoints"),
+        (name="Raffle",description="Raffle endpoints"),
         (name="Metadata",description="Metadata upload endpoints"),
         (name="Gecko",description="Gecko Terminal API endpoints"),
     ),
@@ -288,12 +298,15 @@ async fn main() -> Result<()> {
 
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
-        .route("/health", get(health_check));
+        .route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()
         .merge(root)
+        .merge(health::router())
         .merge(auth::router(app_state.clone()))
         .merge(account::router().layer(ServiceBuilder::new().layer(
+            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
+        )))
+        .merge(raffle::router().layer(ServiceBuilder::new().layer(
             axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
         )))
         .merge(token::router())
@@ -335,10 +348,6 @@ async fn main() -> Result<()> {
 
 async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "nothing to see here")
-}
-
-async fn health_check() -> impl IntoResponse {
-    (StatusCode::OK, "OK")
 }
 
 // 메서드별 타임아웃 미들웨어
