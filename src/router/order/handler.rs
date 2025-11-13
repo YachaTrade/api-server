@@ -102,29 +102,3 @@ pub async fn get_latest_trade_order(
     Ok(Json(response))
 }
 
-/// Get tokens ordered by verified creators (price descending)
-#[utoipa::path(
-    get,
-    path = OrderPath::Verified.docs_str(),
-    params(
-        ("page" = Option<i64>, Query, description = "Page number for pagination"),
-        ("limit" = Option<i64>, Query, description = "Number of items per page"),
-        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
-    ),
-    responses(
-        (status = 200, description = "Successfully retrieved tokens from verified creators ordered by price", body = OrderTokenResponse),
-        (status = 400, description = "Bad request - Invalid pagination parameters"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Order"
-)]
-#[instrument(skip(state))]
-pub async fn get_verified_order(
-    State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
-) -> AppJsonResult<OrderTokenResponse> {
-    let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.get_order(TokenOrderType::Verified, &query).await?;
-
-    Ok(Json(response))
-}

@@ -2,7 +2,7 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, bot, follow, gecko, health, hype, metadata, metrics, new_event, order,
+        self, account, auth, bot, gecko, health, hype, metadata, metrics, new_event, order,
         profile, raffle, search, token, trade,
     },
     state::AppState,
@@ -91,14 +91,6 @@ use utoipa_swagger_ui::SwaggerUi;
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
-        router::order::handler::get_verified_order,
-
-        // ----------------Follow----------------
-        router::follow::handler::add_follow,
-        router::follow::handler::remove_follow,
-        router::follow::handler::check_follow,
-        router::follow::handler::get_followers,
-        router::follow::handler::get_followings,
 
         // ----------------New Event----------------
         router::new_event::handler::get_new_event,
@@ -227,12 +219,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::search::AccountSearchResult,
             types::search::AccountSearchResponse,
             types::search::SearchResponse,
-            // Social
-            types::social::follow::UpdateFollowRequest,
-            types::social::follow::UpdateFollowResponse,
-            types::social::follow::CheckFollowResponse,
-            types::social::follow::FollowersResponse,
-            types::social::follow::FollowingResponse,
 
             // New Event
             types::new_event::NewEventResponse,
@@ -315,7 +301,6 @@ async fn main() -> Result<()> {
         .merge(profile::router())
         .merge(order::router())
         .merge(hype::router(app_state.clone()))
-        .merge(follow::router(app_state.clone()))
         .merge(bot::router())
         .merge(new_event::router())
         .merge(metadata::router())

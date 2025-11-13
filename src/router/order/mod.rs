@@ -20,8 +20,4 @@ pub fn router() -> Router<AppState> {
             OrderPath::LatestTrade.as_str(),
             get(handler::get_latest_trade_order),
         )
-        .route(
-            OrderPath::Verified.as_str(),
-            get(handler::get_verified_order),
-        )
 }

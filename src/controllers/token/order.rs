@@ -306,112 +306,18 @@ impl OrderController {
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by market cap: {}", err))?
             }
-            TokenOrderType::Verified => {
-                // Optimized with MATERIALIZED CTEs to force correct execution order
-                // This prevents PostgreSQL from scanning the entire market table
-                let current_time = current_unix_timestamp();
-                let time_24h_ago = current_time - 86400;
-
-                let query = format!(
-                    r#"
-                    WITH latest_price AS (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    ),
-                    verified_creators AS MATERIALIZED (
-                        SELECT a.account_id
-                        FROM account_x ax
-                        JOIN account a ON ax.account_id = a.account_id
-                    ),
-                    top_verified_markets AS MATERIALIZED (
-                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.volume, m.ath_price
-                        FROM market m
-                        JOIN token t ON m.token_id = t.token_id
-                        WHERE t.creator IN (SELECT account_id FROM verified_creators)
-                        ORDER BY m.price {}
-                        LIMIT $1 OFFSET $2
-                    )
-                    SELECT
-                        t.token_id,
-                        t.name,
-                        t.symbol,
-                        t.image_uri as token_image_uri,
-                        t.description,
-                        t.twitter,
-                        t.telegram,
-                        t.website,
-                        t.is_graduated,
-                        t.is_nsfw,
-                        t.created_at,
-                        t.creator,
-                        t.token_holder_count as holder_count,
-                        ax.x_handle as creator_nickname,
-                        a.bio as creator_bio,
-                        ax.x_image_uri as creator_image_uri,
-                        tvm.market_type,
-                        COALESCE(tvm.pool_id, '') as market_id,
-                        (tvm.price * COALESCE(lp.price, 0)) as token_price,
-                        COALESCE(lp.price, 0) as native_price,
-                        tvm.price,
-                        t.total_supply,
-                        COALESCE(tvm.reserve_native, 0) as liquidity,
-                        tvm.volume,
-                        tvm.ath_price,
-                        (
-                            SELECT ph.price
-                            FROM price_history ph
-                            WHERE ph.token_id = t.token_id
-                            AND ph.created_at <= $3
-                            ORDER BY
-                                ph.created_at DESC,
-                                ph.tx_index DESC,
-                                ph.log_index DESC
-                            LIMIT 1
-                        ) as price_24h_ago
-                    FROM top_verified_markets tvm
-                    JOIN token t ON tvm.token_id = t.token_id
-                    JOIN account a ON t.creator = a.account_id
-                    JOIN account_x ax ON a.account_id = ax.account_id
-                    CROSS JOIN latest_price lp
-                    ORDER BY tvm.price {}
-                    "#,
-                    order_direction, order_direction
-                );
-
-                measure_postgres!(
-                    "token_order.fetch_verified",
-                    sqlx::query_as::<_, OrderTokenRow>(&query)
-                        .bind(pagination.limit)
-                        .bind(offset)
-                        .bind(time_24h_ago)
-                        .fetch_all(&*self.db.get_read_pool())
-                )
-                .map_err(|err| anyhow!("Failed to fetch verified tokens: {}", err))?
-            }
         };
 
         Ok(rows.into_iter().map(OrderToken::from).collect())
     }
 
-    pub async fn get_total_count_by_type(&self, order_type: &TokenOrderType) -> Result<i64> {
-        let (query, log_type) = match order_type {
-            TokenOrderType::Verified => (
-                "SELECT verified_token_count as count FROM token_count",
-                "verified_token_count",
-            ),
-            _ => (
-                "SELECT total_count as count FROM token_count",
-                "total_count",
-            ),
-        };
-
+    pub async fn get_total_count_by_type(&self, _order_type: &TokenOrderType) -> Result<i64> {
         let row = measure_postgres!(
             "token_order.get_total_count_by_type",
-            sqlx::query_as::<_, CountRow>(query).fetch_one(self.db.get_read_pool())
+            sqlx::query_as::<_, CountRow>("SELECT total_count as count FROM token_count")
+                .fetch_one(self.db.get_read_pool())
         )
-        .map_err(|e| anyhow!("Failed to get {} count: {}", log_type, e))?;
+        .map_err(|e| anyhow!("Failed to get total_count: {}", e))?;
 
         Ok(row.count)
     }
