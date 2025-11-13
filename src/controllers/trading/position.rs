@@ -108,16 +108,12 @@ impl PositionController {
                     COALESCE(lp.price, 0) as native_price,
                     b.created_at as balance_created_at,
                     a.account_id,
-                    COALESCE(
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
-                    ) as nickname,
+                    COALESCE(ax.x_handle, a.nickname) as nickname,
                     a.bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as image_uri
                 FROM balance b
                 JOIN account a ON b.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 JOIN market m ON b.token_id = m.token_id
                 CROSS JOIN latest_price lp
                 WHERE b.token_id = $1 AND b.balance > 0
@@ -241,10 +237,7 @@ impl PositionController {
                     t.is_nsfw,
                     t.created_at,
                     t.creator,
-                    COALESCE(
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
-                    ) as creator_nickname,
+                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                     a.bio as creator_bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                     b.balance,
@@ -264,7 +257,6 @@ impl PositionController {
                 JOIN market m ON t.token_id = m.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 CROSS JOIN latest_price lp
                 WHERE b.account_id = $1 AND b.balance > 0
                 ORDER BY (b.balance * m.price * COALESCE(lp.price, 0)) DESC

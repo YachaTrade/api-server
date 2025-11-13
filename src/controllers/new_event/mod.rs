@@ -123,27 +123,19 @@ impl NewEventController {
                 t.is_nsfw,
                 t.created_at as token_created_at,
                 t.creator,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as creator_nickname,
+                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                 s.account_id,
-                COALESCE(
-                    CASE WHEN av2.x_handle IS NOT NULL THEN REPLACE(ax2.x_handle, '@', '#') ELSE ax2.x_handle END,
-                    a2.nickname
-                ) as account_nickname,
+                COALESCE(ax2.x_handle, a2.nickname) as account_nickname,
                 a2.bio as account_bio,
                 COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             JOIN account a2 ON s.account_id = a2.account_id
             LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
-            LEFT JOIN account_verified av2 ON ax2.x_handle = av2.x_handle
             WHERE s.is_buy = true
             ORDER BY s.created_at DESC
             LIMIT $1
@@ -209,27 +201,19 @@ impl NewEventController {
                 t.is_nsfw,
                 t.created_at as token_created_at,
                 t.creator,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as creator_nickname,
+                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                 s.account_id,
-                COALESCE(
-                    CASE WHEN av2.x_handle IS NOT NULL THEN REPLACE(ax2.x_handle, '@', '#') ELSE ax2.x_handle END,
-                    a2.nickname
-                ) as account_nickname,
+                COALESCE(ax2.x_handle, a2.nickname) as account_nickname,
                 a2.bio as account_bio,
                 COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             JOIN account a2 ON s.account_id = a2.account_id
             LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
-            LEFT JOIN account_verified av2 ON ax2.x_handle = av2.x_handle
             WHERE s.is_buy = false
             ORDER BY s.created_at DESC
             LIMIT $1
@@ -293,23 +277,16 @@ impl NewEventController {
                 t.is_nsfw,
                 t.created_at as token_created_at,
                 t.creator,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as creator_nickname,
+                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                 t.creator as account_id,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as account_nickname,
+                COALESCE(ax.x_handle, a.nickname) as account_nickname,
                 a.bio as account_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as account_image_uri
             FROM token t
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             ORDER BY t.created_at DESC
             LIMIT $1
         "#;

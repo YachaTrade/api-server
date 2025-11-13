@@ -74,10 +74,7 @@ impl TokenController {
                     t.is_nsfw,
                     t.created_at,
                     t.creator,
-                    COALESCE(
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
-                    ) as creator_nickname,
+                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                     a.bio as creator_bio,
                     a.follower_count as creator_follower_count,
@@ -85,7 +82,6 @@ impl TokenController {
                 FROM token t
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 WHERE t.token_id = $1
                 "#,
             )

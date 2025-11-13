@@ -128,11 +128,7 @@ impl HypeController {
                         t.created_at,
                         t.is_nsfw,
                         t.creator,
-                        CASE
-                            WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
-                            WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
-                            ELSE a.nickname
-                        END as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         t.token_holder_count as holder_count,
@@ -142,7 +138,6 @@ impl HypeController {
                     JOIN token t ON h.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                     WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
@@ -268,11 +263,7 @@ impl HypeController {
                         t.total_supply,
                         t.created_at,
                         t.creator,
-                        CASE
-                            WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#')
-                            WHEN ax.x_handle IS NOT NULL THEN ax.x_handle
-                            ELSE a.nickname
-                        END as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         t.token_holder_count as holder_count,
@@ -282,7 +273,6 @@ impl HypeController {
                     JOIN token t ON h.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                     WHERE h.epoch = $1
@@ -513,17 +503,13 @@ impl HypeController {
                 t.creator,
                 t.is_nsfw,
                 t.is_graduated,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as creator_nickname,
+                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri
             FROM vote_history vh
             JOIN token t ON vh.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE vh.account_id = $1
             ORDER BY vh.created_at DESC
             LIMIT $2 OFFSET $3
@@ -785,10 +771,7 @@ impl HypeController {
                         r.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(
-                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                            a.nickname
-                        ) as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         a.follower_count as creator_follower_count,
@@ -797,7 +780,6 @@ impl HypeController {
                     JOIN token t ON r.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE r.account_id = $1 
                     ORDER BY r.created_at DESC
                     LIMIT $2 OFFSET $3
@@ -1126,17 +1108,13 @@ impl HypeController {
                         t.created_at as token_created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(
-                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                            a.nickname
-                        ) as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri
                     FROM reward_add_history rah
                     JOIN token t ON rah.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     WHERE rah.account_id = $1
                     ORDER BY rah.created_at DESC
                     LIMIT $2 OFFSET $3

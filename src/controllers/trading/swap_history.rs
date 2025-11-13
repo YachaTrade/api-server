@@ -149,10 +149,7 @@ impl SwapController {
                     t.is_nsfw,
                     t.created_at as token_created_at,
                     t.creator,
-                    COALESCE(
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
-                    ) as creator_nickname,
+                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                     a.bio as creator_bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                     rs.is_buy,
@@ -166,7 +163,6 @@ impl SwapController {
                 JOIN token t ON rs.token_id = t.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 CROSS JOIN latest_price lp
                 ORDER BY rs.created_at DESC
                 "#,
@@ -275,10 +271,9 @@ impl SwapController {
         JOIN account a ON s.account_id = a.account_id
         LEFT JOIN LATERAL (
             SELECT
-                CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END as x_handle,
+                ax.x_handle,
                 x_image_uri
             FROM account_x ax
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE ax.account_id = a.account_id
             LIMIT 1
         ) ax ON true

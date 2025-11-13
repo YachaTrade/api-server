@@ -118,10 +118,7 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(
-                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                            a.nickname
-                        ) as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
@@ -147,7 +144,6 @@ impl OrderController {
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON t.token_id = m.token_id
                     CROSS JOIN latest_price lp
                     ORDER BY t.created_at {}
@@ -192,10 +188,7 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(
-                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                            a.nickname
-                        ) as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
@@ -222,7 +215,6 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     CROSS JOIN latest_price lp
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
@@ -266,10 +258,7 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(
-                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                            a.nickname
-                        ) as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
@@ -301,7 +290,6 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     CROSS JOIN latest_price lp
                     ORDER BY m.price {}
                     "#,
@@ -334,8 +322,7 @@ impl OrderController {
                     ),
                     verified_creators AS MATERIALIZED (
                         SELECT a.account_id
-                        FROM account_verified av
-                        JOIN account_x ax ON av.x_handle = ax.x_handle
+                        FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                     ),
                     top_verified_markets AS MATERIALIZED (
@@ -360,7 +347,7 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        REPLACE(ax.x_handle, '@', '#') as creator_nickname,
+                        ax.x_handle as creator_nickname,
                         a.bio as creator_bio,
                         ax.x_image_uri as creator_image_uri,
                         tvm.market_type,

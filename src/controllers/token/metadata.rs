@@ -94,10 +94,7 @@ impl TokenMetadataController {
                     t.created_at,
                     t.creator,
                     t.token_holder_count as holder_count,
-                    COALESCE(
-                        CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                        a.nickname
-                    ) as creator_nickname,
+                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                     a.bio as creator_bio,
                     m.market_type,
@@ -112,7 +109,6 @@ impl TokenMetadataController {
                 FROM token t
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                 JOIN market m ON t.token_id = m.token_id
                 CROSS JOIN latest_price lp
                 WHERE t.token_id = $1

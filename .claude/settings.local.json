@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test:*)",
+      "Bash(grep:*)",
+      "Bash(mkdir:*)",
+      "Bash(psql:*)",
+      "Bash(find src/types -name \"*.rs\" -exec grep -l \"TokenInfo\\|MarketInfo\" {} ;)",
+      "Bash(cargo check:*)",
+      "Bash(aws ecs:*)"
+    ],
+    "deny": []
+  }
+}
