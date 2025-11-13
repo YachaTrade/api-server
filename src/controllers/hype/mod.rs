@@ -1004,11 +1004,11 @@ impl HypeController {
 
     async fn get_buyback_amount_sum(&self) -> Result<BigDecimal> {
         let query = sqlx::query_as::<_, AmountRow>(
-            "SELECT COALESCE(SUM(amount), 0) as amount FROM buyback_amount",
+            "SELECT COALESCE(SUM(amount), 0) as amount FROM total_buy_back",
         )
         .fetch_one(self.db.get_read_pool());
 
-        let result = measure_postgres!("hype.get_buyback_amount_sum", query)
+        let result = measure_postgres!("hype.total_buy_back", query)
             .map_err(|err| anyhow!("Failed to get buyback amount sum\n Reason: {err}"))?;
         Ok(result.amount)
     }
