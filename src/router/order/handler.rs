@@ -10,8 +10,7 @@ use crate::{
     services::token::order::TokenOrderService,
     state::AppState,
     types::{
-        common::pagination::PaginationParams,
-        token::order::{OrderTokenResponse, TokenOrderType},
+        token::order::{OrderQuery, OrderTokenResponse, TokenOrderType},
     },
 };
 
@@ -24,7 +23,8 @@ use super::path::OrderPath;
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
         ("limit" = Option<i64>, Query, description = "Number of items per page"),
-        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC"),
+        ("is_nsfw" = Option<bool>, Query, description = "Filter NSFW tokens (default: false)")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by creation time", body = OrderTokenResponse),
@@ -36,7 +36,7 @@ use super::path::OrderPath;
 #[instrument(skip(state))]
 pub async fn get_creation_time_order(
     State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
+    Query(query): Query<OrderQuery>,
 ) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service
@@ -53,7 +53,8 @@ pub async fn get_creation_time_order(
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
         ("limit" = Option<i64>, Query, description = "Number of items per page"),
-        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC"),
+        ("is_nsfw" = Option<bool>, Query, description = "Filter NSFW tokens (default: false)")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by market cap", body = OrderTokenResponse),
@@ -65,7 +66,7 @@ pub async fn get_creation_time_order(
 #[instrument(skip(state))]
 pub async fn get_market_cap_order(
     State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
+    Query(query): Query<OrderQuery>,
 ) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_order(TokenOrderType::MarketCap, &query).await?;
@@ -80,7 +81,8 @@ pub async fn get_market_cap_order(
     params(
         ("page" = Option<i64>, Query, description = "Page number for pagination"),
         ("limit" = Option<i64>, Query, description = "Number of items per page"),
-        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC")
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC"),
+        ("is_nsfw" = Option<bool>, Query, description = "Filter NSFW tokens (default: false)")
     ),
     responses(
         (status = 200, description = "Successfully retrieved tokens ordered by latest trade", body = OrderTokenResponse),
@@ -92,7 +94,7 @@ pub async fn get_market_cap_order(
 #[instrument(skip(state))]
 pub async fn get_latest_trade_order(
     State(state): State<AppState>,
-    Query(query): Query<PaginationParams>,
+    Query(query): Query<OrderQuery>,
 ) -> AppJsonResult<OrderTokenResponse> {
     let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
     let response = service
