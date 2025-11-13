@@ -939,11 +939,11 @@ impl HypeController {
 
     async fn fetch_total_hype_point(&self) -> Result<AmountResponse> {
         let query = sqlx::query_as::<_, AmountRow>(
-            "SELECT hype_point::NUMERIC as amount FROM total_spent_point WHERE id = 1",
+            "SELECT hype_point::NUMERIC as amount FROM total_hype_point WHERE id = 1",
         )
         .fetch_one(self.db.get_read_pool());
 
-        let result = measure_postgres!("hype.fetch_total_hype_point", query)
+        let result = measure_postgres!("hype.total_hype_point", query)
             .map_err(|err| anyhow!("Failed to get total hype point\n Reason: {err}"))?;
 
         Ok(AmountResponse {
