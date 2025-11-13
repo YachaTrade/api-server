@@ -65,18 +65,20 @@ impl OrderController {
         &self,
         order_by: TokenOrderType,
         pagination: &PaginationParams,
+        is_nsfw: bool,
     ) -> Result<Vec<OrderToken>> {
         let cache_key = cache_key!(
             "order_tokens",
             order_by.as_str(),
             pagination.direction,
             pagination.page,
-            pagination.limit
+            pagination.limit,
+            is_nsfw
         );
 
         let order_by_clone = order_by;
         let tokens = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async move {
-            self.fetch_order_tokens(order_by_clone, pagination).await
+            self.fetch_order_tokens(order_by_clone, pagination, is_nsfw).await
         })
         .await?;
 
@@ -87,6 +89,7 @@ impl OrderController {
         &self,
         order_by: TokenOrderType,
         pagination: &PaginationParams,
+        is_nsfw: bool,
     ) -> Result<Vec<OrderToken>> {
         let offset = (pagination.page.abs() - 1) * pagination.limit;
         let order_direction = &pagination.direction;
@@ -95,6 +98,8 @@ impl OrderController {
             TokenOrderType::CreationTime => {
                 let current_time = current_unix_timestamp();
                 let time_24h_ago = current_time - 86400;
+
+                let nsfw_filter = if is_nsfw { "t.is_nsfw = true" } else { "t.is_nsfw = false" };
 
                 let query = format!(
                     r#"
@@ -146,10 +151,11 @@ impl OrderController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
                     CROSS JOIN latest_price lp
+                    WHERE {}
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
                     "#,
-                    order_direction
+                    nsfw_filter, order_direction
                 );
 
                 measure_postgres!(
@@ -165,6 +171,8 @@ impl OrderController {
             TokenOrderType::LatestTrade => {
                 let current_time = current_unix_timestamp();
                 let time_24h_ago = current_time - 86400;
+
+                let nsfw_filter = if is_nsfw { "t.is_nsfw = true" } else { "t.is_nsfw = false" };
 
                 let query = format!(
                     r#"
@@ -216,10 +224,11 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     CROSS JOIN latest_price lp
+                    WHERE {}
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
                     "#,
-                    order_direction
+                    nsfw_filter, order_direction
                 );
 
                 measure_postgres!(
@@ -235,6 +244,8 @@ impl OrderController {
             TokenOrderType::MarketCap => {
                 let current_time = current_unix_timestamp();
                 let time_24h_ago = current_time - 86400;
+
+                let nsfw_filter = if is_nsfw { "t.is_nsfw = true" } else { "t.is_nsfw = false" };
 
                 let query = format!(
                     r#"
@@ -282,9 +293,11 @@ impl OrderController {
                             LIMIT 1
                         ) as price_24h_ago
                     FROM (
-                        SELECT token_id, price, market_type, pool_id, reserve_native, volume, ath_price
-                        FROM market
-                        ORDER BY price {}
+                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.volume, m.ath_price
+                        FROM market m
+                        JOIN token t ON m.token_id = t.token_id
+                        WHERE {}
+                        ORDER BY m.price {}
                         LIMIT $1 OFFSET $2
                     ) m
                     JOIN token t ON m.token_id = t.token_id
@@ -293,7 +306,7 @@ impl OrderController {
                     CROSS JOIN latest_price lp
                     ORDER BY m.price {}
                     "#,
-                    order_direction, order_direction
+                    nsfw_filter, order_direction, order_direction
                 );
 
                 measure_postgres!(

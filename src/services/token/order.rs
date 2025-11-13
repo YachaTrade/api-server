@@ -8,7 +8,7 @@ use crate::{
     result::AppError,
     types::{
         common::pagination::PaginationParams,
-        token::order::{OrderTokenResponse, TokenOrderType},
+        token::order::{OrderQuery, OrderTokenResponse, TokenOrderType},
     },
 };
 
@@ -25,11 +25,17 @@ impl TokenOrderService {
     pub async fn get_order(
         &self,
         order_type: TokenOrderType,
-        pagination: &PaginationParams,
+        query: &OrderQuery,
     ) -> Result<OrderTokenResponse, AppError> {
+        let pagination = PaginationParams {
+            page: query.page,
+            limit: query.limit,
+            direction: query.direction.clone(),
+        };
+
         if let Ok(cached) = self
             .redis
-            .get_order_response(&order_type, Some(pagination))
+            .get_order_response(&order_type, Some(&pagination))
             .await
         {
             return Ok(cached);
@@ -38,7 +44,7 @@ impl TokenOrderService {
         let controller = OrderController::new(self.postgres.clone());
 
         let tokens = controller
-            .get_order_tokens(order_type, pagination)
+            .get_order_tokens(order_type, &pagination, query.is_nsfw)
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 
@@ -51,7 +57,7 @@ impl TokenOrderService {
 
         if let Err(err) = self
             .redis
-            .set_order_response(&order_type, &response, Some(pagination))
+            .set_order_response(&order_type, &response, Some(&pagination))
             .await
         {
             warn!("Failed to set {:?} cache: {}", order_type, err);

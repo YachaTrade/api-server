@@ -144,6 +144,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::token::TokenResponse,
             types::token::order::TokenOrderType,
             types::token::order::OrderToken,
+            types::token::order::OrderQuery,
             types::token::order::OrderTokenResponse,
             types::token::metadata::TokenMetadataResponse,
             types::token::salt::MineSaltRequest,

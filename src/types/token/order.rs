@@ -22,6 +22,30 @@ impl TokenOrderType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct OrderQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default = "default_direction")]
+    pub direction: String,
+    #[serde(default)]
+    pub is_nsfw: bool,
+}
+
+fn default_page() -> i64 {
+    1
+}
+
+fn default_limit() -> i64 {
+    20
+}
+
+fn default_direction() -> String {
+    "DESC".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderToken {
     pub token_info: TokenInfo,
     pub market_info: MarketInfo,
