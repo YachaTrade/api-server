@@ -157,10 +157,7 @@ impl TokenCreatedController {
                         t.created_at as token_created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(
-                            CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                            a.nickname
-                        ) as creator_nickname,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
@@ -178,7 +175,6 @@ impl TokenCreatedController {
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
                     JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                     CROSS JOIN latest_price lp

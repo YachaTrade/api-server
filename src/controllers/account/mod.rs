@@ -41,15 +41,11 @@ impl AccountController {
             )
             SELECT
                 a.account_id,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as nickname,
+                COALESCE(ax.x_handle, a.nickname) as nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                 a.bio
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE a.account_id = $1
             "#,
         )
@@ -112,7 +108,7 @@ impl AccountController {
         query_builder
             .push(" WHERE account_id = ")
             .push_bind(address)
-            .push(" RETURNING account_id) SELECT a.account_id, COALESCE(CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END, a.nickname) as nickname, COALESCE(ax.x_image_uri, a.image_uri) as image_uri, a.bio FROM account a LEFT JOIN account_x ax ON a.account_id = ax.account_id LEFT JOIN account_verified av ON ax.x_handle = av.x_handle WHERE a.account_id = ")
+            .push(" RETURNING account_id) SELECT a.account_id, COALESCE(ax.x_handle, a.nickname) as nickname, COALESCE(ax.x_image_uri, a.image_uri) as image_uri, a.bio FROM account a LEFT JOIN account_x ax ON a.account_id = ax.account_id WHERE a.account_id = ")
             .push_bind(address);
 
         let query = query_builder
@@ -141,15 +137,11 @@ impl AccountController {
             r#"
             SELECT
                 a.account_id,
-                COALESCE(
-                    CASE WHEN av.x_handle IS NOT NULL THEN REPLACE(ax.x_handle, '@', '#') ELSE ax.x_handle END,
-                    a.nickname
-                ) as nickname,
+                COALESCE(ax.x_handle, a.nickname) as nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                 a.bio
             FROM account a
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             WHERE a.account_id = $1
             "#,
         )
