@@ -924,27 +924,27 @@ impl HypeController {
         })
     }
 
-    pub async fn get_total_spend_point(&self) -> Result<AmountResponse> {
-        let cache_key = "get_total_spend_point";
+    pub async fn get_total_hype_point(&self) -> Result<AmountResponse> {
+        let cache_key = "get_total_hype_point";
 
         with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
             async move {
                 let controller = HypeController::new(db);
-                controller.fetch_total_spend_point().await
+                controller.fetch_total_hype_point().await
             }
         })
         .await
     }
 
-    async fn fetch_total_spend_point(&self) -> Result<AmountResponse> {
+    async fn fetch_total_hype_point(&self) -> Result<AmountResponse> {
         let query = sqlx::query_as::<_, AmountRow>(
             "SELECT hype_point::NUMERIC as amount FROM total_spent_point WHERE id = 1",
         )
         .fetch_one(self.db.get_read_pool());
 
-        let result = measure_postgres!("hype.fetch_total_spend_point", query)
-            .map_err(|err| anyhow!("Failed to get total spend point\n Reason: {err}"))?;
+        let result = measure_postgres!("hype.fetch_total_hype_point", query)
+            .map_err(|err| anyhow!("Failed to get total hype point\n Reason: {err}"))?;
 
         Ok(AmountResponse {
             amount: result.amount.to_string(),

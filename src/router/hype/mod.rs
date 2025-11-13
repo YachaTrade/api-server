@@ -15,8 +15,8 @@ pub fn router(app_state: AppState) -> Router<AppState> {
         .route(HypePath::GetHype.as_str(), get(handler::get_hype_token))
         .route(HypePath::GetEpoch.as_str(), get(handler::get_hype_epoch))
         .route(
-            HypePath::GetTotalSpendPoint.as_str(),
-            get(handler::get_total_spend_point),
+            HypePath::GetTotalHypePoint.as_str(),
+            get(handler::get_total_hype_point),
         )
         .route(
             HypePath::GetCommunityTreasury.as_str(),

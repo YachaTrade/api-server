@@ -43,10 +43,10 @@ lazy_static! {
         .expect("GET_HYPE_TOKEN_RESPONSE_EXPIRATION must be set")
         .parse::<u64>()
         .expect("GET_HYPE_TOKEN_RESPONSE_EXPIRATION must be a valid u64");
-    pub static ref GET_TOTAL_SPEND_POINT_EXPIRATION: u64 = env::var("GET_TOTAL_SPEND_POINT_EXPIRATION")
-        .expect("GET_TOTAL_SPEND_POINT_EXPIRATION must be set")
+    pub static ref GET_TOTAL_HYPE_POINT_EXPIRATION: u64 = env::var("GET_TOTAL_HYPE_POINT_EXPIRATION")
+        .expect("GET_TOTAL_HYPE_POINT_EXPIRATION must be set")
         .parse::<u64>()
-        .expect("GET_TOTAL_SPEND_POINT_EXPIRATION must be a valid u64");
+        .expect("GET_TOTAL_HYPE_POINT_EXPIRATION must be a valid u64");
     pub static ref GET_COMMUNITY_TREASURY_EXPIRATION: u64 = env::var("GET_COMMUNITY_TREASURY_EXPIRATION")
         .expect("GET_COMMUNITY_TREASURY_EXPIRATION must be set")
         .parse::<u64>()

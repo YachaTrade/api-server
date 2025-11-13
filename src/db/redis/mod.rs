@@ -12,7 +12,7 @@ use crate::{
     config::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
         GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
-        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_SPEND_POINT_EXPIRATION, MESSAGE_EXPIRATION,
+        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION, MESSAGE_EXPIRATION,
         NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
         TOKEN_TRADE_EXPIRATION,
     },
@@ -594,35 +594,35 @@ impl RedisDatabase {
         Ok(response)
     }
 
-    pub async fn set_total_spend_point_response(&self, response: &AmountResponse) -> Result<()> {
+    pub async fn set_total_hype_point_response(&self, response: &AmountResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("total_spend_point");
+        let key = format!("total_hype_point");
         let json = serde_json::to_string(response)?;
         measure_redis!(
-            "redis.set_total_spend_point_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_TOTAL_SPEND_POINT_EXPIRATION)
+            "redis.set_total_hype_point_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_TOTAL_HYPE_POINT_EXPIRATION)
         )?;
 
         let elapsed = start_time.elapsed();
         debug!(
-            "set_total_spend_point_response() completed in {:?}",
+            "set_total_hype_point_response() completed in {:?}",
             elapsed
         );
         Ok(())
     }
 
-    pub async fn get_total_spend_point_response(&self) -> Result<AmountResponse> {
+    pub async fn get_total_hype_point_response(&self) -> Result<AmountResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("total_spend_point");
+        let key = format!("total_hype_point");
         let response_json: String = measure_redis!(
-            "redis.get_total_spend_point_response",
+            "redis.get_total_hype_point_response",
             conn.get::<_, String>(key)
         )?;
         let elapsed = start_time.elapsed();
         debug!(
-            "get_total_spend_point_response() completed in {:?}",
+            "get_total_hype_point_response() completed in {:?}",
             elapsed
         );
         let response_json: AmountResponse = serde_json::from_str(&response_json)?;
