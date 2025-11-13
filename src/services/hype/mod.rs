@@ -286,18 +286,18 @@ impl HypeService {
         Ok(response)
     }
 
-    pub async fn get_total_spend_point(&self) -> Result<AmountResponse, AppError> {
-        if let Ok(cached) = self.redis.get_total_spend_point_response().await {
+    pub async fn get_total_hype_point(&self) -> Result<AmountResponse, AppError> {
+        if let Ok(cached) = self.redis.get_total_hype_point_response().await {
             return Ok(cached);
         }
 
         let controller = HypeController::new(self.postgres.clone());
-        let response = controller.get_total_spend_point().await.map_err(|err| {
-            AppError::InternalError(format!("Failed to get total spend point, error: {}", err))
+        let response = controller.get_total_hype_point().await.map_err(|err| {
+            AppError::InternalError(format!("Failed to get total hype point, error: {}", err))
         })?;
 
-        if let Err(err) = self.redis.set_total_spend_point_response(&response).await {
-            error!("Failed to set total spend point response: {}", err);
+        if let Err(err) = self.redis.set_total_hype_point_response(&response).await {
+            error!("Failed to set total hype point response: {}", err);
         }
 
         Ok(response)

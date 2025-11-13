@@ -74,7 +74,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::hype::handler::get_hype_reward_history,
         router::hype::handler::get_hype_reward_add_history,
         router::hype::handler::vote,
-        router::hype::handler::get_total_spend_point,
+        router::hype::handler::get_total_hype_point,
         router::hype::handler::get_community_treasury,
 
         // ----------------Trade----------------

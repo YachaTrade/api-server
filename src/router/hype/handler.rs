@@ -249,21 +249,21 @@ pub async fn get_community_treasury(
     Ok(Json(response))
 }
 
-/// Get Total Spend Point
+/// Get Total Hype Point
 #[utoipa::path(
     get,
-    path = HypePath::GetTotalSpendPoint.docs_str(),
+    path = HypePath::GetTotalHypePoint.docs_str(),
     responses(
-        (status = 200, description = "Total spend point fetched successfully", body = AmountResponse),
+        (status = 200, description = "Total hype point fetched successfully", body = AmountResponse),
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Hype"
 )]
 #[instrument(skip(state))]
-pub async fn get_total_spend_point(State(state): State<AppState>) -> AppJsonResult<AmountResponse> {
+pub async fn get_total_hype_point(State(state): State<AppState>) -> AppJsonResult<AmountResponse> {
     let service = HypeService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.get_total_spend_point().await?;
+    let response = service.get_total_hype_point().await?;
 
     Ok(Json(response))
 }
