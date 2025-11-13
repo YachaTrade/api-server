@@ -30,8 +30,8 @@ pub struct HypeTokenResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypePointResponse {
     pub account_id: String,
-    pub point: String,
-    pub spend_point: String,
+    pub round_point: String,
+    pub hype_point: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -99,8 +99,8 @@ pub struct HypeVoteRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeVoteResponse {
     pub account_id: String,
-    pub account_point: String,
-    pub account_spend_point: String,
+    pub round_point: String,
+    pub hype_point: String,
     pub token_vote: String,
 }
 
