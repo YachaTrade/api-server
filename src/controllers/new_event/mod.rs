@@ -15,6 +15,7 @@ use crate::{
 
 #[derive(sqlx::FromRow)]
 struct SwapEventRow {
+    swap_created_at: i64,
     native_amount: BigDecimal,
     token_id: String,
     name: String,
@@ -85,29 +86,30 @@ impl NewEventController {
     }
 
     async fn fetch_new_events(&self) -> Result<NewEventResponse> {
-        let (buy_event, sell_event, create_event) = tokio::try_join!(
-            self.fetch_latest_buy_event(),
-            self.fetch_latest_sell_event(),
-            self.fetch_latest_create_event()
+        let (create_events, buy_events, sell_events) = tokio::try_join!(
+            self.fetch_create_events(2),
+            self.fetch_buy_events(4),
+            self.fetch_sell_events(4)
         )?;
 
-        let mut new_events = Vec::new();
-        if let Some(event) = buy_event {
-            new_events.push(event);
-        }
-        if let Some(event) = sell_event {
-            new_events.push(event);
-        }
-        if let Some(event) = create_event {
-            new_events.push(event);
-        }
+        let mut all_events: Vec<NewEvent> = create_events
+            .into_iter()
+            .chain(buy_events.into_iter())
+            .chain(sell_events.into_iter())
+            .collect();
 
-        Ok(NewEventResponse { new_events })
+        // Sort by event_created_at (swap.created_at for buy/sell, token.created_at for create)
+        all_events.sort_by(|a, b| b.event_created_at.cmp(&a.event_created_at));
+
+        Ok(NewEventResponse {
+            new_events: all_events,
+        })
     }
 
-    async fn fetch_latest_buy_event(&self) -> Result<Option<NewEvent>> {
+    async fn fetch_buy_events(&self, limit: i64) -> Result<Vec<NewEvent>> {
         let query = r#"
             SELECT
+                s.created_at as swap_created_at,
                 s.native_amount,
                 t.token_id,
                 t.name,
@@ -144,49 +146,56 @@ impl NewEventController {
             LEFT JOIN account_verified av2 ON ax2.x_handle = av2.x_handle
             WHERE s.is_buy = true
             ORDER BY s.created_at DESC
-            LIMIT 1
+            LIMIT $1
         "#;
 
-        let row_opt = measure_postgres!(
-            "new_event.fetch_latest_buy",
-            sqlx::query_as::<_, SwapEventRow>(query).fetch_optional(self.db.get_read_pool())
+        let rows = measure_postgres!(
+            "new_event.fetch_buy_events",
+            sqlx::query_as::<_, SwapEventRow>(query)
+                .bind(limit)
+                .fetch_all(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get latest buy event: {}", err))?;
+        .map_err(|err| anyhow!("Failed to get buy events: {}", err))?;
 
-        Ok(row_opt.map(|row| NewEvent {
-            event_type: EventType::Buy,
-            amount: row.native_amount.normalized().to_plain_string(),
-            token_info: TokenInfo {
-                token_id: row.token_id.clone(),
-                name: row.name,
-                symbol: row.symbol,
-                image_uri: row.token_image_uri,
-                description: row.description,
-                is_graduated: row.is_graduated,
-                is_nsfw: row.is_nsfw,
-                twitter: row.twitter,
-                telegram: row.telegram,
-                website: row.website,
-                created_at: row.token_created_at,
-                creator: AccountInfo {
-                    account_id: row.creator,
-                    nickname: row.creator_nickname,
-                    bio: row.creator_bio,
-                    image_uri: row.creator_image_uri,
+        Ok(rows
+            .into_iter()
+            .map(|row| NewEvent {
+                event_type: EventType::Buy,
+                amount: row.native_amount.normalized().to_plain_string(),
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.token_image_uri,
+                    description: row.description,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                    },
                 },
-            },
-            account_info: AccountInfo {
-                account_id: row.account_id,
-                nickname: row.account_nickname,
-                bio: row.account_bio,
-                image_uri: row.account_image_uri,
-            },
-        }))
+                account_info: AccountInfo {
+                    account_id: row.account_id,
+                    nickname: row.account_nickname,
+                    bio: row.account_bio,
+                    image_uri: row.account_image_uri,
+                },
+                event_created_at: row.swap_created_at,
+            })
+            .collect())
     }
 
-    async fn fetch_latest_sell_event(&self) -> Result<Option<NewEvent>> {
+    async fn fetch_sell_events(&self, limit: i64) -> Result<Vec<NewEvent>> {
         let query = r#"
             SELECT
+                s.created_at as swap_created_at,
                 s.native_amount,
                 t.token_id,
                 t.name,
@@ -223,47 +232,53 @@ impl NewEventController {
             LEFT JOIN account_verified av2 ON ax2.x_handle = av2.x_handle
             WHERE s.is_buy = false
             ORDER BY s.created_at DESC
-            LIMIT 1
+            LIMIT $1
         "#;
 
-        let row_opt = measure_postgres!(
-            "new_event.fetch_latest_sell",
-            sqlx::query_as::<_, SwapEventRow>(query).fetch_optional(self.db.get_read_pool())
+        let rows = measure_postgres!(
+            "new_event.fetch_sell_events",
+            sqlx::query_as::<_, SwapEventRow>(query)
+                .bind(limit)
+                .fetch_all(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get latest sell event: {}", err))?;
+        .map_err(|err| anyhow!("Failed to get sell events: {}", err))?;
 
-        Ok(row_opt.map(|row| NewEvent {
-            event_type: EventType::Sell,
-            amount: row.native_amount.normalized().to_plain_string(),
-            token_info: TokenInfo {
-                token_id: row.token_id.clone(),
-                name: row.name,
-                symbol: row.symbol,
-                image_uri: row.token_image_uri,
-                description: row.description,
-                is_graduated: row.is_graduated,
-                is_nsfw: row.is_nsfw,
-                twitter: row.twitter,
-                telegram: row.telegram,
-                website: row.website,
-                created_at: row.token_created_at,
-                creator: AccountInfo {
-                    account_id: row.creator,
-                    nickname: row.creator_nickname,
-                    bio: row.creator_bio,
-                    image_uri: row.creator_image_uri,
+        Ok(rows
+            .into_iter()
+            .map(|row| NewEvent {
+                event_type: EventType::Sell,
+                amount: row.native_amount.normalized().to_plain_string(),
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.token_image_uri,
+                    description: row.description,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                    },
                 },
-            },
-            account_info: AccountInfo {
-                account_id: row.account_id,
-                nickname: row.account_nickname,
-                bio: row.account_bio,
-                image_uri: row.account_image_uri,
-            },
-        }))
+                account_info: AccountInfo {
+                    account_id: row.account_id,
+                    nickname: row.account_nickname,
+                    bio: row.account_bio,
+                    image_uri: row.account_image_uri,
+                },
+                event_created_at: row.swap_created_at,
+            })
+            .collect())
     }
 
-    async fn fetch_latest_create_event(&self) -> Result<Option<NewEvent>> {
+    async fn fetch_create_events(&self, limit: i64) -> Result<Vec<NewEvent>> {
         let query = r#"
             SELECT
                 t.token_id,
@@ -296,43 +311,49 @@ impl NewEventController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             LEFT JOIN account_verified av ON ax.x_handle = av.x_handle
             ORDER BY t.created_at DESC
-            LIMIT 1
+            LIMIT $1
         "#;
 
-        let row_opt = measure_postgres!(
-            "new_event.fetch_latest_create",
-            sqlx::query_as::<_, CreateEventRow>(query).fetch_optional(self.db.get_read_pool())
+        let rows = measure_postgres!(
+            "new_event.fetch_create_events",
+            sqlx::query_as::<_, CreateEventRow>(query)
+                .bind(limit)
+                .fetch_all(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get latest create event: {}", err))?;
+        .map_err(|err| anyhow!("Failed to get create events: {}", err))?;
 
-        Ok(row_opt.map(|row| NewEvent {
-            event_type: EventType::Create,
-            amount: "0".to_string(),
-            token_info: TokenInfo {
-                token_id: row.token_id.clone(),
-                name: row.name,
-                symbol: row.symbol,
-                image_uri: row.token_image_uri,
-                description: row.description,
-                is_graduated: row.is_graduated,
-                is_nsfw: row.is_nsfw,
-                twitter: row.twitter,
-                telegram: row.telegram,
-                website: row.website,
-                created_at: row.token_created_at,
-                creator: AccountInfo {
-                    account_id: row.creator,
-                    nickname: row.creator_nickname,
-                    bio: row.creator_bio,
-                    image_uri: row.creator_image_uri,
+        Ok(rows
+            .into_iter()
+            .map(|row| NewEvent {
+                event_type: EventType::Create,
+                amount: "0".to_string(),
+                token_info: TokenInfo {
+                    token_id: row.token_id.clone(),
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.token_image_uri,
+                    description: row.description,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                    },
                 },
-            },
-            account_info: AccountInfo {
-                account_id: row.account_id,
-                nickname: row.account_nickname,
-                bio: row.account_bio,
-                image_uri: row.account_image_uri,
-            },
-        }))
+                account_info: AccountInfo {
+                    account_id: row.account_id,
+                    nickname: row.account_nickname,
+                    bio: row.account_bio,
+                    image_uri: row.account_image_uri,
+                },
+                event_created_at: row.token_created_at,
+            })
+            .collect())
     }
 }
