@@ -8,6 +8,6 @@ use path::RafflePath;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route(RafflePath::GetStatus.as_str(), get(handler::get_status))
+        .route(RafflePath::GetEligible.as_str(), get(handler::get_eligible))
         .route(RafflePath::GetPrizes.as_str(), get(handler::get_prizes))
 }

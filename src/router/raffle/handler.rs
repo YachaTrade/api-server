@@ -17,20 +17,20 @@ pub struct PrizeQuery {
     pub round: i64,
 }
 
-/// Get raffle status for authenticated user
+/// Get raffle eligibility for authenticated user
 #[utoipa::path(
     get,
-    path = RafflePath::GetStatus.docs_str(),
+    path = RafflePath::GetEligible.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),
     responses(
-        (status = 200, description = "Get raffle status successfully", body = RaffleStatusResponse)
+        (status = 200, description = "Get raffle eligibility successfully", body = RaffleStatusResponse)
     ),
     tag="Raffle"
 )]
 #[instrument(skip(state, session_address))]
-pub async fn get_status(
+pub async fn get_eligible(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<RaffleStatusResponse> {

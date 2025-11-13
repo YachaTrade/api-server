@@ -104,7 +104,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::new_event::handler::get_new_event,
 
         // ----------------Raffle----------------
-        router::raffle::handler::get_status,
+        router::raffle::handler::get_eligible,
         router::raffle::handler::get_prizes,
 
         // ----------------Metadata----------------
