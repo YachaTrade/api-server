@@ -4,6 +4,7 @@ use anyhow::Result;
 use bigdecimal::BigDecimal;
 
 use crate::{
+    config::MIN_PRICE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::trading::metrics::{
@@ -26,12 +27,35 @@ impl MetricsController {
         token_id: &str,
         timeframes: Vec<TimeFrame>,
     ) -> Result<MetricsBatchResponse> {
-        let mut metrics = Vec::with_capacity(timeframes.len());
+        let mut handles = Vec::with_capacity(timeframes.len());
 
         for timeframe in timeframes {
-            let metric = self.fetch_metric_for_timeframe(token_id, timeframe).await?;
-            metrics.push(metric);
+            let token_id = token_id.to_string();
+            let handle = tokio::spawn({
+                let db = Arc::clone(&self.db);
+                async move {
+                    let controller = MetricsController::new(db);
+                    controller.fetch_metric_for_timeframe(&token_id, timeframe).await
+                }
+            });
+            handles.push(handle);
         }
+
+        let mut metrics = Vec::with_capacity(handles.len());
+        for handle in handles {
+            metrics.push(handle.await??);
+        }
+
+        // Sort metrics by timeframe to preserve order
+        metrics.sort_by_key(|m| {
+            match m.timeframe.as_str() {
+                "5m" => 0,
+                "1h" => 1,
+                "6h" => 2,
+                "24h" => 3,
+                _ => 999,
+            }
+        });
 
         Ok(MetricsBatchResponse { metrics })
     }
@@ -90,6 +114,11 @@ impl MetricsController {
         let percent = match (start_price, current_price) {
             (Some(start), Some(current)) => {
                 calculate_price_change_percent(&start, &current).unwrap_or(0.0)
+            }
+            (None, Some(current)) => {
+                // If start_price is None, use MIN_PRICE
+                let min_price_str = MIN_PRICE.to_string();
+                calculate_price_change_percent(&min_price_str, &current).unwrap_or(0.0)
             }
             _ => 0.0,
         };
@@ -168,11 +197,9 @@ impl MetricsController {
             .fetch_optional(self.db.get_read_pool())
         )?;
 
-        let start_price = start_result
-            .map(|row| row.price.normalized().to_plain_string());
+        let start_price = start_result.map(|row| row.price.normalized().to_plain_string());
 
-        let current_price = current_result
-            .map(|row| row.price.normalized().to_plain_string());
+        let current_price = current_result.map(|row| row.price.normalized().to_plain_string());
 
         Ok((start_price, current_price))
     }
