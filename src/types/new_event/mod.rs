@@ -18,6 +18,8 @@ pub struct NewEvent {
     pub amount: String,
     pub token_info: TokenInfo,
     pub account_info: AccountInfo,
+    #[serde(skip)]
+    pub event_created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
