@@ -9,7 +9,6 @@ pub enum TokenOrderType {
     MarketCap,    // price * reserve_token
     CreationTime, // created_at
     LatestTrade,  // market latest_trade_at
-    Verified,     // verified
 }
 
 impl TokenOrderType {
@@ -18,7 +17,6 @@ impl TokenOrderType {
             TokenOrderType::MarketCap => "market_cap",
             TokenOrderType::CreationTime => "creation_time",
             TokenOrderType::LatestTrade => "latest_trade",
-            TokenOrderType::Verified => "verified",
         }
     }
 }
