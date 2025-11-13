@@ -324,10 +324,13 @@ impl OrderController {
         Ok(rows.into_iter().map(OrderToken::from).collect())
     }
 
-    pub async fn get_total_count_by_type(&self, _order_type: &TokenOrderType) -> Result<i64> {
+    pub async fn get_total_count_by_type(&self, _order_type: &TokenOrderType, is_nsfw: bool) -> Result<i64> {
+        let column = if is_nsfw { "nsfw_count" } else { "sfw_count" };
+        let query = format!("SELECT {} as count FROM token_count", column);
+
         let row = measure_postgres!(
             "token_order.get_total_count_by_type",
-            sqlx::query_as::<_, CountRow>("SELECT total_count as count FROM token_count")
+            sqlx::query_as::<_, CountRow>(&query)
                 .fetch_one(self.db.get_read_pool())
         )
         .map_err(|e| anyhow!("Failed to get total_count: {}", e))?;

@@ -49,7 +49,7 @@ impl TokenOrderService {
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 
         let total_count = controller
-            .get_total_count_by_type(&order_type)
+            .get_total_count_by_type(&order_type, query.is_nsfw)
             .await
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 
