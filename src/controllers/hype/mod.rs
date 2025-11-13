@@ -352,18 +352,18 @@ impl HypeController {
         #[derive(sqlx::FromRow)]
         struct PointRow {
             account_id: String,
-            point: i64,
-            spend_point: i64,
+            round_point: i64,
+            hype_point: i64,
         }
 
         let row = measure_postgres!(
             "hype.fetch_hype_point",
             sqlx::query_as::<_, PointRow>(
                 r#"
-                SELECT 
+                SELECT
                     account_id,
-                    point,
-                    spend_point
+                    round_point,
+                    hype_point
                 FROM point
                 WHERE account_id = $1
                 "#,
@@ -376,13 +376,13 @@ impl HypeController {
         match row {
             Some(row) => Ok(HypePointResponse {
                 account_id: row.account_id,
-                point: row.point.to_string(),
-                spend_point: row.spend_point.to_string(),
+                round_point: row.round_point.to_string(),
+                hype_point: row.hype_point.to_string(),
             }),
             None => Ok(HypePointResponse {
                 account_id: account_id.to_string(),
-                point: "0".to_string(),
-                spend_point: "0".to_string(),
+                round_point: "0".to_string(),
+                hype_point: "0".to_string(),
             }),
         }
     }
@@ -866,8 +866,8 @@ impl HypeController {
 
         #[derive(sqlx::FromRow)]
         struct VoteResult {
-            new_point: i64,
-            new_spend_point: i64,
+            new_round_point: i64,
+            new_hype_point: i64,
             new_vote: BigDecimal,
         }
 
@@ -875,35 +875,35 @@ impl HypeController {
             r#"
             WITH vote_history_insert AS (
                 INSERT INTO vote_history (epoch, token_id, account_id, vote, total_vote_amount)
-                SELECT 
+                SELECT
                     (SELECT epoch FROM epoch WHERE status = 'ACTIVE'),
                     $2,
                     $1,
                     $3,
-                    (SELECT vote + $3 FROM hype_token 
-                     WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE') 
+                    (SELECT vote + $3 FROM hype_token
+                     WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
                      AND token_id = $2)
-                WHERE (SELECT point FROM point WHERE account_id = $1) >= $3
+                WHERE (SELECT round_point FROM point WHERE account_id = $1) >= $3
                 RETURNING id
             ),
             point_update AS (
-                UPDATE point 
-                SET point = point - $3, spend_point = spend_point + $3
-                WHERE account_id = $1 AND point >= $3
+                UPDATE point
+                SET round_point = round_point - $3, hype_point = hype_point + $3
+                WHERE account_id = $1 AND round_point >= $3
                 AND EXISTS (SELECT 1 FROM vote_history_insert)
-                RETURNING point as new_point, spend_point as new_spend_point
+                RETURNING round_point as new_round_point, hype_point as new_hype_point
             ),
             vote_update AS (
-                UPDATE hype_token 
+                UPDATE hype_token
                 SET vote = vote + $3
-                WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE') 
+                WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
                 AND token_id = $2
                 AND EXISTS (SELECT 1 FROM vote_history_insert)
                 RETURNING vote as new_vote
             )
-            SELECT 
-                (SELECT new_point FROM point_update) as new_point,
-                (SELECT new_spend_point FROM point_update) as new_spend_point,
+            SELECT
+                (SELECT new_round_point FROM point_update) as new_round_point,
+                (SELECT new_hype_point FROM point_update) as new_hype_point,
                 (SELECT new_vote FROM vote_update) as new_vote
             WHERE EXISTS (SELECT 1 FROM vote_history_insert)
             "#,
@@ -918,8 +918,8 @@ impl HypeController {
 
         Ok(HypeVoteResponse {
             account_id: account_id.to_string(),
-            account_point: vote_result.new_point.to_string(),
-            account_spend_point: vote_result.new_spend_point.to_string(),
+            round_point: vote_result.new_round_point.to_string(),
+            hype_point: vote_result.new_hype_point.to_string(),
             token_vote: vote_result.new_vote.to_string(),
         })
     }
@@ -939,7 +939,7 @@ impl HypeController {
 
     async fn fetch_total_spend_point(&self) -> Result<AmountResponse> {
         let query = sqlx::query_as::<_, AmountRow>(
-            "SELECT spend_point::NUMERIC as amount FROM total_spent_point WHERE id = 1",
+            "SELECT hype_point::NUMERIC as amount FROM total_spent_point WHERE id = 1",
         )
         .fetch_one(self.db.get_read_pool());
 
