@@ -127,7 +127,8 @@ impl SearchController {
                         native_price: row.native_price.normalized().to_plain_string(),
                         price: row.price.normalized().to_plain_string(),
                         total_supply: row.total_supply.normalized().to_plain_string(),
-                        liquidity: row.liquidity.normalized().to_plain_string(),
+                        reserve_native: row.reserve_native.normalized().to_plain_string(),
+                        reserve_token: row.reserve_token.normalized().to_plain_string(),
                         volume: row.volume.normalized().to_plain_string(),
                         ath_price: row.ath_price.normalized().to_plain_string(),
                         holder_count: row.holder_count,
@@ -221,7 +222,8 @@ impl SearchController {
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply,
-                        COALESCE(m.reserve_native, 0) as liquidity,
+                        COALESCE(m.reserve_native, 0) as reserve_native,
+                        COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price
                     FROM token t
@@ -272,7 +274,8 @@ impl SearchController {
                             COALESCE(lp.price, 0) as native_price,
                             m.price,
                             t.total_supply,
-                            COALESCE(m.reserve_native, 0) as liquidity,
+                            COALESCE(m.reserve_native, 0) as reserve_native,
+                            COALESCE(m.reserve_token, 0) as reserve_token,
                             m.volume,
                             m.ath_price
                         FROM token t
@@ -318,7 +321,8 @@ impl SearchController {
                             COALESCE(lp.price, 0) as native_price,
                             m.price,
                             t.total_supply,
-                            COALESCE(m.reserve_native, 0) as liquidity,
+                            COALESCE(m.reserve_native, 0) as reserve_native,
+                            COALESCE(m.reserve_token, 0) as reserve_token,
                             m.volume,
                             m.ath_price
                         FROM token t
@@ -547,7 +551,8 @@ struct SearchTokenRow {
     native_price: BigDecimal,
     price: BigDecimal,
     total_supply: BigDecimal,
-    liquidity: BigDecimal,
+    reserve_native: BigDecimal,
+    reserve_token: BigDecimal,
     volume: BigDecimal,
     ath_price: BigDecimal,
 }

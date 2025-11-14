@@ -152,7 +152,7 @@ impl GeckoController {
                     FROM swap s
                     JOIN market m ON s.token_id = m.token_id
                     WHERE s.block_number >= $1 AND s.block_number <= $2
-                    ORDER BY s.block_number ASC, s.tx_index ASC NULLS LAST, s.log_index ASC
+                    ORDER BY s.block_number ASC, s.tx_index ASC, s.log_index ASC
                 "#,
             )
             .bind(from_block as i64)

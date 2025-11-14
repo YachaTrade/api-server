@@ -68,6 +68,8 @@ pub struct MarketInfo {
     pub market_type: MarketType,
     pub token_id: String,
     pub market_id: String,
+    pub reserve_native: String,
+    pub reserve_token: String,
     /// Token/USD price
     pub token_price: String,
     /// MON/USD price
@@ -76,8 +78,6 @@ pub struct MarketInfo {
     pub price: String,
     /// Total supply (used for market cap calculation in bonding curve)
     pub total_supply: String,
-    /// Liquidity (used for pool liquidity in dex)
-    pub liquidity: String,
     /// Volume (used for tokne total volume)
     pub volume: String,
     // Ath price
