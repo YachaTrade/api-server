@@ -46,7 +46,8 @@ struct OrderTokenRow {
     native_price: BigDecimal,
     price: BigDecimal,
     total_supply: BigDecimal,
-    liquidity: BigDecimal,
+    reserve_native: BigDecimal,
+    reserve_token: BigDecimal,
     volume: BigDecimal,
     ath_price: BigDecimal,
     price_24h_ago: Option<BigDecimal>,
@@ -132,7 +133,8 @@ impl OrderController {
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply,
-                        COALESCE(m.reserve_native, 0) as liquidity,
+                        COALESCE(m.reserve_native, 0) as reserve_native,
+                        COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
                         (
@@ -205,7 +207,8 @@ impl OrderController {
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply,
-                        COALESCE(m.reserve_native, 0) as liquidity,
+                        COALESCE(m.reserve_native, 0) as reserve_native,
+                        COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
                         (
@@ -278,7 +281,8 @@ impl OrderController {
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
                         t.total_supply,
-                        COALESCE(m.reserve_native, 0) as liquidity,
+                        COALESCE(m.reserve_native, 0) as reserve_native,
+                        COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
                         (
@@ -293,7 +297,7 @@ impl OrderController {
                             LIMIT 1
                         ) as price_24h_ago
                     FROM (
-                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.volume, m.ath_price
+                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.reserve_token, m.volume, m.ath_price
                         FROM market m
                         JOIN token t ON m.token_id = t.token_id
                         WHERE {}
@@ -396,7 +400,8 @@ impl From<OrderTokenRow> for OrderToken {
                 native_price: row.native_price.normalized().to_plain_string(),
                 price: row.price.normalized().to_plain_string(),
                 total_supply: row.total_supply.normalized().to_plain_string(),
-                liquidity: row.liquidity.normalized().to_plain_string(),
+                reserve_native: row.reserve_native.normalized().to_plain_string(),
+                reserve_token: row.reserve_token.normalized().to_plain_string(),
                 volume: row.volume.normalized().to_plain_string(),
                 ath_price: row.ath_price.normalized().to_plain_string(),
                 holder_count: row.holder_count,
