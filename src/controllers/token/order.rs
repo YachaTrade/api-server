@@ -99,7 +99,7 @@ impl OrderController {
                 let current_time = current_unix_timestamp();
                 let time_24h_ago = current_time - 86400;
 
-                let nsfw_filter = if is_nsfw { "t.is_nsfw = true" } else { "t.is_nsfw = false" };
+                let nsfw_filter = if is_nsfw { "TRUE" } else { "t.is_nsfw = false" };
 
                 let query = format!(
                     r#"
@@ -172,7 +172,7 @@ impl OrderController {
                 let current_time = current_unix_timestamp();
                 let time_24h_ago = current_time - 86400;
 
-                let nsfw_filter = if is_nsfw { "t.is_nsfw = true" } else { "t.is_nsfw = false" };
+                let nsfw_filter = if is_nsfw { "TRUE" } else { "t.is_nsfw = false" };
 
                 let query = format!(
                     r#"
@@ -245,7 +245,7 @@ impl OrderController {
                 let current_time = current_unix_timestamp();
                 let time_24h_ago = current_time - 86400;
 
-                let nsfw_filter = if is_nsfw { "t.is_nsfw = true" } else { "t.is_nsfw = false" };
+                let nsfw_filter = if is_nsfw { "TRUE" } else { "t.is_nsfw = false" };
 
                 let query = format!(
                     r#"
@@ -325,7 +325,9 @@ impl OrderController {
     }
 
     pub async fn get_total_count_by_type(&self, _order_type: &TokenOrderType, is_nsfw: bool) -> Result<i64> {
-        let column = if is_nsfw { "nsfw_count" } else { "sfw_count" };
+        // is_nsfw = true: return all tokens (total_count)
+        // is_nsfw = false: return only SFW tokens (sfw_count)
+        let column = if is_nsfw { "total_count" } else { "sfw_count" };
         let query = format!("SELECT {} as count FROM token_count", column);
 
         let row = measure_postgres!(
