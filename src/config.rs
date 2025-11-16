@@ -105,7 +105,7 @@ lazy_static! {
 
     // Minimum price for metrics calculation
     pub static ref MIN_PRICE: BigDecimal = env::var("MIN_PRICE")
-        .unwrap_or_else(|_| "0.0000000280".to_string())
+        .unwrap_or_else(|_| "0.0000838".to_string())
         .parse::<BigDecimal>()
         .expect("MIN_PRICE must be a valid BigDecimal");
 }
