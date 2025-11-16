@@ -205,6 +205,8 @@ impl TokenCreatedController {
                     native_price,
                     price,
                     total_supply,
+                    reserve_native,
+                    reserve_token,
                     volume,
                     ath_price,
                     balance,
