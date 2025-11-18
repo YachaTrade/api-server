@@ -2,7 +2,6 @@ pub mod auth;
 pub mod common;
 
 pub mod account;
-pub mod bot;
 
 pub mod new_event;
 

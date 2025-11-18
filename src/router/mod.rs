@@ -1,5 +1,5 @@
 pub mod auth;
-pub mod bot;
+
 pub mod profile;
 
 pub mod account;
