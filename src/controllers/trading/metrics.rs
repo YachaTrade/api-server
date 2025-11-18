@@ -35,7 +35,9 @@ impl MetricsController {
                 let db = Arc::clone(&self.db);
                 async move {
                     let controller = MetricsController::new(db);
-                    controller.fetch_metric_for_timeframe(&token_id, timeframe).await
+                    controller
+                        .fetch_metric_for_timeframe(&token_id, timeframe)
+                        .await
                 }
             });
             handles.push(handle);
@@ -47,14 +49,12 @@ impl MetricsController {
         }
 
         // Sort metrics by timeframe to preserve order
-        metrics.sort_by_key(|m| {
-            match m.timeframe.as_str() {
-                "5m" => 0,
-                "1h" => 1,
-                "6h" => 2,
-                "24h" => 3,
-                _ => 999,
-            }
+        metrics.sort_by_key(|m| match m.timeframe.as_str() {
+            "5m" => 0,
+            "1h" => 1,
+            "6h" => 2,
+            "24h" => 3,
+            _ => 999,
         });
 
         Ok(MetricsBatchResponse { metrics })
@@ -87,8 +87,8 @@ impl MetricsController {
                     SELECT
                         SUM(CASE WHEN is_buy = true THEN 1 ELSE 0 END) as buy_count,
                         SUM(CASE WHEN is_buy = false THEN 1 ELSE 0 END) as sell_count,
-                        COALESCE(SUM(CASE WHEN is_buy = true THEN native_amount ELSE 0 END), 0) as buy_volume,
-                        COALESCE(SUM(CASE WHEN is_buy = false THEN native_amount ELSE 0 END), 0) as sell_volume,
+                        COALESCE(SUM(CASE WHEN is_buy = true THEN value ELSE 0 END), 0) as buy_volume,
+                        COALESCE(SUM(CASE WHEN is_buy = false THEN value ELSE 0 END), 0) as sell_volume,
                         COUNT(DISTINCT CASE WHEN is_buy = true THEN account_id END) as buy_makers,
                         COUNT(DISTINCT CASE WHEN is_buy = false THEN account_id END) as sell_makers
                     FROM swap
