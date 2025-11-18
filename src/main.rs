@@ -2,8 +2,8 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, bot, gecko, health, hype, metadata, metrics, new_event, order,
-        profile, raffle, search, token, trade,
+        self, account, auth, gecko, health, hype, metadata, metrics, new_event, order, profile,
+        raffle, search, token, trade,
     },
     state::AppState,
     types,
@@ -282,10 +282,10 @@ async fn main() -> Result<()> {
     info!("Server will start on {}:{} - v2 deployment test", ip, port);
 
     let app_state = AppState::new().await;
+    info!("AppState initialized");
 
     let cookie_manager_layer = CookieManagerLayer::new();
-    let root = Router::new()
-        .route("/", get(|| async { "Hello, World!" }));
+    let root = Router::new().route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()
         .merge(root)
         .merge(health::router())
@@ -302,7 +302,7 @@ async fn main() -> Result<()> {
         .merge(profile::router())
         .merge(order::router())
         .merge(hype::router(app_state.clone()))
-        .merge(bot::router())
+        // .merge(bot::router()) // bot 모듈이 존재하지 않음
         .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
