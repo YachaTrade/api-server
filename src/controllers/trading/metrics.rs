@@ -156,17 +156,23 @@ impl MetricsController {
         let current_time = current_unix_timestamp();
         let timeframe_ago = current_time - period_seconds;
 
-        // Get start price: most recent price before or at timeframe_ago
+        // Get start price: most recent price before or at timeframe_ago, or oldest price if not available
         let start_result = measure_postgres!(
             "trading_metrics.get_start_price",
             sqlx::query!(
                 r#"
-                SELECT price
-                FROM price_history
-                WHERE token_id = $1
-                AND created_at <= $2
-                ORDER BY created_at DESC, tx_index DESC, log_index DESC
-                LIMIT 1
+                SELECT COALESCE(
+                    (SELECT price
+                     FROM price_history
+                     WHERE token_id = $1 AND created_at <= $2
+                     ORDER BY created_at DESC, tx_index DESC, log_index DESC
+                     LIMIT 1),
+                    (SELECT price
+                     FROM price_history
+                     WHERE token_id = $1
+                     ORDER BY created_at ASC, tx_index ASC, log_index ASC
+                     LIMIT 1)
+                ) as price
                 "#,
                 token_id,
                 timeframe_ago
@@ -174,7 +180,7 @@ impl MetricsController {
             .fetch_optional(self.db.get_read_pool())
         )?;
 
-        // Get current price: most recent price at current_time
+        // Get current price: most recent price
         let current_result = measure_postgres!(
             "trading_metrics.get_current_price",
             sqlx::query!(
@@ -182,17 +188,15 @@ impl MetricsController {
                 SELECT price
                 FROM price_history
                 WHERE token_id = $1
-                AND created_at <= $2
                 ORDER BY created_at DESC, tx_index DESC, log_index DESC
                 LIMIT 1
                 "#,
-                token_id,
-                current_time
+                token_id
             )
             .fetch_optional(self.db.get_read_pool())
         )?;
 
-        let start_price = start_result.map(|row| row.price.normalized().to_plain_string());
+        let start_price = start_result.and_then(|row| row.price).map(|price| price.normalized().to_plain_string());
 
         let current_price = current_result.map(|row| row.price.normalized().to_plain_string());
 
