@@ -3,7 +3,7 @@ use api_server::{
     middleware::authenticate_user,
     router::{
         self, account, auth, gecko, health, hype, metadata, metrics, new_event, order, profile,
-        raffle, search, token, trade,
+        raffle, search, token, trade, trend,
     },
     state::AppState,
     types,
@@ -109,6 +109,11 @@ use utoipa_swagger_ui::SwaggerUi;
         router::gecko::handler::get_pair,
         router::gecko::handler::get_events,
         router::gecko::handler::get_gecko_metadata,
+
+        // ----------------Trend----------------
+        router::trend::handler::get_trend,
+        router::trend::handler::insert_trend,
+        router::trend::handler::delete_trend,
 
     ),
     components(
@@ -231,6 +236,12 @@ use utoipa_swagger_ui::SwaggerUi;
             types::raffle::Prize,
             types::raffle::PrizeListResponse,
 
+            // Trend
+            types::trend::TrendToken,
+            types::trend::TrendResponse,
+            types::trend::TrendRequest,
+            types::trend::TrendActionResponse,
+
         )
     ),
     tags(
@@ -246,6 +257,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Raffle",description="Raffle endpoints"),
         (name="Metadata",description="Metadata upload endpoints"),
         (name="Gecko",description="Gecko Terminal API endpoints"),
+        (name="Trend",description="Trend token endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -307,6 +319,7 @@ async fn main() -> Result<()> {
         .merge(metadata::router())
         .merge(metrics::router())
         .merge(gecko::router())
+        .merge(trend::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(5_000_000)) // 5MB (decimal) global limit
         .layer(axum_middleware::from_fn(method_based_timeout))
