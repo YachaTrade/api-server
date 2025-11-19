@@ -195,6 +195,13 @@ impl OrderController {
                         FROM price
                         ORDER BY created_at DESC
                         LIMIT 1
+                    ),
+                    latest_swap AS (
+                        SELECT
+                            token_id,
+                            MAX(created_at) as latest_swap_at
+                        FROM swap
+                        GROUP BY token_id
                     )
                     SELECT
                         t.token_id,
@@ -250,9 +257,10 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    JOIN latest_swap ls ON t.token_id = ls.token_id
                     CROSS JOIN latest_price lp
                     WHERE {}
-                    ORDER BY m.latest_trade_at {}
+                    ORDER BY ls.latest_swap_at {}
                     LIMIT $1 OFFSET $2
                     "#,
                     nsfw_filter, order_direction
