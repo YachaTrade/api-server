@@ -4,7 +4,6 @@ use anyhow::Result;
 use bigdecimal::BigDecimal;
 
 use crate::{
-    config::MIN_PRICE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::trading::metrics::{
@@ -115,11 +114,7 @@ impl MetricsController {
             (Some(start), Some(current)) => {
                 calculate_price_change_percent(&start, &current).unwrap_or(0.0)
             }
-            (None, Some(current)) => {
-                // If start_price is None, use MIN_PRICE
-                let min_price_str = MIN_PRICE.to_string();
-                calculate_price_change_percent(&min_price_str, &current).unwrap_or(0.0)
-            }
+
             _ => 0.0,
         };
 

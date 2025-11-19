@@ -152,7 +152,6 @@ impl SearchController {
                         _ => row.image_uri,
                     },
                 },
-                total_value: row.total_value.to_string(),
             })
             .collect::<Vec<_>>();
 
@@ -371,9 +370,8 @@ impl SearchController {
         let pool = self.db.get_read_pool();
 
         match pattern {
-            SearchPattern::TwitterHandle => {
-                sqlx::query_as::<_, SearchAccountRow>(
-                    r#"
+            SearchPattern::TwitterHandle => sqlx::query_as::<_, SearchAccountRow>(
+                r#"
                     SELECT
                         a.account_id,
                         a.nickname,
@@ -382,29 +380,27 @@ impl SearchController {
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
-                        COALESCE(total_value.value, 0) as total_value
+                        0 as total_value
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
-                    LEFT JOIN LATERAL (
-                        SELECT SUM(b.balance * m.price) as value
-                        FROM balance b
-                        INNER JOIN market m ON b.token_id = m.token_id
-                        WHERE b.account_id = a.account_id
-                          AND b.balance >= 1000000000000000000
-                    ) total_value ON true
                     WHERE ax.x_handle ILIKE '%' || $1 || '%'
-                    ORDER BY total_value.value DESC NULLS LAST
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(ax.x_handle) = LOWER($1) THEN 0
+                            WHEN LOWER(ax.x_handle) LIKE LOWER($1) || '%' THEN 1
+                            ELSE 2
+                        END,
+                        LENGTH(ax.x_handle),
+                        a.follower_count DESC
                     LIMIT 50
                     "#,
-                )
-                .bind(query)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Database error: {}", e))
-            }
-            SearchPattern::EvmAddress => {
-                sqlx::query_as::<_, SearchAccountRow>(
-                    r#"
+            )
+            .bind(query)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
+            SearchPattern::EvmAddress => sqlx::query_as::<_, SearchAccountRow>(
+                r#"
                     SELECT
                         a.account_id,
                         a.nickname,
@@ -413,7 +409,7 @@ impl SearchController {
                         ax.x_handle,
                         ax.x_image_uri,
                         ax.is_blue_label,
-                        COALESCE(total_value.value, 0) as total_value
+                        0 as total_value
                     FROM account a
                     LEFT JOIN LATERAL (
                         SELECT x_handle, x_image_uri, is_blue_label
@@ -421,22 +417,14 @@ impl SearchController {
                         WHERE account_id = a.account_id
                         LIMIT 1
                     ) ax ON true
-                    LEFT JOIN LATERAL (
-                        SELECT SUM(b.balance * m.price) as value
-                        FROM balance b
-                        INNER JOIN market m ON b.token_id = m.token_id
-                        WHERE b.account_id = a.account_id
-                          AND b.balance >= 1000000000000000000
-                    ) total_value ON true
                     WHERE LOWER(a.account_id) = LOWER($1)
                     LIMIT 1
                     "#,
-                )
-                .bind(query)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Database error: {}", e))
-            }
+            )
+            .bind(query)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
             SearchPattern::Universal => {
                 let (nickname_future, x_handle_future) = (
                     sqlx::query_as::<_, SearchAccountRow>(
@@ -449,7 +437,7 @@ impl SearchController {
                             ax.x_handle,
                             ax.x_image_uri,
                             ax.is_blue_label,
-                            COALESCE(total_value.value, 0) as total_value
+                            0 as total_value
                         FROM account a
                         LEFT JOIN LATERAL (
                             SELECT x_handle, x_image_uri, is_blue_label
@@ -457,15 +445,15 @@ impl SearchController {
                             WHERE account_id = a.account_id
                             LIMIT 1
                         ) ax ON true
-                        LEFT JOIN LATERAL (
-                            SELECT SUM(b.balance * m.price) as value
-                            FROM balance b
-                            INNER JOIN market m ON b.token_id = m.token_id
-                            WHERE b.account_id = a.account_id
-                              AND b.balance >= 1000000000000000000
-                        ) total_value ON true
                         WHERE a.nickname ILIKE '%' || $1 || '%'
-                        ORDER BY total_value.value DESC NULLS LAST, a.follower_count DESC
+                        ORDER BY
+                            CASE
+                                WHEN LOWER(a.nickname) = LOWER($1) THEN 0
+                                WHEN LOWER(a.nickname) LIKE LOWER($1) || '%' THEN 1
+                                ELSE 2
+                            END,
+                            LENGTH(a.nickname),
+                            a.follower_count DESC
                         LIMIT 5
                         "#,
                     )
@@ -481,18 +469,18 @@ impl SearchController {
                             ax.x_handle,
                             ax.x_image_uri,
                             ax.is_blue_label,
-                            COALESCE(total_value.value, 0) as total_value
+                            0 as total_value
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
-                        LEFT JOIN LATERAL (
-                            SELECT SUM(b.balance * m.price) as value
-                            FROM balance b
-                            INNER JOIN market m ON b.token_id = m.token_id
-                            WHERE b.account_id = a.account_id
-                              AND b.balance >= 1000000000000000000
-                        ) total_value ON true
                         WHERE ax.x_handle ILIKE '%' || $1 || '%'
-                        ORDER BY total_value.value DESC NULLS LAST
+                        ORDER BY
+                            CASE
+                                WHEN LOWER(ax.x_handle) = LOWER($1) THEN 0
+                                WHEN LOWER(ax.x_handle) LIKE LOWER($1) || '%' THEN 1
+                                ELSE 2
+                            END,
+                            LENGTH(ax.x_handle),
+                            a.follower_count DESC
                         LIMIT 20
                         "#,
                     )
@@ -500,21 +488,24 @@ impl SearchController {
                     .fetch_all(pool),
                 );
 
-                let (nickname_results, x_handle_results) = tokio::join!(nickname_future, x_handle_future);
+                let (nickname_results, x_handle_results) =
+                    tokio::join!(nickname_future, x_handle_future);
 
                 let mut combined_results = Vec::new();
                 let mut seen_ids = HashSet::new();
 
-                for account in nickname_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
+                for account in
+                    nickname_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))?
+                {
                     if seen_ids.insert(account.account_id.clone()) {
                         combined_results.push(account);
                     }
                 }
 
-                for account in x_handle_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))? {
-                    if seen_ids.insert(account.account_id.clone())
-                        && combined_results.len() < 40
-                    {
+                for account in
+                    x_handle_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))?
+                {
+                    if seen_ids.insert(account.account_id.clone()) && combined_results.len() < 40 {
                         combined_results.push(account);
                     }
                 }
