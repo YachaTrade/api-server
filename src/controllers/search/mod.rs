@@ -506,7 +506,7 @@ impl SearchController {
                     }
                 }
 
-                combined_results.sort_by(|a, b| b.total_value.cmp(&a.total_value));
+                // Results are already sorted by name similarity in the queries
                 combined_results.truncate(40);
                 Ok(combined_results)
             }
