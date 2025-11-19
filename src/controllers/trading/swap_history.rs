@@ -316,7 +316,10 @@ impl SwapController {
             }
         }
 
-        query_sql.push_str(&format!(" ORDER BY s.created_at {}", query.direction));
+        query_sql.push_str(&format!(
+            " ORDER BY s.created_at {}, s.tx_index {}, s.log_index {}",
+            query.direction, query.direction, query.direction
+        ));
         query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));
 
         let mut query_builder = sqlx::query_as::<_, TokenSwapRow>(&query_sql);

@@ -17,7 +17,6 @@ pub struct TokenSearchResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AccountSearchResult {
     pub account_info: AccountInfo,
-    pub total_value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

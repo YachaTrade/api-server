@@ -172,8 +172,7 @@ impl TokenCreatedController {
                         m.volume,
                         m.ath_price,
                         COALESCE(b.balance, 0) as balance,
-                        COALESCE(b.created_at, 0) as balance_created_at,
-                        COALESCE(m.price * b.balance * COALESCE(lp.price, 0), 0) as current_value
+                        COALESCE(b.created_at, 0) as balance_created_at
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -210,10 +209,9 @@ impl TokenCreatedController {
                     volume,
                     ath_price,
                     balance,
-                    balance_created_at,
-                    current_value
+                    balance_created_at
                 FROM created_tokens
-                ORDER BY current_value DESC
+                ORDER BY token_created_at DESC
                 LIMIT $2
                 OFFSET $3
                 "#,

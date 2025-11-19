@@ -103,9 +103,5 @@ lazy_static! {
         .parse::<u64>()
         .expect("METRICS_REPORT_INTERVAL must be a valid u64");
 
-    // Minimum price for metrics calculation
-    pub static ref MIN_PRICE: BigDecimal = env::var("MIN_PRICE")
-        .unwrap_or_else(|_| "0.0000838".to_string())
-        .parse::<BigDecimal>()
-        .expect("MIN_PRICE must be a valid BigDecimal");
+
 }
