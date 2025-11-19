@@ -379,8 +379,7 @@ impl SearchController {
                         a.image_uri,
                         ax.x_handle,
                         ax.x_image_uri,
-                        ax.is_blue_label,
-                        0 as total_value
+                        ax.is_blue_label
                     FROM account_x ax
                     JOIN account a ON ax.account_id = a.account_id
                     WHERE ax.x_handle ILIKE '%' || $1 || '%'
@@ -408,8 +407,7 @@ impl SearchController {
                         a.image_uri,
                         ax.x_handle,
                         ax.x_image_uri,
-                        ax.is_blue_label,
-                        0 as total_value
+                        ax.is_blue_label
                     FROM account a
                     LEFT JOIN LATERAL (
                         SELECT x_handle, x_image_uri, is_blue_label
@@ -436,8 +434,7 @@ impl SearchController {
                             a.image_uri,
                             ax.x_handle,
                             ax.x_image_uri,
-                            ax.is_blue_label,
-                            0 as total_value
+                            ax.is_blue_label
                         FROM account a
                         LEFT JOIN LATERAL (
                             SELECT x_handle, x_image_uri, is_blue_label
@@ -468,8 +465,7 @@ impl SearchController {
                             a.image_uri,
                             ax.x_handle,
                             ax.x_image_uri,
-                            ax.is_blue_label,
-                            0 as total_value
+                            ax.is_blue_label
                         FROM account_x ax
                         JOIN account a ON ax.account_id = a.account_id
                         WHERE ax.x_handle ILIKE '%' || $1 || '%'
@@ -557,7 +553,6 @@ struct SearchAccountRow {
     x_handle: Option<String>,
     x_image_uri: Option<String>,
     is_blue_label: Option<bool>,
-    total_value: BigDecimal,
 }
 
 enum SearchPattern {
