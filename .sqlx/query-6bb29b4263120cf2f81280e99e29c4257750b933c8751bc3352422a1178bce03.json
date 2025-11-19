@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COALESCE(\n                    (SELECT price\n                     FROM price_history\n                     WHERE token_id = $1 AND created_at <= $2\n                     ORDER BY created_at DESC, tx_index DESC, log_index DESC\n                     LIMIT 1),\n                    (SELECT price\n                     FROM price_history\n                     WHERE token_id = $1\n                     ORDER BY created_at ASC, tx_index ASC, log_index ASC\n                     LIMIT 1)\n                ) as price\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "price",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6bb29b4263120cf2f81280e99e29c4257750b933c8751bc3352422a1178bce03"
+}
