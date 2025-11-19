@@ -50,7 +50,7 @@ struct OrderTokenRow {
     reserve_token: BigDecimal,
     volume: BigDecimal,
     ath_price: BigDecimal,
-    price_24h_ago: Option<BigDecimal>,
+    price_24h_ago: BigDecimal,
 }
 
 pub struct OrderController {
@@ -137,16 +137,28 @@ impl OrderController {
                         COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
-                        (
-                            SELECT ph.price
-                            FROM price_history ph
-                            WHERE ph.token_id = t.token_id
-                            AND ph.created_at <= $3
-                            ORDER BY
-                                ph.created_at DESC,
-                                ph.tx_index DESC,
-                                ph.log_index DESC
-                            LIMIT 1
+                        COALESCE(
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                AND ph.created_at <= $3
+                                ORDER BY
+                                    ph.created_at DESC,
+                                    ph.tx_index DESC,
+                                    ph.log_index DESC
+                                LIMIT 1
+                            ),
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                ORDER BY
+                                    ph.created_at ASC,
+                                    ph.tx_index ASC,
+                                    ph.log_index ASC
+                                LIMIT 1
+                            )
                         ) as price_24h_ago
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
@@ -211,16 +223,28 @@ impl OrderController {
                         COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
-                        (
-                            SELECT ph.price
-                            FROM price_history ph
-                            WHERE ph.token_id = t.token_id
-                            AND ph.created_at <= $3
-                            ORDER BY
-                                ph.created_at DESC,
-                                ph.tx_index DESC,
-                                ph.log_index DESC
-                            LIMIT 1
+                        COALESCE(
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                AND ph.created_at <= $3
+                                ORDER BY
+                                    ph.created_at DESC,
+                                    ph.tx_index DESC,
+                                    ph.log_index DESC
+                                LIMIT 1
+                            ),
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                ORDER BY
+                                    ph.created_at ASC,
+                                    ph.tx_index ASC,
+                                    ph.log_index ASC
+                                LIMIT 1
+                            )
                         ) as price_24h_ago
                     FROM market m
                     JOIN token t ON m.token_id = t.token_id
@@ -285,16 +309,28 @@ impl OrderController {
                         COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
-                        (
-                            SELECT ph.price
-                            FROM price_history ph
-                            WHERE ph.token_id = t.token_id
-                            AND ph.created_at <= $3
-                            ORDER BY
-                                ph.created_at DESC,
-                                ph.tx_index DESC,
-                                ph.log_index DESC
-                            LIMIT 1
+                        COALESCE(
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                AND ph.created_at <= $3
+                                ORDER BY
+                                    ph.created_at DESC,
+                                    ph.tx_index DESC,
+                                    ph.log_index DESC
+                                LIMIT 1
+                            ),
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                ORDER BY
+                                    ph.created_at ASC,
+                                    ph.tx_index ASC,
+                                    ph.log_index ASC
+                                LIMIT 1
+                            )
                         ) as price_24h_ago
                     FROM (
                         SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.reserve_token, m.volume, m.ath_price
@@ -359,14 +395,11 @@ impl From<OrderTokenRow> for OrderToken {
             market_id = BONDING_CURVE.clone();
         }
 
-        let percent = match &row.price_24h_ago {
-            Some(price_24h_ago) => calculate_price_change_percent(
-                &price_24h_ago.normalized().to_plain_string(),
-                &row.price.normalized().to_plain_string(),
-            )
-            .unwrap_or(0.0),
-            None => 0.0,
-        };
+        let percent = calculate_price_change_percent(
+            &row.price_24h_ago.normalized().to_plain_string(),
+            &row.price.normalized().to_plain_string(),
+        )
+        .unwrap_or(0.0);
 
         OrderToken {
             token_info: TokenInfo {

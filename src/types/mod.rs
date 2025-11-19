@@ -13,3 +13,4 @@ pub mod raffle;
 pub mod search;
 pub mod token;
 pub mod trading;
+pub mod trend;

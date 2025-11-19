@@ -1,6 +1,6 @@
 # 멀티스테이지 빌드를 위한 Dockerfile
 # Stage 1: 빌드 스테이지
-FROM rust:1.89-slim AS builder
+FROM --platform=linux/amd64 rust:1.89-slim AS builder
 
 # 빌드 의존성 설치
 
@@ -33,8 +33,8 @@ ENV DATABASE_URL="postgres://user:password@localhost:5432/db"
 # 릴리즈 빌드
 RUN cargo build --release
 
-# Stage 2: 런타임 스테이지  
-FROM rust:1.89-slim
+# Stage 2: 런타임 스테이지
+FROM --platform=linux/amd64 rust:1.89-slim
 
 # 런타임 의존성 설치
 RUN apt-get update && apt-get install -y \
