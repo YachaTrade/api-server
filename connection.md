@@ -2,13 +2,13 @@
 
 ## 환경 사양
 - **Primary DB (쓰기 전용)**: 글로벌 Writer RDS Proxy
-- **Replica DB (읽기 전용)**: 파리 지역 전용 r5g.large (2 vCPU, 16GB 메모리)
+- **Replica DB (읽기 전용)**: 싱가포르/테스트 지역 전용 r6gd.xlarge (4 vCPU, 32GB 메모리)
 - **RDS Proxy**: 최대 사용률 80%로 제한
-- **Fargate 오토스케일링**: 1-5 태스크
+- **Fargate 오토스케일링**: 1-5 태스크 (각 4GB 메모리)
 
 ## 연결 제한
-- **r5g.large max_connections**: 약 1,700개
-- **RDS Proxy 80% 사용**: 1,700 × 0.8 = 1,360개 사용 가능
+- **r6gd.xlarge max_connections**: 약 3,700개
+- **RDS Proxy 80% 사용**: 3,700 × 0.8 = 2,960개 사용 가능
 
 ## 연결 풀 설정 값
 
@@ -47,22 +47,24 @@
 
 ### REPLICA (읽기 전용) 설정
 
-#### 1. PG_REPLICA_MAX_CONNECTIONS = 200
+#### 1. PG_REPLICA_MAX_CONNECTIONS = 350
 - **계산 근거**:
   - 최대 Fargate 태스크: 5개
-  - 태스크당 최대 연결: 200개
-  - 총 최대 연결: 5 × 200 = 1,000개
-  - RDS Proxy 사용률: 1,000 / 1,360 = 73.5%
+  - 태스크당 최대 연결: 350개
+  - 총 최대 연결: 5 × 350 = 1,750개
+  - RDS Proxy 사용률: 1,750 / 2,960 = 59.1%
 - **선택 이유**:
   - API 트래픽의 대부분이 읽기 작업
   - 높은 동시성 지원
-  - RDS Proxy 한계 내에서 최대 활용
+  - r6gd.xlarge의 여유 리소스 활용
+  - RDS Proxy 한계 내에서 안전한 여유분 확보 (40.9%)
 
-#### 2. PG_REPLICA_MIN_CONNECTIONS = 10
+#### 2. PG_REPLICA_MIN_CONNECTIONS = 20
 - **선택 이유**:
   - 빠른 읽기 응답 보장
   - 콜드 스타트 최소화
   - 항상 준비된 연결 풀
+  - r6gd.xlarge의 충분한 메모리로 최소 연결 증가
 
 #### 3. PG_REPLICA_MAX_LIFETIME_SECS = 300 (5분)
 - **선택 이유**:
@@ -79,11 +81,12 @@
   - 효율적인 연결 재사용
   - RDS Proxy 최적화
 
-#### 6. PG_REPLICA_STATEMENT_CACHE_CAPACITY = 1000
+#### 6. PG_REPLICA_STATEMENT_CACHE_CAPACITY = 1500
 - **선택 이유**:
   - 다양한 읽기 쿼리 캐싱
   - 읽기 성능 최대화
-  - 메모리 여유분 활용
+  - r6gd.xlarge의 풍부한 메모리 활용 (32GB)
+  - Fargate 4GB 메모리로 여유있는 캐시 설정
 
 ## 성능 분석
 
@@ -94,16 +97,18 @@
 - **글로벌 Writer 고려**: 충분히 보수적
 
 #### Replica (읽기)
-- **정상 시**: 3개 태스크 × 200 = 600개 (44%)
-- **피크 시**: 5개 태스크 × 200 = 1,000개 (73.5%)
-- **여유분**: 360개 (26.5%)
+- **정상 시**: 3개 태스크 × 350 = 1,050개 (35.5%)
+- **피크 시**: 5개 태스크 × 350 = 1,750개 (59.1%)
+- **여유분**: 1,210개 (40.9%)
 
-### 메모리 사용량
-- **태스크당 메모리**: 1024MB
+### 메모리 사용량 (태스크당 4GB)
+- **태스크당 메모리**: 4096MB
 - **Primary 연결**: 30 × 3MB = 90MB
-- **Replica 연결**: 200 × 3MB = 600MB
-- **Statement 캐시**: ~100MB
-- **총 사용**: ~790MB (77%)
+- **Replica 연결**: 350 × 3MB = 1,050MB
+- **Statement 캐시**: ~150MB
+- **애플리케이션**: ~1,500MB (예상)
+- **총 사용**: ~2,790MB (68%)
+- **여유분**: ~1,300MB (32%)
 
 ## 워크로드 특성
 
@@ -120,7 +125,7 @@
 
 ### CloudWatch 메트릭
 1. **RDS Proxy (Replica)**:
-   - `DatabaseConnections` > 1000: 경고
+   - `DatabaseConnections` > 1,750: 경고
    - `ClientConnections` 추세 모니터링
    - 연결 풀 대기 시간
 
@@ -137,8 +142,8 @@
 
 ### Replica (읽기) 조정
 1. **트래픽 증가 시**:
-   - `PG_REPLICA_MAX_CONNECTIONS` 250까지 증가 가능
-   - 단, 총 연결 수 1,360개 한계 고려
+   - `PG_REPLICA_MAX_CONNECTIONS` 500까지 증가 가능
+   - 단, 총 연결 수 2,960개 한계 고려 (5 태스크 × 500 = 2,500개 = 84.5%)
 
 2. **응답 지연 시**:
    - `PG_REPLICA_MIN_CONNECTIONS` 증가
@@ -154,4 +159,23 @@
    - 배치 처리 고려
 
 ## 결론
-현재 설정은 읽기 중심의 API 워크로드에 최적화되어 있습니다. Replica DB에 충분한 연결을 할당하여 대부분의 트래픽을 효율적으로 처리하고, Primary DB는 안정성을 우선으로 보수적으로 설정했습니다. RDS Proxy의 제한 내에서 안전하게 운영 가능한 구성입니다.
+현재 설정은 읽기 중심의 API 워크로드에 최적화되어 있습니다. r6gd.xlarge (4 vCPU, 32GB 메모리)의 충분한 리소스를 활용하여 Replica DB에 350개 연결을 할당, 대부분의 트래픽을 효율적으로 처리합니다. Primary DB는 안정성을 우선으로 보수적으로 설정했습니다. RDS Proxy의 제한 내에서 안전하게 운영 가능하며 40.9%의 여유분을 확보한 구성입니다.
+
+### 테스트/싱가포르 환경 설정 요약
+```bash
+# PRIMARY (변경 없음)
+PG_PRIMARY_MAX_CONNECTIONS=30
+PG_PRIMARY_MIN_CONNECTIONS=3
+PG_PRIMARY_MAX_LIFETIME_SECS=300
+PG_PRIMARY_ACQUIRE_TIMEOUT_SECS=10
+PG_PRIMARY_IDLE_TIMEOUT_SECS=30
+PG_PRIMARY_STATEMENT_CACHE_CAPACITY=200
+
+# REPLICA (r6gd.xlarge 최적화)
+PG_REPLICA_MAX_CONNECTIONS=350
+PG_REPLICA_MIN_CONNECTIONS=20
+PG_REPLICA_MAX_LIFETIME_SECS=300
+PG_REPLICA_ACQUIRE_TIMEOUT_SECS=5
+PG_REPLICA_IDLE_TIMEOUT_SECS=30
+PG_REPLICA_STATEMENT_CACHE_CAPACITY=1500
+```

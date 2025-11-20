@@ -3,7 +3,7 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, gecko, health, hype, metadata, metrics, new_event, order, profile,
+        self, account, auth, terminal, health, hype, metadata, metrics, new_event, order, profile,
         raffle, search, token, trade, trend,
     },
     state::AppState,
@@ -104,12 +104,12 @@ use utoipa_swagger_ui::SwaggerUi;
         router::metadata::handler::upload_image,
         router::metadata::handler::upload_metadata,
 
-        // ----------------Gecko----------------
-        router::gecko::handler::get_latest_block,
-        router::gecko::handler::get_asset,
-        router::gecko::handler::get_pair,
-        router::gecko::handler::get_events,
-        router::gecko::handler::get_gecko_metadata,
+        // ----------------Terminal----------------
+        router::terminal::handler::get_latest_block,
+        router::terminal::handler::get_asset,
+        router::terminal::handler::get_pair,
+        router::terminal::handler::get_events,
+        router::terminal::handler::get_terminal_metadata,
 
         // ----------------Trend----------------
         router::trend::handler::get_trend,
@@ -163,21 +163,21 @@ use utoipa_swagger_ui::SwaggerUi;
             types::metadata::UploadMetadataRequest,
             types::metadata::UploadMetadataResponse,
             types::metadata::TokenMetadata,
-            types::metadata::GeckoMetadataResponse,
+            types::metadata::TerminalMetadataResponse,
 
-            // Gecko
-            types::gecko::Block,
-            types::gecko::LatestBlockResponse,
-            types::gecko::Asset,
-            types::gecko::AssetResponse,
-            types::gecko::AssetQuery,
-            types::gecko::Pair,
-            types::gecko::PairResponse,
-            types::gecko::PairQuery,
-            types::gecko::Reserves,
-            types::gecko::Event,
-            types::gecko::EventsResponse,
-            types::gecko::EventsQuery,
+            // Terminal
+            types::terminal::Block,
+            types::terminal::LatestBlockResponse,
+            types::terminal::Asset,
+            types::terminal::AssetResponse,
+            types::terminal::AssetQuery,
+            types::terminal::Pair,
+            types::terminal::PairResponse,
+            types::terminal::PairQuery,
+            types::terminal::Reserves,
+            types::terminal::Event,
+            types::terminal::EventsResponse,
+            types::terminal::EventsQuery,
 
             //Hype
             types::hype::HypeToken,
@@ -257,7 +257,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="New Event",description="New Event endpoints"),
         (name="Raffle",description="Raffle endpoints"),
         (name="Metadata",description="Metadata upload endpoints"),
-        (name="Gecko",description="Gecko Terminal API endpoints"),
+        (name="Terminal",description="Gecko Terminal API endpoints"),
         (name="Trend",description="Trend token endpoints"),
     ),
     security(
@@ -319,7 +319,7 @@ async fn main() -> Result<()> {
         .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
-        .merge(gecko::router())
+        .merge(terminal::router())
         .merge(trend::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(5_000_000)) // 5MB (decimal) global limit

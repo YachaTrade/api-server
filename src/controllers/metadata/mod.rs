@@ -7,7 +7,7 @@ use tracing::warn;
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::metadata::{GeckoMetadataResponse, TokenMetadata},
+    types::metadata::{TerminalMetadataResponse, TokenMetadata},
 };
 
 pub struct MetadataController {
@@ -59,7 +59,7 @@ impl MetadataController {
         Ok(())
     }
 
-    pub async fn get_gecko_metadata(&self, token_address: &str) -> Result<GeckoMetadataResponse> {
+    pub async fn get_terminal_metadata(&self, token_address: &str) -> Result<TerminalMetadataResponse> {
         let start_time = Instant::now();
 
         #[derive(sqlx::FromRow)]
@@ -72,7 +72,7 @@ impl MetadataController {
         }
 
         let row = measure_postgres!(
-            "metadata.get_gecko_metadata",
+            "metadata.get_terminal_metadata",
             sqlx::query_as::<_, GeckoMetadataRow>(
                 r#"
                 SELECT
@@ -93,7 +93,7 @@ impl MetadataController {
         let elapsed = start_time.elapsed();
         if elapsed > Duration::from_millis(100) {
             warn!(
-                "get_gecko_metadata query slow performance: {:?} for token_address: {}",
+                "get_terminal_metadata query slow performance: {:?} for token_address: {}",
                 elapsed, token_address
             );
         }
@@ -108,7 +108,7 @@ impl MetadataController {
         let twitter = row.twitter.filter(|s| !s.is_empty());
         let telegram = row.telegram.filter(|s| !s.is_empty());
 
-        Ok(GeckoMetadataResponse {
+        Ok(TerminalMetadataResponse {
             image: row.image_uri,
             description: row.description.unwrap_or_default(),
             website,
