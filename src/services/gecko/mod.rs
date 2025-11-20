@@ -17,6 +17,14 @@ use crate::{
 
 use crate::controllers::gecko::{SwapEventRow, MintEventRow, BurnEventRow};
 
+/// Truncate BigDecimal to maximum 50 decimal places and convert to string
+fn to_truncated_string(value: &BigDecimal) -> String {
+    // Normalize and round to 50 decimal places
+    let normalized = value.normalized();
+    let truncated = normalized.with_scale(50);
+    truncated.normalized().to_plain_string()
+}
+
 pub struct GeckoService {
     postgres: Arc<PostgresDatabase>,
 }
@@ -224,31 +232,31 @@ impl GeckoService {
             match (is_native_token0, row.is_buy) {
                 // token0 = WMON (native), token1 = token, Buy: native in, token out
                 (true, true) => (
-                    Some(native_amount_decimalized.normalized().to_plain_string()),
+                    Some(to_truncated_string(&native_amount_decimalized)),
                     None,
                     None,
-                    Some(token_amount_decimalized.normalized().to_plain_string()),
+                    Some(to_truncated_string(&token_amount_decimalized)),
                 ),
                 // token0 = WMON (native), token1 = token, Sell: token in, native out
                 (true, false) => (
                     None,
-                    Some(token_amount_decimalized.normalized().to_plain_string()),
-                    Some(native_amount_decimalized.normalized().to_plain_string()),
+                    Some(to_truncated_string(&token_amount_decimalized)),
+                    Some(to_truncated_string(&native_amount_decimalized)),
                     None,
                 ),
                 // token0 = token, token1 = WMON (native), Buy: native in, token out
                 (false, true) => (
                     None,
-                    Some(native_amount_decimalized.normalized().to_plain_string()),
-                    Some(token_amount_decimalized.normalized().to_plain_string()),
+                    Some(to_truncated_string(&native_amount_decimalized)),
+                    Some(to_truncated_string(&token_amount_decimalized)),
                     None,
                 ),
                 // token0 = token, token1 = WMON (native), Sell: token in, native out
                 (false, false) => (
-                    Some(token_amount_decimalized.normalized().to_plain_string()),
+                    Some(to_truncated_string(&token_amount_decimalized)),
                     None,
                     None,
-                    Some(native_amount_decimalized.normalized().to_plain_string()),
+                    Some(to_truncated_string(&native_amount_decimalized)),
                 ),
             };
 
@@ -256,13 +264,13 @@ impl GeckoService {
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                reserve_native_decimalized.normalized().to_plain_string(),
-                reserve_token_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_token_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
-                reserve_token_decimalized.normalized().to_plain_string(),
-                reserve_native_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&reserve_token_decimalized),
+                to_truncated_string(&reserve_native_decimalized),
             ),
         };
 
@@ -272,12 +280,10 @@ impl GeckoService {
             match is_native_token0 {
                 // token0 = native, token1 = token
                 // priceNative = amount(asset1) / amount(asset0) = token_amount / native_amount
-                true => (&token_amount_decimalized / &native_amount_decimalized)
-                    .normalized().to_plain_string(),
+                true => to_truncated_string(&(&token_amount_decimalized / &native_amount_decimalized)),
                 // token0 = token, token1 = native
                 // priceNative = amount(asset1) / amount(asset0) = native_amount / token_amount
-                false => (&native_amount_decimalized / &token_amount_decimalized)
-                    .normalized().to_plain_string(),
+                false => to_truncated_string(&(&native_amount_decimalized / &token_amount_decimalized)),
             };
 
         Event::Swap {
@@ -320,13 +326,13 @@ impl GeckoService {
         let (amount0, amount1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                native_amount_decimalized.normalized().to_plain_string(),
-                token_amount_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&native_amount_decimalized),
+                to_truncated_string(&token_amount_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
-                token_amount_decimalized.normalized().to_plain_string(),
-                native_amount_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&token_amount_decimalized),
+                to_truncated_string(&native_amount_decimalized),
             ),
         };
 
@@ -334,13 +340,13 @@ impl GeckoService {
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                reserve_native_decimalized.normalized().to_plain_string(),
-                reserve_token_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_token_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
-                reserve_token_decimalized.normalized().to_plain_string(),
-                reserve_native_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&reserve_token_decimalized),
+                to_truncated_string(&reserve_native_decimalized),
             ),
         };
 
@@ -381,13 +387,13 @@ impl GeckoService {
         let (amount0, amount1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                native_amount_decimalized.normalized().to_plain_string(),
-                token_amount_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&native_amount_decimalized),
+                to_truncated_string(&token_amount_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
-                token_amount_decimalized.normalized().to_plain_string(),
-                native_amount_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&token_amount_decimalized),
+                to_truncated_string(&native_amount_decimalized),
             ),
         };
 
@@ -395,13 +401,13 @@ impl GeckoService {
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                reserve_native_decimalized.normalized().to_plain_string(),
-                reserve_token_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_token_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
-                reserve_token_decimalized.normalized().to_plain_string(),
-                reserve_native_decimalized.normalized().to_plain_string(),
+                to_truncated_string(&reserve_token_decimalized),
+                to_truncated_string(&reserve_native_decimalized),
             ),
         };
 
