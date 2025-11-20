@@ -6,16 +6,16 @@ use tracing::error;
 
 use crate::{
     config::{BONDING_CURVE, RPC_URL, WMON},
-    controllers::gecko::GeckoController,
+    controllers::terminal::TerminalController,
     db::postgres::PostgresDatabase,
     result::AppError,
-    types::gecko::{
+    types::terminal::{
         Asset, AssetResponse, Block, Event, EventsResponse, LatestBlockResponse, Pair,
         PairResponse, Reserves,
     },
 };
 
-use crate::controllers::gecko::{SwapEventRow, MintEventRow, BurnEventRow};
+use crate::controllers::terminal::{SwapEventRow, MintEventRow, BurnEventRow};
 
 /// Truncate BigDecimal to maximum 50 decimal places and convert to string
 fn to_truncated_string(value: &BigDecimal) -> String {
@@ -25,18 +25,18 @@ fn to_truncated_string(value: &BigDecimal) -> String {
     truncated.normalized().to_plain_string()
 }
 
-pub struct GeckoService {
+pub struct TerminalService {
     postgres: Arc<PostgresDatabase>,
 }
 
-impl GeckoService {
+impl TerminalService {
     pub fn new(postgres: Arc<PostgresDatabase>) -> Self {
         Self { postgres }
     }
 
     pub async fn get_latest_block(&self) -> Result<LatestBlockResponse, AppError> {
         // Get the latest indexed block from balance_history
-        let controller = GeckoController::new(self.postgres.clone());
+        let controller = TerminalController::new(self.postgres.clone());
         let latest_indexed_block = controller.get_latest_indexed_block().await.map_err(|e| {
             error!("Failed to get latest indexed block: {}", e);
             AppError::InternalError(format!("Failed to get latest indexed block: {}", e))
@@ -76,7 +76,7 @@ impl GeckoService {
     }
 
     pub async fn get_asset(&self, token_id: &str) -> Result<AssetResponse, AppError> {
-        let controller = GeckoController::new(self.postgres.clone());
+        let controller = TerminalController::new(self.postgres.clone());
         let asset_row = controller.get_asset(token_id).await.map_err(|e| {
             error!("Failed to get asset: {}", e);
             AppError::NotFound(format!("Asset not found: {}", e))
@@ -103,7 +103,7 @@ impl GeckoService {
     }
 
     pub async fn get_pair(&self, token_id: &str) -> Result<PairResponse, AppError> {
-        let controller = GeckoController::new(self.postgres.clone());
+        let controller = TerminalController::new(self.postgres.clone());
         let pair_row = controller.get_pair(token_id).await.map_err(|e| {
             error!("Failed to get pair: {}", e);
             AppError::NotFound(format!("Pair not found: {}", e))
@@ -157,7 +157,7 @@ impl GeckoService {
         from_block: u64,
         to_block: u64,
     ) -> Result<EventsResponse, AppError> {
-        let controller = GeckoController::new(self.postgres.clone());
+        let controller = TerminalController::new(self.postgres.clone());
 
         // Fetch all three event types in parallel
         let (swap_result, mint_result, burn_result) = tokio::join!(

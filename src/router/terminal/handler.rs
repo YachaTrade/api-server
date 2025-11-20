@@ -4,12 +4,12 @@ use axum::{
 };
 use tracing::{info, instrument};
 
-use super::path::GeckoPath;
+use super::path::TerminalPath;
 use crate::{
     result::AppJsonResult,
-    services::{gecko::GeckoService, metadata::MetadataService},
+    services::{terminal::TerminalService, metadata::MetadataService},
     state::AppState,
-    types::{gecko::*, metadata::GeckoMetadataResponse},
+    types::{terminal::*, metadata::TerminalMetadataResponse},
 };
 
 /// Get latest block
@@ -20,13 +20,13 @@ use crate::{
         (status = 200, description = "Latest block fetched successfully", body = LatestBlockResponse),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Gecko"
+    tag = "Terminal"
 )]
 #[instrument(skip(state))]
 pub async fn get_latest_block(
     State(state): State<AppState>,
 ) -> AppJsonResult<LatestBlockResponse> {
-    let service = GeckoService::new(state.postgres.clone());
+    let service = TerminalService::new(state.postgres.clone());
     let response = service.get_latest_block().await?;
 
     Ok(Json(response))
@@ -44,14 +44,14 @@ pub async fn get_latest_block(
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Gecko"
+    tag = "Terminal"
 )]
 #[instrument(skip(state))]
 pub async fn get_asset(
     State(state): State<AppState>,
     Query(query): Query<AssetQuery>,
 ) -> AppJsonResult<AssetResponse> {
-    let service = GeckoService::new(state.postgres.clone());
+    let service = TerminalService::new(state.postgres.clone());
     let response = service.get_asset(&query.id).await?;
 
     Ok(Json(response))
@@ -69,14 +69,14 @@ pub async fn get_asset(
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Gecko"
+    tag = "Terminal"
 )]
 #[instrument(skip(state))]
 pub async fn get_pair(
     State(state): State<AppState>,
     Query(query): Query<PairQuery>,
 ) -> AppJsonResult<PairResponse> {
-    let service = GeckoService::new(state.postgres.clone());
+    let service = TerminalService::new(state.postgres.clone());
     let response = service.get_pair(&query.id).await?;
 
     Ok(Json(response))
@@ -95,39 +95,39 @@ pub async fn get_pair(
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Gecko"
+    tag = "Terminal"
 )]
 #[instrument(skip(state))]
 pub async fn get_events(
     State(state): State<AppState>,
     Query(query): Query<EventsQuery>,
 ) -> AppJsonResult<EventsResponse> {
-    let service = GeckoService::new(state.postgres.clone());
+    let service = TerminalService::new(state.postgres.clone());
     let response = service.get_events(query.from_block, query.to_block).await?;
 
     Ok(Json(response))
 }
 
-/// Get gecko metadata for token
+/// Get terminal metadata for token
 #[utoipa::path(
     get,
-    path = GeckoPath::GetMetadata.docs_str(),
+    path = TerminalPath::GetMetadata.docs_str(),
     params(
         ("token_address" = String, Path, description = "Token contract address")
     ),
     responses(
-        (status = 200, description = "Gecko metadata retrieved successfully", body = GeckoMetadataResponse),
+        (status = 200, description = "Terminal metadata retrieved successfully", body = TerminalMetadataResponse),
         (status = 404, description = "Token not found"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Gecko"
+    tag = "Terminal"
 )]
 #[instrument(skip(state))]
-pub async fn get_gecko_metadata(
+pub async fn get_terminal_metadata(
     State(state): State<AppState>,
     Path(token_address): Path<String>,
-) -> AppJsonResult<GeckoMetadataResponse> {
-    info!("🔍 Getting gecko metadata for token: {}", token_address);
+) -> AppJsonResult<TerminalMetadataResponse> {
+    info!("🔍 Getting terminal metadata for token: {}", token_address);
 
     let service = MetadataService::new(
         state.postgres.clone(),
@@ -135,9 +135,9 @@ pub async fn get_gecko_metadata(
         state.r2.clone(),
     );
 
-    let response = service.get_gecko_metadata(&token_address).await?;
+    let response = service.get_terminal_metadata(&token_address).await?;
 
-    info!("✅ Gecko metadata retrieved for token: {}", token_address);
+    info!("✅ Terminal metadata retrieved for token: {}", token_address);
 
     Ok(Json(response))
 }

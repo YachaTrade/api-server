@@ -33,19 +33,19 @@ struct BlockNumberRow {
     pub block_number: i64,
 }
 
-pub struct GeckoController {
+pub struct TerminalController {
     db: Arc<PostgresDatabase>,
 }
 
-impl GeckoController {
+impl TerminalController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
-        GeckoController { db }
+        TerminalController { db }
     }
 
     /// Get the latest indexed block number from balance_history table
     pub async fn get_latest_indexed_block(&self) -> Result<u64> {
         let row = measure_postgres!(
-            "gecko.get_latest_indexed_block",
+            "terminal.get_latest_indexed_block",
             sqlx::query_as::<_, LatestBlockRow>(
                 r#"
                     SELECT MAX(block_number) as block_number
@@ -62,7 +62,7 @@ impl GeckoController {
     /// Get asset (token) information by token_id
     pub async fn get_asset(&self, token_id: &str) -> Result<AssetRow> {
         let row = measure_postgres!(
-            "gecko.get_asset",
+            "terminal.get_asset",
             sqlx::query_as::<_, AssetRow>(
                 r#"
                     SELECT
@@ -85,7 +85,7 @@ impl GeckoController {
     /// Get pair (token) information by token_id
     pub async fn get_pair(&self, token_id: &str) -> Result<PairRow> {
         let row = measure_postgres!(
-            "gecko.get_pair",
+            "terminal.get_pair",
             sqlx::query_as::<_, PairRow>(
                 r#"
                     SELECT
@@ -111,7 +111,7 @@ impl GeckoController {
     /// Get block number by transaction hash from balance_history
     pub async fn get_block_number_by_tx(&self, transaction_hash: &str) -> Result<u64> {
         let row = measure_postgres!(
-            "gecko.get_block_number_by_tx",
+            "terminal.get_block_number_by_tx",
             sqlx::query_as::<_, BlockNumberRow>(
                 r#"
                     SELECT block_number
@@ -131,7 +131,7 @@ impl GeckoController {
     /// Get swap events from swap table for a block range
     pub async fn get_events(&self, from_block: u64, to_block: u64) -> Result<Vec<SwapEventRow>> {
         let rows = measure_postgres!(
-            "gecko.get_events",
+            "terminal.get_events",
             sqlx::query_as::<_, SwapEventRow>(
                 r#"
                     SELECT
@@ -167,7 +167,7 @@ impl GeckoController {
     /// Get mint events from mint table for a block range
     pub async fn get_mint_events(&self, from_block: u64, to_block: u64) -> Result<Vec<MintEventRow>> {
         let rows = measure_postgres!(
-            "gecko.get_mint_events",
+            "terminal.get_mint_events",
             sqlx::query_as::<_, MintEventRow>(
                 r#"
                     SELECT
@@ -200,7 +200,7 @@ impl GeckoController {
     /// Get burn events from burn table for a block range
     pub async fn get_burn_events(&self, from_block: u64, to_block: u64) -> Result<Vec<BurnEventRow>> {
         let rows = measure_postgres!(
-            "gecko.get_burn_events",
+            "terminal.get_burn_events",
             sqlx::query_as::<_, BurnEventRow>(
                 r#"
                     SELECT

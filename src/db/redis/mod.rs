@@ -24,7 +24,7 @@ use crate::{
             HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenResponse,
             HypeVoteHistoryResponse,
         },
-        metadata::GeckoMetadataResponse,
+        metadata::TerminalMetadataResponse,
         new_event::NewEventResponse,
         profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
@@ -1246,48 +1246,48 @@ impl RedisDatabase {
 
 // Gecko Metadata Caching
 impl RedisDatabase {
-    pub async fn set_gecko_metadata(
+    pub async fn set_terminal_metadata(
         &self,
         token_address: &str,
-        response: &GeckoMetadataResponse,
+        response: &TerminalMetadataResponse,
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("gecko_metadata:{}", token_address);
+        let key = format!("terminal_metadata:{}", token_address);
         let response_json = serde_json::to_string(response)?;
 
         measure_redis!(
-            "redis.set_gecko_metadata",
+            "redis.set_terminal_metadata",
             conn.pset_ex::<_, _, ()>(key, response_json, *GECKO_METADATA_EXPIRATION)
         )?;
 
         let elapsed = start_time.elapsed();
         debug!(
-            "set_gecko_metadata(token_address: {}) completed in {:?}",
+            "set_terminal_metadata(token_address: {}) completed in {:?}",
             token_address, elapsed
         );
         Ok(())
     }
 
-    pub async fn get_gecko_metadata(&self, token_address: &str) -> Result<Option<GeckoMetadataResponse>> {
+    pub async fn get_terminal_metadata(&self, token_address: &str) -> Result<Option<TerminalMetadataResponse>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("gecko_metadata:{}", token_address);
+        let key = format!("terminal_metadata:{}", token_address);
 
         let response_json: Option<String> = measure_redis!(
-            "redis.get_gecko_metadata",
+            "redis.get_terminal_metadata",
             conn.get::<_, Option<String>>(key)
         )?;
 
         let elapsed = start_time.elapsed();
         debug!(
-            "get_gecko_metadata(token_address: {}) completed in {:?}",
+            "get_terminal_metadata(token_address: {}) completed in {:?}",
             token_address, elapsed
         );
 
         match response_json {
             Some(json) => {
-                let response: GeckoMetadataResponse = serde_json::from_str(&json)?;
+                let response: TerminalMetadataResponse = serde_json::from_str(&json)?;
                 Ok(Some(response))
             }
             None => Ok(None),

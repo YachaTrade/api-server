@@ -10,7 +10,7 @@ pub mod search;
 pub mod token;
 pub mod trade;
 
-pub mod gecko;
+pub mod terminal;
 pub mod hype;
 
 pub mod health;

@@ -132,7 +132,7 @@ impl TokenMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct GeckoMetadataResponse {
+pub struct TerminalMetadataResponse {
     pub image: String,
     pub description: String,
     pub website: String,

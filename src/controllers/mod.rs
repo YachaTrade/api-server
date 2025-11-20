@@ -1,6 +1,6 @@
 pub mod account;
 pub mod auth;
-pub mod gecko;
+pub mod terminal;
 pub mod hype;
 pub mod metadata;
 pub mod new_event;
