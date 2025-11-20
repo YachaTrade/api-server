@@ -103,5 +103,25 @@ lazy_static! {
         .parse::<u64>()
         .expect("METRICS_REPORT_INTERVAL must be a valid u64");
 
+    // HTTP request timeout configurations (in milliseconds)
+    pub static ref HTTP_GET_TIMEOUT_MS: u64 = env::var("HTTP_GET_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(10000); // Default: 10 seconds
 
+    pub static ref HTTP_POST_TIMEOUT_MS: u64 = env::var("HTTP_POST_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(15000); // Default: 15 seconds
+
+    // Database timeout configurations (in milliseconds)
+    pub static ref REDIS_TIMEOUT_MS: u64 = env::var("REDIS_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(5000); // Default: 5 seconds
+
+    pub static ref POSTGRES_TIMEOUT_MS: u64 = env::var("POSTGRES_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(10000); // Default: 10 seconds
 }

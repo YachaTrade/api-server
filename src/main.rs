@@ -1,4 +1,5 @@
 use api_server::{
+    config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS},
     cors::get_cors,
     middleware::authenticate_user,
     router::{
@@ -366,8 +367,8 @@ async fn method_based_timeout(
     }
 
     let timeout_duration = match method {
-        Method::GET => Duration::from_millis(5000),
-        _ => Duration::from_millis(10000), // POST, PUT, DELETE 등은 10초
+        Method::GET => Duration::from_millis(*HTTP_GET_TIMEOUT_MS),
+        _ => Duration::from_millis(*HTTP_POST_TIMEOUT_MS), // POST, PUT, DELETE 등
     };
 
     match tokio::time::timeout(timeout_duration, next.run(req)).await {
