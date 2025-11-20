@@ -163,6 +163,72 @@ impl GeckoController {
 
         Ok(rows)
     }
+
+    /// Get mint events from mint table for a block range
+    pub async fn get_mint_events(&self, from_block: u64, to_block: u64) -> Result<Vec<MintEventRow>> {
+        let rows = measure_postgres!(
+            "gecko.get_mint_events",
+            sqlx::query_as::<_, MintEventRow>(
+                r#"
+                    SELECT
+                        token_id,
+                        account_id,
+                        market_id,
+                        native_amount,
+                        token_amount,
+                        reserve_native,
+                        reserve_token,
+                        created_at,
+                        transaction_hash,
+                        block_number,
+                        tx_index,
+                        log_index
+                    FROM mint
+                    WHERE block_number >= $1 AND block_number <= $2
+                    ORDER BY block_number ASC, tx_index ASC, log_index ASC
+                "#,
+            )
+            .bind(from_block as i64)
+            .bind(to_block as i64)
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get mint events: {}", err))?;
+
+        Ok(rows)
+    }
+
+    /// Get burn events from burn table for a block range
+    pub async fn get_burn_events(&self, from_block: u64, to_block: u64) -> Result<Vec<BurnEventRow>> {
+        let rows = measure_postgres!(
+            "gecko.get_burn_events",
+            sqlx::query_as::<_, BurnEventRow>(
+                r#"
+                    SELECT
+                        token_id,
+                        account_id,
+                        market_id,
+                        native_amount,
+                        token_amount,
+                        reserve_native,
+                        reserve_token,
+                        created_at,
+                        transaction_hash,
+                        block_number,
+                        tx_index,
+                        log_index
+                    FROM burn
+                    WHERE block_number >= $1 AND block_number <= $2
+                    ORDER BY block_number ASC, tx_index ASC, log_index ASC
+                "#,
+            )
+            .bind(from_block as i64)
+            .bind(to_block as i64)
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get burn events: {}", err))?;
+
+        Ok(rows)
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -181,4 +247,36 @@ pub struct SwapEventRow {
     pub log_index: i32,
     pub pool_id: Option<String>,
     pub price: BigDecimal,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct MintEventRow {
+    pub token_id: String,
+    pub account_id: String,
+    pub market_id: String,
+    pub native_amount: BigDecimal,
+    pub token_amount: BigDecimal,
+    pub reserve_native: BigDecimal,
+    pub reserve_token: BigDecimal,
+    pub created_at: i64,
+    pub transaction_hash: String,
+    pub block_number: i64,
+    pub tx_index: i32,
+    pub log_index: i32,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct BurnEventRow {
+    pub token_id: String,
+    pub account_id: String,
+    pub market_id: String,
+    pub native_amount: BigDecimal,
+    pub token_amount: BigDecimal,
+    pub reserve_native: BigDecimal,
+    pub reserve_token: BigDecimal,
+    pub created_at: i64,
+    pub transaction_hash: String,
+    pub block_number: i64,
+    pub tx_index: i32,
+    pub log_index: i32,
 }

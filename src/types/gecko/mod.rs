@@ -149,6 +149,32 @@ pub enum Event {
     },
 }
 
+impl Event {
+    pub fn block_number(&self) -> u64 {
+        match self {
+            Event::Swap { block, .. } => block.block_number,
+            Event::Join { block, .. } => block.block_number,
+            Event::Exit { block, .. } => block.block_number,
+        }
+    }
+
+    pub fn transaction_index(&self) -> u32 {
+        match self {
+            Event::Swap { txn_index, .. } => *txn_index,
+            Event::Join { txn_index, .. } => *txn_index,
+            Event::Exit { txn_index, .. } => *txn_index,
+        }
+    }
+
+    pub fn log_index(&self) -> u32 {
+        match self {
+            Event::Swap { event_index, .. } => *event_index,
+            Event::Join { event_index, .. } => *event_index,
+            Event::Exit { event_index, .. } => *event_index,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct EventsResponse {
     pub events: Vec<Event>,
