@@ -12,6 +12,7 @@ pub fn get_cors() -> CorsLayer {
     let mut origins = vec![
         "https://nad.fun".parse::<HeaderValue>().unwrap(),
         "https://nadapp.net".parse::<HeaderValue>().unwrap(),
+        "https://symphony.io".parse::<HeaderValue>().unwrap(),
     ];
     // Get the `ENVIROMENT` variable and if it is `development` then add `http://localhost:3000`
     // to the `origins` array.
@@ -45,6 +46,7 @@ pub fn get_cors() -> CorsLayer {
                         .any(|allowed_origin| allowed_origin == origin)
                         || origin_string.ends_with(".nad.fun")
                         || origin_string.ends_with(".cloudfront.net")
+                        || origin_string.ends_with(".symphony.io")
                 })
                 .unwrap_or(false)
         }))
