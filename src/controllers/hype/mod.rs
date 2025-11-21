@@ -420,15 +420,15 @@ impl HypeController {
             "hype.fetch_hype_epoch",
             sqlx::query_as::<_, HypeEpochRow>(
                 r#"
-                SELECT 
+                SELECT
                     epoch,
                     start_at,
                     end_at,
                     status
-                FROM epoch 
+                FROM epoch
                 WHERE epoch = COALESCE(
                     (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
-                    (SELECT MAX(epoch) FROM epoch)
+                    (SELECT MIN(epoch) FROM epoch WHERE status = 'READY')
                 )
                 "#,
             )
