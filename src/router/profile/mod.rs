@@ -1,12 +1,12 @@
 pub mod handler;
 pub mod path;
-use crate::state::AppState;
+use crate::{middleware::authenticate_user, state::AppState};
 
-use axum::{Router, routing::get};
+use axum::{Router, middleware, routing::get};
 
 use path::ProfilePath;
 
-pub fn router() -> Router<AppState> {
+pub fn router(app_state: AppState) -> Router<AppState> {
     Router::new()
         .route(ProfilePath::GetProfile.as_str(), get(handler::get_profile))
         .route(
@@ -23,6 +23,9 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             ProfilePath::GetPointHistory.as_str(),
-            get(handler::get_point_history),
+            get(handler::get_point_history).layer(middleware::from_fn_with_state(
+                app_state.clone(),
+                authenticate_user,
+            )),
         )
 }

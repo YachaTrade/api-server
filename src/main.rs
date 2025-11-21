@@ -314,7 +314,7 @@ async fn main() -> Result<()> {
         .merge(token::router())
         .merge(search::router())
         .merge(trade::router())
-        .merge(profile::router())
+        .merge(profile::router(app_state.clone()))
         .merge(order::router())
         .merge(hype::router(app_state.clone()))
         // .merge(bot::router()) // bot 모듈이 존재하지 않음
