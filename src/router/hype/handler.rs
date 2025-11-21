@@ -44,6 +44,27 @@ pub async fn get_hype_token(
     Ok(Json(response))
 }
 
+/// Get Latest Hype Token (ACTIVE or most recent COMPLETE)
+#[utoipa::path(
+    get,
+    path = HypePath::GetHypeLatest.docs_str(),
+    responses(
+        (status = 200, description = "Latest Hype Token fetched successfully", body = HypeTokenResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Hype"
+)]
+#[instrument(skip(state))]
+pub async fn get_hype_token_latest(
+    State(state): State<AppState>,
+) -> AppJsonResult<HypeTokenResponse> {
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_hype_token_latest().await?;
+
+    Ok(Json(response))
+}
+
 /// Get Hype Point
 #[utoipa::path(
     get,

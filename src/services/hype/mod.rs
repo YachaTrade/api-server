@@ -77,6 +77,23 @@ impl HypeService {
         }
     }
 
+    pub async fn get_hype_token_latest(&self) -> Result<HypeTokenResponse, AppError> {
+        if let Ok(cached) = self.redis.get_hype_token_latest_response().await {
+            return Ok(cached);
+        }
+
+        let controller = HypeController::new(self.postgres.clone());
+        let response = controller.get_hype_token_latest().await.map_err(|err| {
+            AppError::InternalError(format!("Failed to get latest hype token, error: {}", err))
+        })?;
+
+        if let Err(err) = self.redis.set_hype_token_latest_response(&response).await {
+            error!("Failed to set latest hype token response: {}", err);
+        }
+
+        Ok(response)
+    }
+
     pub async fn get_hype_point(&self, account_id: &str) -> Result<HypePointResponse, AppError> {
         if let Ok(cached) = self.redis.get_hype_point_response(account_id).await {
             return Ok(cached);

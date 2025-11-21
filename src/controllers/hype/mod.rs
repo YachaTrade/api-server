@@ -107,6 +107,131 @@ impl HypeController {
         Ok(response)
     }
 
+    pub async fn get_hype_token_latest(&self) -> Result<HypeTokenResponse> {
+        let cache_key = "hype_token_latest";
+
+        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
+            let db = self.db.clone();
+            async move {
+                let controller = HypeController::new(db);
+                controller.fetch_hype_token_latest().await
+            }
+        })
+        .await?;
+
+        Ok(response)
+    }
+
+    async fn fetch_hype_token_latest(&self) -> Result<HypeTokenResponse> {
+        let rows_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_token_latest.rows",
+                sqlx::query_as::<_, HypeTokenRow>(
+                    r#"
+                    SELECT
+                        h.vote,
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri,
+                        t.description,
+                        t.is_graduated,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.total_supply,
+                        t.created_at,
+                        t.is_nsfw,
+                        t.creator,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        t.token_holder_count as holder_count,
+                        (m.price * t.total_supply) as market_cap,
+                        r.amount as reward_amount
+                    FROM hype_token h
+                    JOIN token t ON h.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    JOIN market m ON h.token_id = m.token_id
+                    LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                    WHERE h.epoch = COALESCE(
+                        (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                    )
+                    ORDER BY h.vote DESC, market_cap DESC
+                    "#,
+                )
+                .fetch_all(self.db.get_read_pool())
+            )
+        };
+
+        let total_count_future = async {
+            measure_postgres!(
+                "hype.fetch_hype_token_latest.count",
+                sqlx::query_as::<_, CountRow>(
+                    r#"
+                    SELECT COUNT(*) as count
+                    FROM hype_token h
+                    WHERE h.epoch = COALESCE(
+                        (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                    )
+                    "#,
+                )
+                .fetch_one(self.db.get_read_pool())
+            )
+        };
+
+        let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
+
+        let token_rows =
+            rows_result.map_err(|err| anyhow!("Failed to fetch latest hype tokens: {}", err))?;
+        let total_count = total_count_result
+            .map_err(|err| anyhow!("Failed to fetch latest hype token count: {}", err))?
+            .count as u64;
+
+        let tokens = token_rows
+            .into_par_iter()
+            .map(|row| HypeToken {
+                token_info: TokenInfo {
+                    token_id: row.token_id,
+                    name: row.name,
+                    symbol: row.symbol,
+                    image_uri: row.image_uri,
+                    description: row.description,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
+                    twitter: row.twitter,
+                    telegram: row.telegram,
+                    website: row.website,
+                    created_at: row.created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                    },
+                },
+                hype_info: HypeInfo {
+                    vote: row.vote.normalized().to_plain_string(),
+                    holder_count: row.holder_count as u64,
+                    market_cap: row.market_cap.normalized().to_plain_string(),
+                    reward_amount: row
+                        .reward_amount
+                        .unwrap_or_default()
+                        .normalized()
+                        .to_plain_string(),
+                },
+            })
+            .collect::<Vec<HypeToken>>();
+
+        Ok(HypeTokenResponse {
+            tokens,
+            total_count,
+        })
+    }
+
     async fn fetch_hype_token(&self) -> Result<HypeTokenResponse> {
         let rows_future = async {
             measure_postgres!(

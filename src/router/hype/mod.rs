@@ -13,6 +13,10 @@ use crate::{middleware::authenticate_user, state::AppState};
 pub fn router(app_state: AppState) -> Router<AppState> {
     Router::new()
         .route(HypePath::GetHype.as_str(), get(handler::get_hype_token))
+        .route(
+            HypePath::GetHypeLatest.as_str(),
+            get(handler::get_hype_token_latest),
+        )
         .route(HypePath::GetEpoch.as_str(), get(handler::get_hype_epoch))
         .route(
             HypePath::GetTotalHypePoint.as_str(),
