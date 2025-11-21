@@ -753,7 +753,7 @@ impl HypeController {
         #[derive(sqlx::FromRow)]
         struct PointDistributionGroupRow {
             created_at: i64,
-            total_point: i64,
+            total_point: BigDecimal,
             details: sqlx::types::Json<Vec<PointDetailJson>>,
         }
 
@@ -761,7 +761,7 @@ impl HypeController {
         struct PointDetailJson {
             epoch: i64,
             activity_type: String,
-            amount: i64,
+            amount: BigDecimal,
         }
 
         let rows_future = async {
