@@ -3,6 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     db::postgres::PostgresDatabase,
@@ -14,11 +15,11 @@ use crate::{
             pagination::PaginationParams,
         },
         hype::{
-            AmountResponse, HypeEpochResponse, HypeInfo, HypePointRecord, HypePointRecordResponse,
-            HypePointResponse, HypeReward, HypeRewardAddHistoryResponse, HypeRewardHistoryResponse,
-            HypeToken, HypeTokenResponse, HypeVoteHistory, HypeVoteHistoryResponse,
-            HypeVoteRequest, HypeVoteResponse, RewardAdd,
+            AmountResponse, HypeEpochResponse, HypeInfo, HypePointResponse, HypeReward,
+            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeToken, HypeTokenResponse,
+            HypeVoteHistory, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse, RewardAdd,
         },
+        profile::{PointHistoryResponse, PointRecord},
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
@@ -720,7 +721,7 @@ impl HypeController {
         &self,
         account_id: &str,
         pagination_params: &PaginationParams,
-    ) -> Result<HypePointRecordResponse> {
+    ) -> Result<PointHistoryResponse> {
         let cache_key = format!(
             "hype_point_history:{}:{}:{}",
             account_id, pagination_params.page, pagination_params.limit
@@ -746,30 +747,43 @@ impl HypeController {
         &self,
         account_id: &str,
         pagination_params: &PaginationParams,
-    ) -> Result<HypePointRecordResponse> {
+    ) -> Result<PointHistoryResponse> {
         let offset = (pagination_params.page - 1) * pagination_params.limit;
 
         #[derive(sqlx::FromRow)]
-        struct PointDistributionRow {
+        struct PointDistributionGroupRow {
+            created_at: i64,
+            total_point: i64,
+            details: sqlx::types::Json<Vec<PointDetailJson>>,
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        struct PointDetailJson {
             epoch: i64,
             activity_type: String,
             amount: i64,
-            created_at: i64,
         }
 
         let rows_future = async {
             measure_postgres!(
                 "hype.fetch_hype_point_history.rows",
-                sqlx::query_as::<_, PointDistributionRow>(
+                sqlx::query_as::<_, PointDistributionGroupRow>(
                     r#"
-                    SELECT 
-                        epoch,
-                        activity_type,
-                        amount,
-                        created_at
+                    SELECT
+                        created_at,
+                        SUM(amount) as total_point,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'epoch', epoch,
+                                'activity_type', activity_type,
+                                'amount', amount
+                            )
+                            ORDER BY amount DESC
+                        ) as details
                     FROM point_distribution
                     WHERE account_id = $1
-                    ORDER BY created_at DESC, amount DESC
+                    GROUP BY created_at
+                    ORDER BY created_at DESC
                     LIMIT $2 OFFSET $3
                     "#,
                 )
@@ -785,13 +799,13 @@ impl HypeController {
                 "hype.fetch_hype_point_history.count",
                 sqlx::query_as::<_, CountRow>(
                     r#"
-                    SELECT COALESCE(total_count, 0) as count
-                    FROM account_point_distribution_count
+                    SELECT COUNT(DISTINCT created_at) as count
+                    FROM point_distribution
                     WHERE account_id = $1
                     "#,
                 )
                 .bind(account_id)
-                .fetch_optional(self.db.get_read_pool())
+                .fetch_one(self.db.get_read_pool())
             )
         };
 
@@ -801,20 +815,32 @@ impl HypeController {
             rows_result.map_err(|err| anyhow!("Failed to fetch hype point history: {}", err))?;
         let total_count = total_count_result
             .map_err(|err| anyhow!("Failed to fetch hype point history count: {}", err))?
-            .map(|row| row.count as u64)
-            .unwrap_or(0);
+            .count as u64;
 
         let history = point_rows
             .into_iter()
-            .map(|row| HypePointRecord {
-                epoch: row.epoch,
-                activity_type: row.activity_type,
-                amount: row.amount.to_string(),
-                created_at: row.created_at,
+            .map(|row| {
+                use crate::types::profile::PointRecordTotal;
+
+                PointRecordTotal {
+                    total_point: row.total_point.to_string(),
+                    history: row
+                        .details
+                        .0
+                        .into_iter()
+                        .map(|detail| PointRecord {
+                            epoch: detail.epoch,
+                            activity_type: detail.activity_type,
+                            amount: detail.amount.to_string(),
+                            created_at: row.created_at,
+                        })
+                        .collect(),
+                    created_at: row.created_at,
+                }
             })
             .collect();
 
-        Ok(HypePointRecordResponse {
+        Ok(PointHistoryResponse {
             history,
             total_count,
         })

@@ -57,6 +57,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::profile::handler::get_hold_token,
         router::profile::handler::get_token_created,
         router::profile::handler::get_swap_history,
+        router::profile::handler::get_point_history,
 
         // ----------------Search----------------
         router::search::handler::search,
@@ -72,7 +73,6 @@ use utoipa_swagger_ui::SwaggerUi;
         router::hype::handler::get_hype_point,
         router::hype::handler::get_hype_epoch,
         router::hype::handler::get_hype_vote_history,
-        router::hype::handler::get_hype_point_history,
         router::hype::handler::get_hype_reward_history,
         router::hype::handler::get_hype_reward_add_history,
         router::hype::handler::vote,
@@ -188,8 +188,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::hype::HypeEpochResponse,
             types::hype::HypeVoteHistory,
             types::hype::HypeVoteHistoryResponse,
-            types::hype::HypePointRecord,
-            types::hype::HypePointRecordResponse,
             types::hype::HypeReward,
             types::hype::HypeRewardHistoryResponse,
             types::hype::HypeVoteRequest,
@@ -220,6 +218,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::profile::HoldTokenResponse,
             types::profile::SwapHistoryResponse,
             types::profile::CreatedTokensResponse,
+            types::profile::PointRecord,
+            types::profile::PointRecordTotal,
+            types::profile::PointHistoryResponse,
 
             //Search
             types::search::TokenSearchResult,

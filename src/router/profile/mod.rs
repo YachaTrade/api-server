@@ -21,4 +21,8 @@ pub fn router() -> Router<AppState> {
             ProfilePath::GetSwapHistory.as_str(),
             get(handler::get_swap_history),
         )
+        .route(
+            ProfilePath::GetPointHistory.as_str(),
+            get(handler::get_point_history),
+        )
 }

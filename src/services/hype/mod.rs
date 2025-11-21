@@ -10,10 +10,11 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         hype::{
-            AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
+            AmountResponse, HypeEpochResponse, HypePointResponse,
             HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenQuery,
             HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
+        profile::PointHistoryResponse,
     },
 };
 
@@ -173,7 +174,7 @@ impl HypeService {
         &self,
         account_id: &str,
         params: &PaginationParams,
-    ) -> Result<HypePointRecordResponse, AppError> {
+    ) -> Result<PointHistoryResponse, AppError> {
         let controller = HypeController::new(self.postgres.clone());
         let response = controller
             .get_hype_point_history(account_id, params)
