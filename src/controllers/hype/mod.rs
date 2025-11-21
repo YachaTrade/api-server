@@ -140,7 +140,10 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                    WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
+                    WHERE h.epoch = COALESCE(
+                        (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                    )
                     ORDER BY h.vote DESC, market_cap DESC
                     "#,
                 )
@@ -155,7 +158,10 @@ impl HypeController {
                     r#"
                     SELECT COUNT(*) as count
                     FROM hype_token h
-                    WHERE h.epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
+                    WHERE h.epoch = COALESCE(
+                        (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                    )
                     "#,
                 )
                 .fetch_one(self.db.get_read_pool())
