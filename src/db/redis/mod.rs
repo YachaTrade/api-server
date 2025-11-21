@@ -20,11 +20,12 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         hype::{
-            AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
+            AmountResponse, HypeEpochResponse, HypePointResponse,
             HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenResponse,
             HypeVoteHistoryResponse,
         },
         metadata::TerminalMetadataResponse,
+        profile::PointHistoryResponse,
         new_event::NewEventResponse,
         profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
@@ -776,7 +777,7 @@ impl RedisDatabase {
         &self,
         account_id: &str,
         params: &PaginationParams,
-        response: &HypePointRecordResponse,
+        response: &PointHistoryResponse,
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
@@ -802,7 +803,7 @@ impl RedisDatabase {
         &self,
         account_id: &str,
         params: &PaginationParams,
-    ) -> Result<HypePointRecordResponse> {
+    ) -> Result<PointHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!(
@@ -818,7 +819,7 @@ impl RedisDatabase {
             "get_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
             account_id, params.page, params.limit, elapsed
         );
-        let response: HypePointRecordResponse = serde_json::from_str(&response_json)?;
+        let response: PointHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 

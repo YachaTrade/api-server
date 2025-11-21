@@ -2,13 +2,14 @@ use crate::{
     controllers::account::AccountController,
     result::{AppError, AppJsonResult},
     services::{
+        hype::HypeService,
         token::create::TokenCreatedService,
         trading::{position::PositionService, swap_history::SwapService},
     },
     state::AppState,
     types::{
         common::pagination::PaginationParams,
-        profile::{CreatedTokensResponse, HoldTokenResponse, ProfileResponse, SwapHistoryResponse},
+        profile::{CreatedTokensResponse, HoldTokenResponse, PointHistoryResponse, ProfileResponse, SwapHistoryResponse},
     },
     utils::valid_evm_address,
 };
@@ -159,5 +160,38 @@ pub async fn get_swap_history(
             );
             err
         })?;
+    Ok(Json(response))
+}
+
+/// Get Hype Point History
+#[utoipa::path(
+    get,
+    path = ProfilePath::GetPointHistory.docs_str(),
+    params(
+        ("account_id" = String, Path, description = "Account ID to get point history for"),
+        ("page" = i64, Query, description = "Page number"),
+        ("limit" = i64, Query, description = "Number of items per page")
+    ),
+    responses(
+        (status = 200, description = "Point history fetched successfully", body = PointHistoryResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+#[instrument(skip(state))]
+pub async fn get_point_history(
+    Path(account_id): Path<String>,
+    Query(params): Query<PaginationParams>,
+    State(state): State<AppState>,
+) -> AppJsonResult<PointHistoryResponse> {
+    if !valid_evm_address(&account_id) {
+        return Err(AppError::BadRequest("Invalid account ID".to_string()));
+    }
+    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
+        .get_hype_point_history(&account_id, &params)
+        .await?;
+
     Ok(Json(response))
 }

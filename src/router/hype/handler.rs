@@ -12,7 +12,7 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         hype::{
-            AmountResponse, HypeEpochResponse, HypePointRecordResponse, HypePointResponse,
+            AmountResponse, HypeEpochResponse, HypePointResponse,
             HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenQuery,
             HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
@@ -131,35 +131,6 @@ pub async fn get_hype_vote_history(
     let service = HypeService::new(state.postgres.clone(), state.redis.clone());
     let response = service
         .get_hype_vote_history(&session_address, &params)
-        .await?;
-
-    Ok(Json(response))
-}
-
-/// Get Hype Point History
-#[utoipa::path(
-    get,
-    path = HypePath::GetPointHistory.docs_str(),
-    params(
-        ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page"),
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    responses(
-        (status = 200, description = "Hype point history fetched successfully", body = HypePointRecordResponse),
-        (status = 400, description = "Bad request"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Hype"
-)]
-pub async fn get_hype_point_history(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-    Query(params): Query<PaginationParams>,
-) -> AppJsonResult<HypePointRecordResponse> {
-    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
-    let response = service
-        .get_hype_point_history(&session_address, &params)
         .await?;
 
     Ok(Json(response))
