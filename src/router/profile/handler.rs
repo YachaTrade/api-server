@@ -15,7 +15,7 @@ use crate::{
 };
 
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, Query, State},
 };
 use tracing::{error, instrument};
@@ -163,14 +163,14 @@ pub async fn get_swap_history(
     Ok(Json(response))
 }
 
-/// Get Hype Point History
+/// Get Point History
 #[utoipa::path(
     get,
     path = ProfilePath::GetPointHistory.docs_str(),
     params(
-        ("account_id" = String, Path, description = "Account ID to get point history for"),
         ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page")
+        ("limit" = i64, Query, description = "Number of items per page"),
+        ("session" = String, Cookie, description = "Session cookie for authentication")
     ),
     responses(
         (status = 200, description = "Point history fetched successfully", body = PointHistoryResponse),
@@ -181,16 +181,13 @@ pub async fn get_swap_history(
 )]
 #[instrument(skip(state))]
 pub async fn get_point_history(
-    Path(account_id): Path<String>,
-    Query(params): Query<PaginationParams>,
     State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Query(params): Query<PaginationParams>,
 ) -> AppJsonResult<PointHistoryResponse> {
-    if !valid_evm_address(&account_id) {
-        return Err(AppError::BadRequest("Invalid account ID".to_string()));
-    }
     let service = HypeService::new(state.postgres.clone(), state.redis.clone());
     let response = service
-        .get_hype_point_history(&account_id, &params)
+        .get_hype_point_history(&session_address, &params)
         .await?;
 
     Ok(Json(response))

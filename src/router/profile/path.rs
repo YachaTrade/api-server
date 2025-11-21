@@ -14,7 +14,7 @@ impl ProfilePath {
             ProfilePath::GetHoldToken => "/profile/hold-token/:account_id",
             ProfilePath::GetTokenCreated => "/profile/tokens/created/:account_id",
             ProfilePath::GetSwapHistory => "/profile/swap-history/:account_id",
-            ProfilePath::GetPointHistory => "/profile/point-history/:account_id",
+            ProfilePath::GetPointHistory => "/profile/point-history",
         }
     }
 
@@ -24,7 +24,7 @@ impl ProfilePath {
             ProfilePath::GetHoldToken => "/profile/hold-token/{account_id}",
             ProfilePath::GetTokenCreated => "/profile/tokens/created/{account_id}",
             ProfilePath::GetSwapHistory => "/profile/swap-history/{account_id}",
-            ProfilePath::GetPointHistory => "/profile/point-history/{account_id}",
+            ProfilePath::GetPointHistory => "/profile/point-history",
         }
     }
 }
