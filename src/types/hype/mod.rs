@@ -45,10 +45,12 @@ pub struct HypeEpochResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeVoteHistory {
     pub epoch: i64,
+    pub is_live: bool,
     pub token_info: TokenInfo,
     pub vote_amount: String,
-    pub total_vote_amount: String,
-    pub created_at: i64,
+    pub reward: String,
+    pub claimable: bool,
+    pub proof: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -71,24 +73,6 @@ pub struct HypePointRecordResponse {
     pub total_count: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct HypeReward {
-    pub epoch: i64,
-    pub token_info: TokenInfo,
-    pub amount: String,
-    pub claimable: bool,
-    pub proof: Vec<String>,
-    pub transaction_hash: Option<String>,
-    pub claim_at: Option<i64>,
-    pub vote_amount: String,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct HypeRewardHistoryResponse {
-    pub history: Vec<HypeReward>,
-    pub total_count: u64,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeVoteRequest {

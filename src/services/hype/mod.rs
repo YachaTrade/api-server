@@ -11,7 +11,7 @@ use crate::{
         common::pagination::PaginationParams,
         hype::{
             AmountResponse, HypeEpochResponse, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenQuery,
+            HypeRewardAddHistoryResponse, HypeTokenQuery,
             HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
         profile::PointHistoryResponse,
@@ -194,40 +194,6 @@ impl HypeService {
         Ok(response)
     }
 
-    pub async fn get_hype_reward_history(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-    ) -> Result<HypeRewardHistoryResponse, AppError> {
-        if let Ok(cached) = self
-            .redis
-            .get_hype_reward_history_response(account_id, params)
-            .await
-        {
-            return Ok(cached);
-        }
-
-        let controller = HypeController::new(self.postgres.clone());
-        let response = controller
-            .get_hype_reward_history(account_id, params)
-            .await
-            .map_err(|err| {
-                AppError::InternalError(format!(
-                    "Failed to get hype reward history, error: {}",
-                    err
-                ))
-            })?;
-
-        if let Err(err) = self
-            .redis
-            .set_hype_reward_history_response(account_id, params, &response)
-            .await
-        {
-            error!("Failed to set hype reward history response: {}", err);
-        }
-
-        Ok(response)
-    }
 
     pub async fn get_hype_reward_add_history(
         &self,

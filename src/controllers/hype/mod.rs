@@ -15,8 +15,8 @@ use crate::{
             pagination::PaginationParams,
         },
         hype::{
-            AmountResponse, HypeEpochResponse, HypeInfo, HypePointResponse, HypeReward,
-            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeToken, HypeTokenResponse,
+            AmountResponse, HypeEpochResponse, HypeInfo, HypePointResponse,
+            HypeRewardAddHistoryResponse, HypeToken, HypeTokenResponse,
             HypeVoteHistory, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse, RewardAdd,
         },
         profile::{PointHistoryResponse, PointRecord},
@@ -605,6 +605,7 @@ impl HypeController {
         #[derive(sqlx::FromRow)]
         struct HypeVoteHistoryRow {
             epoch: i64,
+            epoch_status: String,
             token_id: String,
             name: String,
             symbol: String,
@@ -612,22 +613,31 @@ impl HypeController {
             token_created_at: i64,
             is_graduated: bool,
             is_nsfw: bool,
-            vote: BigDecimal,
-            total_vote_amount: BigDecimal,
-            created_at: i64,
+            vote_amount: BigDecimal,
             creator: String,
             creator_nickname: String,
             creator_bio: String,
             creator_image_uri: String,
+            reward_amount: Option<BigDecimal>,
+            reward_status: Option<String>,
+            reward_proof: Option<Vec<String>>,
         }
 
         let query = r#"
+            WITH vote_summary AS (
+                SELECT
+                    epoch,
+                    token_id,
+                    SUM(vote) as vote_amount
+                FROM vote_history
+                WHERE account_id = $1
+                GROUP BY epoch, token_id
+            )
             SELECT
-                vh.epoch,
-                vh.token_id,
-                vh.vote,
-                vh.total_vote_amount,
-                vh.created_at,
+                vs.epoch,
+                e.status as epoch_status,
+                vs.token_id,
+                vs.vote_amount,
                 t.name,
                 t.symbol,
                 t.image_uri,
@@ -637,13 +647,19 @@ impl HypeController {
                 t.is_graduated,
                 COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri
-            FROM vote_history vh
-            JOIN token t ON vh.token_id = t.token_id
+                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                r.amount as reward_amount,
+                r.status as reward_status,
+                r.proof as reward_proof
+            FROM vote_summary vs
+            JOIN epoch e ON vs.epoch = e.epoch
+            JOIN token t ON vs.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
-            WHERE vh.account_id = $1
-            ORDER BY vh.created_at DESC
+            LEFT JOIN reward r ON vs.epoch = r.epoch
+                AND vs.token_id = r.token_id
+                AND r.account_id = $1
+            ORDER BY vs.epoch DESC, vs.vote_amount DESC
             LIMIT $2 OFFSET $3
             "#;
 
@@ -686,6 +702,7 @@ impl HypeController {
             .into_iter()
             .map(|row| HypeVoteHistory {
                 epoch: row.epoch,
+                is_live: row.epoch_status == "ACTIVE",
                 token_info: TokenInfo {
                     token_id: row.token_id.clone(),
                     name: row.name,
@@ -705,9 +722,14 @@ impl HypeController {
                         image_uri: row.creator_image_uri,
                     },
                 },
-                vote_amount: row.vote.to_string(),
-                total_vote_amount: row.total_vote_amount.to_string(),
-                created_at: row.created_at,
+                vote_amount: row.vote_amount.normalized().to_plain_string(),
+                reward: row
+                    .reward_amount
+                    .unwrap_or_default()
+                    .normalized()
+                    .to_plain_string(),
+                claimable: row.reward_status.as_deref() == Some("AWAITING"),
+                proof: row.reward_proof.unwrap_or_default(),
             })
             .collect();
 
@@ -846,170 +868,6 @@ impl HypeController {
         })
     }
 
-    pub async fn get_hype_reward_history(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<HypeRewardHistoryResponse> {
-        let cache_key = format!(
-            "hype_reward_history:{}:{}:{}",
-            account_id, pagination.page, pagination.limit
-        );
-
-        let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
-            let db = self.db.clone();
-            let account_id = account_id.to_string();
-
-            async move {
-                let controller = HypeController::new(db);
-                controller
-                    .fetch_hype_reward_history(&account_id, &pagination)
-                    .await
-            }
-        })
-        .await?;
-
-        Ok(response)
-    }
-
-    async fn fetch_hype_reward_history(
-        &self,
-        account_id: &str,
-        pagination: &PaginationParams,
-    ) -> Result<HypeRewardHistoryResponse> {
-        let offset = (pagination.page - 1) * pagination.limit;
-
-        #[derive(sqlx::FromRow)]
-        struct HypeRewardRow {
-            token_id: String,
-            name: String,
-            symbol: String,
-            image_uri: String,
-            token_created_at: i64,
-            is_graduated: bool,
-            is_nsfw: bool,
-            epoch: i64,
-            amount: BigDecimal,
-            status: String,
-            proof: Vec<String>,
-            transaction_hash: Option<String>,
-            claim_at: Option<i64>,
-            vote_amount: BigDecimal,
-            created_at: i64,
-            creator: String,
-            holder_count: i64,
-            creator_nickname: String,
-            creator_bio: String,
-            creator_image_uri: String,
-            creator_follower_count: i32,
-            creator_following_count: i32,
-        }
-
-        let rows_future = async {
-            measure_postgres!(
-                "hype.fetch_hype_reward_history.rows",
-                sqlx::query_as::<_, HypeRewardRow>(
-                    r#"
-                    SELECT
-                        t.token_id,
-                        t.name,
-                        t.symbol,
-                        t.image_uri,
-                        t.created_at as token_created_at,
-                        t.is_graduated,
-                        t.is_nsfw,
-                        r.epoch,
-                        r.vote_amount,
-                        r.amount,
-                        r.status,
-                        r.proof,
-                        r.transaction_hash,
-                        r.claim_at,
-                        r.created_at,
-                        t.creator,
-                        t.token_holder_count as holder_count,
-                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
-                        a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                        a.follower_count as creator_follower_count,
-                        a.following_count as creator_following_count
-                    FROM reward r
-                    JOIN token t ON r.token_id = t.token_id
-                    JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    WHERE r.account_id = $1 
-                    ORDER BY r.created_at DESC
-                    LIMIT $2 OFFSET $3
-                    "#,
-                )
-                .bind(account_id)
-                .bind(pagination.limit)
-                .bind(offset)
-                .fetch_all(self.db.get_read_pool())
-            )
-        };
-
-        let total_count_future = async {
-            measure_postgres!(
-                "hype.fetch_hype_reward_history.count",
-                sqlx::query_as::<_, CountRow>(
-                    r#"
-                    SELECT COUNT(*) as count
-                    FROM reward
-                    WHERE account_id = $1
-                    "#,
-                )
-                .bind(account_id)
-                .fetch_one(self.db.get_read_pool())
-            )
-        };
-
-        let (rows_result, total_count_result) = tokio::join!(rows_future, total_count_future);
-
-        let reward_rows =
-            rows_result.map_err(|err| anyhow!("Failed to fetch hype reward history: {}", err))?;
-        let total_count = total_count_result
-            .map_err(|err| anyhow!("Failed to fetch hype reward history count: {}", err))?
-            .count as u64;
-
-        let history = reward_rows
-            .into_iter()
-            .map(|row| HypeReward {
-                epoch: row.epoch,
-                token_info: TokenInfo {
-                    token_id: row.token_id.clone(),
-                    name: row.name,
-                    symbol: row.symbol,
-                    image_uri: row.image_uri,
-                    description: None,
-                    is_graduated: row.is_graduated,
-                    is_nsfw: row.is_nsfw,
-                    twitter: None,
-                    telegram: None,
-                    website: None,
-                    created_at: row.token_created_at,
-                    creator: AccountInfo {
-                        account_id: row.creator,
-                        nickname: row.creator_nickname,
-                        bio: row.creator_bio,
-                        image_uri: row.creator_image_uri,
-                    },
-                },
-                amount: row.amount.normalized().to_plain_string(),
-                claimable: row.status == "AWAITING",
-                proof: row.proof,
-                transaction_hash: row.transaction_hash,
-                claim_at: row.claim_at,
-                vote_amount: row.vote_amount.normalized().to_plain_string(),
-                created_at: row.created_at,
-            })
-            .collect();
-
-        Ok(HypeRewardHistoryResponse {
-            history,
-            total_count,
-        })
-    }
 
     pub async fn vote(
         &self,
