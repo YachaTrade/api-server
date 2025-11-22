@@ -41,13 +41,6 @@ pub fn router(app_state: AppState) -> Router<AppState> {
             )),
         )
         .route(
-            HypePath::GetRewardHistory.as_str(),
-            get(handler::get_hype_reward_history).layer(middleware::from_fn_with_state(
-                app_state.clone(),
-                authenticate_user,
-            )),
-        )
-        .route(
             HypePath::GetRewardAddHistory.as_str(),
             get(handler::get_hype_reward_add_history).layer(middleware::from_fn_with_state(
                 app_state.clone(),

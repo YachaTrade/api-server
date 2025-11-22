@@ -13,7 +13,7 @@ use crate::{
         common::pagination::PaginationParams,
         hype::{
             AmountResponse, HypeEpochResponse, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenQuery,
+            HypeRewardAddHistoryResponse, HypeTokenQuery,
             HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
         },
     },
@@ -136,34 +136,6 @@ pub async fn get_hype_vote_history(
     Ok(Json(response))
 }
 
-/// Get Hype Reward History
-#[utoipa::path(
-    get,
-    path = HypePath::GetRewardHistory.docs_str(),
-    params(
-        ("page" = i64, Query, description = "Page number"),
-        ("limit" = i64, Query, description = "Number of items per page"),
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    responses(
-        (status = 200, description = "Hype reward history fetched successfully", body = HypeRewardHistoryResponse),
-        (status = 400, description = "Bad request"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Hype"
-)]
-pub async fn get_hype_reward_history(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-    Query(params): Query<PaginationParams>,
-) -> AppJsonResult<HypeRewardHistoryResponse> {
-    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
-    let response = service
-        .get_hype_reward_history(&session_address, &params)
-        .await?;
-
-    Ok(Json(response))
-}
 
 /// Get Hype Reward Add History
 #[utoipa::path(

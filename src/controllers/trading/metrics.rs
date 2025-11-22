@@ -4,12 +4,16 @@ use anyhow::Result;
 use bigdecimal::BigDecimal;
 
 use crate::{
+    cache_key,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::trading::metrics::{
         MakerCount, MetricItem, MetricsBatchResponse, TimeFrame, TransactionCount, VolumeAmount,
     },
-    utils::{calculate_price_change_percent, current_unix_timestamp},
+    utils::{
+        calculate_price_change_percent, current_unix_timestamp,
+        single_flight::{GLOBAL_CACHE, with_cache},
+    },
 };
 
 pub struct MetricsController {
@@ -60,6 +64,24 @@ impl MetricsController {
     }
 
     async fn fetch_metric_for_timeframe(
+        &self,
+        token_id: &str,
+        timeframe: TimeFrame,
+    ) -> Result<MetricItem> {
+        let cache_key = cache_key!(
+            "metrics",
+            token_id,
+            timeframe.to_string()
+        );
+
+        let token_id_clone = token_id.to_string();
+        with_cache(&GLOBAL_CACHE.cache, &cache_key, || async move {
+            self.fetch_metric_for_timeframe_internal(&token_id_clone, timeframe).await
+        })
+        .await
+    }
+
+    async fn fetch_metric_for_timeframe_internal(
         &self,
         token_id: &str,
         timeframe: TimeFrame,

@@ -21,7 +21,7 @@ use crate::{
         common::pagination::PaginationParams,
         hype::{
             AmountResponse, HypeEpochResponse, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeRewardHistoryResponse, HypeTokenResponse,
+            HypeRewardAddHistoryResponse, HypeTokenResponse,
             HypeVoteHistoryResponse,
         },
         metadata::TerminalMetadataResponse,
@@ -860,55 +860,6 @@ impl RedisDatabase {
         Ok(response)
     }
 
-    pub async fn set_hype_reward_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-        response: &HypeRewardHistoryResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "hype_reward_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        );
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_reward_history_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_reward_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-    ) -> Result<HypeRewardHistoryResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = format!(
-            "hype_reward_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        );
-        let response_json: String = measure_redis!(
-            "redis.get_hype_reward_history_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_reward_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        let response: HypeRewardHistoryResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
 
     pub async fn set_hype_reward_add_history_response(
         &self,
