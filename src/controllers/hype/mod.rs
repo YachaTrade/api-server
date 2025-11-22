@@ -817,7 +817,7 @@ impl HypeController {
             .map_err(|err| anyhow!("Failed to fetch hype point history count: {}", err))?
             .count as u64;
 
-        let history = point_rows
+        let histories = point_rows
             .into_iter()
             .map(|row| {
                 use crate::types::profile::PointRecordTotal;
@@ -841,7 +841,7 @@ impl HypeController {
             .collect();
 
         Ok(PointHistoryResponse {
-            history,
+            histories,
             total_count,
         })
     }
