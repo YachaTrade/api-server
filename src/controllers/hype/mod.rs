@@ -158,7 +158,7 @@ impl HypeController {
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
-                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
                     )
                     ORDER BY h.vote DESC, market_cap DESC
                     "#,
@@ -176,7 +176,7 @@ impl HypeController {
                     FROM hype_token h
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
-                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
                     )
                     "#,
                 )
@@ -268,7 +268,7 @@ impl HypeController {
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
-                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
                     )
                     ORDER BY h.vote DESC, market_cap DESC
                     "#,
@@ -286,7 +286,7 @@ impl HypeController {
                     FROM hype_token h
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
-                        (SELECT epoch FROM epoch WHERE status = 'COMPLETE' ORDER BY epoch DESC LIMIT 1)
+                        (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
                     )
                     "#,
                 )
