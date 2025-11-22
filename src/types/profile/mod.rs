@@ -45,6 +45,6 @@ pub struct PointRecordTotal {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PointHistoryResponse {
-    pub history: Vec<PointRecordTotal>,
+    pub histories: Vec<PointRecordTotal>,
     pub total_count: u64,
 }
