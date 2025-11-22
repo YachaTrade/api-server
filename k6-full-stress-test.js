@@ -2,6 +2,19 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 
+// 10초마다 100명씩 증가하는 단계 생성 (대역폭 효율을 위해 속도 조절)
+// 150단계 × 10초 = 1500초 (약 25분)
+function generateRampUpStages() {
+  const stages = [];
+  for (let i = 0; i < 150; i++) {
+    stages.push({
+      duration: '10s',  // 5s → 10s로 증가 (대역폭 부담 감소)
+      target: (i + 1) * 100  // 150 → 100으로 감소 (점진적 증가)
+    });
+  }
+  return stages;
+}
+
 // 테스트 설정
 export const options = {
   // 로컬 실행 명시
@@ -9,18 +22,12 @@ export const options = {
     default: {
       executor: 'ramping-vus',
       startVUs: 0,
-      stages: [
-        // 10초마다 100명씩 증가 (대역폭 효율을 위해 속도 조절)
-        // 150단계 × 10초 = 1500초 (약 25분)
-        ...Array.from({ length: 150 }, (_, i) => ({
-          duration: '10s',  // 5s → 10s로 증가 (대역폭 부담 감소)
-          target: (i + 1) * 100  // 150 → 100으로 감소 (점진적 증가)
-        })),
+      stages: generateRampUpStages().concat([
         // 15,000명에서 30초 유지
         { duration: '30s', target: 15000 },
         // 점진적으로 감소
         { duration: '60s', target: 0 },
-      ],
+      ]),
       gracefulRampDown: '10s',
     },
   },
@@ -284,10 +291,9 @@ function httpGetWithErrorLog(url, checks = {}, expectedDuration = null) {
   const res = http.get(url);
 
   // 기본 체크에 status 200 체크 추가
-  const allChecks = {
-    'status is 200': (r) => r.status === 200,
-    ...checks
-  };
+  const allChecks = Object.assign({
+    'status is 200': (r) => r.status === 200
+  }, checks);
 
   const checkResult = check(res, allChecks);
 
