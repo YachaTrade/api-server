@@ -2,14 +2,17 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 
-// 10초마다 100명씩 증가하는 단계 생성 (대역폭 효율을 위해 속도 조절)
-// 150단계 × 10초 = 1500초 (약 25분)
+// 1초당 150명씩 증가 (3000 → 30000)
+// 180단계 × 1초 = 180초 (3분)
 function generateRampUpStages() {
   const stages = [];
-  for (let i = 0; i < 150; i++) {
+  const startVUs = 3000;
+  const increment = 150;
+
+  for (let i = 0; i < 180; i++) {
     stages.push({
-      duration: '10s',  // 5s → 10s로 증가 (대역폭 부담 감소)
-      target: (i + 1) * 100  // 150 → 100으로 감소 (점진적 증가)
+      duration: '1s',
+      target: startVUs + (i + 1) * increment
     });
   }
   return stages;
@@ -21,10 +24,10 @@ export const options = {
   scenarios: {
     default: {
       executor: 'ramping-vus',
-      startVUs: 0,
+      startVUs: 3000,
       stages: generateRampUpStages().concat([
         // 15,000명에서 30초 유지
-        { duration: '30s', target: 15000 },
+        { duration: '30s', target: 30000 },
         // 점진적으로 감소
         { duration: '60s', target: 0 },
       ]),
