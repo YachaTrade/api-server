@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum VolumeRange {
-    /// $1 ~ $1000
+    /// $0 ~ $1000
     Small,
     /// $1000 ~ $10000
     Medium,
@@ -21,7 +21,7 @@ impl VolumeRange {
     /// Get the minimum value for this range
     pub fn min_value(&self) -> &str {
         match self {
-            VolumeRange::Small => "1",
+            VolumeRange::Small => "0",
             VolumeRange::Medium => "1000",
             VolumeRange::Large => "10000",
         }
