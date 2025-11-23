@@ -16,8 +16,8 @@ use crate::{
         },
         hype::{
             AmountResponse, HypeEpochResponse, HypeInfo, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeToken, HypeTokenResponse,
-            HypeVoteHistory, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse, RewardAdd,
+            HypeRewardAddHistoryResponse, HypeToken, HypeTokenResponse, HypeVoteHistory,
+            HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse, RewardAdd,
         },
         profile::{PointHistoryResponse, PointRecord},
     },
@@ -723,7 +723,7 @@ impl HypeController {
                     },
                 },
                 vote_amount: row.vote_amount.normalized().to_plain_string(),
-                reward: row
+                reward_amount: row
                     .reward_amount
                     .unwrap_or_default()
                     .normalized()
@@ -867,7 +867,6 @@ impl HypeController {
             total_count,
         })
     }
-
 
     pub async fn vote(
         &self,
