@@ -48,7 +48,7 @@ pub struct HypeVoteHistory {
     pub is_live: bool,
     pub token_info: TokenInfo,
     pub vote_amount: String,
-    pub reward: String,
+    pub reward_amount: String,
     pub claimable: bool,
     pub proof: Vec<String>,
 }
@@ -72,7 +72,6 @@ pub struct HypePointRecordResponse {
     pub history: Vec<HypePointRecord>,
     pub total_count: u64,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypeVoteRequest {
