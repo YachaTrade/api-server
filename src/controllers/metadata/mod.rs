@@ -59,7 +59,10 @@ impl MetadataController {
         Ok(())
     }
 
-    pub async fn get_terminal_metadata(&self, token_address: &str) -> Result<TerminalMetadataResponse> {
+    pub async fn get_terminal_metadata(
+        &self,
+        token_address: &str,
+    ) -> Result<TerminalMetadataResponse> {
         let start_time = Instant::now();
 
         #[derive(sqlx::FromRow)]

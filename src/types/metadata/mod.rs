@@ -21,7 +21,7 @@ pub struct UploadMetadataRequest {
     pub image_uri: String,
     pub name: String,
     pub symbol: String,
-    pub description: String,
+    pub description: Option<String>,
     pub website: Option<String>,
     pub twitter: Option<String>,
     pub telegram: Option<String>,
@@ -37,7 +37,7 @@ pub struct UploadMetadataResponse {
 pub struct TokenMetadata {
     pub name: String,
     pub symbol: String,
-    pub description: String,
+    pub description: Option<String>,
     pub image_uri: String,
     pub website: Option<String>,
     pub twitter: Option<String>,
@@ -101,12 +101,6 @@ impl TokenMetadata {
         if self.symbol.trim().is_empty() {
             return Err(AppError::BadRequest(
                 "Token symbol cannot be empty".to_string(),
-            ));
-        }
-
-        if self.description.trim().is_empty() {
-            return Err(AppError::BadRequest(
-                "Token description cannot be empty".to_string(),
             ));
         }
 
