@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     controllers::account::{wallet::WalletController, x::AccountXController, AccountController},
-    db::postgres::PostgresDatabase,
+    db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::account::{
         AccountResponse, ConnectXRequest, GetWalletResponse, RegisterWalletRequest,
@@ -12,11 +12,12 @@ use crate::{
 
 pub struct AccountService {
     postgres: Arc<PostgresDatabase>,
+    redis: Arc<RedisDatabase>,
 }
 
 impl AccountService {
-    pub fn new(postgres: Arc<PostgresDatabase>) -> Self {
-        Self { postgres }
+    pub fn new(postgres: Arc<PostgresDatabase>, redis: Arc<RedisDatabase>) -> Self {
+        Self { postgres, redis }
     }
 
     pub async fn get_account(&self, account_id: &str) -> Result<AccountResponse, AppError> {
@@ -39,6 +40,12 @@ impl AccountService {
             .update_account(account_id, req.image_uri, req.nickname, req.bio)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // Cache updated account info in Redis
+        self.redis
+            .set_account_info(account_id, &account_info)
+            .await
+            .ok(); // Ignore cache errors, don't fail the request
 
         Ok(AccountResponse { account_info })
     }

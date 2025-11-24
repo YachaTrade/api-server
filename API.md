@@ -1,11 +1,13 @@
 # API Documentation
 
 ## Overview
+
 This document provides the complete API specification for the NADS Pump API Server.
 
 ---
 
 ## Table of Contents
+
 1. [Get Token Metadata API](#1-get-token-metadata-api)
 2. [Get Market Data API](#2-get-market-data-api)
 3. [Get Chart Data API](#3-get-chart-data-api)
@@ -13,6 +15,7 @@ This document provides the complete API specification for the NADS Pump API Serv
 5. [Get Hype Token API](#5-get-hype-token-api)
 6. [Upload Image API](#6-upload-image-api)
 7. [Upload Metadata API](#7-upload-metadata-api)
+8. [Mine Salt API](#8-mine-salt-api)
 
 ---
 
@@ -20,17 +23,17 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /token/metadata/:token_id |
-| Method | GET |
+| Item        | Description                                                       |
+| ----------- | ----------------------------------------------------------------- |
+| URL         | /token/metadata/:token_id                                         |
+| Method      | GET                                                               |
 | Description | Query comprehensive metadata and market data for a specific token |
 
 ### Parameters
 
-| Parameter | Location | Type | Required | Description |
-| --- | --- | --- | --- | --- |
-| token_id | Path | String | Required | EVM token address to query (42 characters with 0x prefix) |
+| Parameter | Location | Type   | Required | Description                                               |
+| --------- | -------- | ------ | -------- | --------------------------------------------------------- |
+| token_id  | Path     | String | Required | EVM token address to query (42 characters with 0x prefix) |
 
 ### Response
 
@@ -78,46 +81,46 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 #### token_info Object
 
-| Field | Type | Description |
-| --- | --- | --- |
-| token_id | String | Token contract address |
-| name | String | Token name |
-| symbol | String | Token symbol |
-| image_uri | String | Token image URL |
-| description | String (nullable) | Token description |
-| is_graduated | Boolean | Whether token graduated from bonding curve to DEX |
-| is_nsfw | Boolean | Whether token is marked as NSFW content |
-| twitter | String (nullable) | Twitter/X profile link |
-| telegram | String (nullable) | Telegram group link |
-| website | String (nullable) | Official website link |
-| created_at | Integer | Creation timestamp (Unix timestamp in seconds) |
-| creator | Object | Creator account information |
+| Field        | Type              | Description                                       |
+| ------------ | ----------------- | ------------------------------------------------- |
+| token_id     | String            | Token contract address                            |
+| name         | String            | Token name                                        |
+| symbol       | String            | Token symbol                                      |
+| image_uri    | String            | Token image URL                                   |
+| description  | String (nullable) | Token description                                 |
+| is_graduated | Boolean           | Whether token graduated from bonding curve to DEX |
+| is_nsfw      | Boolean           | Whether token is marked as NSFW content           |
+| twitter      | String (nullable) | Twitter/X profile link                            |
+| telegram     | String (nullable) | Telegram group link                               |
+| website      | String (nullable) | Official website link                             |
+| created_at   | Integer           | Creation timestamp (Unix timestamp in seconds)    |
+| creator      | Object            | Creator account information                       |
 
 #### creator Object
 
-| Field | Type | Description |
-| --- | --- | --- |
-| account_id | String | Creator's wallet address |
-| nickname | String | Creator's display name |
-| bio | String | Creator's biography |
-| image_uri | String | Creator's profile image URL |
+| Field      | Type   | Description                 |
+| ---------- | ------ | --------------------------- |
+| account_id | String | Creator's wallet address    |
+| nickname   | String | Creator's display name      |
+| bio        | String | Creator's biography         |
+| image_uri  | String | Creator's profile image URL |
 
 #### market_info Object
 
-| Field | Type | Description |
-| --- | --- | --- |
-| market_type | String | Market type: "CURVE" (Bonding Curve) or "DEX" (Uniswap v3) |
-| token_id | String | Token contract address |
-| market_id | String | Market address (Bonding Curve address or Uniswap v3 pool address) |
-| reserve_native | String | Native token (MON) reserve in the pool |
-| reserve_token | String | Project token reserve in the pool |
-| token_price | String | Token price in USD |
-| native_price | String | Native token (MON) price in USD |
-| price | String | Token price in native token (MON/Token) |
-| total_supply | String | Total token supply |
-| volume | String | Trading volume |
-| ath_price | String | All-time high price in native token |
-| holder_count | Integer | Number of unique token holders |
+| Field          | Type    | Description                                                       |
+| -------------- | ------- | ----------------------------------------------------------------- |
+| market_type    | String  | Market type: "CURVE" (Bonding Curve) or "DEX" (Uniswap v3)        |
+| token_id       | String  | Token contract address                                            |
+| market_id      | String  | Market address (Bonding Curve address or Uniswap v3 pool address) |
+| reserve_native | String  | Native token (MON) reserve in the pool                            |
+| reserve_token  | String  | Project token reserve in the pool                                 |
+| token_price    | String  | Token price in USD                                                |
+| native_price   | String  | Native token (MON) price in USD                                   |
+| price          | String  | Token price in native token (MON/Token)                           |
+| total_supply   | String  | Total token supply                                                |
+| volume         | String  | Trading volume                                                    |
+| ath_price      | String  | All-time high price in native token                               |
+| holder_count   | Integer | Number of unique token holders                                    |
 
 #### Error Response (Status: 400)
 
@@ -133,17 +136,17 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /trade/market/:token_id |
-| Method | GET |
+| Item        | Description                                    |
+| ----------- | ---------------------------------------------- |
+| URL         | /trade/market/:token_id                        |
+| Method      | GET                                            |
 | Description | Query current market data for a specific token |
 
 ### Parameters
 
-| Parameter | Location | Type | Required | Description |
-| --- | --- | --- | --- | --- |
-| token_id | Path | String | Required | EVM token address to query (42 characters with 0x prefix) |
+| Parameter | Location | Type   | Required | Description                                               |
+| --------- | -------- | ------ | -------- | --------------------------------------------------------- |
+| token_id  | Path     | String | Required | EVM token address to query (42 characters with 0x prefix) |
 
 ### Response
 
@@ -170,20 +173,20 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Response Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| market_info.market_type | String | Market type: "CURVE" (Bonding Curve) or "DEX" (Uniswap v3) |
-| market_info.token_id | String | Token contract address |
-| market_info.market_id | String | Market address (Bonding Curve address or Uniswap v3 pool address) |
-| market_info.reserve_native | String | Native token (MON) reserve in the pool |
-| market_info.reserve_token | String | Project token reserve in the pool |
-| market_info.token_price | String | Token price in USD |
-| market_info.native_price | String | Native token (MON) price in USD |
-| market_info.price | String | Token price in native token (MON/Token) |
-| market_info.total_supply | String | Total token supply |
-| market_info.volume | String | Trading volume |
-| market_info.ath_price | String | All-time high price in native token |
-| market_info.holder_count | Integer | Number of unique token holders |
+| Field                      | Type    | Description                                                       |
+| -------------------------- | ------- | ----------------------------------------------------------------- |
+| market_info.market_type    | String  | Market type: "CURVE" (Bonding Curve) or "DEX" (Uniswap v3)        |
+| market_info.token_id       | String  | Token contract address                                            |
+| market_info.market_id      | String  | Market address (Bonding Curve address or Uniswap v3 pool address) |
+| market_info.reserve_native | String  | Native token (MON) reserve in the pool                            |
+| market_info.reserve_token  | String  | Project token reserve in the pool                                 |
+| market_info.token_price    | String  | Token price in USD                                                |
+| market_info.native_price   | String  | Native token (MON) price in USD                                   |
+| market_info.price          | String  | Token price in native token (MON/Token)                           |
+| market_info.total_supply   | String  | Total token supply                                                |
+| market_info.volume         | String  | Trading volume                                                    |
+| market_info.ath_price      | String  | All-time high price in native token                               |
+| market_info.holder_count   | Integer | Number of unique token holders                                    |
 
 #### Error Response (Status: 400)
 
@@ -199,31 +202,31 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /trade/chart/:token_id |
-| Method | GET |
+| Item        | Description                                                                          |
+| ----------- | ------------------------------------------------------------------------------------ |
+| URL         | /trade/chart/:token_id                                                               |
+| Method      | GET                                                                                  |
 | Description | Query OHLCV chart data (candlesticks) for a specific token with multiple chart types |
 
 ### Parameters
 
-| Parameter | Location | Type | Required | Description |
-| --- | --- | --- | --- | --- |
-| token_id | Path | String | Required | EVM token address to query (42 characters with 0x prefix) |
-| resolution | Query | String | Required | Chart resolution: "1", "5", "15", "30", "60"/"1H", "240"/"4H", "D"/"1D", "W"/"1W", "M"/"1M" |
-| from | Query | Integer | Required | Start timestamp (Unix timestamp in seconds) |
-| to | Query | Integer | Required | End timestamp (Unix timestamp in seconds) |
-| countback | Query | Integer | Optional | Maximum number of candles to return (default: 500) |
-| chart_type | Query | String | Optional | Chart type: "price", "price_usd", "market_cap", "market_cap_usd" (default: "price") |
+| Parameter  | Location | Type    | Required | Description                                                                                 |
+| ---------- | -------- | ------- | -------- | ------------------------------------------------------------------------------------------- |
+| token_id   | Path     | String  | Required | EVM token address to query (42 characters with 0x prefix)                                   |
+| resolution | Query    | String  | Required | Chart resolution: "1", "5", "15", "30", "60"/"1H", "240"/"4H", "D"/"1D", "W"/"1W", "M"/"1M" |
+| from       | Query    | Integer | Required | Start timestamp (Unix timestamp in seconds)                                                 |
+| to         | Query    | Integer | Required | End timestamp (Unix timestamp in seconds)                                                   |
+| countback  | Query    | Integer | Optional | Maximum number of candles to return (default: 500)                                          |
+| chart_type | Query    | String  | Optional | Chart type: "price", "price_usd", "market_cap", "market_cap_usd" (default: "price")         |
 
 ### Chart Types
 
-| chart_type | Description |
-| --- | --- |
-| price | Token price in native token (MON/Token) - default |
-| price_usd | Token price in USD |
-| market_cap | Market capitalization in native token (price × total_supply) |
-| market_cap_usd | Market capitalization in USD (usd_price × total_supply) |
+| chart_type     | Description                                                  |
+| -------------- | ------------------------------------------------------------ |
+| price          | Token price in native token (MON/Token) - default            |
+| price_usd      | Token price in USD                                           |
+| market_cap     | Market capitalization in native token (price × total_supply) |
+| market_cap_usd | Market capitalization in USD (usd_price × total_supply)      |
 
 ### Response
 
@@ -243,15 +246,15 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Response Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| s | String | Status: "ok" (success), "no_data" (no candles found), or "error" (error occurred) |
-| t | Array[Integer] | Timestamps (Unix timestamps in seconds), sorted chronologically |
-| o | Array[String] | Open prices for each candle |
-| c | Array[String] | Close prices for each candle |
-| h | Array[String] | High prices for each candle |
-| l | Array[String] | Low prices for each candle |
-| v | Array[String] | Trading volumes for each candle |
+| Field | Type           | Description                                                                       |
+| ----- | -------------- | --------------------------------------------------------------------------------- |
+| s     | String         | Status: "ok" (success), "no_data" (no candles found), or "error" (error occurred) |
+| t     | Array[Integer] | Timestamps (Unix timestamps in seconds), sorted chronologically                   |
+| o     | Array[String]  | Open prices for each candle                                                       |
+| c     | Array[String]  | Close prices for each candle                                                      |
+| h     | Array[String]  | High prices for each candle                                                       |
+| l     | Array[String]  | Low prices for each candle                                                        |
+| v     | Array[String]  | Trading volumes for each candle                                                   |
 
 **Note:** All price/volume values are returned as strings to preserve decimal precision.
 
@@ -280,16 +283,16 @@ This document provides the complete API specification for the NADS Pump API Serv
 ### Resolution Format
 
 | Input Value | Interval Type | Description |
-| --- | --- | --- |
-| 1 | 1 | 1 minute |
-| 5 | 5 | 5 minutes |
-| 15 | 15 | 15 minutes |
-| 30 | 30 | 30 minutes |
-| 60 or 1H | 1H | 1 hour |
-| 240 or 4H | 4H | 4 hours |
-| D or 1D | D | 1 day |
-| W or 1W | W | 1 week |
-| M or 1M | M | 1 month |
+| ----------- | ------------- | ----------- |
+| 1           | 1             | 1 minute    |
+| 5           | 5             | 5 minutes   |
+| 15          | 15            | 15 minutes  |
+| 30          | 30            | 30 minutes  |
+| 60 or 1H    | 1H            | 1 hour      |
+| 240 or 4H   | 4H            | 4 hours     |
+| D or 1D     | D             | 1 day       |
+| W or 1W     | W             | 1 week      |
+| M or 1M     | M             | 1 month     |
 
 ---
 
@@ -297,30 +300,30 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /trade/metrics/:token_id |
-| Method | GET |
+| Item        | Description                                                           |
+| ----------- | --------------------------------------------------------------------- |
+| URL         | /trade/metrics/:token_id                                              |
+| Method      | GET                                                                   |
 | Description | Query trading metrics for a specific token across multiple timeframes |
 
 ### Parameters
 
-| Parameter | Location | Type | Required | Description |
-| --- | --- | --- | --- | --- |
-| token_id | Path | String | Required | EVM token address (42 characters with 0x prefix) |
-| timeframes | Query | String | Required | Comma-separated timeframes: "1", "5", "15", "30", "60", "240", "1D" (e.g., "1,5,15,30") |
+| Parameter  | Location | Type   | Required | Description                                                                             |
+| ---------- | -------- | ------ | -------- | --------------------------------------------------------------------------------------- |
+| token_id   | Path     | String | Required | EVM token address (42 characters with 0x prefix)                                        |
+| timeframes | Query    | String | Required | Comma-separated timeframes: "1", "5", "15", "30", "60", "240", "1D" (e.g., "1,5,15,30") |
 
 ### Supported Timeframes
 
 | Value | Display | Description |
-| --- | --- | --- |
-| 1 | 1m | 1 minute |
-| 5 | 5m | 5 minutes |
-| 15 | 15m | 15 minutes |
-| 30 | 30m | 30 minutes |
-| 60 | 1h | 1 hour |
-| 240 | 4h | 4 hours |
-| 1D | 1d | 1 day |
+| ----- | ------- | ----------- |
+| 1     | 1m      | 1 minute    |
+| 5     | 5m      | 5 minutes   |
+| 15    | 15m     | 15 minutes  |
+| 30    | 30m     | 30 minutes  |
+| 60    | 1h      | 1 hour      |
+| 240   | 4h      | 4 hours     |
+| 1D    | 1d      | 1 day       |
 
 ### Response
 
@@ -350,7 +353,7 @@ This document provides the complete API specification for the NADS Pump API Serv
     },
     {
       "timeframe": "5",
-      "percent": 12.80,
+      "percent": 12.8,
       "transactions": {
         "buy": 320,
         "sell": 210,
@@ -373,23 +376,23 @@ This document provides the complete API specification for the NADS Pump API Serv
 
 ### Response Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| metrics | Array | Array of metric objects, one for each requested timeframe |
-| metrics[].timeframe | String | Timeframe identifier ("1", "5", "15", "30", "60", "240", "1D") |
-| metrics[].percent | Float | Price change percentage within the timeframe |
-| metrics[].transactions | Object | Transaction count statistics |
-| metrics[].transactions.buy | Integer | Number of buy transactions |
-| metrics[].transactions.sell | Integer | Number of sell transactions |
-| metrics[].transactions.total | Integer | Total number of transactions (buy + sell) |
-| metrics[].volume | Object | Trading volume statistics in native token (MON) |
-| metrics[].volume.buy | String | Buy volume in native token |
-| metrics[].volume.sell | String | Sell volume in native token |
-| metrics[].volume.total | String | Total volume (buy + sell) |
-| metrics[].makers | Object | Unique trader count statistics |
-| metrics[].makers.buy | Integer | Number of unique buyers |
-| metrics[].makers.sell | Integer | Number of unique sellers |
-| metrics[].makers.total | Integer | Total unique traders |
+| Field                        | Type    | Description                                                    |
+| ---------------------------- | ------- | -------------------------------------------------------------- |
+| metrics                      | Array   | Array of metric objects, one for each requested timeframe      |
+| metrics[].timeframe          | String  | Timeframe identifier ("1", "5", "15", "30", "60", "240", "1D") |
+| metrics[].percent            | Float   | Price change percentage within the timeframe                   |
+| metrics[].transactions       | Object  | Transaction count statistics                                   |
+| metrics[].transactions.buy   | Integer | Number of buy transactions                                     |
+| metrics[].transactions.sell  | Integer | Number of sell transactions                                    |
+| metrics[].transactions.total | Integer | Total number of transactions (buy + sell)                      |
+| metrics[].volume             | Object  | Trading volume statistics in native token (MON)                |
+| metrics[].volume.buy         | String  | Buy volume in native token                                     |
+| metrics[].volume.sell        | String  | Sell volume in native token                                    |
+| metrics[].volume.total       | String  | Total volume (buy + sell)                                      |
+| metrics[].makers             | Object  | Unique trader count statistics                                 |
+| metrics[].makers.buy         | Integer | Number of unique buyers                                        |
+| metrics[].makers.sell        | Integer | Number of unique sellers                                       |
+| metrics[].makers.total       | Integer | Total unique traders                                           |
 
 **Note:** All volume values are returned as strings to preserve decimal precision.
 
@@ -422,11 +425,13 @@ Database Error (Status: 500)
 ### Usage Examples
 
 Query single timeframe:
+
 ```
 GET /trade/metrics/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c?timeframes=1
 ```
 
 Query multiple timeframes:
+
 ```
 GET /trade/metrics/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c?timeframes=1,5,15,30,60,240,1D
 ```
@@ -437,17 +442,17 @@ GET /trade/metrics/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c?timeframes=1,5,15,
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /hype/token |
-| Method | GET |
+| Item        | Description                                                             |
+| ----------- | ----------------------------------------------------------------------- |
+| URL         | /hype/token                                                             |
+| Method      | GET                                                                     |
 | Description | Query hype tokens for current active epoch or specific historical epoch |
 
 ### Parameters
 
-| Parameter | Location | Type | Required | Description |
-| --- | --- | --- | --- | --- |
-| epoch | Query | Integer | Optional | Specific epoch number to query. If not provided, returns current active epoch |
+| Parameter | Location | Type    | Required | Description                                                                   |
+| --------- | -------- | ------- | -------- | ----------------------------------------------------------------------------- |
+| epoch     | Query    | Integer | Optional | Specific epoch number to query. If not provided, returns current active epoch |
 
 ### Response
 
@@ -490,32 +495,32 @@ GET /trade/metrics/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c?timeframes=1,5,15,
 
 ### Response Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| tokens | Array | List of hype tokens for the specified epoch |
-| tokens[].token_info | Object | Basic token information |
-| tokens[].token_info.token_id | String | EVM token address (42 characters with 0x prefix) |
-| tokens[].token_info.name | String | Token name |
-| tokens[].token_info.symbol | String | Token symbol |
-| tokens[].token_info.image_uri | String | Token image URL |
-| tokens[].token_info.description | String (nullable) | Token description |
-| tokens[].token_info.is_graduated | Boolean | Whether token graduated to DEX |
-| tokens[].token_info.is_nsfw | Boolean | Whether token is marked as NSFW |
-| tokens[].token_info.twitter | String (nullable) | Twitter/X profile link |
-| tokens[].token_info.telegram | String (nullable) | Telegram group link |
-| tokens[].token_info.website | String (nullable) | Official website link |
-| tokens[].token_info.created_at | Integer | Token creation timestamp (Unix timestamp in seconds) |
-| tokens[].token_info.creator | Object | Token creator information |
-| tokens[].token_info.creator.account_id | String | Creator's wallet address |
-| tokens[].token_info.creator.nickname | String | Creator's display name (X handle if verified, otherwise nickname) |
-| tokens[].token_info.creator.bio | String | Creator's biography |
-| tokens[].token_info.creator.image_uri | String | Creator's profile image URL |
-| tokens[].hype_info | Object | Hype-related metrics for this token |
-| tokens[].hype_info.vote | String | Total votes received by this token |
-| tokens[].hype_info.holder_count | Integer | Number of token holders |
-| tokens[].hype_info.market_cap | String | Current market capitalization (price × total_supply) |
-| tokens[].hype_info.reward_amount | String | Reward pool amount allocated for this token |
-| total_count | Integer | Total number of hype tokens in this epoch |
+| Field                                  | Type              | Description                                                       |
+| -------------------------------------- | ----------------- | ----------------------------------------------------------------- |
+| tokens                                 | Array             | List of hype tokens for the specified epoch                       |
+| tokens[].token_info                    | Object            | Basic token information                                           |
+| tokens[].token_info.token_id           | String            | EVM token address (42 characters with 0x prefix)                  |
+| tokens[].token_info.name               | String            | Token name                                                        |
+| tokens[].token_info.symbol             | String            | Token symbol                                                      |
+| tokens[].token_info.image_uri          | String            | Token image URL                                                   |
+| tokens[].token_info.description        | String (nullable) | Token description                                                 |
+| tokens[].token_info.is_graduated       | Boolean           | Whether token graduated to DEX                                    |
+| tokens[].token_info.is_nsfw            | Boolean           | Whether token is marked as NSFW                                   |
+| tokens[].token_info.twitter            | String (nullable) | Twitter/X profile link                                            |
+| tokens[].token_info.telegram           | String (nullable) | Telegram group link                                               |
+| tokens[].token_info.website            | String (nullable) | Official website link                                             |
+| tokens[].token_info.created_at         | Integer           | Token creation timestamp (Unix timestamp in seconds)              |
+| tokens[].token_info.creator            | Object            | Token creator information                                         |
+| tokens[].token_info.creator.account_id | String            | Creator's wallet address                                          |
+| tokens[].token_info.creator.nickname   | String            | Creator's display name (X handle if verified, otherwise nickname) |
+| tokens[].token_info.creator.bio        | String            | Creator's biography                                               |
+| tokens[].token_info.creator.image_uri  | String            | Creator's profile image URL                                       |
+| tokens[].hype_info                     | Object            | Hype-related metrics for this token                               |
+| tokens[].hype_info.vote                | String            | Total votes received by this token                                |
+| tokens[].hype_info.holder_count        | Integer           | Number of token holders                                           |
+| tokens[].hype_info.market_cap          | String            | Current market capitalization (price × total_supply)              |
+| tokens[].hype_info.reward_amount       | String            | Reward pool amount allocated for this token                       |
+| total_count                            | Integer           | Total number of hype tokens in this epoch                         |
 
 **Note:** All numeric values (vote, market_cap, reward_amount) are returned as strings to preserve decimal precision.
 
@@ -540,11 +545,13 @@ Database Error (Status: 500)
 ### Usage Examples
 
 Get current active epoch hype tokens:
+
 ```
 GET /hype/token
 ```
 
 Get specific epoch hype tokens:
+
 ```
 GET /hype/token?epoch=10
 ```
@@ -555,10 +562,10 @@ GET /hype/token?epoch=10
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /metadata/image |
-| Method | POST |
+| Item        | Description                                                |
+| ----------- | ---------------------------------------------------------- |
+| URL         | /metadata/image                                            |
+| Method      | POST                                                       |
 | Description | Upload an image with NSFW validation using AWS Rekognition |
 
 ### Request
@@ -571,12 +578,12 @@ GET /hype/token?epoch=10
 
 ### Supported Image Formats
 
-| Format | MIME Type | Magic Bytes Validation |
-| --- | --- | --- |
-| JPEG | image/jpeg | 0xFF, 0xD8, 0xFF |
-| PNG | image/png | 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A |
-| WebP | image/webp | RIFF header with WEBP at position 8 |
-| SVG | image/svg+xml | Starts with `<svg` or `<?xml` containing `<svg` |
+| Format | MIME Type     | Magic Bytes Validation                          |
+| ------ | ------------- | ----------------------------------------------- |
+| JPEG   | image/jpeg    | 0xFF, 0xD8, 0xFF                                |
+| PNG    | image/png     | 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A  |
+| WebP   | image/webp    | RIFF header with WEBP at position 8             |
+| SVG    | image/svg+xml | Starts with `<svg` or `<?xml` containing `<svg` |
 
 ### Validation Process
 
@@ -598,10 +605,10 @@ GET /hype/token?epoch=10
 
 ### Response Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| is_nsfw | Boolean | Whether the image contains NSFW content based on AWS Rekognition analysis |
-| image_uri | String | Uploaded image URL on R2 storage CDN |
+| Field     | Type    | Description                                                               |
+| --------- | ------- | ------------------------------------------------------------------------- |
+| is_nsfw   | Boolean | Whether the image contains NSFW content based on AWS Rekognition analysis |
+| image_uri | String  | Uploaded image URL on R2 storage CDN                                      |
 
 #### Error Responses
 
@@ -640,6 +647,7 @@ NSFW Check Failed (Status: 500)
 ### Usage Examples
 
 Upload JPEG image:
+
 ```bash
 curl -X POST https://api.example.com/metadata/image \
   -H "Content-Type: image/jpeg" \
@@ -647,6 +655,7 @@ curl -X POST https://api.example.com/metadata/image \
 ```
 
 Upload PNG image:
+
 ```bash
 curl -X POST https://api.example.com/metadata/image \
   -H "Content-Type: image/png" \
@@ -657,16 +666,16 @@ curl -X POST https://api.example.com/metadata/image \
 
 The following content categories are detected with respective confidence thresholds:
 
-| Category | Minimum Confidence |
-| --- | --- |
-| Explicit | 10.0% |
-| Explicit Nudity | 10.0% |
-| Explicit Sexual Activity | 10.0% |
-| Exposed Buttocks or Anus | 10.0% |
-| Exposed Male Genitalia | 10.0% |
-| Exposed Female Genitalia | 10.0% |
-| Exposed Female Nipple | 10.0% |
-| Non-Explicit Nudity | 90.0% |
+| Category                 | Minimum Confidence |
+| ------------------------ | ------------------ |
+| Explicit                 | 10.0%              |
+| Explicit Nudity          | 10.0%              |
+| Explicit Sexual Activity | 10.0%              |
+| Exposed Buttocks or Anus | 10.0%              |
+| Exposed Male Genitalia   | 10.0%              |
+| Exposed Female Genitalia | 10.0%              |
+| Exposed Female Nipple    | 10.0%              |
+| Non-Explicit Nudity      | 90.0%              |
 
 ---
 
@@ -674,10 +683,10 @@ The following content categories are detected with respective confidence thresho
 
 ### Basic Information
 
-| Item | Description |
-| --- | --- |
-| URL | /metadata/metadata |
-| Method | POST |
+| Item        | Description                                      |
+| ----------- | ------------------------------------------------ |
+| URL         | /metadata/metadata                               |
+| Method      | POST                                             |
 | Description | Upload token metadata to R2 storage and database |
 
 ### Request
@@ -698,15 +707,15 @@ The following content categories are detected with respective confidence thresho
 
 ### Request Fields
 
-| Field | Type | Required | Validation Rules | Description |
-| --- | --- | --- | --- | --- |
-| image_uri | String | Yes | Must be from https://storage.nadapp.net/, cannot be empty | Image URL from /metadata/image upload |
-| name | String | Yes | Cannot be empty or whitespace | Token name |
-| symbol | String | Yes | Cannot be empty or whitespace | Token symbol |
-| description | String | Yes | Cannot be empty or whitespace | Token description |
-| website | String | No | Must start with https:// if provided | Website URL |
-| twitter | String | No | Must contain x.com and start with https:// if provided | X (Twitter) URL |
-| telegram | String | No | Must contain t.me and start with https:// if provided | Telegram URL |
+| Field       | Type   | Required | Validation Rules                                          | Description                           |
+| ----------- | ------ | -------- | --------------------------------------------------------- | ------------------------------------- |
+| image_uri   | String | Yes      | Must be from https://storage.nadapp.net/, cannot be empty | Image URL from /metadata/image upload |
+| name        | String | Yes      | Cannot be empty or whitespace                             | Token name                            |
+| symbol      | String | Yes      | Cannot be empty or whitespace                             | Token symbol                          |
+| description | String | Yes      | Cannot be empty or whitespace                             | Token description                     |
+| website     | String | No       | Must start with https:// if provided                      | Website URL                           |
+| twitter     | String | No       | Must contain x.com and start with https:// if provided    | X (Twitter) URL                       |
+| telegram    | String | No       | Must contain t.me and start with https:// if provided     | Telegram URL                          |
 
 ### Response
 
@@ -730,18 +739,18 @@ The following content categories are detected with respective confidence thresho
 
 ### Response Fields
 
-| Field | Type | Description |
-| --- | --- | --- |
-| metadata_uri | String | Uploaded metadata JSON URL on R2 storage |
-| metadata | Object | Complete token metadata object |
-| metadata.name | String | Token name |
-| metadata.symbol | String | Token symbol |
-| metadata.description | String | Token description |
-| metadata.image_uri | String | Token image URL |
-| metadata.website | String (nullable) | Website URL |
-| metadata.twitter | String (nullable) | X (Twitter) URL |
-| metadata.telegram | String (nullable) | Telegram URL |
-| metadata.is_nsfw | Boolean | NSFW status inherited from image upload |
+| Field                | Type              | Description                              |
+| -------------------- | ----------------- | ---------------------------------------- |
+| metadata_uri         | String            | Uploaded metadata JSON URL on R2 storage |
+| metadata             | Object            | Complete token metadata object           |
+| metadata.name        | String            | Token name                               |
+| metadata.symbol      | String            | Token symbol                             |
+| metadata.description | String            | Token description                        |
+| metadata.image_uri   | String            | Token image URL                          |
+| metadata.website     | String (nullable) | Website URL                              |
+| metadata.twitter     | String (nullable) | X (Twitter) URL                          |
+| metadata.telegram    | String (nullable) | Telegram URL                             |
+| metadata.is_nsfw     | Boolean           | NSFW status inherited from image upload  |
 
 #### Error Responses
 
@@ -795,15 +804,130 @@ Upload Failed (Status: 500)
 
 ---
 
+# 8. Mine Salt API
+
+### Basic Information
+
+| Item        | Description                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| URL         | /token/salt                                                                                  |
+| Method      | POST                                                                                         |
+| Description | Generate a salt value to create a vanity token address (address ending with specific digits) |
+
+### Request
+
+**Content-Type:** application/json
+
+```json
+{
+  "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
+  "name": "My Token",
+  "symbol": "MTK",
+  "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+}
+```
+
+### Request Fields
+
+| Field        | Type   | Required | Description                                          |
+| ------------ | ------ | -------- | ---------------------------------------------------- |
+| creator      | String | Yes      | Creator's wallet address (EVM format with 0x prefix) |
+| name         | String | Yes      | Token name (must match metadata)                     |
+| symbol       | String | Yes      | Token symbol (must match metadata)                   |
+| metadata_uri | String | Yes      | Metadata URI from Upload Metadata API                |
+
+### Response
+
+#### Success Response (Status: 200)
+
+```json
+{
+  "salt": "0x000000000000000000000000000000000000000000000000000000000000a3f5",
+  "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f70888"
+}
+```
+
+### Response Fields
+
+| Field   | Type   | Description                                                      |
+| ------- | ------ | ---------------------------------------------------------------- |
+| salt    | String | The mined salt value (32 bytes hex with 0x prefix)               |
+| address | String | The resulting token address with desired suffix ending in "7777" |
+
+### Algorithm Details
+
+The salt mining process:
+
+1. Generates random salt values
+2. Computes the resulting token address using CREATE2
+3. Checks if the address ends with "7777"
+4. Returns the first salt that produces a matching address
+
+**Note:** The algorithm searches for addresses ending with **8 consecutive 8s** ("7777").
+
+#### Error Responses
+
+Invalid Parameters (Status: 400)
+
+```json
+{
+  "error": "Invalid creator address"
+}
+```
+
+Request Timeout (Status: 408)
+
+```json
+{
+  "error": "Max iterations reached",
+  "iterations_attempted": 1000000
+}
+```
+
+Internal Server Error (Status: 500)
+
+```json
+{
+  "error": "Failed to mine salt: [error details]"
+}
+```
+
+### Usage Examples
+
+Mine salt for token creation:
+
+```bash
+curl -X POST https://api.nadapp.net/token/salt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
+    "name": "My Token",
+    "symbol": "MTK",
+    "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+  }'
+```
+
+### Important Notes
+
+1. **Vanity Address:** The salt mining process generates vanity addresses ending with "7777" (8 consecutive 8s)
+2. **Processing Time:** May take time depending on computational complexity and randomness
+3. **Timeout Limit:** Has a maximum iteration limit to prevent infinite loops
+4. **Smart Contract Integration:** Use the returned `salt` and `address` values when deploying the token contract via CREATE2
+5. **Deterministic:** Given the same inputs (creator, name, symbol, metadata_uri) and salt, the resulting address is deterministic
+
+---
+
 ## Changelog
 
 ### Latest Updates (2025-01-20)
 
 #### All APIs
+
 - All numeric values (prices, volumes, supplies) are now returned as strings to preserve decimal precision
 - All endpoints use EVM address validation (42 characters with 0x prefix)
 
 #### Token Metadata API (`/token/metadata/:token_id`)
+
 - **Added** `token_info` and `market_info` nested structure
 - **Added** `creator` object with account details (account_id, nickname, bio, image_uri)
 - **Added** `is_graduated` field to indicate DEX listing status
@@ -812,6 +936,7 @@ Upload Failed (Status: 500)
 - **Removed** `transaction_hash` field from response
 
 #### Market Data API (`/trade/market/:token_id`)
+
 - **Added** `reserve_native` field (native token reserve in pool)
 - **Added** `reserve_token` field (project token reserve in pool)
 - **Added** `token_price` field (USD price)
@@ -820,12 +945,14 @@ Upload Failed (Status: 500)
 - **Removed** `liquidity` field (replaced by reserve fields)
 
 #### Chart Data API (`/trade/chart/:token_id`)
+
 - **Added** `chart_type` query parameter with 4 options: price, price_usd, market_cap, market_cap_usd
 - **Added** support for monthly resolution ("M" or "1M")
 - Arrays are now guaranteed to be sorted chronologically (oldest to newest)
 - Clarified that response arrays use string format for decimal precision
 
 #### Token Metrics API (`/trade/metrics/:token_id`)
+
 - **Changed** from single `timeframe` parameter to `timeframes` (comma-separated) for batch requests
 - **Removed** support for weekly ("W") and monthly ("M") timeframes - now supports: 1, 5, 15, 30, 60, 240, 1D
 - **Changed** response structure to array of metric objects (one per timeframe)
@@ -836,6 +963,7 @@ Upload Failed (Status: 500)
 - Implements fallback logic when no price exists at timeframe start
 
 #### Hype Token API (`/hype/token`)
+
 - **Changed** response structure to include full `token_info` object with creator details
 - **Added** `creator` nested object with account information
 - **Added** token fields: `is_graduated`, `is_nsfw`, `twitter`, `telegram`, `website`, `created_at`
@@ -845,6 +973,7 @@ Upload Failed (Status: 500)
 - Creator image shows X profile image if verified, otherwise default image
 
 #### Upload Image API (`/metadata/image`)
+
 - **Added** magic bytes validation for file format verification
 - **Added** SVG support with automatic PNG conversion for NSFW analysis
 - **Added** detailed NSFW detection categories with specific confidence thresholds
@@ -853,6 +982,7 @@ Upload Failed (Status: 500)
 - NSFW status cached in Redis for 3 minutes
 
 #### Upload Metadata API (`/metadata/metadata`)
+
 - **Added** strict validation for required fields (name, symbol, description cannot be empty)
 - **Added** domain validation for image_uri (must be from storage.nadapp.net)
 - **Added** URL format validation (HTTPS only, specific domain requirements)

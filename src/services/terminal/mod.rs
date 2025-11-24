@@ -102,9 +102,26 @@ impl TerminalService {
         Ok(AssetResponse { asset })
     }
 
-    pub async fn get_pair(&self, token_id: &str) -> Result<PairResponse, AppError> {
+    pub async fn get_pair(&self, pool_id: &str) -> Result<PairResponse, AppError> {
+        // If pool_id is BONDING_CURVE, return a generic response without DB query
+        if pool_id.eq_ignore_ascii_case(&BONDING_CURVE) {
+            let pair = Pair {
+                id: BONDING_CURVE.to_string(),
+                dex_key: "nadfun".to_string(),
+                asset0_id: String::new(), // Generic bonding curve pair
+                asset1_id: String::new(),
+                created_at_block_number: None,
+                created_at_block_timestamp: None,
+                created_at_txn_id: None,
+                creator: None,
+                fee_bps: Some(100), // 1% fee
+            };
+            return Ok(PairResponse { pair });
+        }
+
+        // Otherwise, query by pool_id
         let controller = TerminalController::new(self.postgres.clone());
-        let pair_row = controller.get_pair(token_id).await.map_err(|e| {
+        let pair_row = controller.get_pair_by_pool_id(pool_id).await.map_err(|e| {
             error!("Failed to get pair: {}", e);
             AppError::NotFound(format!("Pair not found: {}", e))
         })?;
@@ -120,16 +137,11 @@ impl TerminalService {
 
         // Order assets: compare token_id with WMON alphabetically
         // asset0 should be the one that comes first alphabetically
-        let (asset0_id, asset1_id) = if token_id.to_lowercase() < WMON.to_lowercase() {
-            (token_id.to_string(), WMON.to_string())
+        let (asset0_id, asset1_id) = if pair_row.token_id.to_lowercase() < WMON.to_lowercase() {
+            (pair_row.token_id.to_string(), WMON.to_string())
         } else {
-            (WMON.to_string(), token_id.to_string())
+            (WMON.to_string(), pair_row.token_id.to_string())
         };
-
-        // Use pool_id if available, otherwise use BONDING_CURVE
-        let pair_id = pair_row
-            .pool_id
-            .unwrap_or_else(|| BONDING_CURVE.to_string());
 
         // Determine dex_key based on market_type
         let dex_key = match pair_row.market_type.as_str() {
@@ -138,7 +150,7 @@ impl TerminalService {
         };
 
         let pair = Pair {
-            id: pair_id,
+            id: pool_id.to_string(),
             dex_key: dex_key.to_string(),
             asset0_id,
             asset1_id,

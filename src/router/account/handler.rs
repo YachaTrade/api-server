@@ -34,7 +34,7 @@ pub async fn update_account(
     Json(payload): Json<UpdateAccountRequest>,
 ) -> AppJsonResult<AccountResponse> {
     info!("update account: {:?}", payload);
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.update_account(&session_address, payload).await?;
 
     Ok(Json(response))
@@ -57,7 +57,7 @@ pub async fn get_account(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<AccountResponse> {
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_account(&session_address).await?;
 
     Ok(Json(response))
@@ -81,7 +81,7 @@ pub async fn connect_x(
     Extension(session_address): Extension<String>,
     Json(payload): Json<ConnectXRequest>,
 ) -> AppJsonResult<AccountResponse> {
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.connect_x(&session_address, payload).await?;
     Ok(Json(response))
 }
@@ -102,7 +102,7 @@ pub async fn disconnect_x(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<AccountResponse> {
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.disconnect_x(session_address).await?;
     Ok(Json(response))
 }
@@ -125,7 +125,7 @@ pub async fn update_x(
     Extension(session_address): Extension<String>,
     Json(payload): Json<UpdateXRequest>,
 ) -> AppJsonResult<AccountResponse> {
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.update_x(session_address, payload).await?;
     Ok(Json(response))
 }
@@ -148,7 +148,7 @@ pub async fn register_wallet(
     Extension(session_address): Extension<String>,
     Json(payload): Json<RegisterWalletRequest>,
 ) -> AppJsonResult<AccountResponse> {
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.register_wallet(session_address, payload).await?;
 
     Ok(Json(response))
@@ -170,7 +170,7 @@ pub async fn get_wallet(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
 ) -> AppJsonResult<GetWalletResponse> {
-    let service = AccountService::new(state.postgres.clone());
+    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_wallet(session_address).await?;
 
     Ok(Json(response))

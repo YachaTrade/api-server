@@ -41,21 +41,9 @@ impl MetadataService {
         }
     }
 
-    /// Validate image with both MIME type and actual format
-    fn validate_image(&self, data: &[u8], content_type: &Option<String>) -> Result<String, AppError> {
-        // First check if declared content type is allowed
-        if let Some(ct) = content_type {
-            if !ALLOWED_IMAGE_TYPES.contains(&ct.as_str()) {
-                return Err(AppError::BadRequest(format!(
-                    "Unsupported image type: {}",
-                    ct
-                )));
-            }
-        } else {
-            return Err(AppError::BadRequest("Missing content type".to_string()));
-        }
-
-        // Check actual file format by magic bytes
+    /// Validate image by detecting actual format from magic bytes
+    fn validate_image(&self, data: &[u8], _content_type: &Option<String>) -> Result<String, AppError> {
+        // Check actual file format by magic bytes only
         if data.len() < 4 {
             return Err(AppError::BadRequest("File too small".to_string()));
         }
@@ -80,14 +68,12 @@ impl MetadataService {
             return Err(AppError::BadRequest("Invalid image format".to_string()));
         };
 
-        // Check if declared type matches actual format
-        if let Some(declared_type) = content_type {
-            if declared_type != actual_format {
-                return Err(AppError::BadRequest(format!(
-                    "File format mismatch: declared {} but actual {}",
-                    declared_type, actual_format
-                )));
-            }
+        // Validate that the detected format is allowed
+        if !ALLOWED_IMAGE_TYPES.contains(&actual_format) {
+            return Err(AppError::BadRequest(format!(
+                "Unsupported image type: {}",
+                actual_format
+            )));
         }
 
         Ok(actual_format.to_string())
@@ -243,14 +229,14 @@ impl MetadataService {
     /// 성인물 여부를 판단하는 함수
     fn is_adult_content(&self, labels: &[aws_sdk_rekognition::types::ModerationLabel]) -> bool {
         let adult_categories = [
-            ("Explicit", 10.0),
-            ("Explicit Nudity", 10.0),
-            ("Explicit Sexual Activity", 10.0),
-            ("Exposed Buttocks or Anus", 10.0),
-            ("Exposed Male Genitalia", 10.0),
-            ("Exposed Female Genitalia", 10.0),
-            ("Exposed Female Nipple", 10.0),
-            ("Non-Explicit Nudity", 90.0),
+            ("Explicit", 50.0),
+            ("Explicit Nudity", 50.0),
+            ("Explicit Sexual Activity", 60.0),
+            ("Exposed Buttocks or Anus", 70.0),
+            ("Exposed Male Genitalia", 60.0),
+            ("Exposed Female Genitalia", 60.0),
+            ("Exposed Female Nipple", 80.0),
+            ("Non-Explicit Nudity", 95.0),
         ];
 
         for label in labels {
