@@ -18,7 +18,7 @@ use crate::{
     },
     measure_redis,
     types::{
-        common::pagination::PaginationParams,
+        common::{info::AccountInfo, pagination::PaginationParams},
         hype::{
             AmountResponse, HypeEpochResponse, HypePointResponse,
             HypeRewardAddHistoryResponse, HypeTokenResponse,
@@ -1268,6 +1268,51 @@ impl RedisDatabase {
             Some(json) => {
                 let response: TerminalMetadataResponse = serde_json::from_str(&json)?;
                 Ok(Some(response))
+            }
+            None => Ok(None),
+        }
+    }
+
+    // Account Info Caching
+    pub async fn set_account_info(&self, account_id: &str, account_info: &AccountInfo) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("account:info:{}", account_id);
+        let account_json = serde_json::to_string(account_info)?;
+
+        measure_redis!(
+            "redis.set_account_info",
+            conn.pset_ex::<_, _, ()>(key, account_json, *SEARCH_EXPIRATION)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_account_info(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_account_info(&self, account_id: &str) -> Result<Option<AccountInfo>> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("account:info:{}", account_id);
+
+        let account_json: Option<String> = measure_redis!(
+            "redis.get_account_info",
+            conn.get::<_, Option<String>>(key)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_account_info(account_id: {}) completed in {:?}",
+            account_id, elapsed
+        );
+
+        match account_json {
+            Some(json) => {
+                let account_info: AccountInfo = serde_json::from_str(&json)?;
+                Ok(Some(account_info))
             }
             None => Ok(None),
         }

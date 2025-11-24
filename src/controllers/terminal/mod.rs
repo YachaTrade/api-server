@@ -108,6 +108,32 @@ impl TerminalController {
         Ok(row)
     }
 
+    /// Get pair (token) information by pool_id
+    pub async fn get_pair_by_pool_id(&self, pool_id: &str) -> Result<PairRow> {
+        let row = measure_postgres!(
+            "terminal.get_pair_by_pool_id",
+            sqlx::query_as::<_, PairRow>(
+                r#"
+                    SELECT
+                        t.token_id,
+                        t.created_at,
+                        t.transaction_hash,
+                        m.pool_id,
+                        m.market_type,
+                        t.creator
+                    FROM market m
+                    JOIN token t ON m.token_id = t.token_id
+                    WHERE m.pool_id = $1
+                "#,
+            )
+            .bind(pool_id)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get pair by pool_id: {}", err))?;
+
+        Ok(row)
+    }
+
     /// Get block number by transaction hash from balance_history
     pub async fn get_block_number_by_tx(&self, transaction_hash: &str) -> Result<u64> {
         let row = measure_postgres!(

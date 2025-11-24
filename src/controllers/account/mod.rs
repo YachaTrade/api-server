@@ -108,8 +108,7 @@ impl AccountController {
         query_builder
             .push(" WHERE account_id = ")
             .push_bind(address)
-            .push(" RETURNING account_id) SELECT a.account_id, COALESCE(ax.x_handle, a.nickname) as nickname, COALESCE(ax.x_image_uri, a.image_uri) as image_uri, a.bio FROM account a LEFT JOIN account_x ax ON a.account_id = ax.account_id WHERE a.account_id = ")
-            .push_bind(address);
+            .push(" RETURNING account_id) SELECT a.account_id, COALESCE(ax.x_handle, a.nickname) as nickname, COALESCE(ax.x_image_uri, a.image_uri) as image_uri, a.bio FROM updated u JOIN account a ON u.account_id = a.account_id LEFT JOIN account_x ax ON a.account_id = ax.account_id");
 
         let query = query_builder
             .build_query_as::<AccountInfo>()
