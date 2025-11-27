@@ -12,8 +12,8 @@ use crate::{
     config::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
         GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
-        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION, MESSAGE_EXPIRATION,
-        NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
+        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
+        MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
         TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
@@ -289,6 +289,7 @@ impl RedisDatabase {
         order_type: &TokenOrderType,
         response: &OrderTokenResponse,
         pagination: Option<&PaginationParams>,
+        is_nsfw: bool,
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
@@ -296,12 +297,14 @@ impl RedisDatabase {
         // 페이지네이션 파라미터가 있는 경우 키에 포함
         let key = match pagination {
             Some(params) => format!(
-                "order:{}:response:page:{}_limit:{}",
+                "order:{}:response:page:{}_limit:{}_direction:{}_nsfw:{}",
                 order_type.as_str(),
                 params.page,
-                params.limit
+                params.limit,
+                params.direction,
+                is_nsfw
             ),
-            None => format!("order:{}:response", order_type.as_str()),
+            None => format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw),
         };
 
         let response_json = serde_json::to_string(response)?;
@@ -323,6 +326,7 @@ impl RedisDatabase {
         &self,
         order_type: &TokenOrderType,
         pagination: Option<&PaginationParams>,
+        is_nsfw: bool,
     ) -> Result<OrderTokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
@@ -330,12 +334,14 @@ impl RedisDatabase {
         // 페이지네이션 파라미터가 있는 경우 키에 포함
         let key = match pagination {
             Some(params) => format!(
-                "order:{}:response:page:{}_limit:{}",
+                "order:{}:response:page:{}_limit:{}_direction:{}_nsfw:{}",
                 order_type.as_str(),
                 params.page,
-                params.limit
+                params.limit,
+                params.direction,
+                is_nsfw
             ),
-            None => format!("order:{}:response", order_type.as_str()),
+            None => format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw),
         };
 
         let response_json: String =
@@ -1271,6 +1277,34 @@ impl RedisDatabase {
             }
             None => Ok(None),
         }
+    }
+
+    // Trend Caching
+    pub async fn set_trend_response(&self, response: &crate::types::trend::TrendResponse) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = "trend:all";
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_trend_response",
+            conn.pset_ex::<String, String, ()>(key.to_string(), json, *GET_TREND_TOKEN_RESPONSE_EXPIRATION)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!("set_trend_response() completed in {:?}", elapsed);
+        Ok(())
+    }
+
+    pub async fn get_trend_response(&self) -> Result<crate::types::trend::TrendResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = "trend:all";
+        let response_json: String =
+            measure_redis!("redis.get_trend_response", conn.get::<_, String>(key))?;
+        let elapsed = start_time.elapsed();
+        debug!("get_trend_response() completed in {:?}", elapsed);
+        let response: crate::types::trend::TrendResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
     }
 
     // Account Info Caching

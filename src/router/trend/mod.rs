@@ -5,7 +5,7 @@ use crate::{middleware::authenticate_user, state::AppState};
 use axum::{
     Router,
     middleware::from_fn_with_state,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use path::TrendPath;
 
@@ -15,9 +15,5 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route(
             TrendPath::InsertTrend.as_str(),
             post(handler::insert_trend).layer(from_fn_with_state(state.clone(), authenticate_user)),
-        )
-        .route(
-            TrendPath::DeleteTrend.as_str(),
-            delete(handler::delete_trend).layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
 }

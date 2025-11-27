@@ -4,7 +4,6 @@ use std::fmt::Display;
 pub enum TrendPath {
     GetTrend,
     InsertTrend,
-    DeleteTrend,
 }
 
 impl TrendPath {
@@ -12,7 +11,6 @@ impl TrendPath {
         match self {
             TrendPath::GetTrend => "/trend",
             TrendPath::InsertTrend => "/trend/insert",
-            TrendPath::DeleteTrend => "/trend/delete",
         }
     }
 
@@ -20,7 +18,6 @@ impl TrendPath {
         match self {
             TrendPath::GetTrend => "/trend",
             TrendPath::InsertTrend => "/trend/insert",
-            TrendPath::DeleteTrend => "/trend/delete",
         }
     }
 }

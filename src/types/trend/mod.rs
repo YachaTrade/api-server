@@ -10,14 +10,14 @@ pub struct TrendToken {
     pub percent: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TrendResponse {
     pub tokens: Vec<TrendToken>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TrendRequest {
-    pub token_id: String,
+    pub token_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
