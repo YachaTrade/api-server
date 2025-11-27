@@ -11,7 +11,10 @@ use crate::{
     types::{
         common::{
             CountRow,
-            info::{AccountInfo, BalanceInfo, MarketInfo, MarketType, TokenCreatedInfo, TokenInfo},
+            info::{
+                AccountInfo, BalanceInfo, MarketInfo, MarketType, RewardInfo, TokenCreatedInfo,
+                TokenInfo,
+            },
             pagination::PaginationParams,
         },
         profile::CreatedTokensResponse,
@@ -131,6 +134,9 @@ impl TokenCreatedController {
             ath_price: BigDecimal,
             balance: BigDecimal,
             balance_created_at: i64,
+            reward_amount: BigDecimal,
+            reward_proof: Vec<String>,
+            reward_status: Option<String>,
         }
 
         let tokens = measure_postgres!(
@@ -172,12 +178,16 @@ impl TokenCreatedController {
                         m.volume,
                         m.ath_price,
                         COALESCE(b.balance, 0) as balance,
-                        COALESCE(b.created_at, 0) as balance_created_at
+                        COALESCE(b.created_at, 0) as balance_created_at,
+                        COALESCE(cr.amount, 0) as reward_amount,
+                        COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
+                        cr.status as reward_status
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
+                    LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
                     CROSS JOIN latest_price lp
                     WHERE t.creator = $1
                 )
@@ -209,7 +219,10 @@ impl TokenCreatedController {
                     volume,
                     ath_price,
                     balance,
-                    balance_created_at
+                    balance_created_at,
+                    reward_amount,
+                    reward_proof,
+                    reward_status
                 FROM created_tokens
                 ORDER BY token_created_at DESC
                 LIMIT $2
@@ -274,6 +287,11 @@ impl TokenCreatedController {
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),
                         created_at: row.balance_created_at,
+                    },
+                    reward_info: RewardInfo {
+                        amount: row.reward_amount.normalized().to_plain_string(),
+                        proof: row.reward_proof,
+                        claimable: row.reward_status.as_deref() == Some("AWAITING"),
                     },
                 }
             })

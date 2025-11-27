@@ -126,6 +126,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::common::info::BalanceInfo,
             types::common::info::SwapInfo,
             types::common::info::SwapType,
+            types::common::info::RewardInfo,
             types::common::info::TokenWithBalanceInfo,
             types::common::info::TokenSwapInfo,
             types::common::info::TokenCreatedInfo,
