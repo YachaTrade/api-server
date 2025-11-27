@@ -137,10 +137,17 @@ pub struct TokenSwapInfo {
     pub swap_info: SwapInfo,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RewardInfo {
+    pub amount: String,
+    pub proof: Vec<String>,
+    pub claimable: bool,
+}
 /// Token created information with market and balance
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreatedInfo {
     pub token_info: TokenInfo,
     pub market_info: MarketInfo,
     pub balance_info: BalanceInfo,
+    pub reward_info: RewardInfo,
 }
