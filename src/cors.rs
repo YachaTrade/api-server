@@ -13,6 +13,7 @@ pub fn get_cors() -> CorsLayer {
         "https://nad.fun".parse::<HeaderValue>().unwrap(),
         "https://nadapp.net".parse::<HeaderValue>().unwrap(),
         "https://symphony.io".parse::<HeaderValue>().unwrap(),
+        "http://localhost:3000".parse::<HeaderValue>().unwrap(),
     ];
     // Get the `ENVIROMENT` variable and if it is `development` then add `http://localhost:3000`
     // to the `origins` array.
@@ -47,6 +48,8 @@ pub fn get_cors() -> CorsLayer {
                         || origin_string.ends_with(".nad.fun")
                         || origin_string.ends_with(".cloudfront.net")
                         || origin_string.ends_with(".symphony.io")
+                        || origin_string.ends_with(".amplifyapp.com")
+                        || origin_string.starts_with("http://localhost:")
                 })
                 .unwrap_or(false)
         }))

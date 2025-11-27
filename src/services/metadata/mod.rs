@@ -178,18 +178,29 @@ impl MetadataService {
 
         let png_data = tokio::task::spawn_blocking(move || {
             if format_owned == "image/svg+xml" {
-                service_ref.convert_svg_to_png(&image_data_owned, 1024, 1024)
+                service_ref.convert_svg_to_png(&image_data_owned, 512, 512)
             } else {
-                service_ref.convert_to_png(&image_data_owned, 1024, 1024)
+                service_ref.convert_to_png(&image_data_owned, 512, 512)
             }
         })
         .await
         .map_err(|e| AppError::InternalError(format!("Task join error: {}", e)))??;
 
         info!(
-            "⏱️  Image conversion took: {:?}",
-            start_conversion.elapsed()
+            "⏱️  Image conversion took: {:?}, PNG size: {} bytes",
+            start_conversion.elapsed(),
+            png_data.len()
         );
+
+        // AWS Rekognition PNG limit is 5MB (5,242,880 bytes)
+        const MAX_PNG_SIZE: usize = 5_242_880;
+        if png_data.len() > MAX_PNG_SIZE {
+            return Err(AppError::BadRequest(format!(
+                "Converted PNG size ({} bytes) exceeds AWS Rekognition limit ({} bytes). Please use a smaller image.",
+                png_data.len(),
+                MAX_PNG_SIZE
+            )));
+        }
 
         info!("☁️  Loading AWS configuration");
         let aws_region = env::var("AWS_REGION").expect("AWS_REGION must be set");

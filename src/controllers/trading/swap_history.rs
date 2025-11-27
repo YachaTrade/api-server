@@ -132,7 +132,7 @@ impl SwapController {
                         s.transaction_hash
                     FROM swap s
                     WHERE s.account_id = $1
-                    ORDER BY s.created_at DESC
+                    ORDER BY s.block_number DESC, s.tx_index DESC, s.log_index DESC
                     LIMIT $2
                     OFFSET $3
                 )
@@ -317,7 +317,7 @@ impl SwapController {
         }
 
         query_sql.push_str(&format!(
-            " ORDER BY s.created_at {}, s.tx_index {}, s.log_index {}",
+            " ORDER BY s.block_number {}, s.tx_index {}, s.log_index {}",
             query.direction, query.direction, query.direction
         ));
         query_sql.push_str(&format!(" LIMIT {} OFFSET {}", query.limit, offset));

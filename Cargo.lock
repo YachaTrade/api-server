@@ -729,7 +729,7 @@ checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
 
 [[package]]
 name = "api-server"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "alloy",
  "anyhow",

@@ -35,6 +35,15 @@ impl AccountService {
         account_id: &str,
         req: UpdateAccountRequest,
     ) -> Result<AccountResponse, AppError> {
+        // Validate nickname: cannot start with @
+        if let Some(ref nickname) = req.nickname {
+            if nickname.starts_with('@') {
+                return Err(AppError::BadRequest(
+                    "Nickname cannot start with '@'".to_string()
+                ));
+            }
+        }
+
         let controller = AccountController::new(self.postgres.clone());
         let account_info = controller
             .update_account(account_id, req.image_uri, req.nickname, req.bio)

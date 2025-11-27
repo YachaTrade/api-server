@@ -35,7 +35,7 @@ impl TokenOrderService {
 
         if let Ok(cached) = self
             .redis
-            .get_order_response(&order_type, Some(&pagination))
+            .get_order_response(&order_type, Some(&pagination), query.is_nsfw)
             .await
         {
             return Ok(cached);
@@ -57,7 +57,7 @@ impl TokenOrderService {
 
         if let Err(err) = self
             .redis
-            .set_order_response(&order_type, &response, Some(&pagination))
+            .set_order_response(&order_type, &response, Some(&pagination), query.is_nsfw)
             .await
         {
             warn!("Failed to set {:?} cache: {}", order_type, err);

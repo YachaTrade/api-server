@@ -72,6 +72,12 @@ impl TrendController {
         Ok(TrendResponse { tokens })
     }
 
+    /// Get trend tokens without single flight (used by TrendService which handles caching)
+    pub async fn get_trend_tokens_raw(&self) -> Result<TrendResponse> {
+        let tokens = self.fetch_trend_tokens().await?;
+        Ok(TrendResponse { tokens })
+    }
+
     async fn fetch_trend_tokens(&self) -> Result<Vec<TrendToken>> {
         let current_time = current_unix_timestamp();
         let time_24h_ago = current_time - 86400;
@@ -139,7 +145,7 @@ impl TrendController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN market m ON t.token_id = m.token_id
             CROSS JOIN latest_price lp
-            ORDER BY tr.created_at DESC
+            ORDER BY tr.display_order ASC
         "#;
 
         let rows = measure_postgres!(
@@ -154,15 +160,44 @@ impl TrendController {
     }
 
     pub async fn insert_trend_token(&self, request: TrendRequest) -> Result<TrendActionResponse> {
+        // Start transaction
+        let mut tx = self.db.get_write_pool().begin().await
+            .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
+
+        // Delete all existing trends
         measure_postgres!(
-            "trend.insert",
-            sqlx::query(
-                "INSERT INTO trend (token_id) VALUES ($1) ON CONFLICT (token_id) DO NOTHING"
+            "trend.delete_all",
+            sqlx::query("DELETE FROM trend")
+                .execute(&mut *tx)
+        )
+        .map_err(|err| anyhow!("Failed to delete trends: {}", err))?;
+
+        // Insert new trends with order if not empty
+        if !request.token_ids.is_empty() {
+            let placeholders: Vec<String> = (0..request.token_ids.len())
+                .map(|i| format!("(${}, ${})", i * 2 + 1, i * 2 + 2))
+                .collect();
+
+            let query = format!(
+                "INSERT INTO trend (token_id, display_order) VALUES {}",
+                placeholders.join(", ")
+            );
+
+            let mut query_builder = sqlx::query(&query);
+            for (index, token_id) in request.token_ids.iter().enumerate() {
+                query_builder = query_builder.bind(token_id).bind(index as i32);
+            }
+
+            measure_postgres!(
+                "trend.insert_all",
+                query_builder.execute(&mut *tx)
             )
-            .bind(&request.token_id)
-            .execute(self.db.get_write_pool())
-        )
-        .map_err(|err| anyhow!("Failed to insert trend token: {}", err))?;
+            .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
+        }
+
+        // Commit transaction
+        tx.commit().await
+            .map_err(|err| anyhow!("Failed to commit transaction: {}", err))?;
 
         // Clear cache
         GLOBAL_CACHE
@@ -173,23 +208,6 @@ impl TrendController {
         Ok(TrendActionResponse { success: true })
     }
 
-    pub async fn delete_trend_token(&self, request: TrendRequest) -> Result<TrendActionResponse> {
-        measure_postgres!(
-            "trend.delete",
-            sqlx::query("DELETE FROM trend WHERE token_id = $1")
-                .bind(&request.token_id)
-                .execute(self.db.get_write_pool())
-        )
-        .map_err(|err| anyhow!("Failed to delete trend token: {}", err))?;
-
-        // Clear cache
-        GLOBAL_CACHE
-            .cache
-            .invalidate(&"trend_tokens:all".to_string())
-            .await;
-
-        Ok(TrendActionResponse { success: true })
-    }
 
     pub async fn is_admin(&self, account_id: &str) -> Result<bool> {
         let query = "SELECT COUNT(*) as count FROM admin WHERE account_id = $1";

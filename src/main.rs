@@ -114,7 +114,6 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------Trend----------------
         router::trend::handler::get_trend,
         router::trend::handler::insert_trend,
-        router::trend::handler::delete_trend,
 
     ),
     components(
