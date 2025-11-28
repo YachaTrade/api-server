@@ -135,6 +135,7 @@ impl TokenCreatedController {
             balance: BigDecimal,
             balance_created_at: i64,
             reward_amount: BigDecimal,
+            reward_claimed_amount: BigDecimal,
             reward_proof: Vec<String>,
             reward_status: Option<String>,
         }
@@ -180,6 +181,7 @@ impl TokenCreatedController {
                         COALESCE(b.balance, 0) as balance,
                         COALESCE(b.created_at, 0) as balance_created_at,
                         COALESCE(cr.amount, 0) as reward_amount,
+                        COALESCE(ctch.claimed_amount, 0) as reward_claimed_amount,
                         COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
                         cr.status as reward_status
                     FROM token t
@@ -188,6 +190,11 @@ impl TokenCreatedController {
                     JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                     LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
+                    LEFT JOIN (
+                        SELECT token_id, account_id, SUM(amount) as claimed_amount
+                        FROM creator_treasury_claim_history
+                        GROUP BY token_id, account_id
+                    ) ctch ON t.token_id = ctch.token_id AND ctch.account_id = $1
                     CROSS JOIN latest_price lp
                     WHERE t.creator = $1
                 )
@@ -221,6 +228,7 @@ impl TokenCreatedController {
                     balance,
                     balance_created_at,
                     reward_amount,
+                    reward_claimed_amount,
                     reward_proof,
                     reward_status
                 FROM created_tokens
@@ -290,6 +298,7 @@ impl TokenCreatedController {
                     },
                     reward_info: RewardInfo {
                         amount: row.reward_amount.normalized().to_plain_string(),
+                        claimed_amount: row.reward_claimed_amount.normalized().to_plain_string(),
                         proof: row.reward_proof,
                         claimable: row.reward_status.as_deref() == Some("AWAITING"),
                     },

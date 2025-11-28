@@ -140,6 +140,7 @@ pub struct TokenSwapInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RewardInfo {
     pub amount: String,
+    pub claimed_amount: String,
     pub proof: Vec<String>,
     pub claimable: bool,
 }
