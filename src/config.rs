@@ -26,6 +26,10 @@ lazy_static! {
         .expect("TOKEN_TRADE_EXPIRATION must be set")
         .parse::<u64>()
         .expect("TOKEN_TRADE_EXPIRATION must be a valid u64");
+    pub static ref TOKEN_CREATED_EXPIRATION: u64 = env::var("TOKEN_CREATED_EXPIRATION")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(5000); // Default: 5000ms
     pub static ref NEW_CONTENT_EXPIRATION: u64 = env::var("NEW_CONTENT_EXPIRATION")
         .expect("NEW_CONTENT_EXPIRATION must be set")
         .parse::<u64>()
