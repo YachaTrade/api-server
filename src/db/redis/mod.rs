@@ -14,7 +14,7 @@ use crate::{
         GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
         GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
         MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
-        TOKEN_TRADE_EXPIRATION,
+        TOKEN_TRADE_EXPIRATION, TOKEN_CREATED_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -422,7 +422,7 @@ impl RedisDatabase {
         //pset is miliseconds
         measure_redis!(
             "redis.set_account_token_created",
-            conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_TRADE_EXPIRATION)
+            conn.pset_ex::<_, _, ()>(key, response_json, *TOKEN_CREATED_EXPIRATION)
         )?;
         let elapsed = start_time.elapsed();
         debug!(
