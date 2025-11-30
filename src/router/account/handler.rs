@@ -202,12 +202,9 @@ pub async fn get_wallet(
 #[utoipa::path(
     post,
     path = AccountPath::UploadImage.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
     request_body(
         content = Vec<u8>,
-        description = "Raw image binary data (supported formats: image/jpeg, image/png, image/gif, image/webp, image/heic)",
+        description = "Raw image binary data (supported formats: image/jpeg, image/jpg, image/png, image/gif, image/webp, image/heic)",
         content_type = "image/png"
     ),
     responses(
@@ -220,7 +217,6 @@ pub async fn get_wallet(
 )]
 pub async fn upload_image(
     State(state): State<AppState>,
-    Extension(_session_address): Extension<String>,
     headers: HeaderMap,
     body: Bytes,
 ) -> AppJsonResult<UploadImageResponse> {
