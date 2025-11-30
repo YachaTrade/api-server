@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State};
 
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 use crate::{
-    result::AppJsonResult,
+    result::{AppError, AppJsonResult},
     services::account::AccountService,
     state::AppState,
     types::account::{
@@ -34,6 +34,12 @@ pub async fn update_account(
     Json(payload): Json<UpdateAccountRequest>,
 ) -> AppJsonResult<AccountResponse> {
     info!("update account: {:?}", payload);
+
+    payload.validate().map_err(|e| {
+        error!("Invalid update account request: {}", e);
+        AppError::BadRequest(e)
+    })?;
+
     let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.update_account(&session_address, payload).await?;
 
@@ -81,6 +87,11 @@ pub async fn connect_x(
     Extension(session_address): Extension<String>,
     Json(payload): Json<ConnectXRequest>,
 ) -> AppJsonResult<AccountResponse> {
+    payload.validate().map_err(|e| {
+        error!("Invalid connect_x request: {}", e);
+        AppError::BadRequest(e)
+    })?;
+
     let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.connect_x(&session_address, payload).await?;
     Ok(Json(response))
