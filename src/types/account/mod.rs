@@ -85,6 +85,13 @@ pub struct UpdateXRequest {
     pub x_image_uri: String,
 }
 
+// ==================== Upload Image Response ====================
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UploadImageResponse {
+    pub image_uri: String,
+}
+
 // ==================== GET /account/wallet ====================
 
 #[derive(Debug, Serialize, ToSchema)]

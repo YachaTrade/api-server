@@ -1,4 +1,5 @@
-use axum::{Extension, Json, extract::State};
+use axum::{Extension, Json, extract::State, http::HeaderMap};
+use bytes::Bytes;
 
 use tracing::{error, info, instrument};
 
@@ -8,11 +9,20 @@ use crate::{
     state::AppState,
     types::account::{
         AccountResponse, ConnectXRequest, GetWalletResponse, RegisterWalletRequest,
-        UpdateAccountRequest, UpdateXRequest,
+        UpdateAccountRequest, UpdateXRequest, UploadImageResponse,
     },
 };
 
 use super::path::AccountPath;
+
+const ALLOWED_IMAGE_TYPES: [&str; 5] = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+];
+const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 /// Update account profile
 #[utoipa::path(
@@ -185,4 +195,76 @@ pub async fn get_wallet(
     let response = service.get_wallet(session_address).await?;
 
     Ok(Json(response))
+}
+
+/// Upload profile image
+#[utoipa::path(
+    post,
+    path = AccountPath::UploadImage.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication")
+    ),
+    request_body(
+        content = Vec<u8>,
+        description = "Raw image binary data (supported formats: image/jpeg, image/png, image/gif, image/webp, image/heic)",
+        content_type = "image/png"
+    ),
+    responses(
+        (status = 200, description = "Image uploaded successfully", body = UploadImageResponse),
+        (status = 400, description = "Bad request - Invalid image format or missing image"),
+        (status = 413, description = "Payload too large - Image exceeds 5MB limit"),
+        (status = 500, description = "Internal server error - Upload failed")
+    ),
+    tag = "Account"
+)]
+pub async fn upload_image(
+    State(state): State<AppState>,
+    Extension(_session_address): Extension<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> AppJsonResult<UploadImageResponse> {
+    info!("Starting profile image upload - Size: {} bytes", body.len());
+
+    // Validate image size
+    if body.len() > MAX_IMAGE_SIZE {
+        error!("Image too large: {} bytes", body.len());
+        return Err(AppError::BadRequest(format!(
+            "Image size exceeds maximum allowed size of {} MB",
+            MAX_IMAGE_SIZE / 1024 / 1024
+        )));
+    }
+
+    // Validate content type
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| {
+            error!("Missing content-type header");
+            AppError::BadRequest("Missing content-type header".to_string())
+        })?;
+
+    if !ALLOWED_IMAGE_TYPES.contains(&content_type) {
+        error!("Invalid content type: {}", content_type);
+        return Err(AppError::BadRequest(format!(
+            "Invalid image type. Allowed types: {:?}",
+            ALLOWED_IMAGE_TYPES
+        )));
+    }
+
+    // Generate UUID for image
+    let image_id = uuid::Uuid::new_v4().to_string();
+
+    // Upload to R2
+    let image_uri = state
+        .r2
+        .upload_account_image_file(&image_id, &body, content_type)
+        .await
+        .map_err(|e| {
+            error!("Failed to upload image to R2: {}", e);
+            AppError::InternalError(format!("Failed to upload image: {}", e))
+        })?;
+
+    info!("Profile image uploaded successfully: {}", image_uri);
+
+    Ok(Json(UploadImageResponse { image_uri }))
 }
