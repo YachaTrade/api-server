@@ -15,8 +15,9 @@ use crate::{
 
 use super::path::AccountPath;
 
-const ALLOWED_IMAGE_TYPES: [&str; 5] = [
+const ALLOWED_IMAGE_TYPES: [&str; 6] = [
     "image/jpeg",
+    "image/jpg",
     "image/png",
     "image/gif",
     "image/webp",
