@@ -147,4 +147,52 @@ impl R2Client {
             }
         }
     }
+
+    // Uploads account profile image to R2 and returns the CDN URL
+    // Parameters:
+    // - image_id: Unique identifier (UUID) for the image
+    // - body: Image file contents
+    // - content_type: MIME type of the image
+    pub async fn upload_account_image_file(
+        &self,
+        image_id: &str,
+        body: &Bytes,
+        content_type: &str,
+    ) -> Result<String> {
+        let key = format!("account/{}", image_id);
+        info!(
+            "Uploading account image to R2: key={}, content_type={}",
+            key, content_type
+        );
+
+        let result = self
+            .client
+            .put_object()
+            .bucket(&self.bucket_name)
+            .key(&key)
+            .body(ByteStream::from(body.clone()))
+            .content_type(content_type)
+            .send()
+            .await;
+
+        match result {
+            Ok(output) => {
+                info!(
+                    "Successfully uploaded account image to R2: key={}, output={:?}",
+                    key, output
+                );
+
+                // R2 Custom Domain URL
+                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                Ok(r2_url)
+            }
+            Err(err) => {
+                error!(
+                    "Failed to upload account image to R2: key={}, error={:?}",
+                    key, err
+                );
+                Err(anyhow!("Upload account image failed. Error: {}", err))
+            }
+        }
+    }
 }

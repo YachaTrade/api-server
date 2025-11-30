@@ -4,7 +4,7 @@ pub enum AccountPath {
     ConnectX,
     DisconnectX,
     UpdateX,
-
+    UploadImage,
     RegisterWallet,
     GetWallet,
 }
@@ -17,6 +17,7 @@ impl AccountPath {
             AccountPath::ConnectX => "/account/connect_x",
             AccountPath::DisconnectX => "/account/disconnect_x",
             AccountPath::UpdateX => "/account/update_x",
+            AccountPath::UploadImage => "/account/image",
             AccountPath::RegisterWallet => "/account/register_wallet",
             AccountPath::GetWallet => "/account/wallet",
         }
@@ -28,6 +29,7 @@ impl AccountPath {
             AccountPath::ConnectX => "/account/connect_x",
             AccountPath::DisconnectX => "/account/disconnect_x",
             AccountPath::UpdateX => "/account/update_x",
+            AccountPath::UploadImage => "/account/image",
             AccountPath::RegisterWallet => "/account/register_wallet",
             AccountPath::GetWallet => "/account/wallet",
         }
