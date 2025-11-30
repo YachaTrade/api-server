@@ -321,7 +321,7 @@ async fn main() -> Result<()> {
         .merge(terminal::router())
         .merge(trend::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .layer(DefaultBodyLimit::max(5_000_000)) // 5MB (decimal) global limit
+        .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
