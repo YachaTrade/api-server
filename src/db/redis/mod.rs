@@ -628,6 +628,21 @@ impl RedisDatabase {
         Ok(response)
     }
 
+    pub async fn delete_hype_token_cache(&self) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+
+        let keys = vec!["hype_token", "hype_token_latest"];
+        measure_redis!(
+            "redis.delete_hype_token_cache",
+            conn.del::<&[&str], ()>(&keys)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!("delete_hype_token_cache() completed in {:?}", elapsed);
+        Ok(())
+    }
+
     pub async fn set_total_hype_point_response(&self, response: &AmountResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();

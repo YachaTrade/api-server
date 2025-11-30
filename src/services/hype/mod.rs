@@ -247,10 +247,17 @@ impl HypeService {
             ));
         }
 
-        controller
+        let response = controller
             .vote(account_id, payload)
             .await
-            .map_err(|err| AppError::InternalError(format!("Failed to vote, error: {}", err)))
+            .map_err(|err| AppError::InternalError(format!("Failed to vote, error: {}", err)))?;
+
+        // Invalidate hype_token cache after successful vote
+        if let Err(err) = self.redis.delete_hype_token_cache().await {
+            error!("Failed to delete hype token cache: {}", err);
+        }
+
+        Ok(response)
     }
 
     pub async fn get_community_treasury(&self) -> Result<AmountResponse, AppError> {
