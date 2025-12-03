@@ -52,6 +52,7 @@ fn default_countback() -> Option<i32> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BarResponse {
+    pub k: String,      //chart type
     pub t: Vec<i64>,    // 타임스탬프 배열 (초 단위)
     pub c: Vec<String>, // 종가 배열 (문자열로 반환)
     pub o: Vec<String>, // 시가 배열 (문자열로 반환)

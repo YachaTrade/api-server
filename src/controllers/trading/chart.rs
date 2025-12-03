@@ -153,8 +153,16 @@ impl ChartController {
 
         charts.reverse();
 
+        let chart_type_str = match request.chart_type {
+            ChartType::Price => "price",
+            ChartType::PriceUsd => "price_usd",
+            ChartType::MarketCap => "market_cap",
+            ChartType::MarketCapUsd => "market_cap_usd",
+        };
+
         if charts.is_empty() {
             return Ok(BarResponse {
+                k: chart_type_str.to_string(),
                 t: vec![],
                 c: vec![],
                 o: vec![],
@@ -182,6 +190,7 @@ impl ChartController {
         }
 
         Ok(BarResponse {
+            k: chart_type_str.to_string(),
             t,
             c,
             o,
