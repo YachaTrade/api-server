@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use bigdecimal::BigDecimal;
 
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::raffle::{Prize, PrizeListResponse, RaffleStatusResponse},
+    types::raffle::{RaffleCheckResponse, RafflePrize, RaffleStatusResponse},
 };
 
 pub struct RaffleController {
@@ -63,30 +64,65 @@ impl RaffleController {
         }
     }
 
-    pub async fn get_prize_list(&self, round: i64) -> Result<PrizeListResponse> {
-        let prizes = measure_postgres!(
-            "raffle.get_prize_list",
+    pub async fn check_raffle(&self, round: i64, account_id: &str) -> Result<RaffleCheckResponse> {
+        // Get total raffle entries for this round and account
+        let total_raffle = measure_postgres!(
+            "raffle.get_total_raffle",
             sqlx::query!(
                 r#"
-                SELECT account_id, amount
-                FROM prize
-                WHERE round = $1
-                ORDER BY amount DESC
+                SELECT COUNT(*) as "count!"
+                FROM raffle
+                WHERE round = $1 AND account_id = $2
                 "#,
-                round
+                round,
+                account_id
+            )
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get raffle count: {}", err))?;
+
+        // Get winning prizes for this round and account
+        let prizes = measure_postgres!(
+            "raffle.get_prizes",
+            sqlx::query!(
+                r#"
+                SELECT raffle_id, rank, type as prize_type, transaction_hash, amount
+                FROM raffle_winner
+                WHERE round = $1 AND account_id = $2
+                ORDER BY rank ASC
+                "#,
+                round,
+                account_id
             )
             .fetch_all(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get prize list: {}", err))?;
+        .map_err(|err| anyhow!("Failed to get prizes: {}", err))?;
 
-        let prizes = prizes
+        let total_wins = prizes.len() as i64;
+
+        let total_amount: BigDecimal = prizes
+            .iter()
+            .map(|row| row.amount.clone())
+            .sum();
+
+        let prizes: Vec<RafflePrize> = prizes
             .into_iter()
-            .map(|row| Prize {
-                account_id: row.account_id,
-                amount: row.amount,
+            .map(|row| RafflePrize {
+                raffle_id: row.raffle_id,
+                rank: row.rank,
+                prize_type: row.prize_type,
+                transaction_hash: row.transaction_hash,
+                amount: row.amount.to_string(),
             })
             .collect();
 
-        Ok(PrizeListResponse { prizes })
+        Ok(RaffleCheckResponse {
+            round,
+            account_id: account_id.to_string(),
+            total_raffle: total_raffle.count,
+            total_wins,
+            total_amount: total_amount.to_string(),
+            prizes,
+        })
     }
 }
