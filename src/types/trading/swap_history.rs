@@ -1,5 +1,8 @@
 use crate::{
-    types::common::info::{AccountInfo, TokenInfo},
+    types::common::{
+        info::{AccountInfo, TokenInfo},
+        pagination::{default_direction, default_page, deserialize_limit, validate_direction, DEFAULT_LIMIT},
+    },
     utils::valid_evm_address,
 };
 use serde::{Deserialize, Deserializer, Serialize};
@@ -65,13 +68,17 @@ pub struct TokenSwapResponse {
     pub total_count: i64,
 }
 
+fn default_swap_limit() -> i64 {
+    DEFAULT_LIMIT
+}
+
 /// Combined query parameters for swap history
 #[derive(Debug, Clone, Deserialize, ToSchema, Default)]
 pub struct SwapQuery {
     // PaginationParams fields
     #[serde(default = "default_page")]
     pub page: i64,
-    #[serde(default = "default_limit", deserialize_with = "validate_limit")]
+    #[serde(default = "default_swap_limit", deserialize_with = "deserialize_limit")]
     pub limit: i64,
     #[serde(default = "default_direction", deserialize_with = "validate_direction")]
     pub direction: String,
@@ -107,47 +114,8 @@ impl SwapQuery {
     }
 }
 
-fn default_page() -> i64 {
-    1
-}
-
-fn default_limit() -> i64 {
-    10
-}
-
-fn default_direction() -> String {
-    "DESC".to_string()
-}
-
 fn default_trade_type() -> String {
     "ALL".to_string()
-}
-
-fn validate_limit<'de, D>(deserializer: D) -> Result<i64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let limit = i64::deserialize(deserializer)?;
-    if limit < 1 || limit > 100 {
-        return Err(serde::de::Error::custom(
-            "Invalid limit: must be between 1 and 100",
-        ));
-    }
-    Ok(limit)
-}
-
-fn validate_direction<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let direction = String::deserialize(deserializer)?;
-    let direction_upper = direction.to_uppercase();
-    if !["ASC", "DESC"].contains(&direction_upper.as_str()) {
-        return Err(serde::de::Error::custom(
-            "Invalid direction: must be 'ASC' or 'DESC'",
-        ));
-    }
-    Ok(direction_upper)
 }
 
 fn deserialize_volume_ranges<'de, D>(deserializer: D) -> Result<Option<Vec<VolumeRange>>, D::Error>

@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::common::info::{MarketInfo, TokenInfo};
+use crate::types::common::{
+    info::{MarketInfo, TokenInfo},
+    pagination::{default_direction, default_page, deserialize_limit, DEFAULT_LIMIT},
+};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -21,28 +24,20 @@ impl TokenOrderType {
     }
 }
 
+fn default_order_limit() -> i64 {
+    20 // OrderQuery uses 20 as default
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderQuery {
     #[serde(default = "default_page")]
     pub page: i64,
-    #[serde(default = "default_limit")]
+    #[serde(default = "default_order_limit", deserialize_with = "deserialize_limit")]
     pub limit: i64,
     #[serde(default = "default_direction")]
     pub direction: String,
     #[serde(default)]
     pub is_nsfw: bool,
-}
-
-fn default_page() -> i64 {
-    1
-}
-
-fn default_limit() -> i64 {
-    20
-}
-
-fn default_direction() -> String {
-    "DESC".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

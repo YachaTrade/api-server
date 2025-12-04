@@ -2,6 +2,8 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::types::common::pagination::{deserialize_chart_limit, DEFAULT_CHART_LIMIT};
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Chart {
     #[serde(skip_serializing)]
@@ -31,23 +33,24 @@ impl Default for ChartType {
     }
 }
 
+fn default_countback() -> i32 {
+    DEFAULT_CHART_LIMIT
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct GetBarsRequest {
     #[serde(default = "default_resolution")]
     pub resolution: String, // 타임프레임 (1, 5, 15, 30, 60, 1H, 4H, D, W, M)
     pub from: i64, // 시작 타임스탬프 (초 단위)
     pub to: i64,   // 끝 타임스탬프 (초 단위)
-    #[serde(default = "default_countback")]
-    pub countback: Option<i32>, // 반환할 최대 캔들 수
+    #[serde(default = "default_countback", deserialize_with = "deserialize_chart_limit")]
+    pub countback: i32, // 반환할 최대 캔들 수 (최대 1000)
     #[serde(default)]
     pub chart_type: ChartType, // 차트 타입 (price, price_usd, market_cap, market_cap_usd)
 }
+
 fn default_resolution() -> String {
     "5".to_string()
-}
-
-fn default_countback() -> Option<i32> {
-    Some(500)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
