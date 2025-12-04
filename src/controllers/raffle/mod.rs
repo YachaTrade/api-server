@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use bigdecimal::BigDecimal;
 
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::raffle::{RaffleCheckResponse, RafflePrize, RaffleStatusResponse},
+    types::raffle::{RaffleCheckResponse, RafflePrizes, RaffleStatusResponse},
 };
 
 pub struct RaffleController {
@@ -65,13 +64,16 @@ impl RaffleController {
     }
 
     pub async fn check_raffle(&self, round: i64, account_id: &str) -> Result<RaffleCheckResponse> {
-        // Get total raffle entries for this round and account
-        let total_raffle = measure_postgres!(
-            "raffle.get_total_raffle",
+        let prizes = measure_postgres!(
+            "raffle.get_prizes",
             sqlx::query!(
                 r#"
-                SELECT COUNT(*) as "count!"
-                FROM raffle
+                SELECT
+                    COALESCE(SUM(CASE WHEN type = 'GENERAL_MONAD' THEN amount ELSE 0 END), 0) as "general_monad!",
+                    COALESCE(SUM(CASE WHEN type = 'GENERAL_HYPE' THEN amount ELSE 0 END), 0) as "general_hype!",
+                    COALESCE(SUM(CASE WHEN type = 'MONAD_AIRDROP_MONAD' THEN amount ELSE 0 END), 0) as "monad_airdrop_monad!",
+                    COALESCE(SUM(CASE WHEN type = 'MONAD_AIRDROP_HYPE' THEN amount ELSE 0 END), 0) as "monad_airdrop_hype!"
+                FROM raffle_winner
                 WHERE round = $1 AND account_id = $2
                 "#,
                 round,
@@ -79,50 +81,17 @@ impl RaffleController {
             )
             .fetch_one(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get raffle count: {}", err))?;
-
-        // Get winning prizes for this round and account
-        let prizes = measure_postgres!(
-            "raffle.get_prizes",
-            sqlx::query!(
-                r#"
-                SELECT raffle_id, rank, type as prize_type, transaction_hash, amount
-                FROM raffle_winner
-                WHERE round = $1 AND account_id = $2
-                ORDER BY rank ASC
-                "#,
-                round,
-                account_id
-            )
-            .fetch_all(self.db.get_read_pool())
-        )
         .map_err(|err| anyhow!("Failed to get prizes: {}", err))?;
-
-        let total_wins = prizes.len() as i64;
-
-        let total_amount: BigDecimal = prizes
-            .iter()
-            .map(|row| row.amount.clone())
-            .sum();
-
-        let prizes: Vec<RafflePrize> = prizes
-            .into_iter()
-            .map(|row| RafflePrize {
-                raffle_id: row.raffle_id,
-                rank: row.rank,
-                prize_type: row.prize_type,
-                transaction_hash: row.transaction_hash,
-                amount: row.amount.to_string(),
-            })
-            .collect();
 
         Ok(RaffleCheckResponse {
             round,
             account_id: account_id.to_string(),
-            total_raffle: total_raffle.count,
-            total_wins,
-            total_amount: total_amount.to_string(),
-            prizes,
+            prizes: RafflePrizes {
+                general_monad: prizes.general_monad.normalized().to_plain_string(),
+                general_hype: prizes.general_hype.normalized().to_plain_string(),
+                monad_airdrop_monad: prizes.monad_airdrop_monad.normalized().to_plain_string(),
+                monad_airdrop_hype: prizes.monad_airdrop_hype.normalized().to_plain_string(),
+            },
         })
     }
 }

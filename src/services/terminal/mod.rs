@@ -102,26 +102,10 @@ impl TerminalService {
         Ok(AssetResponse { asset })
     }
 
-    pub async fn get_pair(&self, pool_id: &str) -> Result<PairResponse, AppError> {
-        // If pool_id is BONDING_CURVE, return a generic response without DB query
-        if pool_id.eq_ignore_ascii_case(&BONDING_CURVE) {
-            let pair = Pair {
-                id: BONDING_CURVE.to_string(),
-                dex_key: "nadfun".to_string(),
-                asset0_id: String::new(), // Generic bonding curve pair
-                asset1_id: String::new(),
-                created_at_block_number: None,
-                created_at_block_timestamp: None,
-                created_at_txn_id: None,
-                creator: None,
-                fee_bps: Some(100), // 1% fee
-            };
-            return Ok(PairResponse { pair });
-        }
-
-        // Otherwise, query by pool_id
+    pub async fn get_pair(&self, token_id: &str) -> Result<PairResponse, AppError> {
+        // Query by token_id (token address)
         let controller = TerminalController::new(self.postgres.clone());
-        let pair_row = controller.get_pair_by_pool_id(pool_id).await.map_err(|e| {
+        let pair_row = controller.get_pair(token_id).await.map_err(|e| {
             error!("Failed to get pair: {}", e);
             AppError::NotFound(format!("Pair not found: {}", e))
         })?;
@@ -143,14 +127,17 @@ impl TerminalService {
             (WMON.to_string(), pair_row.token_id.to_string())
         };
 
-        // Determine dex_key based on market_type
-        let dex_key = match pair_row.market_type.as_str() {
-            "DEX" => "capricorn",
-            _ => "nadfun",
+        // Determine pair_id and dex_key based on market_type
+        let (pair_id, dex_key) = match pair_row.market_type.as_str() {
+            "DEX" => (
+                pair_row.pool_id.unwrap_or_else(|| token_id.to_string()),
+                "capricorn",
+            ),
+            _ => (BONDING_CURVE.to_string(), "nadfun"),
         };
 
         let pair = Pair {
-            id: pool_id.to_string(),
+            id: pair_id,
             dex_key: dex_key.to_string(),
             asset0_id,
             asset1_id,

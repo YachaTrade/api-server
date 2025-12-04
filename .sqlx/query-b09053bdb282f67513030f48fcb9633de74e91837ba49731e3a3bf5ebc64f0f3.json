@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    COALESCE(SUM(CASE WHEN type = 'GENERAL_MONAD' THEN amount ELSE 0 END), 0) as \"general_monad!\",\n                    COALESCE(SUM(CASE WHEN type = 'GENERAL_HYPE' THEN amount ELSE 0 END), 0) as \"general_hype!\",\n                    COALESCE(SUM(CASE WHEN type = 'MONAD_AIRDROP_MONAD' THEN amount ELSE 0 END), 0) as \"monad_airdrop_monad!\",\n                    COALESCE(SUM(CASE WHEN type = 'MONAD_AIRDROP_HYPE' THEN amount ELSE 0 END), 0) as \"monad_airdrop_hype!\"\n                FROM raffle_winner\n                WHERE round = $1 AND account_id = $2\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "general_monad!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "general_hype!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "monad_airdrop_monad!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "monad_airdrop_hype!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b09053bdb282f67513030f48fcb9633de74e91837ba49731e3a3bf5ebc64f0f3"
+}
