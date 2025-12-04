@@ -18,29 +18,6 @@ impl RaffleController {
     }
 
     pub async fn get_raffle_status(&self, account_id: &str) -> Result<RaffleStatusResponse> {
-        // Check if account is in monad_airdrop
-        let is_eligible = measure_postgres!(
-            "raffle.check_monad_airdrop",
-            sqlx::query!(
-                r#"
-                SELECT EXISTS(
-                    SELECT 1 FROM monad_airdrop WHERE account_id = $1
-                ) as "exists!"
-                "#,
-                account_id
-            )
-            .fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|err| anyhow!("Failed to check monad_airdrop: {}", err))?
-        .exists;
-
-        if !is_eligible {
-            return Ok(RaffleStatusResponse {
-                is_eligible: false,
-                count: 0,
-            });
-        }
-
         // Get active round
         let active_round = measure_postgres!(
             "raffle.get_active_round",

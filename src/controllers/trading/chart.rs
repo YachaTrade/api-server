@@ -55,10 +55,7 @@ impl ChartController {
     ) -> Result<BarResponse> {
         let interval_type = resolution_to_interval_type(&request.resolution)?;
 
-        let limit = match request.countback {
-            Some(0) | None => 500,
-            Some(count) => count,
-        };
+        let limit = request.countback;
 
         // Build query based on chart_type
         let query = match request.chart_type {
