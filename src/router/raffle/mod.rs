@@ -9,5 +9,5 @@ use path::RafflePath;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(RafflePath::GetEligible.as_str(), get(handler::get_eligible))
-        .route(RafflePath::GetPrizes.as_str(), get(handler::get_prizes))
+        .route(RafflePath::Check.as_str(), get(handler::check_raffle))
 }

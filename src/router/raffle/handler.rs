@@ -1,23 +1,17 @@
 use axum::{Extension, Json, extract::{Query, State}};
 
-use serde::Deserialize;
 use tracing::instrument;
 
 use crate::{
     result::AppJsonResult,
     state::AppState,
-    types::raffle::{PrizeListResponse, RaffleStatusResponse},
+    types::raffle::{RaffleCheckQuery, RaffleCheckResponse, RaffleStatusResponse},
     controllers::raffle::RaffleController,
 };
 
 use super::path::RafflePath;
 
-#[derive(Debug, Deserialize)]
-pub struct PrizeQuery {
-    pub round: i64,
-}
-
-/// Get raffle eligibility for authenticated user
+/// Get raffle eligibility and entry count for authenticated user
 #[utoipa::path(
     get,
     path = RafflePath::GetEligible.docs_str(),
@@ -25,9 +19,9 @@ pub struct PrizeQuery {
         ("session" = String, Cookie, description = "Session cookie for authentication")
     ),
     responses(
-        (status = 200, description = "Get raffle eligibility successfully", body = RaffleStatusResponse)
+        (status = 200, description = "Raffle eligibility status", body = RaffleStatusResponse)
     ),
-    tag="Raffle"
+    tag = "Raffle"
 )]
 #[instrument(skip(state, session_address))]
 pub async fn get_eligible(
@@ -40,25 +34,27 @@ pub async fn get_eligible(
     Ok(Json(response))
 }
 
-/// Get prize list for a specific round
+/// Check raffle entries and prizes for a specific round
 #[utoipa::path(
     get,
-    path = RafflePath::GetPrizes.docs_str(),
+    path = RafflePath::Check.docs_str(),
     params(
-        ("round" = i64, Query, description = "Round number")
+        ("session" = String, Cookie, description = "Session cookie for authentication"),
+        ("round" = i64, Query, description = "Round number to check")
     ),
     responses(
-        (status = 200, description = "Get prize list successfully", body = PrizeListResponse)
+        (status = 200, description = "Raffle entries and prize information", body = RaffleCheckResponse)
     ),
-    tag="Raffle"
+    tag = "Raffle"
 )]
-#[instrument(skip(state, query))]
-pub async fn get_prizes(
+#[instrument(skip(state, session_address, query))]
+pub async fn check_raffle(
     State(state): State<AppState>,
-    Query(query): Query<PrizeQuery>,
-) -> AppJsonResult<PrizeListResponse> {
+    Extension(session_address): Extension<String>,
+    Query(query): Query<RaffleCheckQuery>,
+) -> AppJsonResult<RaffleCheckResponse> {
     let controller = RaffleController::new(state.postgres.clone());
-    let response = controller.get_prize_list(query.round).await?;
+    let response = controller.check_raffle(query.round, &session_address).await?;
 
     Ok(Json(response))
 }
