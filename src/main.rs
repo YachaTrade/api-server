@@ -237,7 +237,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::raffle::RaffleStatusResponse,
             types::raffle::RaffleCheckQuery,
             types::raffle::RaffleCheckResponse,
-            types::raffle::RafflePrize,
+            types::raffle::RafflePrizes,
 
             // Trend
             types::trend::TrendToken,

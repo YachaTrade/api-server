@@ -17,19 +17,17 @@ pub struct RaffleCheckQuery {
     pub round: i64,
 }
 
-/// Individual prize information
+/// Prize amounts by type
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct RafflePrize {
-    /// Raffle entry ID that won
-    pub raffle_id: i32,
-    /// Prize rank (1st, 2nd, 3rd, etc.)
-    pub rank: i32,
-    /// Prize type: GENERAL_MONAD, GENERAL_HYPE, MONAD_AIRDROP_MONAD, MONAD_AIRDROP_HYPE
-    pub prize_type: String,
-    /// Transaction hash if prize has been sent
-    pub transaction_hash: Option<String>,
-    /// Prize amount
-    pub amount: String,
+pub struct RafflePrizes {
+    /// Total amount won from general monad raffle
+    pub general_monad: String,
+    /// Total amount won from general hype raffle
+    pub general_hype: String,
+    /// Total amount won from monad airdrop monad raffle
+    pub monad_airdrop_monad: String,
+    /// Total amount won from monad airdrop hype raffle
+    pub monad_airdrop_hype: String,
 }
 
 /// Raffle check response with entries and prizes
@@ -39,12 +37,6 @@ pub struct RaffleCheckResponse {
     pub round: i64,
     /// User's account address
     pub account_id: String,
-    /// Total raffle entries for this round
-    pub total_raffle: i64,
-    /// Number of winning entries
-    pub total_wins: i64,
-    /// Total prize amount won
-    pub total_amount: String,
-    /// List of prizes won
-    pub prizes: Vec<RafflePrize>,
+    /// Prize amounts by type
+    pub prizes: RafflePrizes,
 }
