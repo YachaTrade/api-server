@@ -1,6 +1,7 @@
 pub enum RafflePath {
     GetEligible,
     Check,
+    Round,
 }
 
 impl RafflePath {
@@ -8,6 +9,7 @@ impl RafflePath {
         match self {
             RafflePath::GetEligible => "/raffle/eligible",
             RafflePath::Check => "/raffle/check",
+            RafflePath::Round => "/raffle/round",
         }
     }
 
@@ -15,6 +17,7 @@ impl RafflePath {
         match self {
             RafflePath::GetEligible => "/raffle/eligible",
             RafflePath::Check => "/raffle/check",
+            RafflePath::Round => "/raffle/round",
         }
     }
 }

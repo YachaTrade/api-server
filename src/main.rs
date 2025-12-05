@@ -100,6 +100,7 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------Raffle----------------
         router::raffle::handler::get_eligible,
         router::raffle::handler::check_raffle,
+        router::raffle::handler::get_round,
 
         // ----------------Metadata----------------
         router::metadata::handler::upload_image,
@@ -234,9 +235,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::new_event::EventType,
 
             // Raffle
+            types::raffle::RaffleRoundResponse,
             types::raffle::RaffleStatusResponse,
             types::raffle::RaffleCheckQuery,
             types::raffle::RaffleCheckResponse,
+            types::raffle::RaffleRound,
             types::raffle::RafflePrizes,
 
             // Trend
