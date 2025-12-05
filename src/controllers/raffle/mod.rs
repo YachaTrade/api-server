@@ -18,49 +18,24 @@ impl RaffleController {
     }
 
     pub async fn get_raffle_status(&self, account_id: &str) -> Result<RaffleStatusResponse> {
-        // Get active round
-        let active_round = measure_postgres!(
-            "raffle.get_active_round",
+        let result = measure_postgres!(
+            "raffle.get_raffle_status",
             sqlx::query!(
                 r#"
-                SELECT round, status
-                FROM raffle_round
-                WHERE status = 'ACTIVE'
-                LIMIT 1
-                "#
+                SELECT COUNT(*) as "count!"
+                FROM raffle
+                WHERE round = (SELECT MAX(round) FROM raffle_round) AND account_id = $1
+                "#,
+                account_id
             )
-            .fetch_optional(self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get active round: {}", err))?;
+        .map_err(|err| anyhow!("Failed to get raffle status: {}", err))?;
 
-        match active_round {
-            Some(round_row) => {
-                // Get raffle count for this round
-                let count = measure_postgres!(
-                    "raffle.get_raffle_count",
-                    sqlx::query!(
-                        r#"
-                        SELECT COUNT(*) as "count!"
-                        FROM raffle
-                        WHERE round = $1 AND account_id = $2
-                        "#,
-                        round_row.round,
-                        account_id
-                    )
-                    .fetch_one(self.db.get_read_pool())
-                )
-                .map_err(|err| anyhow!("Failed to get raffle count: {}", err))?;
-
-                Ok(RaffleStatusResponse {
-                    is_eligible: true,
-                    count: count.count,
-                })
-            }
-            None => Ok(RaffleStatusResponse {
-                is_eligible: true,
-                count: 0,
-            }),
-        }
+        Ok(RaffleStatusResponse {
+            is_eligible: true,
+            count: result.count,
+        })
     }
 
     pub async fn check_raffle(&self, round: i64, account_id: &str) -> Result<RaffleCheckResponse> {
