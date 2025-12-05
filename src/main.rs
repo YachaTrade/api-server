@@ -309,9 +309,7 @@ async fn main() -> Result<()> {
         .merge(health::router())
         .merge(auth::router(app_state.clone()))
         .merge(account::router(app_state.clone()))
-        .merge(raffle::router().layer(ServiceBuilder::new().layer(
-            axum_middleware::from_fn_with_state(app_state.clone(), authenticate_user),
-        )))
+        .merge(raffle::router(app_state.clone()))
         .merge(token::router())
         .merge(search::router())
         .merge(trade::router())
