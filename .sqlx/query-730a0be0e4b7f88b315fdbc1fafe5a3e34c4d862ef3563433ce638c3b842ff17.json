@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    rr.round,\n                    rr.start_at,\n                    rr.end_at,\n                    (SELECT COUNT(*) FROM raffle r WHERE r.round = $1 AND r.account_id = $2) as \"raffle_count!\",\n                    COALESCE(SUM(CASE WHEN rw.type = 'GENERAL_MONAD' THEN rw.amount ELSE 0 END), 0) as \"general_monad!\",\n                    COALESCE(SUM(CASE WHEN rw.type = 'GENERAL_HYPE' THEN rw.amount ELSE 0 END), 0) as \"general_hype!\",\n                    COALESCE(SUM(CASE WHEN rw.type = 'MONAD_AIRDROP_MONAD' THEN rw.amount ELSE 0 END), 0) as \"monad_airdrop_monad!\",\n                    COALESCE(SUM(CASE WHEN rw.type = 'MONAD_AIRDROP_HYPE' THEN rw.amount ELSE 0 END), 0) as \"monad_airdrop_hype!\"\n                FROM raffle_round rr\n                LEFT JOIN raffle_winner rw ON rw.round = rr.round AND rw.account_id = $2\n                WHERE rr.round = $1\n                GROUP BY rr.round, rr.start_at, rr.end_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "round",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "start_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "end_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "raffle_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "general_monad!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "general_hype!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "monad_airdrop_monad!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "monad_airdrop_hype!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "730a0be0e4b7f88b315fdbc1fafe5a3e34c4d862ef3563433ce638c3b842ff17"
+}
