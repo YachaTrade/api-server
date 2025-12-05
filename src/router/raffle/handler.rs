@@ -3,10 +3,10 @@ use axum::{Extension, Json, extract::{Query, State}};
 use tracing::instrument;
 
 use crate::{
+    controllers::raffle::RaffleController,
     result::AppJsonResult,
     state::AppState,
-    types::raffle::{RaffleCheckQuery, RaffleCheckResponse, RaffleStatusResponse},
-    controllers::raffle::RaffleController,
+    types::raffle::{RaffleCheckQuery, RaffleCheckResponse, RaffleRoundResponse, RaffleStatusResponse},
 };
 
 use super::path::RafflePath;
@@ -55,6 +55,25 @@ pub async fn check_raffle(
 ) -> AppJsonResult<RaffleCheckResponse> {
     let controller = RaffleController::new(state.postgres.clone());
     let response = controller.check_raffle(query.round, &session_address).await?;
+
+    Ok(Json(response))
+}
+
+/// Get current raffle round information
+#[utoipa::path(
+    get,
+    path = RafflePath::Round.docs_str(),
+    responses(
+        (status = 200, description = "Current raffle round information", body = RaffleRoundResponse)
+    ),
+    tag = "Raffle"
+)]
+#[instrument(skip(state))]
+pub async fn get_round(
+    State(state): State<AppState>,
+) -> AppJsonResult<Option<RaffleRoundResponse>> {
+    let controller = RaffleController::new(state.postgres.clone());
+    let response = controller.get_current_round().await?;
 
     Ok(Json(response))
 }

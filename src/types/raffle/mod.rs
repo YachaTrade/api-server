@@ -1,6 +1,19 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// Current raffle round information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RaffleRoundResponse {
+    /// Round number
+    pub round: i64,
+    /// Round status (ACTIVE or COMPLETED)
+    pub status: String,
+    /// Round start timestamp
+    pub start_at: i64,
+    /// Round end timestamp
+    pub end_at: i64,
+}
+
 /// Raffle eligibility status response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RaffleStatusResponse {
@@ -30,11 +43,24 @@ pub struct RafflePrizes {
     pub monad_airdrop_hype: String,
 }
 
+/// Round epoch information
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RaffleRound {
+    /// Round start timestamp
+    pub start_at: i64,
+    /// Round number
+    pub round: i64,
+    /// Round end timestamp
+    pub end_at: i64,
+}
+
 /// Raffle check response with entries and prizes
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RaffleCheckResponse {
-    /// Round number
-    pub round: i64,
+    /// Whether user has raffle entries in this round
+    pub is_validate: bool,
+    /// Round information
+    pub round: RaffleRound,
     /// User's account address
     pub account_id: String,
     /// Prize amounts by type
