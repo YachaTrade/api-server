@@ -132,6 +132,7 @@ impl SwapController {
                         s.transaction_hash
                     FROM swap s
                     WHERE s.account_id = $1
+                      AND EXISTS (SELECT 1 FROM token t WHERE t.token_id = s.token_id)
                     ORDER BY s.block_number DESC, s.tx_index DESC, s.log_index DESC
                     LIMIT $2
                     OFFSET $3
