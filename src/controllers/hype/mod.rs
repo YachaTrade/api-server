@@ -41,6 +41,7 @@ struct HypeTokenRow {
     telegram: Option<String>,
     website: Option<String>,
     is_nsfw: bool,
+    is_cto: bool,
     total_supply: BigDecimal,
     created_at: i64,
     creator: String,
@@ -50,6 +51,7 @@ struct HypeTokenRow {
     vote: BigDecimal,
     holder_count: i64,
     market_cap: BigDecimal,
+    market_cap_usd: BigDecimal,
     reward_amount: Option<BigDecimal>,
 }
 
@@ -129,6 +131,9 @@ impl HypeController {
                 "hype.fetch_hype_token_latest.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price FROM price ORDER BY created_at DESC LIMIT 1
+                    )
                     SELECT
                         h.vote,
                         t.token_id,
@@ -143,12 +148,14 @@ impl HypeController {
                         t.total_supply,
                         t.created_at,
                         t.is_nsfw,
+                        t.is_cto,
                         t.creator,
                         COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
+                        (m.price * t.total_supply * COALESCE(lp.price, 0)) as market_cap_usd,
                         r.amount as reward_amount
                     FROM hype_token h
                     JOIN token t ON h.token_id = t.token_id
@@ -156,6 +163,7 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                    CROSS JOIN latest_price lp
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
                         (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
@@ -213,11 +221,13 @@ impl HypeController {
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
                     },
+                    is_cto: row.is_cto,
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.normalized().to_plain_string(),
+                    market_cap_usd: row.market_cap_usd.normalized().to_plain_string(),
                     reward_amount: row
                         .reward_amount
                         .unwrap_or_default()
@@ -239,6 +249,9 @@ impl HypeController {
                 "hype.fetch_hype_token.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price FROM price ORDER BY created_at DESC LIMIT 1
+                    )
                     SELECT
                         h.vote,
                         t.token_id,
@@ -253,12 +266,14 @@ impl HypeController {
                         t.total_supply,
                         t.created_at,
                         t.is_nsfw,
+                        t.is_cto,
                         t.creator,
                         COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
+                        (m.price * t.total_supply * COALESCE(lp.price, 0)) as market_cap_usd,
                         r.amount as reward_amount
                     FROM hype_token h
                     JOIN token t ON h.token_id = t.token_id
@@ -266,6 +281,7 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                    CROSS JOIN latest_price lp
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
                         (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
@@ -323,11 +339,13 @@ impl HypeController {
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
                     },
+                    is_cto: row.is_cto,
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.normalized().to_plain_string(),
+                    market_cap_usd: row.market_cap_usd.normalized().to_plain_string(),
                     reward_amount: row
                         .reward_amount
                         .unwrap_or_default()
@@ -380,6 +398,9 @@ impl HypeController {
                 "hype.fetch_hype_token_epoch.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
+                    WITH latest_price AS (
+                        SELECT price FROM price ORDER BY created_at DESC LIMIT 1
+                    )
                     SELECT
                         h.vote,
                         t.token_id,
@@ -392,6 +413,7 @@ impl HypeController {
                         t.telegram,
                         t.website,
                         t.is_nsfw,
+                        t.is_cto,
                         t.total_supply,
                         t.created_at,
                         t.creator,
@@ -400,6 +422,7 @@ impl HypeController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         t.token_holder_count as holder_count,
                         (m.price * t.total_supply) as market_cap,
+                        (m.price * t.total_supply * COALESCE(lp.price, 0)) as market_cap_usd,
                         r.amount as reward_amount
                     FROM hype_token h
                     JOIN token t ON h.token_id = t.token_id
@@ -407,6 +430,7 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
+                    CROSS JOIN latest_price lp
                     WHERE h.epoch = $1
                     ORDER BY h.vote DESC, market_cap DESC
                     "#,
@@ -460,11 +484,13 @@ impl HypeController {
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
                     },
+                    is_cto: row.is_cto,
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
                     holder_count: row.holder_count as u64,
                     market_cap: row.market_cap.normalized().to_plain_string(),
+                    market_cap_usd: row.market_cap_usd.normalized().to_plain_string(),
                     reward_amount: row
                         .reward_amount
                         .unwrap_or_default()
@@ -613,6 +639,7 @@ impl HypeController {
             token_created_at: i64,
             is_graduated: bool,
             is_nsfw: bool,
+            is_cto: bool,
             vote_amount: BigDecimal,
             creator: String,
             creator_nickname: String,
@@ -645,6 +672,7 @@ impl HypeController {
                 t.creator,
                 t.is_nsfw,
                 t.is_graduated,
+                t.is_cto,
                 COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
@@ -721,6 +749,7 @@ impl HypeController {
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
                     },
+                    is_cto: row.is_cto,
                 },
                 vote_amount: row.vote_amount.normalized().to_plain_string(),
                 reward_amount: row
@@ -1090,6 +1119,7 @@ impl HypeController {
             image_uri: String,
             is_graduated: bool,
             is_nsfw: bool,
+            is_cto: bool,
             token_created_at: i64,
             amount: BigDecimal,
             total_amount: BigDecimal,
@@ -1119,6 +1149,7 @@ impl HypeController {
                         t.image_uri,
                         t.is_graduated,
                         t.is_nsfw,
+                        t.is_cto,
                         t.created_at as token_created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -1187,6 +1218,7 @@ impl HypeController {
                         bio: row.creator_bio,
                         image_uri: row.creator_image_uri,
                     },
+                    is_cto: row.is_cto,
                 },
                 amount: row.amount.normalized().to_plain_string(),
                 total_amount: row.total_amount.normalized().to_plain_string(),

@@ -13,6 +13,7 @@ pub struct HypeInfo {
     pub vote: String,
     pub holder_count: u64,
     pub market_cap: String,
+    pub market_cap_usd: String,
     pub reward_amount: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -195,6 +195,7 @@ impl PositionController {
             website: Option<String>,
             is_graduated: bool,
             is_nsfw: bool,
+            is_cto: bool,
             created_at: i64,
             creator: String,
             creator_nickname: String,
@@ -236,6 +237,7 @@ impl PositionController {
                     t.website,
                     t.is_graduated,
                     t.is_nsfw,
+                    t.is_cto,
                     t.created_at,
                     t.creator,
                     COALESCE(ax.x_handle, a.nickname) as creator_nickname,
@@ -305,6 +307,7 @@ impl PositionController {
                             bio: row.creator_bio,
                             image_uri: row.creator_image_uri,
                         },
+                        is_cto: row.is_cto,
                     },
                     balance_info: BalanceInfo {
                         balance: row.balance.normalized().to_plain_string(),

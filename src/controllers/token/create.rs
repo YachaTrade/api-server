@@ -116,6 +116,7 @@ impl TokenCreatedController {
             token_website: Option<String>,
             is_graduated: bool,
             is_nsfw: bool,
+            is_cto: bool,
             token_created_at: i64,
             creator: String,
             holder_count: i64,
@@ -162,6 +163,7 @@ impl TokenCreatedController {
                         t.website as token_website,
                         t.is_graduated,
                         t.is_nsfw,
+                        t.is_cto,
                         t.created_at as token_created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -271,6 +273,7 @@ impl TokenCreatedController {
                             bio: row.creator_bio,
                             image_uri: row.creator_image_uri,
                         },
+                        is_cto: row.is_cto,
                     },
                     market_info: MarketInfo {
                         market_type: match row.market_type.as_str() {

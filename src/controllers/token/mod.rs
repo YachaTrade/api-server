@@ -29,6 +29,7 @@ struct TokenRow {
     image_uri: String,
     is_graduated: bool,
     is_nsfw: bool,
+    is_cto: bool,
     created_at: i64,
     creator: String,
     creator_nickname: String,
@@ -72,6 +73,7 @@ impl TokenController {
                     t.image_uri,
                     t.is_graduated,
                     t.is_nsfw,
+                    t.is_cto,
                     t.created_at,
                     t.creator,
                     COALESCE(ax.x_handle, a.nickname) as creator_nickname,
@@ -108,6 +110,7 @@ impl TokenController {
                 bio: row.creator_bio,
                 image_uri: row.creator_image_uri,
             },
+            is_cto: row.is_cto,
         };
 
         Ok(TokenResponse { token_info })

@@ -23,6 +23,7 @@ pub struct TokenInfo {
     pub website: Option<String>,
     pub created_at: i64,
     pub creator: AccountInfo,
+    pub is_cto: bool,
 }
 
 /// Account information
