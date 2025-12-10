@@ -13,8 +13,8 @@ use crate::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
         GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
         GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
-        MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION,
-        TOKEN_TRADE_EXPIRATION, TOKEN_CREATED_EXPIRATION,
+        HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION,
+        ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION, TOKEN_CREATED_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -24,6 +24,7 @@ use crate::{
             HypeRewardAddHistoryResponse, HypeTokenResponse,
             HypeVoteHistoryResponse,
         },
+        leaderboard::HypePointLeaderboardResponse,
         metadata::TerminalMetadataResponse,
         profile::PointHistoryResponse,
         new_event::NewEventResponse,
@@ -1365,5 +1366,69 @@ impl RedisDatabase {
             }
             None => Ok(None),
         }
+    }
+}
+
+// Leaderboard cache
+impl RedisDatabase {
+    /// Get KST period key (morning: 0-12, afternoon: 12-24)
+    fn get_kst_period_key() -> String {
+        use chrono::{Timelike, Utc};
+        let now = Utc::now();
+        let kst_hour = (now.hour() + 9) % 24;
+        let period = if kst_hour < 12 { "morning" } else { "afternoon" };
+        // Adjust date for KST (if UTC hour + 9 >= 24, it's next day in KST)
+        let kst_date = if now.hour() + 9 >= 24 {
+            (now + chrono::Duration::days(1)).format("%Y-%m-%d")
+        } else {
+            now.format("%Y-%m-%d")
+        };
+        format!("{}_{}", kst_date, period)
+    }
+
+    pub async fn set_hype_point_leaderboard_response(
+        &self,
+        limit: i64,
+        offset: i64,
+        response: &HypePointLeaderboardResponse,
+    ) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let period = Self::get_kst_period_key();
+        let key = format!("leaderboard:hype_point:{}:limit:{}:offset:{}", period, limit, offset);
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_hype_point_leaderboard_response",
+            conn.pset_ex::<String, String, ()>(key, json, *HYPE_LEADERBOARD_RESPONSE_EXPIRATION)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_hype_point_leaderboard_response(limit: {}, offset: {}) completed in {:?}",
+            limit, offset, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_hype_point_leaderboard_response(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<HypePointLeaderboardResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let period = Self::get_kst_period_key();
+        let key = format!("leaderboard:hype_point:{}:limit:{}:offset:{}", period, limit, offset);
+        let response_json: String = measure_redis!(
+            "redis.get_hype_point_leaderboard_response",
+            conn.get::<_, String>(key)
+        )?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_hype_point_leaderboard_response(limit: {}, offset: {}) completed in {:?}",
+            limit, offset, elapsed
+        );
+        let response: HypePointLeaderboardResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
     }
 }

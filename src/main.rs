@@ -3,8 +3,8 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, terminal, health, hype, metadata, metrics, new_event, order, profile,
-        raffle, search, token, trade, trend,
+        self, account, auth, terminal, health, hype, leaderboard, metadata, metrics, new_event,
+        order, profile, raffle, search, token, trade, trend,
     },
     state::AppState,
     types,
@@ -116,6 +116,9 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------Trend----------------
         router::trend::handler::get_trend,
         router::trend::handler::insert_trend,
+
+        // ----------------Leaderboard----------------
+        router::leaderboard::handler::get_hype_point_leaderboard,
 
     ),
     components(
@@ -248,6 +251,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::trend::TrendRequest,
             types::trend::TrendActionResponse,
 
+            // Leaderboard
+            types::leaderboard::HypePointLeaderboardEntry,
+            types::leaderboard::HypePointLeaderboardResponse,
+            types::leaderboard::LeaderboardQuery,
+
         )
     ),
     tags(
@@ -264,6 +272,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Metadata",description="Metadata upload endpoints"),
         (name="Terminal",description="Gecko Terminal API endpoints"),
         (name="Trend",description="Trend token endpoints"),
+        (name="Leaderboard",description="Leaderboard endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -322,6 +331,7 @@ async fn main() -> Result<()> {
         .merge(metrics::router())
         .merge(terminal::router())
         .merge(trend::router(app_state.clone()))
+        .merge(leaderboard::router())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
