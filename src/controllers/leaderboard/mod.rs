@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
+use bigdecimal::BigDecimal;
 
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::{CountRow, info::AccountInfo},
+        common::info::AccountInfo,
         leaderboard::{HypePointLeaderboardEntry, HypePointLeaderboardResponse, LeaderboardQuery},
     },
 };
@@ -19,6 +20,8 @@ struct HypePointLeaderboardRow {
     bio: String,
     image_uri: String,
     hype_point: i64,
+    total_count: i64,
+    total_hype_point: BigDecimal,
 }
 
 pub struct LeaderboardController {
@@ -37,55 +40,46 @@ impl LeaderboardController {
         let limit = query.limit.unwrap_or(10).min(100);
         let offset = query.offset.unwrap_or(0);
 
-        let rows_future = async {
-            measure_postgres!(
-                "leaderboard.get_hype_point_leaderboard.rows",
-                sqlx::query_as::<_, HypePointLeaderboardRow>(
-                    r#"
+        let rows = measure_postgres!(
+            "leaderboard.get_hype_point_leaderboard",
+            sqlx::query_as::<_, HypePointLeaderboardRow>(
+                r#"
+                WITH stats AS (
                     SELECT
-                        ROW_NUMBER() OVER (ORDER BY p.hype_point DESC) as rank,
-                        a.account_id,
-                        COALESCE(ax.x_handle, a.nickname) as nickname,
-                        a.bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
-                        p.hype_point
-                    FROM point p
-                    JOIN account a ON p.account_id = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    WHERE p.hype_point > 0
-                    ORDER BY p.hype_point DESC
-                    LIMIT $1 OFFSET $2
-                    "#,
+                        (SELECT total_count FROM hype_point_leaderboard_count WHERE id = 1) as total_count,
+                        (SELECT hype_point FROM total_hype_point WHERE id = 1) as total_hype_point
                 )
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(self.db.get_read_pool())
+                SELECT
+                    ROW_NUMBER() OVER (ORDER BY p.hype_point DESC) as rank,
+                    a.account_id,
+                    COALESCE(ax.x_handle, a.nickname) as nickname,
+                    a.bio,
+                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    p.hype_point,
+                    s.total_count,
+                    s.total_hype_point::NUMERIC as total_hype_point
+                FROM point p
+                JOIN account a ON p.account_id = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                CROSS JOIN stats s
+                WHERE p.hype_point > 0
+                ORDER BY p.hype_point DESC
+                LIMIT $1 OFFSET $2
+                "#,
             )
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch hype point leaderboard: {}", err))?;
+
+        let (total_count, total_hype_point) = if let Some(first) = rows.first() {
+            (first.total_count, first.total_hype_point.normalized().to_plain_string())
+        } else {
+            (0, "0".to_string())
         };
 
-        let count_future = async {
-            measure_postgres!(
-                "leaderboard.get_hype_point_leaderboard.count",
-                sqlx::query_as::<_, CountRow>(
-                    r#"
-                    SELECT total_count as count
-                    FROM hype_point_leaderboard_count
-                    WHERE id = 1
-                    "#,
-                )
-                .fetch_one(self.db.get_read_pool())
-            )
-        };
-
-        let (rows_result, count_result) = tokio::join!(rows_future, count_future);
-
-        let rows = rows_result
-            .map_err(|err| anyhow!("Failed to fetch hype point leaderboard: {}", err))?;
-        let total_count = count_result
-            .map_err(|err| anyhow!("Failed to fetch hype point leaderboard count: {}", err))?
-            .count;
-
-        let leaderboard = rows
+        let ranks = rows
             .into_iter()
             .map(|row| HypePointLeaderboardEntry {
                 rank: row.rank + offset,
@@ -100,8 +94,9 @@ impl LeaderboardController {
             .collect();
 
         Ok(HypePointLeaderboardResponse {
-            leaderboard,
+            ranks,
             total_count,
+            total_hype_point,
         })
     }
 }
