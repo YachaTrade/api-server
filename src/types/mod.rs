@@ -7,6 +7,7 @@ pub mod new_event;
 
 pub mod terminal;
 pub mod hype;
+pub mod leaderboard;
 pub mod metadata;
 pub mod profile;
 pub mod raffle;

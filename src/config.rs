@@ -64,6 +64,12 @@ lazy_static! {
         .parse::<u64>()
         .expect("GET_REWARD_ADD_HISTORY_EXPIRATION must be a valid u64");
 
+    // Leaderboard cache expiration (default: 12 hours = 43200000ms)
+    pub static ref HYPE_LEADERBOARD_RESPONSE_EXPIRATION: u64 = env::var("HYPE_LEADERBOARD_RESPONSE_EXPIRATION")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(43200000);
+
     pub static ref NSFW_STATUS_EXPIRATION: u64 = env::var("NSFW_STATUS_EXPIRATION")
         .expect("NSFW_STATUS_EXPIRATION must be set")
         .parse::<u64>()

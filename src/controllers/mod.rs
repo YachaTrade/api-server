@@ -2,6 +2,7 @@ pub mod account;
 pub mod auth;
 pub mod terminal;
 pub mod hype;
+pub mod leaderboard;
 pub mod metadata;
 pub mod new_event;
 pub mod raffle;

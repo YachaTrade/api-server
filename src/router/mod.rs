@@ -14,6 +14,7 @@ pub mod terminal;
 pub mod hype;
 
 pub mod health;
+pub mod leaderboard;
 pub mod metadata;
 pub mod metrics;
 pub mod new_event;
