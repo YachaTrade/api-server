@@ -12,8 +12,9 @@ pub struct HypePointLeaderboardEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypePointLeaderboardResponse {
-    pub leaderboard: Vec<HypePointLeaderboardEntry>,
+    pub ranks: Vec<HypePointLeaderboardEntry>,
     pub total_count: i64,
+    pub total_hype_point: String,
 }
 
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
