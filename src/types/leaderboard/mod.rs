@@ -15,6 +15,7 @@ pub struct HypePointLeaderboardResponse {
     pub ranks: Vec<HypePointLeaderboardEntry>,
     pub total_count: i64,
     pub total_hype_point: String,
+    pub last_updated_at: i64,
 }
 
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]

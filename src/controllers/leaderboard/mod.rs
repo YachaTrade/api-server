@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
@@ -79,6 +80,11 @@ impl LeaderboardController {
             (0, "0".to_string())
         };
 
+        let last_updated_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
         let ranks = rows
             .into_iter()
             .map(|row| HypePointLeaderboardEntry {
@@ -97,6 +103,7 @@ impl LeaderboardController {
             ranks,
             total_count,
             total_hype_point,
+            last_updated_at,
         })
     }
 }
