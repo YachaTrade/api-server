@@ -211,6 +211,7 @@ impl TokenCreatedController {
                     token_website,
                     is_graduated,
                     is_nsfw,
+                    is_cto,
                     token_created_at,
                     creator,
                     holder_count,
