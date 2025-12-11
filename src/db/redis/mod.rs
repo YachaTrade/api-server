@@ -1371,21 +1371,6 @@ impl RedisDatabase {
 
 // Leaderboard cache
 impl RedisDatabase {
-    /// Get KST period key (morning: 0-12, afternoon: 12-24)
-    fn get_kst_period_key() -> String {
-        use chrono::{Timelike, Utc};
-        let now = Utc::now();
-        let kst_hour = (now.hour() + 9) % 24;
-        let period = if kst_hour < 12 { "morning" } else { "afternoon" };
-        // Adjust date for KST (if UTC hour + 9 >= 24, it's next day in KST)
-        let kst_date = if now.hour() + 9 >= 24 {
-            (now + chrono::Duration::days(1)).format("%Y-%m-%d")
-        } else {
-            now.format("%Y-%m-%d")
-        };
-        format!("{}_{}", kst_date, period)
-    }
-
     pub async fn set_hype_point_leaderboard_response(
         &self,
         limit: i64,
@@ -1394,8 +1379,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let period = Self::get_kst_period_key();
-        let key = format!("leaderboard:hype_point:{}:limit:{}:offset:{}", period, limit, offset);
+        let key = format!("leaderboard:hype_point:limit:{}:offset:{}", limit, offset);
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_point_leaderboard_response",
@@ -1417,8 +1401,7 @@ impl RedisDatabase {
     ) -> Result<HypePointLeaderboardResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let period = Self::get_kst_period_key();
-        let key = format!("leaderboard:hype_point:{}:limit:{}:offset:{}", period, limit, offset);
+        let key = format!("leaderboard:hype_point:limit:{}:offset:{}", limit, offset);
         let response_json: String = measure_redis!(
             "redis.get_hype_point_leaderboard_response",
             conn.get::<_, String>(key)
