@@ -110,7 +110,7 @@ impl NewEventController {
 
     async fn fetch_buy_events(&self, limit: i64) -> Result<Vec<NewEvent>> {
         let query = r#"
-            SELECT DISTINCT ON (s.token_id, s.account_id)
+            SELECT
                 s.created_at as swap_created_at,
                 s.native_amount,
                 t.token_id,
@@ -139,8 +139,8 @@ impl NewEventController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN account a2 ON s.account_id = a2.account_id
             LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
-            WHERE s.is_buy = true
-            ORDER BY s.token_id, s.account_id, s.created_at DESC
+            WHERE s.is_buy = true AND s.native_amount >= 1
+            ORDER BY s.created_at DESC
             LIMIT $1
         "#;
 
@@ -190,7 +190,7 @@ impl NewEventController {
 
     async fn fetch_sell_events(&self, limit: i64) -> Result<Vec<NewEvent>> {
         let query = r#"
-            SELECT DISTINCT ON (s.token_id, s.account_id)
+            SELECT
                 s.created_at as swap_created_at,
                 s.native_amount,
                 t.token_id,
@@ -219,8 +219,8 @@ impl NewEventController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN account a2 ON s.account_id = a2.account_id
             LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
-            WHERE s.is_buy = false
-            ORDER BY s.token_id, s.account_id, s.created_at DESC
+            WHERE s.is_buy = false AND s.native_amount >= 1
+            ORDER BY s.created_at DESC
             LIMIT $1
         "#;
 
