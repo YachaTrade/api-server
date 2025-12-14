@@ -13,6 +13,7 @@ pub mod trade;
 pub mod terminal;
 pub mod hype;
 
+pub mod cms;
 pub mod health;
 pub mod leaderboard;
 pub mod metadata;

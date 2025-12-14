@@ -1,19 +1,10 @@
 pub mod handler;
 pub mod path;
 
-use crate::{middleware::authenticate_user, state::AppState};
-use axum::{
-    Router,
-    middleware::from_fn_with_state,
-    routing::{get, post},
-};
+use crate::state::AppState;
+use axum::{Router, routing::get};
 use path::TrendPath;
 
-pub fn router(state: AppState) -> Router<AppState> {
-    Router::new()
-        .route(TrendPath::GetTrend.as_str(), get(handler::get_trend))
-        .route(
-            TrendPath::InsertTrend.as_str(),
-            post(handler::insert_trend).layer(from_fn_with_state(state.clone(), authenticate_user)),
-        )
+pub fn router(_state: AppState) -> Router<AppState> {
+    Router::new().route(TrendPath::GetTrend.as_str(), get(handler::get_trend))
 }

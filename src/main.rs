@@ -3,8 +3,8 @@ use api_server::{
     cors::get_cors,
     middleware::authenticate_user,
     router::{
-        self, account, auth, terminal, health, hype, leaderboard, metadata, metrics, new_event,
-        order, profile, raffle, search, token, trade, trend,
+        self, account, auth, cms, terminal, health, hype, leaderboard, metadata, metrics,
+        new_event, order, profile, raffle, search, token, trade, trend,
     },
     state::AppState,
     types,
@@ -115,10 +115,13 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------Trend----------------
         router::trend::handler::get_trend,
-        router::trend::handler::insert_trend,
 
         // ----------------Leaderboard----------------
         router::leaderboard::handler::get_hype_point_leaderboard,
+
+        // ----------------CMS----------------
+        router::cms::handler::set_nsfw,
+        router::cms::handler::insert_trend,
 
     ),
     components(
@@ -256,6 +259,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::leaderboard::HypePointLeaderboardResponse,
             types::leaderboard::LeaderboardQuery,
 
+            // CMS
+            types::cms::SetNsfwRequest,
+            types::cms::InsertTrendRequest,
+            types::cms::CmsActionResponse,
+
         )
     ),
     tags(
@@ -273,6 +281,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Terminal",description="Gecko Terminal API endpoints"),
         (name="Trend",description="Trend token endpoints"),
         (name="Leaderboard",description="Leaderboard endpoints"),
+        (name="CMS",description="CMS admin endpoints"),
     ),
     security(
         ("session_cookie" = [])
@@ -332,6 +341,7 @@ async fn main() -> Result<()> {
         .merge(terminal::router())
         .merge(trend::router(app_state.clone()))
         .merge(leaderboard::router())
+        .merge(cms::router(app_state.clone()))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
