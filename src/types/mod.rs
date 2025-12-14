@@ -6,6 +6,7 @@ pub mod account;
 pub mod new_event;
 
 pub mod terminal;
+pub mod cms;
 pub mod hype;
 pub mod leaderboard;
 pub mod metadata;
