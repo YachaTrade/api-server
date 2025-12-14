@@ -33,14 +33,10 @@ pub struct RaffleCheckQuery {
 /// Prize amounts by type
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RafflePrizes {
-    /// Total amount won from general monad raffle
-    pub general_monad: String,
-    /// Total amount won from general hype raffle
-    pub general_hype: String,
-    /// Total amount won from monad airdrop monad raffle
-    pub monad_airdrop_monad: String,
-    /// Total amount won from monad airdrop hype raffle
-    pub monad_airdrop_hype: String,
+    /// Total amount won from monad raffle
+    pub total_monad: String,
+    /// Total amount won from hype raffle
+    pub total_hype: String,
 }
 
 /// Round epoch information
