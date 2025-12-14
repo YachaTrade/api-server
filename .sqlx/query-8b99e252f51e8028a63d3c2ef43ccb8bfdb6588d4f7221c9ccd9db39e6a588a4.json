@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    rr.round,\n                    rr.start_at,\n                    rr.end_at,\n                    (SELECT COUNT(*) FROM raffle r WHERE r.round = $1 AND r.account_id = $2) as \"raffle_count!\",\n                    COALESCE(SUM(CASE WHEN rw.type LIKE '%_MONAD' THEN rw.amount ELSE 0 END), 0) as \"total_monad!\",\n                    COALESCE(SUM(CASE WHEN rw.type LIKE '%_HYPE' THEN rw.amount ELSE 0 END), 0) as \"total_hype!\"\n                FROM raffle_round rr\n                LEFT JOIN raffle_winner rw ON rw.round = rr.round AND rw.account_id = $2\n                WHERE rr.round = $1\n                GROUP BY rr.round, rr.start_at, rr.end_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "round",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "start_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "end_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "raffle_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_monad!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_hype!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8b99e252f51e8028a63d3c2ef43ccb8bfdb6588d4f7221c9ccd9db39e6a588a4"
+}

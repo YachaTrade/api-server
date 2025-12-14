@@ -48,10 +48,8 @@ impl RaffleController {
                     rr.start_at,
                     rr.end_at,
                     (SELECT COUNT(*) FROM raffle r WHERE r.round = $1 AND r.account_id = $2) as "raffle_count!",
-                    COALESCE(SUM(CASE WHEN rw.type = 'GENERAL_MONAD' THEN rw.amount ELSE 0 END), 0) as "general_monad!",
-                    COALESCE(SUM(CASE WHEN rw.type = 'GENERAL_HYPE' THEN rw.amount ELSE 0 END), 0) as "general_hype!",
-                    COALESCE(SUM(CASE WHEN rw.type = 'MONAD_AIRDROP_MONAD' THEN rw.amount ELSE 0 END), 0) as "monad_airdrop_monad!",
-                    COALESCE(SUM(CASE WHEN rw.type = 'MONAD_AIRDROP_HYPE' THEN rw.amount ELSE 0 END), 0) as "monad_airdrop_hype!"
+                    COALESCE(SUM(CASE WHEN rw.type LIKE '%_MONAD' THEN rw.amount ELSE 0 END), 0) as "total_monad!",
+                    COALESCE(SUM(CASE WHEN rw.type LIKE '%_HYPE' THEN rw.amount ELSE 0 END), 0) as "total_hype!"
                 FROM raffle_round rr
                 LEFT JOIN raffle_winner rw ON rw.round = rr.round AND rw.account_id = $2
                 WHERE rr.round = $1
@@ -73,10 +71,8 @@ impl RaffleController {
             },
             account_id: account_id.to_string(),
             prizes: RafflePrizes {
-                general_monad: result.general_monad.normalized().to_plain_string(),
-                general_hype: result.general_hype.normalized().to_plain_string(),
-                monad_airdrop_monad: result.monad_airdrop_monad.normalized().to_plain_string(),
-                monad_airdrop_hype: result.monad_airdrop_hype.normalized().to_plain_string(),
+                total_monad: result.total_monad.normalized().to_plain_string(),
+                total_hype: result.total_hype.normalized().to_plain_string(),
             },
         })
     }
