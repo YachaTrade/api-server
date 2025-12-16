@@ -77,12 +77,20 @@ pub struct MarketInfo {
     pub native_price: String,
     /// MON/Token price
     pub price: String,
+    /// USD/Token price
+    pub price_usd: String,
+    /// MON/Token price
+    pub price_native: String,
     /// Total supply (used for market cap calculation in bonding curve)
     pub total_supply: String,
     /// Volume (used for tokne total volume)
     pub volume: String,
-    // Ath price
+    // Ath price(USD)
     pub ath_price: String,
+    /// Ath price(USD)
+    pub ath_price_usd: String,
+    //Ath price(Native)
+    pub ath_price_native: String,
     /// Holder count (used for tokne total holder count)
     pub holder_count: i64,
 }

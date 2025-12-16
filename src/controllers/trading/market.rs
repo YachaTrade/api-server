@@ -23,12 +23,14 @@ struct MarketRow {
     token_price: BigDecimal,
     native_price: BigDecimal,
     price: BigDecimal,
+    price_usd: BigDecimal,
     total_supply: BigDecimal,
     reserve_native: BigDecimal,
     reserve_token: BigDecimal,
     volume: BigDecimal,
     holder_count: i64,
     ath_price: BigDecimal,
+    ath_price_native: BigDecimal,
 }
 
 pub struct MarketController {
@@ -69,12 +71,14 @@ impl MarketController {
                     (m.price * COALESCE(lp.price, 0)) as token_price,
                     COALESCE(lp.price, 0) as native_price,
                     m.price,
+                    (m.price * COALESCE(lp.price, 0)) as price_usd,
                     t.total_supply,
                     COALESCE(m.reserve_native, 0) as reserve_native,
-                COALESCE(m.reserve_token, 0) as reserve_token,
+                    COALESCE(m.reserve_token, 0) as reserve_token,
                     m.volume,
                     t.token_holder_count as holder_count,
-                    m.ath_price
+                    m.ath_price,
+                    m.ath_price_native
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 CROSS JOIN latest_price lp
@@ -103,12 +107,16 @@ impl MarketController {
                 token_price: row.token_price.normalized().to_plain_string(),
                 native_price: row.native_price.normalized().to_plain_string(),
                 price: row.price.normalized().to_plain_string(),
+                price_usd: row.price_usd.normalized().to_plain_string(),
+                price_native: row.price.normalized().to_plain_string(),
                 total_supply: row.total_supply.normalized().to_plain_string(),
                 reserve_native: row.reserve_native.normalized().to_plain_string(),
                 reserve_token: row.reserve_token.normalized().to_plain_string(),
                 volume: row.volume.normalized().to_plain_string(),
                 holder_count: row.holder_count,
                 ath_price: row.ath_price.normalized().to_plain_string(),
+                ath_price_usd: row.ath_price.normalized().to_plain_string(),
+                ath_price_native: row.ath_price_native.normalized().to_plain_string(),
             },
         })
     }
