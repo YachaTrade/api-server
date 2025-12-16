@@ -208,11 +208,13 @@ impl PositionController {
             market_type: String,
             market_id: String,
             price: BigDecimal,
+            price_usd: BigDecimal,
             total_supply: BigDecimal,
             reserve_native: BigDecimal,
             reserve_token: BigDecimal,
             volume: BigDecimal,
             ath_price: BigDecimal,
+            ath_price_native: BigDecimal,
             holder_count: i64,
         }
 
@@ -250,11 +252,13 @@ impl PositionController {
                     m.market_type,
                     COALESCE(m.pool_id, '') as market_id,
                     m.price,
+                    (m.price * COALESCE(lp.price, 0)) as price_usd,
                     t.total_supply,
                     COALESCE(m.reserve_native, 0) as reserve_native,
                     COALESCE(m.reserve_token, 0) as reserve_token,
                     m.volume,
                     m.ath_price,
+                    m.ath_price_native,
                     t.token_holder_count as holder_count
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
@@ -326,11 +330,15 @@ impl PositionController {
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),
                         price: row.price.normalized().to_plain_string(),
+                        price_usd: row.price_usd.normalized().to_plain_string(),
+                        price_native: row.price.normalized().to_plain_string(),
                         total_supply: row.total_supply.normalized().to_plain_string(),
                         reserve_native: row.reserve_native.normalized().to_plain_string(),
                         reserve_token: row.reserve_token.normalized().to_plain_string(),
                         volume: row.volume.normalized().to_plain_string(),
                         ath_price: row.ath_price.normalized().to_plain_string(),
+                        ath_price_usd: row.ath_price.normalized().to_plain_string(),
+                        ath_price_native: row.ath_price_native.normalized().to_plain_string(),
                         holder_count: row.holder_count,
                     },
                 }
