@@ -187,12 +187,12 @@ impl MetricsController {
                     (SELECT price
                      FROM price_history
                      WHERE token_id = $1 AND created_at <= $2
-                     ORDER BY created_at DESC, tx_index DESC, log_index DESC
+                     ORDER BY created_at DESC, block_number DESC, tx_index DESC, log_index DESC
                      LIMIT 1),
                     (SELECT price
                      FROM price_history
                      WHERE token_id = $1
-                     ORDER BY created_at ASC, tx_index ASC, log_index ASC
+                     ORDER BY created_at ASC, block_number ASC, tx_index ASC, log_index ASC
                      LIMIT 1)
                 ) as price
                 "#,
@@ -210,7 +210,7 @@ impl MetricsController {
                 SELECT price
                 FROM price_history
                 WHERE token_id = $1
-                ORDER BY created_at DESC, tx_index DESC, log_index DESC
+                ORDER BY created_at DESC, block_number DESC, tx_index DESC, log_index DESC
                 LIMIT 1
                 "#,
                 token_id
