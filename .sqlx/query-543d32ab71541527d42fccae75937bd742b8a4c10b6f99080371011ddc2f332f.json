@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT price\n                FROM price_history\n                WHERE token_id = $1\n                ORDER BY created_at DESC, block_number DESC, tx_index DESC, log_index DESC\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "price",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "543d32ab71541527d42fccae75937bd742b8a4c10b6f99080371011ddc2f332f"
+}
