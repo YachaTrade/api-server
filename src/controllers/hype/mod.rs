@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
