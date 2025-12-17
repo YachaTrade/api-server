@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
+use alloy::primitives::Address;
 use chrono::Timelike;
 use tracing::error;
 
@@ -235,6 +236,22 @@ impl HypeService {
         account_id: &str,
         payload: &HypeVoteRequest,
     ) -> Result<HypeVoteResponse, AppError> {
+        // Validate amount is positive
+        let amount = payload
+            .amount
+            .parse::<i64>()
+            .map_err(|_| AppError::BadRequest("Invalid amount format".to_string()))?;
+
+        if amount <= 0 {
+            return Err(AppError::BadRequest(
+                "Vote amount must be greater than 0".to_string(),
+            ));
+        }
+
+        // Validate token_id is a valid EVM address
+        Address::from_str(&payload.token_id)
+            .map_err(|_| AppError::BadRequest("Invalid token_id format".to_string()))?;
+
         let controller = HypeController::new(self.postgres.clone());
 
         let active_epoch = controller.get_active_epoch().await.map_err(|err| {

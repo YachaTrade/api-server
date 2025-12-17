@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
@@ -902,6 +902,7 @@ impl HypeController {
         account_id: &str,
         payload: &HypeVoteRequest,
     ) -> Result<HypeVoteResponse> {
+        // Amount validation is done in service layer
         let amount = payload
             .amount
             .parse::<i64>()
@@ -916,7 +917,13 @@ impl HypeController {
 
         let result = sqlx::query_as::<_, VoteResult>(
             r#"
-            WITH vote_history_insert AS (
+            WITH locked_point AS (
+                SELECT round_point, hype_point
+                FROM point
+                WHERE account_id = $1
+                FOR UPDATE
+            ),
+            vote_history_insert AS (
                 INSERT INTO vote_history (epoch, token_id, account_id, vote, total_vote_amount)
                 SELECT
                     (SELECT epoch FROM epoch WHERE status = 'ACTIVE'),
@@ -926,7 +933,7 @@ impl HypeController {
                     (SELECT vote + $3 FROM hype_token
                      WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
                      AND token_id = $2)
-                WHERE (SELECT round_point FROM point WHERE account_id = $1) >= $3
+                WHERE (SELECT round_point FROM locked_point) >= $3
                 RETURNING id
             ),
             point_update AS (

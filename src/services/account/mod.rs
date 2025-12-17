@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
+
+use alloy::primitives::Address;
 
 use crate::{
     controllers::account::{wallet::WalletController, x::AccountXController, AccountController},
@@ -102,6 +104,10 @@ impl AccountService {
         account_id: String,
         req: RegisterWalletRequest,
     ) -> Result<AccountResponse, AppError> {
+        // Validate wallet is a valid EVM address
+        Address::from_str(&req.wallet)
+            .map_err(|_| AppError::BadRequest("Invalid wallet address format".to_string()))?;
+
         let controller = WalletController::new(self.postgres.clone());
         controller
             .register_wallet(account_id.clone(), req.wallet)
