@@ -1,7 +1,9 @@
 use std::{env, str::FromStr, sync::Arc};
 
-use alloy::{primitives::Address, signers::Signature};
-use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use alloy::{
+    primitives::{Address, keccak256},
+    signers::Signature,
+};
 use chrono::Utc;
 use tokio::try_join;
 use uuid::Uuid;
@@ -158,11 +160,9 @@ impl AuthService {
             .as_nanos();
 
         let combined = format!("{}-{}-{}-{}", address, timestamp, uuid, message);
+        let hash = keccak256(combined.as_bytes());
 
-        BASE64_STANDARD
-            .encode(combined.as_bytes())
-            .chars()
-            .take(32)
-            .collect()
+        // keccak256 = 32 bytes = 64 hex chars, take first 32
+        hex::encode(hash)[..32].to_string()
     }
 }
