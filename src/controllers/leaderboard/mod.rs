@@ -38,8 +38,8 @@ impl LeaderboardController {
         &self,
         query: &LeaderboardQuery,
     ) -> Result<HypePointLeaderboardResponse> {
-        let limit = query.limit.unwrap_or(10).min(100);
-        let offset = query.offset.unwrap_or(0);
+        let limit = query.limit;
+        let offset = query.offset;
 
         let rows = measure_postgres!(
             "leaderboard.get_hype_point_leaderboard",

@@ -109,6 +109,33 @@ impl RedisDatabase {
         }
     }
 
+    /// Atomically get and delete sign message to prevent nonce reuse attacks
+    pub async fn get_and_delete_sign_message(&self, address: &str) -> Result<String> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+
+        let key = format!("session:{}:message", address);
+
+        // Use GETDEL for atomic get-and-delete operation
+        let message: Option<String> = measure_redis!(
+            "redis.get_and_delete_sign_message",
+            redis::cmd("GETDEL")
+                .arg(&key)
+                .query_async(&mut conn)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_and_delete_sign_message(address: {}) completed in {:?}",
+            address, elapsed
+        );
+
+        match message {
+            Some(message) => Ok(message),
+            None => Err(anyhow::anyhow!("Message not found or already used")),
+        }
+    }
+
     pub async fn delete_sign_message(&self, address: &str) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();

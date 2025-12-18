@@ -1,7 +1,7 @@
 use crate::{
     types::common::{
         info::{AccountInfo, TokenInfo},
-        pagination::{default_direction, default_page, deserialize_limit, validate_direction, DEFAULT_LIMIT},
+        pagination::{default_direction, default_page, deserialize_limit, deserialize_page, validate_direction, DEFAULT_LIMIT},
     },
     utils::valid_evm_address,
 };
@@ -76,7 +76,7 @@ fn default_swap_limit() -> i64 {
 #[derive(Debug, Clone, Deserialize, ToSchema, Default)]
 pub struct SwapQuery {
     // PaginationParams fields
-    #[serde(default = "default_page")]
+    #[serde(default = "default_page", deserialize_with = "deserialize_page")]
     pub page: i64,
     #[serde(default = "default_swap_limit", deserialize_with = "deserialize_limit")]
     pub limit: i64,

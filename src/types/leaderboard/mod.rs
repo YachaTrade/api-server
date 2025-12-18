@@ -1,7 +1,18 @@
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use crate::types::common::info::AccountInfo;
+use crate::types::common::{
+    info::AccountInfo,
+    pagination::{deserialize_limit, deserialize_offset},
+};
+
+fn default_leaderboard_limit() -> i64 {
+    10
+}
+
+fn default_offset() -> i64 {
+    0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HypePointLeaderboardEntry {
@@ -21,7 +32,9 @@ pub struct HypePointLeaderboardResponse {
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct LeaderboardQuery {
     #[param(default = 10, minimum = 1, maximum = 100)]
-    pub limit: Option<i64>,
+    #[serde(default = "default_leaderboard_limit", deserialize_with = "deserialize_limit")]
+    pub limit: i64,
     #[param(default = 0, minimum = 0)]
-    pub offset: Option<i64>,
+    #[serde(default = "default_offset", deserialize_with = "deserialize_offset")]
+    pub offset: i64,
 }

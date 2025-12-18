@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
+
+use alloy::primitives::Address;
 
 use crate::{
     controllers::cms::CmsController,
@@ -23,20 +25,24 @@ impl CmsService {
         session_address: &str,
         request: SetNsfwRequest,
     ) -> Result<CmsActionResponse, AppError> {
+        // Validate token_id is a valid EVM address
+        Address::from_str(&request.token_id)
+            .map_err(|_| AppError::BadRequest("Invalid token_id format".to_string()))?;
+
         let controller = CmsController::new(self.postgres.clone());
 
-        // Check if user is admin
-        let is_admin = controller.is_admin(session_address).await.map_err(|err| {
-            AppError::InternalError(format!("Failed to check admin status: {}", err))
-        })?;
-
-        if !is_admin {
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-
-        let response = controller.set_nsfw(request).await.map_err(|err| {
-            AppError::InternalError(format!("Failed to set nsfw: {}", err))
-        })?;
+        // Use atomic admin check + operation to prevent TOCTOU attacks
+        let response = controller
+            .set_nsfw_with_admin_check(session_address, request)
+            .await
+            .map_err(|err| {
+                let err_msg = err.to_string();
+                if err_msg.contains("Admin access required") {
+                    AppError::AuthError("Admin access required".to_string())
+                } else {
+                    AppError::InternalError(format!("Failed to set nsfw: {}", err))
+                }
+            })?;
 
         Ok(response)
     }
@@ -46,20 +52,26 @@ impl CmsService {
         session_address: &str,
         request: InsertTrendRequest,
     ) -> Result<CmsActionResponse, AppError> {
-        let controller = CmsController::new(self.postgres.clone());
-
-        // Check if user is admin
-        let is_admin = controller.is_admin(session_address).await.map_err(|err| {
-            AppError::InternalError(format!("Failed to check admin status: {}", err))
-        })?;
-
-        if !is_admin {
-            return Err(AppError::AuthError("Admin access required".to_string()));
+        // Validate all token_ids are valid EVM addresses
+        for token_id in &request.token_ids {
+            Address::from_str(token_id)
+                .map_err(|_| AppError::BadRequest(format!("Invalid token_id format: {}", token_id)))?;
         }
 
-        let response = controller.insert_trend(request).await.map_err(|err| {
-            AppError::InternalError(format!("Failed to insert trend: {}", err))
-        })?;
+        let controller = CmsController::new(self.postgres.clone());
+
+        // Use atomic admin check + operation to prevent TOCTOU attacks
+        let response = controller
+            .insert_trend_with_admin_check(session_address, request)
+            .await
+            .map_err(|err| {
+                let err_msg = err.to_string();
+                if err_msg.contains("Admin access required") {
+                    AppError::AuthError("Admin access required".to_string())
+                } else {
+                    AppError::InternalError(format!("Failed to insert trend: {}", err))
+                }
+            })?;
 
         // Invalidate trend cache
         self.invalidate_trend_cache().await;

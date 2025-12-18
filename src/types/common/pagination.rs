@@ -46,20 +46,42 @@ fn default_limit() -> i64 {
     DEFAULT_LIMIT
 }
 
+/// Validate and deserialize page (minimum 1)
+pub fn deserialize_page<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = i64::deserialize(deserializer)?;
+    if value < 1 {
+        Err(serde::de::Error::custom("Invalid page: must be at least 1"))
+    } else {
+        Ok(value)
+    }
+}
+
+/// Validate and deserialize offset (non-negative)
+pub fn deserialize_offset<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = i64::deserialize(deserializer)?;
+    if value < 0 {
+        Err(serde::de::Error::custom(
+            "Invalid offset: must be non-negative",
+        ))
+    } else {
+        Ok(value)
+    }
+}
+
 #[derive(Clone, Deserialize, ToSchema, Debug)]
 pub struct PaginationParams {
-    #[serde(default = "default_page")]
+    #[serde(default = "default_page", deserialize_with = "deserialize_page")]
     pub page: i64,
     #[serde(default = "default_limit", deserialize_with = "deserialize_limit")]
     pub limit: i64,
     #[serde(default = "default_direction", deserialize_with = "validate_direction")]
     pub direction: String,
-}
-
-impl PaginationParams {
-    pub fn is_reverse_order(&self) -> bool {
-        self.page < 0
-    }
 }
 
 pub fn default_direction() -> String {

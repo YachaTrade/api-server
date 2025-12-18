@@ -915,25 +915,35 @@ impl HypeController {
             new_vote: BigDecimal,
         }
 
+        // Lock both point and hype_token rows to prevent race conditions
         let result = sqlx::query_as::<_, VoteResult>(
             r#"
-            WITH locked_point AS (
+            WITH active_epoch AS (
+                SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1
+            ),
+            locked_point AS (
                 SELECT round_point, hype_point
                 FROM point
                 WHERE account_id = $1
                 FOR UPDATE
             ),
+            locked_hype_token AS (
+                SELECT vote
+                FROM hype_token
+                WHERE epoch = (SELECT epoch FROM active_epoch)
+                AND token_id = $2
+                FOR UPDATE
+            ),
             vote_history_insert AS (
                 INSERT INTO vote_history (epoch, token_id, account_id, vote, total_vote_amount)
                 SELECT
-                    (SELECT epoch FROM epoch WHERE status = 'ACTIVE'),
+                    (SELECT epoch FROM active_epoch),
                     $2,
                     $1,
                     $3,
-                    (SELECT vote + $3 FROM hype_token
-                     WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
-                     AND token_id = $2)
+                    (SELECT vote + $3 FROM locked_hype_token)
                 WHERE (SELECT round_point FROM locked_point) >= $3
+                AND EXISTS (SELECT 1 FROM locked_hype_token)
                 RETURNING id
             ),
             point_update AS (
@@ -946,7 +956,7 @@ impl HypeController {
             vote_update AS (
                 UPDATE hype_token
                 SET vote = vote + $3
-                WHERE epoch = (SELECT epoch FROM epoch WHERE status = 'ACTIVE')
+                WHERE epoch = (SELECT epoch FROM active_epoch)
                 AND token_id = $2
                 AND EXISTS (SELECT 1 FROM vote_history_insert)
                 RETURNING vote as new_vote
