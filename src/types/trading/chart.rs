@@ -44,7 +44,7 @@ pub struct GetBarsRequest {
     pub from: i64, // 시작 타임스탬프 (초 단위)
     pub to: i64,   // 끝 타임스탬프 (초 단위)
     #[serde(default = "default_countback", deserialize_with = "deserialize_chart_limit")]
-    pub countback: i32, // 반환할 최대 캔들 수 (최대 1000)
+    pub countback: i32, // 반환할 최대 캔들 수 (최대 2000)
     #[serde(default)]
     pub chart_type: ChartType, // 차트 타입 (price, price_usd, market_cap, market_cap_usd)
 }
