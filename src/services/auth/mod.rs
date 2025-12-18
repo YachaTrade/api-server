@@ -75,8 +75,10 @@ impl AuthService {
             .await?;
         let redis = self.redis.clone();
 
+        // Use atomic GETDEL to prevent nonce reuse attacks
+        // This ensures the nonce can only be used once even with concurrent requests
         let sign_message = redis
-            .get_sign_message(&address)
+            .get_and_delete_sign_message(&address)
             .await
             .map_err(|err| AppError::RedisError(err.to_string()))?;
 
@@ -89,20 +91,14 @@ impl AuthService {
         let postgres = self.postgres.clone();
         let session_controller = SessionController::new(postgres.clone());
 
-        let delete_nonce_future = redis.delete_sign_message(&address);
         let set_session_future = redis.set_session(&session_id, &address, *EXPIRATION_SESSION_KEY);
 
-        let (account_info, _, _) = try_join!(
+        let (account_info, _) = try_join!(
             async {
                 session_controller
                     .set_session(&session_id, &address)
                     .await
                     .map_err(|err| AppError::InternalError(err.to_string()))
-            },
-            async {
-                delete_nonce_future
-                    .await
-                    .map_err(|err| AppError::RedisError(err.to_string()))
             },
             async {
                 set_session_future

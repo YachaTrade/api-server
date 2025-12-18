@@ -29,23 +29,60 @@ impl CmsController {
         Ok(result > 0)
     }
 
-    pub async fn set_nsfw(&self, request: SetNsfwRequest) -> Result<CmsActionResponse> {
-        measure_postgres!(
-            "cms.set_nsfw",
-            sqlx::query("UPDATE token SET is_nsfw = $1 WHERE token_id = $2")
-                .bind(request.is_nsfw)
-                .bind(&request.token_id)
-                .execute(self.db.get_write_pool())
+    /// Set NSFW status with admin check in a single transaction to prevent TOCTOU attacks
+    pub async fn set_nsfw_with_admin_check(
+        &self,
+        account_id: &str,
+        request: SetNsfwRequest,
+    ) -> Result<CmsActionResponse> {
+        // Use a single query that checks admin and updates in one atomic operation
+        let result = measure_postgres!(
+            "cms.set_nsfw_with_admin_check",
+            sqlx::query(
+                r#"
+                UPDATE token SET is_nsfw = $1
+                WHERE token_id = $2
+                AND EXISTS (SELECT 1 FROM admin WHERE account_id = $3)
+                "#
+            )
+            .bind(request.is_nsfw)
+            .bind(&request.token_id)
+            .bind(account_id)
+            .execute(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to set nsfw: {}", err))?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow!("Admin access required or token not found"));
+        }
 
         Ok(CmsActionResponse { success: true })
     }
 
-    pub async fn insert_trend(&self, request: InsertTrendRequest) -> Result<CmsActionResponse> {
+    /// Insert trends with admin check in a single transaction to prevent TOCTOU attacks
+    pub async fn insert_trend_with_admin_check(
+        &self,
+        account_id: &str,
+        request: InsertTrendRequest,
+    ) -> Result<CmsActionResponse> {
         // Start transaction
         let mut tx = self.db.get_write_pool().begin().await
             .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
+
+        // Verify admin status with FOR UPDATE to lock the row during transaction
+        let is_admin = measure_postgres!(
+            "cms.trend.verify_admin",
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM admin WHERE account_id = $1 FOR UPDATE"
+            )
+            .bind(account_id)
+            .fetch_one(&mut *tx)
+        )
+        .map_err(|err| anyhow!("Failed to verify admin status: {}", err))?;
+
+        if is_admin == 0 {
+            return Err(anyhow!("Admin access required"));
+        }
 
         // Delete all existing trends
         measure_postgres!(

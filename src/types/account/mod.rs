@@ -85,6 +85,15 @@ pub struct UpdateXRequest {
     pub x_image_uri: String,
 }
 
+impl UpdateXRequest {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.x_image_uri.len() > MAX_IMAGE_URI_LENGTH {
+            return Err(format!("x_image_uri must be at most {} characters", MAX_IMAGE_URI_LENGTH));
+        }
+        Ok(())
+    }
+}
+
 // ==================== Upload Image Response ====================
 
 #[derive(Debug, Serialize, ToSchema)]

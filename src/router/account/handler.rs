@@ -147,6 +147,11 @@ pub async fn update_x(
     Extension(session_address): Extension<String>,
     Json(payload): Json<UpdateXRequest>,
 ) -> AppJsonResult<AccountResponse> {
+    payload.validate().map_err(|e| {
+        error!("Invalid update_x request: {}", e);
+        AppError::BadRequest(e)
+    })?;
+
     let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.update_x(session_address, payload).await?;
     Ok(Json(response))

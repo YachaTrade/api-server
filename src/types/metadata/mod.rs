@@ -3,6 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use utoipa::ToSchema;
 
+// Validation constants
+pub const MIN_NAME_LENGTH: usize = 1;
+pub const MAX_NAME_LENGTH: usize = 32;
+pub const MIN_SYMBOL_LENGTH: usize = 1;
+pub const MAX_SYMBOL_LENGTH: usize = 10;
+pub const MAX_DESCRIPTION_LENGTH: usize = 500;
+
 #[derive(ToSchema)]
 pub struct UploadImageMultipart {
     /// Image file to upload (JPEG, PNG, WebP, SVG)
@@ -48,62 +55,52 @@ pub struct TokenMetadata {
 impl TokenMetadata {
     /// Validate all metadata fields
     pub fn validate(&self) -> Result<(), AppError> {
-        // Validate website URL - HTTPS only for security
-        if let Some(website_url) = &self.website {
-            if !website_url.is_empty() {
-                if !website_url.starts_with("https://") {
-                    return Err(AppError::BadRequest(
-                        "Invalid website URL format - must start with https://".to_string(),
-                    ));
-                }
-            }
-        }
-
-        // Validate Twitter URL (X) - HTTPS only for security
-        if let Some(twitter_url) = &self.twitter {
-            if !twitter_url.is_empty() {
-                if !twitter_url.contains("x.com") {
-                    return Err(AppError::BadRequest(
-                        "Invalid X (Twitter) URL format - must contain x.com".to_string(),
-                    ));
-                }
-                if !twitter_url.starts_with("https://") {
-                    return Err(AppError::BadRequest(
-                        "Invalid X (Twitter) URL format - must start with https://".to_string(),
-                    ));
-                }
-            }
-        }
-
-        // Validate Telegram URL - HTTPS only for security
-        if let Some(telegram_url) = &self.telegram {
-            if !telegram_url.is_empty() {
-                if !telegram_url.contains("t.me") {
-                    return Err(AppError::BadRequest(
-                        "Invalid Telegram URL format - must contain t.me".to_string(),
-                    ));
-                }
-                if !telegram_url.starts_with("https://") {
-                    return Err(AppError::BadRequest(
-                        "Invalid Telegram URL format - must start with https://".to_string(),
-                    ));
-                }
-            }
-        }
-
-        // Validate required fields are not empty
-        if self.name.trim().is_empty() {
+        // Validate name: 1-32 chars, no newlines
+        let name = self.name.trim();
+        if name.len() < MIN_NAME_LENGTH {
             return Err(AppError::BadRequest(
-                "Token name cannot be empty".to_string(),
+                format!("Token name must be at least {} character", MIN_NAME_LENGTH),
+            ));
+        }
+        if name.len() > MAX_NAME_LENGTH {
+            return Err(AppError::BadRequest(
+                format!("Token name must be at most {} characters", MAX_NAME_LENGTH),
+            ));
+        }
+        if name.contains('\n') || name.contains('\r') {
+            return Err(AppError::BadRequest(
+                "Token name cannot contain newlines".to_string(),
             ));
         }
 
-        if self.symbol.trim().is_empty() {
+        // Validate symbol: 1-10 chars, alphanumeric only
+        let symbol = self.symbol.trim();
+        if symbol.len() < MIN_SYMBOL_LENGTH {
             return Err(AppError::BadRequest(
-                "Token symbol cannot be empty".to_string(),
+                format!("Token symbol must be at least {} character", MIN_SYMBOL_LENGTH),
+            ));
+        }
+        if symbol.len() > MAX_SYMBOL_LENGTH {
+            return Err(AppError::BadRequest(
+                format!("Token symbol must be at most {} characters", MAX_SYMBOL_LENGTH),
+            ));
+        }
+        if !symbol.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(AppError::BadRequest(
+                "Token symbol must contain only letters and numbers".to_string(),
             ));
         }
 
+        // Validate description: max 500 chars (optional)
+        if let Some(ref desc) = self.description {
+            if desc.len() > MAX_DESCRIPTION_LENGTH {
+                return Err(AppError::BadRequest(
+                    format!("Description must be at most {} characters", MAX_DESCRIPTION_LENGTH),
+                ));
+            }
+        }
+
+        // Validate image_uri is not empty
         if self.image_uri.trim().is_empty() {
             return Err(AppError::BadRequest(
                 "Image URI cannot be empty".to_string(),
@@ -119,6 +116,33 @@ impl TokenMetadata {
                 "Invalid image URI - must be from {}",
                 allowed_image_domain
             )));
+        }
+
+        // Validate website URL - must start with https://
+        if let Some(website_url) = &self.website {
+            if !website_url.is_empty() && !website_url.starts_with("https://") {
+                return Err(AppError::BadRequest(
+                    "Invalid website URL - must start with https://".to_string(),
+                ));
+            }
+        }
+
+        // Validate Twitter URL - must start with https://x.com/
+        if let Some(twitter_url) = &self.twitter {
+            if !twitter_url.is_empty() && !twitter_url.starts_with("https://x.com/") {
+                return Err(AppError::BadRequest(
+                    "Invalid X (Twitter) URL - must start with https://x.com/".to_string(),
+                ));
+            }
+        }
+
+        // Validate Telegram URL - must start with https://t.me/
+        if let Some(telegram_url) = &self.telegram {
+            if !telegram_url.is_empty() && !telegram_url.starts_with("https://t.me/") {
+                return Err(AppError::BadRequest(
+                    "Invalid Telegram URL - must start with https://t.me/".to_string(),
+                ));
+            }
         }
 
         Ok(())

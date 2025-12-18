@@ -23,12 +23,9 @@ impl LeaderboardService {
         &self,
         query: &LeaderboardQuery,
     ) -> Result<HypePointLeaderboardResponse, AppError> {
-        let limit = query.limit.unwrap_or(10);
-        let offset = query.offset.unwrap_or(0);
-
         if let Ok(cached) = self
             .redis
-            .get_hype_point_leaderboard_response(limit, offset)
+            .get_hype_point_leaderboard_response(query.limit, query.offset)
             .await
         {
             return Ok(cached);
@@ -44,7 +41,7 @@ impl LeaderboardService {
 
         if let Err(err) = self
             .redis
-            .set_hype_point_leaderboard_response(limit, offset, &response)
+            .set_hype_point_leaderboard_response(query.limit, query.offset, &response)
             .await
         {
             error!("Failed to set hype point leaderboard response: {}", err);

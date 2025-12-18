@@ -95,7 +95,7 @@ impl OrderController {
         pagination: &PaginationParams,
         is_nsfw: bool,
     ) -> Result<Vec<OrderToken>> {
-        let offset = (pagination.page.abs() - 1) * pagination.limit;
+        let offset = (pagination.page - 1) * pagination.limit;
         let order_direction = &pagination.direction;
 
         let rows = match order_by {

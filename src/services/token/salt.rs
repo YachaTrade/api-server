@@ -85,6 +85,28 @@ impl SaltService {
                 request.creator
             )));
         }
+
+        // Validate name length (1-32 chars)
+        if request.name.is_empty() || request.name.len() > 32 {
+            return Err(AppError::BadRequest(
+                "Token name must be between 1 and 32 characters".to_string(),
+            ));
+        }
+
+        // Validate symbol length (1-10 chars)
+        if request.symbol.is_empty() || request.symbol.len() > 10 {
+            return Err(AppError::BadRequest(
+                "Token symbol must be between 1 and 10 characters".to_string(),
+            ));
+        }
+
+        // Validate metadata_uri length (max 500 chars)
+        if request.metadata_uri.len() > 500 {
+            return Err(AppError::BadRequest(
+                "Metadata URI must be at most 500 characters".to_string(),
+            ));
+        }
+
         Ok(())
     }
 
