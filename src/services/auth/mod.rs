@@ -158,7 +158,7 @@ impl AuthService {
         let combined = format!("{}-{}-{}-{}", address, timestamp, uuid, message);
         let hash = keccak256(combined.as_bytes());
 
-        // keccak256 = 32 bytes = 64 hex chars, take first 32
-        hex::encode(hash)[..32].to_string()
+        // keccak256 = 32 bytes = 64 hex chars (full entropy)
+        hex::encode(hash)
     }
 }

@@ -12,6 +12,7 @@ use tower_cookies::cookie::time::Duration;
 
 use tracing::instrument;
 
+use crate::middleware::SessionInfo;
 use crate::router::auth::path::AuthPath;
 use crate::services::auth::AuthService;
 use crate::types::auth::{AuthNonceRequest, AuthNonceResponse, AuthSessionRequest};
@@ -37,6 +38,8 @@ pub async fn auth_nonce(
     State(state): State<AppState>,
     Json(payload): Json<AuthNonceRequest>,
 ) -> AppJsonResult<AuthNonceResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = AuthService::new(state.postgres.clone(), state.redis.clone());
     let response = service.generate_nonce(payload).await?;
 
@@ -61,10 +64,13 @@ pub async fn auth_session(
     State(state): State<AppState>,
     Json(payload): Json<AuthSessionRequest>,
 ) -> AppResult<impl IntoResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = AuthService::new(state.postgres.clone(), state.redis.clone());
     let (response, session_id) = service.create_session(payload).await?;
 
-    let cookie_name = env::var("COOKIE_NAME").unwrap();
+    let cookie_name = env::var("COOKIE_NAME")
+        .map_err(|_| AppError::InternalError("COOKIE_NAME not configured".to_string()))?;
     // 쿠키 설정
     let mut cookie = Cookie::new(cookie_name, session_id);
     cookie.set_http_only(true);
@@ -87,7 +93,8 @@ pub async fn auth_session(
     let response = Response::builder()
         .header(
             SET_COOKIE,
-            HeaderValue::from_str(&cookie.to_string()).unwrap(),
+            HeaderValue::from_str(&cookie.to_string())
+                .map_err(|e| AppError::InternalError(e.to_string()))?,
         )
         .body(body.into_response())
         .map_err(|e| AppError::InternalError(e.to_string()))?;
@@ -111,10 +118,10 @@ pub async fn auth_session(
 #[instrument(skip(state))]
 pub async fn auth_delete_session(
     State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
+    Extension(session_info): Extension<SessionInfo>,
 ) -> AppResult<impl IntoResponse> {
     let service = AuthService::new(state.postgres.clone(), state.redis.clone());
-    service.delete_session(&session_address).await?;
+    service.delete_session(&session_info.session_id).await?;
 
     // Remove session cookie by setting its expiry to a past date
     let cookie_name = env::var("COOKIE_NAME").unwrap_or_else(|_| "api-session".to_string());

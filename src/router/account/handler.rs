@@ -44,7 +44,12 @@ pub async fn update_account(
     Extension(session_address): Extension<String>,
     Json(payload): Json<UpdateAccountRequest>,
 ) -> AppJsonResult<AccountResponse> {
-    info!("update account: {:?}", payload);
+    info!(
+        "update account: nickname={}, bio={}, image={}",
+        payload.nickname.is_some(),
+        payload.bio.is_some(),
+        payload.image_uri.is_some()
+    );
 
     payload.validate().map_err(|e| {
         error!("Invalid update account request: {}", e);
@@ -175,6 +180,8 @@ pub async fn register_wallet(
     Extension(session_address): Extension<String>,
     Json(payload): Json<RegisterWalletRequest>,
 ) -> AppJsonResult<AccountResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.register_wallet(session_address, payload).await?;
 

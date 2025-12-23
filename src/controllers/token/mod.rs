@@ -100,9 +100,9 @@ impl TokenController {
             description: row.description,
             is_graduated: row.is_graduated,
             is_nsfw: row.is_nsfw,
-            twitter: row.twitter,
-            telegram: row.telegram,
-            website: row.website,
+            twitter: row.twitter.filter(|s| !s.is_empty()),
+            telegram: row.telegram.filter(|s| !s.is_empty()),
+            website: row.website.filter(|s| !s.is_empty()),
             created_at: row.created_at,
             creator: AccountInfo {
                 account_id: row.creator,

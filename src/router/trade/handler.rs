@@ -163,6 +163,8 @@ pub async fn get_prices(
         return Err(AppError::BadRequest("Invalid token ID".to_string()));
     }
 
+    query.validate().map_err(AppError::BadRequest)?;
+
     let chart_service = ChartService::new(state.postgres.clone(), state.redis.clone());
     let bar_data = chart_service.get_prices(&token_id, &query).await?;
 

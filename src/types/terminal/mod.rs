@@ -187,3 +187,17 @@ pub struct EventsQuery {
     #[serde(rename = "toBlock")]
     pub to_block: u64,
 }
+
+impl EventsQuery {
+    const MAX_BLOCK_RANGE: u64 = 10000;
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.from_block > self.to_block {
+            return Err("from_block must be <= to_block".to_string());
+        }
+        if self.to_block - self.from_block > Self::MAX_BLOCK_RANGE {
+            return Err(format!("Block range must not exceed {}", Self::MAX_BLOCK_RANGE));
+        }
+        Ok(())
+    }
+}

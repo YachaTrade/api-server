@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use super::path::HypePath;
 use crate::{
-    result::AppJsonResult,
+    result::{AppError, AppJsonResult},
     services::hype::HypeService,
     state::AppState,
     types::{
@@ -186,6 +186,8 @@ pub async fn vote(
     Extension(session_address): Extension<String>,
     Json(payload): Json<HypeVoteRequest>,
 ) -> AppJsonResult<HypeVoteResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = HypeService::new(state.postgres.clone(), state.redis.clone());
     let response = service.vote(&session_address, &payload).await?;
 

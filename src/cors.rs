@@ -9,23 +9,15 @@ pub fn get_cors() -> CorsLayer {
     // Allow CORS
     // From: https://github.com/MystenLabs/sui/blob/13df03f2fad0e80714b596f55b04e0b7cea37449/crates/sui-faucet/src/main.rs#L85
     // License: Apache-2.0
-    let mut origins = vec![
+    let origins = vec![
         "https://nad.fun".parse::<HeaderValue>().unwrap(),
         "https://nadapp.net".parse::<HeaderValue>().unwrap(),
         "https://symphony.io".parse::<HeaderValue>().unwrap(),
-        "http://localhost:3000".parse::<HeaderValue>().unwrap(),
     ];
-    // Get the `ENVIROMENT` variable and if it is `development` then add `http://localhost:3000`
-    // to the `origins` array.
-    let environment = env::var("ENVIRONMENT").expect("ENVIRONMENT must be set");
-    {
-        if environment == "DEV" {
-            let allow_cors_port = env::var("ALLOW_CORS_PORT").expect("ALLOW_CORS_PORT must be set");
-            if let Ok(localhost_origin) = format!("http://localhost:{}", allow_cors_port).parse() {
-                origins.push(localhost_origin);
-            }
-        }
-    }
+
+    let is_dev = env::var("ENVIRONMENT")
+        .map(|e| e == "DEV")
+        .unwrap_or(false);
 
     let cors = CorsLayer::new()
         .allow_methods([
@@ -46,10 +38,8 @@ pub fn get_cors() -> CorsLayer {
                         .iter()
                         .any(|allowed_origin| allowed_origin == origin)
                         || origin_string.ends_with(".nad.fun")
-                        || origin_string.ends_with(".cloudfront.net")
                         || origin_string.ends_with(".symphony.io")
-                        || origin_string.ends_with(".amplifyapp.com")
-                        || origin_string.starts_with("http://localhost:")
+                        || (is_dev && origin_string.starts_with("http://localhost:"))
                 })
                 .unwrap_or(false)
         }))

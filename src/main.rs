@@ -342,7 +342,7 @@ async fn main() -> Result<()> {
         .merge(trend::router(app_state.clone()))
         .merge(leaderboard::router())
         .merge(cms::router(app_state.clone()))
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/internal-docs-x7k9m2").url("/internal-docs-x7k9m2/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
@@ -353,17 +353,18 @@ async fn main() -> Result<()> {
         .with_state(app_state)
         .fallback(handler_404);
 
-    let addr = SocketAddr::from((
-        IpAddr::from_str(ip.as_str()).unwrap(),
-        port.parse().unwrap(),
-    ));
+    let ip_addr = IpAddr::from_str(ip.as_str())
+        .map_err(|e| anyhow::anyhow!("Invalid IP address '{}': {}", ip, e))?;
+    let port_num: u16 = port.parse()
+        .map_err(|e| anyhow::anyhow!("Invalid port '{}': {}", port, e))?;
+    let addr = SocketAddr::from((ip_addr, port_num));
 
     info!("Listening on {} Server port{}", addr, port);
 
     axum_server::bind(addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("Server failed to start: {}", e))?;
     Ok(())
 }
 
