@@ -90,6 +90,8 @@ pub async fn salt(
     State(_state): State<AppState>,
     Json(payload): Json<MineSaltRequest>,
 ) -> AppJsonResult<MineSaltResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = SaltService::new();
     let response = service.mine_salt(payload).await?;
 

@@ -11,6 +11,12 @@ use axum::{
 use std::env;
 use tower_cookies::Cookies;
 
+#[derive(Clone, Debug)]
+pub struct SessionInfo {
+    pub session_id: String,
+    pub address: String,
+}
+
 pub async fn authenticate_user(
     State(state): State<AppState>,
     cookies: Cookies,
@@ -44,6 +50,11 @@ pub async fn authenticate_user(
         }
     };
 
+    let session_info = SessionInfo {
+        session_id: session_key,
+        address: session_address.clone(),
+    };
+    req.extensions_mut().insert(session_info);
     req.extensions_mut().insert(session_address);
 
     Ok(next.run(req).await)

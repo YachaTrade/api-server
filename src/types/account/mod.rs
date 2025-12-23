@@ -43,6 +43,19 @@ pub struct RegisterWalletRequest {
     pub wallet: String,
 }
 
+impl RegisterWalletRequest {
+    const ALLOWED_WALLETS: &'static [&'static str] = &[
+        "METAMASK", "KEPLR", "BACKPACK", "HAHA", "OKX", "PHANTOM", "RABBY", "OTHER"
+    ];
+
+    pub fn validate(&self) -> Result<(), String> {
+        if !Self::ALLOWED_WALLETS.contains(&self.wallet.as_str()) {
+            return Err(format!("Invalid wallet type. Allowed: {:?}", Self::ALLOWED_WALLETS));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateAccountRequest {
     #[serde(default)]

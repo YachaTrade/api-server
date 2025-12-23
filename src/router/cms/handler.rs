@@ -3,7 +3,7 @@ use tracing::instrument;
 
 use super::path::CmsPath;
 use crate::{
-    result::AppJsonResult,
+    result::{AppError, AppJsonResult},
     services::cms::CmsService,
     state::AppState,
     types::cms::{CmsActionResponse, InsertTrendRequest, SetNsfwRequest},
@@ -28,6 +28,8 @@ pub async fn set_nsfw(
     Extension(session_address): Extension<String>,
     Json(payload): Json<SetNsfwRequest>,
 ) -> AppJsonResult<CmsActionResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = CmsService::new(state.postgres.clone(), state.redis.clone());
     let response = service.set_nsfw(&session_address, payload).await?;
 
@@ -53,6 +55,8 @@ pub async fn insert_trend(
     Extension(session_address): Extension<String>,
     Json(payload): Json<InsertTrendRequest>,
 ) -> AppJsonResult<CmsActionResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
     let service = CmsService::new(state.postgres.clone(), state.redis.clone());
     let response = service.insert_trend(&session_address, payload).await?;
 

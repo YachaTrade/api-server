@@ -7,6 +7,7 @@ use axum::{
 
 use redis::RedisError;
 use serde_json::json;
+use tracing::error;
 
 pub type AppResult<T> = Result<T, AppError>;
 pub type AppJsonResult<T> = AppResult<Json<T>>;
@@ -41,22 +42,23 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response<axum::body::Body> {
         let (status, error_message) = match self {
             AppError::RouteError(err) => (StatusCode::BAD_REQUEST, err),
-            AppError::AnyhowError(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-            AppError::RedisError(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Redis Error: {}", err),
-            ),
+            AppError::AnyhowError(err) => {
+                error!("Internal error: {:?}", err);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+            },
+            AppError::RedisError(err) => {
+                error!("Redis error: {}", err);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+            },
             AppError::Conflict => (StatusCode::CONFLICT, "Conflict".into()),
             AppError::AuthError(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
-            AppError::InternalError(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Internal Server Error: {}", msg),
-            ),
-            AppError::Unauthorized(msg) => {
-                (StatusCode::UNAUTHORIZED, format!("Unauthorized: {}", msg))
-            }
+            AppError::InternalError(msg) => {
+                error!("Internal error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+            },
+            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
         };
 
         let body = Json(json!({

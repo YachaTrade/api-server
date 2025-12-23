@@ -49,6 +49,28 @@ pub struct GetBarsRequest {
     pub chart_type: ChartType, // 차트 타입 (price, price_usd, market_cap, market_cap_usd)
 }
 
+impl GetBarsRequest {
+    // Matches resolution_to_interval_type in controllers/trading/chart.rs
+    const VALID_RESOLUTIONS: &'static [&'static str] = &[
+        "1", "5", "15", "30",
+        "60", "1H",      // 1 hour
+        "240", "4H",     // 4 hours
+        "D", "1D",       // 1 day
+        "W", "1W",       // 1 week
+        "M", "1M",       // 1 month
+    ];
+
+    pub fn validate(&self) -> Result<(), String> {
+        if !Self::VALID_RESOLUTIONS.contains(&self.resolution.as_str()) {
+            return Err(format!("Invalid resolution. Allowed: {:?}", Self::VALID_RESOLUTIONS));
+        }
+        if self.from > self.to {
+            return Err("from must be <= to".to_string());
+        }
+        Ok(())
+    }
+}
+
 fn default_resolution() -> String {
     "5".to_string()
 }

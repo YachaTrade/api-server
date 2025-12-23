@@ -6,10 +6,11 @@ use tracing::{info, instrument};
 
 use super::path::TerminalPath;
 use crate::{
-    result::AppJsonResult,
+    result::{AppError, AppJsonResult},
     services::{terminal::TerminalService, metadata::MetadataService},
     state::AppState,
     types::{terminal::*, metadata::TerminalMetadataResponse},
+    utils::valid_evm_address,
 };
 
 /// Get latest block
@@ -102,6 +103,8 @@ pub async fn get_events(
     State(state): State<AppState>,
     Query(query): Query<EventsQuery>,
 ) -> AppJsonResult<EventsResponse> {
+    query.validate().map_err(AppError::BadRequest)?;
+
     let service = TerminalService::new(state.postgres.clone());
     let response = service.get_events(query.from_block, query.to_block).await?;
 
@@ -127,7 +130,11 @@ pub async fn get_terminal_metadata(
     State(state): State<AppState>,
     Path(token_address): Path<String>,
 ) -> AppJsonResult<TerminalMetadataResponse> {
-    info!("🔍 Getting terminal metadata for token: {}", token_address);
+    if !valid_evm_address(&token_address) {
+        return Err(AppError::BadRequest("Invalid token address format".to_string()));
+    }
+
+    info!("Getting terminal metadata for token: {}", token_address);
 
     let service = MetadataService::new(
         state.postgres.clone(),

@@ -92,7 +92,7 @@ pub struct SwapQuery {
     pub account_id: Option<String>,
 
     /// Trade type filter: "BUY", "SELL", or "ALL" (default)
-    #[serde(default = "default_trade_type")]
+    #[serde(default = "default_trade_type", deserialize_with = "normalize_trade_type")]
     pub trade_type: String,
 }
 
@@ -116,6 +116,15 @@ impl SwapQuery {
 
 fn default_trade_type() -> String {
     "ALL".to_string()
+}
+
+/// Deserialize trade_type, normalizing to uppercase
+fn normalize_trade_type<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let trade_type = String::deserialize(deserializer)?;
+    Ok(trade_type.to_uppercase())
 }
 
 fn deserialize_volume_ranges<'de, D>(deserializer: D) -> Result<Option<Vec<VolumeRange>>, D::Error>
