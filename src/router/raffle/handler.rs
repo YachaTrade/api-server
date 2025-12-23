@@ -1,4 +1,7 @@
-use axum::{Extension, Json, extract::{Query, State}};
+use axum::{
+    Extension, Json,
+    extract::{Query, State},
+};
 
 use tracing::instrument;
 
@@ -6,7 +9,9 @@ use crate::{
     controllers::raffle::RaffleController,
     result::AppJsonResult,
     state::AppState,
-    types::raffle::{RaffleCheckQuery, RaffleCheckResponse, RaffleRoundResponse, RaffleStatusResponse},
+    types::raffle::{
+        RaffleCheckQuery, RaffleCheckResponse, RaffleRoundResponse, RaffleStatusResponse,
+    },
 };
 
 use super::path::RafflePath;
@@ -54,7 +59,9 @@ pub async fn check_raffle(
     Query(query): Query<RaffleCheckQuery>,
 ) -> AppJsonResult<RaffleCheckResponse> {
     let controller = RaffleController::new(state.postgres.clone());
-    let response = controller.check_raffle(query.round, &session_address).await?;
+    let response = controller
+        .check_raffle(query.round, &session_address)
+        .await?;
 
     Ok(Json(response))
 }

@@ -2,7 +2,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::common::pagination::{deserialize_chart_limit, DEFAULT_CHART_LIMIT};
+use crate::types::common::pagination::{DEFAULT_CHART_LIMIT, deserialize_chart_limit};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct Chart {
@@ -20,18 +20,15 @@ pub struct Chart {
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ChartType {
+    #[default]
     Price,        // MON/TOKEN 가격 (기본)
     PriceUsd,     // USD 가격
     MarketCap,    // 시가총액 (MON) = price * total_supply
     MarketCapUsd, // 시가총액 (USD) = usd_price * total_supply
 }
 
-impl Default for ChartType {
-    fn default() -> Self {
-        ChartType::Price
-    }
-}
 
 fn default_countback() -> i32 {
     DEFAULT_CHART_LIMIT
@@ -43,7 +40,10 @@ pub struct GetBarsRequest {
     pub resolution: String, // 타임프레임 (1, 5, 15, 30, 60, 1H, 4H, D, W, M)
     pub from: i64, // 시작 타임스탬프 (초 단위)
     pub to: i64,   // 끝 타임스탬프 (초 단위)
-    #[serde(default = "default_countback", deserialize_with = "deserialize_chart_limit")]
+    #[serde(
+        default = "default_countback",
+        deserialize_with = "deserialize_chart_limit"
+    )]
     pub countback: i32, // 반환할 최대 캔들 수 (최대 3000)
     #[serde(default)]
     pub chart_type: ChartType, // 차트 타입 (price, price_usd, market_cap, market_cap_usd)
@@ -52,17 +52,19 @@ pub struct GetBarsRequest {
 impl GetBarsRequest {
     // Matches resolution_to_interval_type in controllers/trading/chart.rs
     const VALID_RESOLUTIONS: &'static [&'static str] = &[
-        "1", "5", "15", "30",
-        "60", "1H",      // 1 hour
-        "240", "4H",     // 4 hours
-        "D", "1D",       // 1 day
-        "W", "1W",       // 1 week
-        "M", "1M",       // 1 month
+        "1", "5", "15", "30", "60", "1H", // 1 hour
+        "240", "4H", // 4 hours
+        "D", "1D", // 1 day
+        "W", "1W", // 1 week
+        "M", "1M", // 1 month
     ];
 
     pub fn validate(&self) -> Result<(), String> {
         if !Self::VALID_RESOLUTIONS.contains(&self.resolution.as_str()) {
-            return Err(format!("Invalid resolution. Allowed: {:?}", Self::VALID_RESOLUTIONS));
+            return Err(format!(
+                "Invalid resolution. Allowed: {:?}",
+                Self::VALID_RESOLUTIONS
+            ));
         }
         if self.from > self.to {
             return Err("from must be <= to".to_string());

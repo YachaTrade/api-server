@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::metadata::{MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH};
+use crate::types::metadata::{
+    MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH,
+};
 use crate::utils::valid_evm_address;
 
 /// Request parameters for mining a salt to generate a vanity token address
@@ -35,14 +37,20 @@ impl MineSaltRequest {
         }
         // name validation
         if self.name.len() < MIN_NAME_LENGTH || self.name.len() > MAX_NAME_LENGTH {
-            return Err(format!("Name must be {}-{} characters", MIN_NAME_LENGTH, MAX_NAME_LENGTH));
+            return Err(format!(
+                "Name must be {}-{} characters",
+                MIN_NAME_LENGTH, MAX_NAME_LENGTH
+            ));
         }
         if self.name.contains('\n') || self.name.contains('\r') {
             return Err("Name cannot contain newlines".to_string());
         }
         // symbol validation
         if self.symbol.len() < MIN_SYMBOL_LENGTH || self.symbol.len() > MAX_SYMBOL_LENGTH {
-            return Err(format!("Symbol must be {}-{} characters", MIN_SYMBOL_LENGTH, MAX_SYMBOL_LENGTH));
+            return Err(format!(
+                "Symbol must be {}-{} characters",
+                MIN_SYMBOL_LENGTH, MAX_SYMBOL_LENGTH
+            ));
         }
         if !self.symbol.chars().all(|c| c.is_ascii_alphanumeric()) {
             return Err("Symbol must be alphanumeric".to_string());
@@ -51,7 +59,10 @@ impl MineSaltRequest {
         let allowed_domain = std::env::var("ALLOWED_IMAGE_DOMAIN")
             .unwrap_or_else(|_| "https://storage.nadapp.net/".to_string());
         if !self.metadata_uri.starts_with(&allowed_domain) {
-            return Err(format!("Invalid metadata URI domain, must start with {}", allowed_domain));
+            return Err(format!(
+                "Invalid metadata URI domain, must start with {}",
+                allowed_domain
+            ));
         }
         Ok(())
     }

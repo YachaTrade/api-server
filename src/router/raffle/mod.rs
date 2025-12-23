@@ -9,8 +9,10 @@ use crate::{middleware::authenticate_user, state::AppState};
 use path::RafflePath;
 
 pub fn router(app_state: AppState) -> Router<AppState> {
-    let auth_layer = ServiceBuilder::new()
-        .layer(axum_middleware::from_fn_with_state(app_state, authenticate_user));
+    let auth_layer = ServiceBuilder::new().layer(axum_middleware::from_fn_with_state(
+        app_state,
+        authenticate_user,
+    ));
 
     Router::new()
         .route(

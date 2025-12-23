@@ -8,7 +8,8 @@ macro_rules! measure_postgres {
         let timeout_ms = *$crate::config::POSTGRES_TIMEOUT_MS;
 
         // 실제 timeout과 메트릭 수집을 함께 적용
-        let result = tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), $query).await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), $query).await;
 
         let elapsed = start_time.elapsed().as_millis() as u64;
         $crate::metrics::METRICS.db.record_postgres_query(elapsed);
@@ -60,7 +61,8 @@ macro_rules! measure_redis {
         let timeout_ms = *$crate::config::REDIS_TIMEOUT_MS;
 
         // 실제 timeout과 메트릭 수집을 함께 적용
-        let result = tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), $query).await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), $query).await;
 
         let elapsed = start_time.elapsed().as_millis() as u64;
         $crate::metrics::METRICS.db.record_redis_query(elapsed);

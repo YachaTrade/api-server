@@ -1,12 +1,12 @@
 pub mod account;
 pub mod auth;
-pub mod terminal;
 pub mod cms;
 pub mod hype;
 pub mod leaderboard;
 pub mod metadata;
 pub mod new_event;
 pub mod search;
+pub mod terminal;
 pub mod token;
 pub mod trading;
 pub mod trend;

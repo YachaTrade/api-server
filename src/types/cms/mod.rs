@@ -33,7 +33,10 @@ impl InsertTrendRequest {
 
     pub fn validate(&self) -> Result<(), String> {
         if self.token_ids.len() > Self::MAX_TREND_TOKENS {
-            return Err(format!("Cannot insert more than {} tokens", Self::MAX_TREND_TOKENS));
+            return Err(format!(
+                "Cannot insert more than {} tokens",
+                Self::MAX_TREND_TOKENS
+            ));
         }
         for token_id in &self.token_ids {
             if !valid_evm_address(token_id) {

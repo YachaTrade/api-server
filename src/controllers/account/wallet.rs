@@ -3,11 +3,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use sqlx::FromRow;
 
-use crate::{
-    db::postgres::PostgresDatabase,
-    measure_postgres,
-    types::account::GetWalletResponse,
-};
+use crate::{db::postgres::PostgresDatabase, measure_postgres, types::account::GetWalletResponse};
 
 #[derive(Debug, FromRow)]
 struct WalletRow {

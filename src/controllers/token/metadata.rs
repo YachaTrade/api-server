@@ -123,7 +123,7 @@ impl TokenMetadataController {
                 "#,
             )
             .bind(token_id)
-            .fetch_one(&*self.db.get_read_pool())
+            .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to get token metadata: {}", err))?;
 

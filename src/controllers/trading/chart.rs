@@ -139,11 +139,11 @@ impl ChartController {
 
         let mut charts = measure_postgres!(
             "chart.fetch_chart_data",
-            sqlx::query_as::<_, Chart>(&query)
+            sqlx::query_as::<_, Chart>(query)
                 .bind(token_id)
                 .bind(interval_type)
                 .bind(request.to)
-                .bind(limit as i32)
+                .bind(limit)
                 .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch chart: {}", err))?;

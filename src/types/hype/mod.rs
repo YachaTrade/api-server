@@ -87,7 +87,9 @@ impl HypeVoteRequest {
             return Err("Invalid token_id format".to_string());
         }
         // amount must be a valid positive number
-        let amount: i64 = self.amount.parse()
+        let amount: i64 = self
+            .amount
+            .parse()
             .map_err(|_| "Invalid amount format".to_string())?;
         if amount <= 0 {
             return Err("Amount must be greater than 0".to_string());

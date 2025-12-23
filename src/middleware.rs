@@ -23,7 +23,8 @@ pub async fn authenticate_user(
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
-    let cookie_name = env::var("COOKIE_NAME").expect("COOKIE_NAME environment variable must be set");
+    let cookie_name =
+        env::var("COOKIE_NAME").expect("COOKIE_NAME environment variable must be set");
     let session_key = match cookies.get(&cookie_name) {
         Some(cookie) => cookie.value().to_string(),
         None => return Err(AppError::AuthError("Session cookie is missing".to_string())),

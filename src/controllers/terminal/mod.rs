@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 
 use crate::{db::postgres::PostgresDatabase, measure_postgres};
@@ -191,7 +191,11 @@ impl TerminalController {
     }
 
     /// Get mint events from mint table for a block range
-    pub async fn get_mint_events(&self, from_block: u64, to_block: u64) -> Result<Vec<MintEventRow>> {
+    pub async fn get_mint_events(
+        &self,
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<Vec<MintEventRow>> {
         let rows = measure_postgres!(
             "terminal.get_mint_events",
             sqlx::query_as::<_, MintEventRow>(
@@ -224,7 +228,11 @@ impl TerminalController {
     }
 
     /// Get burn events from burn table for a block range
-    pub async fn get_burn_events(&self, from_block: u64, to_block: u64) -> Result<Vec<BurnEventRow>> {
+    pub async fn get_burn_events(
+        &self,
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<Vec<BurnEventRow>> {
         let rows = measure_postgres!(
             "terminal.get_burn_events",
             sqlx::query_as::<_, BurnEventRow>(

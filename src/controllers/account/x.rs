@@ -28,7 +28,7 @@ impl AccountXController {
             VALUES ($1, $2, $3, $4)
             "#,
         )
-        .bind(&account_id)
+        .bind(account_id)
         .bind(&req.x_handle)
         .bind(&req.x_image_uri)
         .bind(req.is_blue_label)

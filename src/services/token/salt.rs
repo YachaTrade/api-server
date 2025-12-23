@@ -34,6 +34,12 @@ struct MinedSalt {
 /// 예: "143"으로 끝나는 주소 (0x742d35Cc6634C0532925a3b844Bc9e7595f0143)
 pub struct SaltService;
 
+impl Default for SaltService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SaltService {
     pub fn new() -> Self {
         Self
@@ -306,7 +312,7 @@ impl SaltService {
 
         // 2단계: 청크 개수 계산
         // 예: 10,000,000 / 10,000 = 1,000개 청크
-        let num_chunks = (MAX_ITERATIONS + CHUNK_SIZE - 1) / CHUNK_SIZE;
+        let num_chunks = MAX_ITERATIONS.div_ceil(CHUNK_SIZE);
 
         // 3단계: 병렬 처리로 마이닝 (rayon의 parallel iterator 사용)
         (0..num_chunks).into_par_iter().find_map_any(|chunk_idx| {

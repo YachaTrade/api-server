@@ -68,9 +68,12 @@ impl TrendService {
             return Err(AppError::AuthError("Admin access required".to_string()));
         }
 
-        let response = controller.insert_trend_token(payload).await.map_err(|err| {
-            AppError::InternalError(format!("Failed to insert trend token: {}", err))
-        })?;
+        let response = controller
+            .insert_trend_token(payload)
+            .await
+            .map_err(|err| {
+                AppError::InternalError(format!("Failed to insert trend token: {}", err))
+            })?;
 
         // Invalidate caches after insert
         self.invalidate_trend_cache().await;

@@ -30,7 +30,7 @@ pub async fn set_nsfw(
 ) -> AppJsonResult<CmsActionResponse> {
     payload.validate().map_err(AppError::BadRequest)?;
 
-    let service = CmsService::new(state.postgres.clone(), state.redis.clone());
+    let service = CmsService::new(state.postgres.clone());
     let response = service.set_nsfw(&session_address, payload).await?;
 
     Ok(Json(response))
@@ -57,7 +57,7 @@ pub async fn insert_trend(
 ) -> AppJsonResult<CmsActionResponse> {
     payload.validate().map_err(AppError::BadRequest)?;
 
-    let service = CmsService::new(state.postgres.clone(), state.redis.clone());
+    let service = CmsService::new(state.postgres.clone());
     let response = service.insert_trend(&session_address, payload).await?;
 
     Ok(Json(response))

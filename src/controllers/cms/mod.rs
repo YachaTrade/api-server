@@ -20,9 +20,11 @@ impl CmsController {
     pub async fn is_admin(&self, account_id: &str) -> Result<bool> {
         let result = measure_postgres!(
             "cms.is_admin",
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) as count FROM admin WHERE account_id = $1")
-                .bind(account_id)
-                .fetch_one(self.db.get_read_pool())
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) as count FROM admin WHERE account_id = $1"
+            )
+            .bind(account_id)
+            .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to check admin status: {}", err))?;
 
@@ -66,7 +68,11 @@ impl CmsController {
         request: InsertTrendRequest,
     ) -> Result<CmsActionResponse> {
         // Start transaction
-        let mut tx = self.db.get_write_pool().begin().await
+        let mut tx = self
+            .db
+            .get_write_pool()
+            .begin()
+            .await
             .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
 
         // Verify admin status with FOR UPDATE to lock the row during transaction
@@ -87,8 +93,7 @@ impl CmsController {
         // Delete all existing trends
         measure_postgres!(
             "cms.trend.delete_all",
-            sqlx::query("DELETE FROM trend")
-                .execute(&mut *tx)
+            sqlx::query("DELETE FROM trend").execute(&mut *tx)
         )
         .map_err(|err| anyhow!("Failed to delete trends: {}", err))?;
 
@@ -108,15 +113,13 @@ impl CmsController {
                 query_builder = query_builder.bind(token_id).bind(index as i32);
             }
 
-            measure_postgres!(
-                "cms.trend.insert",
-                query_builder.execute(&mut *tx)
-            )
-            .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
+            measure_postgres!("cms.trend.insert", query_builder.execute(&mut *tx))
+                .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
         }
 
         // Commit transaction
-        tx.commit().await
+        tx.commit()
+            .await
             .map_err(|err| anyhow!("Failed to commit transaction: {}", err))?;
 
         Ok(CmsActionResponse { success: true })

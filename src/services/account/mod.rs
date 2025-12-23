@@ -3,7 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use alloy::primitives::Address;
 
 use crate::{
-    controllers::account::{wallet::WalletController, x::AccountXController, AccountController},
+    controllers::account::{AccountController, wallet::WalletController, x::AccountXController},
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::account::{
@@ -38,13 +38,12 @@ impl AccountService {
         req: UpdateAccountRequest,
     ) -> Result<AccountResponse, AppError> {
         // Validate nickname: cannot start with @
-        if let Some(ref nickname) = req.nickname {
-            if nickname.starts_with('@') {
+        if let Some(ref nickname) = req.nickname
+            && nickname.starts_with('@') {
                 return Err(AppError::BadRequest(
-                    "Nickname cannot start with '@'".to_string()
+                    "Nickname cannot start with '@'".to_string(),
                 ));
             }
-        }
 
         let controller = AccountController::new(self.postgres.clone());
         let account_info = controller

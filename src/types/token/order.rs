@@ -3,7 +3,9 @@ use utoipa::ToSchema;
 
 use crate::types::common::{
     info::{MarketInfo, TokenInfo},
-    pagination::{default_direction, default_page, deserialize_limit, deserialize_page, validate_direction},
+    pagination::{
+        default_direction, default_page, deserialize_limit, deserialize_page, validate_direction,
+    },
 };
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, ToSchema)]
@@ -32,7 +34,10 @@ fn default_order_limit() -> i64 {
 pub struct OrderQuery {
     #[serde(default = "default_page", deserialize_with = "deserialize_page")]
     pub page: i64,
-    #[serde(default = "default_order_limit", deserialize_with = "deserialize_limit")]
+    #[serde(
+        default = "default_order_limit",
+        deserialize_with = "deserialize_limit"
+    )]
     pub limit: i64,
     #[serde(default = "default_direction", deserialize_with = "validate_direction")]
     pub direction: String,

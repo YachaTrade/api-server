@@ -247,7 +247,7 @@ impl TokenCreatedController {
                 "#,
             )
             .bind(account_id)
-            .bind(pagination.limit as i64)
+            .bind(pagination.limit)
             .bind(offset)
             .fetch_all(self.db.get_read_pool())
         )

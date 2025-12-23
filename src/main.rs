@@ -1,10 +1,9 @@
 use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS},
     cors::get_cors,
-    middleware::authenticate_user,
     router::{
-        self, account, auth, cms, terminal, health, hype, leaderboard, metadata, metrics,
-        new_event, order, profile, raffle, search, token, trade, trend,
+        self, account, auth, cms, health, hype, leaderboard, metadata, metrics, new_event, order,
+        profile, raffle, search, terminal, token, trade, trend,
     },
     state::AppState,
     types,
@@ -355,7 +354,8 @@ async fn main() -> Result<()> {
 
     let ip_addr = IpAddr::from_str(ip.as_str())
         .map_err(|e| anyhow::anyhow!("Invalid IP address '{}': {}", ip, e))?;
-    let port_num: u16 = port.parse()
+    let port_num: u16 = port
+        .parse()
         .map_err(|e| anyhow::anyhow!("Invalid port '{}': {}", port, e))?;
     let addr = SocketAddr::from((ip_addr, port_num));
 
