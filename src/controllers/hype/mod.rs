@@ -42,6 +42,7 @@ struct HypeTokenRow {
     website: Option<String>,
     is_nsfw: bool,
     is_cto: bool,
+    #[allow(dead_code)]
     total_supply: BigDecimal,
     created_at: i64,
     creator: String,
@@ -613,7 +614,7 @@ impl HypeController {
             async move {
                 let controller = HypeController::new(db);
                 controller
-                    .fetch_hype_vote_history(&account_id, &pagination)
+                    .fetch_hype_vote_history(&account_id, pagination)
                     .await
             }
         })
@@ -785,7 +786,7 @@ impl HypeController {
             async move {
                 let controller = HypeController::new(db);
                 controller
-                    .fetch_hype_point_history(&account_id, &pagination)
+                    .fetch_hype_point_history(&account_id, pagination)
                     .await
             }
         })
@@ -1091,7 +1092,7 @@ impl HypeController {
             async move {
                 let controller = HypeController::new(db);
                 controller
-                    .fetch_hype_reward_add_history(&account_id, &pagination)
+                    .fetch_hype_reward_add_history(&account_id, pagination)
                     .await
             }
         })
@@ -1123,6 +1124,7 @@ impl HypeController {
             transaction_hash: String,
             created_at: i64,
             creator: String,
+            #[allow(dead_code)]
             holder_count: i64,
             creator_nickname: String,
             creator_bio: String,

@@ -40,7 +40,9 @@ pub async fn search(
 
     if name.len() > 100 {
         warn!("Search query too long: {} chars", name.len());
-        return Err(AppError::BadRequest("Search query too long (max 100 characters)".to_string()));
+        return Err(AppError::BadRequest(
+            "Search query too long (max 100 characters)".to_string(),
+        ));
     }
 
     if name == "0x" {

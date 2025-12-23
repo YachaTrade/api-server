@@ -11,9 +11,9 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         hype::{
-            AmountResponse, HypeEpochResponse, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeTokenQuery,
-            HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
+            AmountResponse, HypeEpochResponse, HypePointResponse, HypeRewardAddHistoryResponse,
+            HypeTokenQuery, HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest,
+            HypeVoteResponse,
         },
         profile::PointHistoryResponse,
     },
@@ -121,11 +121,10 @@ impl HypeService {
         let now = chrono::Utc::now();
         let is_midnight_utc = now.hour() == 0 && now.minute() == 0;
 
-        if !is_midnight_utc {
-            if let Ok(cached) = self.redis.get_hype_epoch_response().await {
+        if !is_midnight_utc
+            && let Ok(cached) = self.redis.get_hype_epoch_response().await {
                 return Ok(cached);
             }
-        }
 
         let controller = HypeController::new(self.postgres.clone());
         let response = controller.get_hype_epoch().await.map_err(|err| {
@@ -194,7 +193,6 @@ impl HypeService {
 
         Ok(response)
     }
-
 
     pub async fn get_hype_reward_add_history(
         &self,

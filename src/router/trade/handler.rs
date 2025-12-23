@@ -171,7 +171,6 @@ pub async fn get_prices(
     Ok(Json(bar_data))
 }
 
-
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct MetricsQuery {
     /// Comma-separated timeframes string (e.g., "1D,240,60")
@@ -203,7 +202,12 @@ where
                 "60" => timeframes.push(TimeFrame::OneHour),
                 "240" => timeframes.push(TimeFrame::FourHours),
                 "1D" => timeframes.push(TimeFrame::OneDay),
-                _ => return Err(D::Error::custom(format!("Invalid timeframe: {}. Valid values: 1, 5, 15, 30, 60, 240, 1D", trimmed))),
+                _ => {
+                    return Err(D::Error::custom(format!(
+                        "Invalid timeframe: {}. Valid values: 1, 5, 15, 30, 60, 240, 1D",
+                        trimmed
+                    )));
+                }
             }
         }
     }

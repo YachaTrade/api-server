@@ -123,7 +123,7 @@ impl PositionController {
             )
             .bind(token_id)
             .bind(offset)
-            .bind(pagination.limit as i64)
+            .bind(pagination.limit)
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch token holders: {}", err))?;

@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::HeaderMap,
-    response::Json,
-};
+use axum::{extract::State, http::HeaderMap, response::Json};
 use bytes::Bytes;
 use std::time::Instant;
 use tracing::info;
@@ -54,7 +50,9 @@ pub async fn upload_image(
         state.r2.clone(),
     );
 
-    let response = service.process_and_upload_image(&body, &content_type).await?;
+    let response = service
+        .process_and_upload_image(&body, &content_type)
+        .await?;
 
     let total_duration = start_time.elapsed();
     info!(

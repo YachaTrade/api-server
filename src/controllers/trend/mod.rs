@@ -167,14 +167,17 @@ impl TrendController {
 
     pub async fn insert_trend_token(&self, request: TrendRequest) -> Result<TrendActionResponse> {
         // Start transaction
-        let mut tx = self.db.get_write_pool().begin().await
+        let mut tx = self
+            .db
+            .get_write_pool()
+            .begin()
+            .await
             .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
 
         // Delete all existing trends
         measure_postgres!(
             "trend.delete_all",
-            sqlx::query("DELETE FROM trend")
-                .execute(&mut *tx)
+            sqlx::query("DELETE FROM trend").execute(&mut *tx)
         )
         .map_err(|err| anyhow!("Failed to delete trends: {}", err))?;
 
@@ -194,15 +197,13 @@ impl TrendController {
                 query_builder = query_builder.bind(token_id).bind(index as i32);
             }
 
-            measure_postgres!(
-                "trend.insert_all",
-                query_builder.execute(&mut *tx)
-            )
-            .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
+            measure_postgres!("trend.insert_all", query_builder.execute(&mut *tx))
+                .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
         }
 
         // Commit transaction
-        tx.commit().await
+        tx.commit()
+            .await
             .map_err(|err| anyhow!("Failed to commit transaction: {}", err))?;
 
         // Clear cache
@@ -213,7 +214,6 @@ impl TrendController {
 
         Ok(TrendActionResponse { success: true })
     }
-
 
     pub async fn is_admin(&self, account_id: &str) -> Result<bool> {
         let query = "SELECT COUNT(*) as count FROM admin WHERE account_id = $1";

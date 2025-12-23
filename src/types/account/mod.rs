@@ -29,10 +29,16 @@ pub struct ConnectXRequest {
 impl ConnectXRequest {
     pub fn validate(&self) -> Result<(), String> {
         if self.x_handle.len() > MAX_X_HANDLE_LENGTH {
-            return Err(format!("x_handle must be at most {} characters", MAX_X_HANDLE_LENGTH));
+            return Err(format!(
+                "x_handle must be at most {} characters",
+                MAX_X_HANDLE_LENGTH
+            ));
         }
         if self.x_image_uri.len() > MAX_IMAGE_URI_LENGTH {
-            return Err(format!("x_image_uri must be at most {} characters", MAX_IMAGE_URI_LENGTH));
+            return Err(format!(
+                "x_image_uri must be at most {} characters",
+                MAX_IMAGE_URI_LENGTH
+            ));
         }
         Ok(())
     }
@@ -45,12 +51,15 @@ pub struct RegisterWalletRequest {
 
 impl RegisterWalletRequest {
     const ALLOWED_WALLETS: &'static [&'static str] = &[
-        "METAMASK", "KEPLR", "BACKPACK", "HAHA", "OKX", "PHANTOM", "RABBY", "OTHER"
+        "METAMASK", "KEPLR", "BACKPACK", "HAHA", "OKX", "PHANTOM", "RABBY", "OTHER",
     ];
 
     pub fn validate(&self) -> Result<(), String> {
         if !Self::ALLOWED_WALLETS.contains(&self.wallet.as_str()) {
-            return Err(format!("Invalid wallet type. Allowed: {:?}", Self::ALLOWED_WALLETS));
+            return Err(format!(
+                "Invalid wallet type. Allowed: {:?}",
+                Self::ALLOWED_WALLETS
+            ));
         }
         Ok(())
     }
@@ -68,27 +77,34 @@ pub struct UpdateAccountRequest {
 
 impl UpdateAccountRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if let Some(ref bio) = self.bio {
-            if bio.len() > MAX_BIO_LENGTH {
+        if let Some(ref bio) = self.bio
+            && bio.len() > MAX_BIO_LENGTH {
                 return Err(format!("Bio must be at most {} characters", MAX_BIO_LENGTH));
             }
-        }
         if let Some(ref nickname) = self.nickname {
             if nickname.len() < NICKNAME_MIN_LENGTH {
-                return Err(format!("Nickname must be at least {} character", NICKNAME_MIN_LENGTH));
+                return Err(format!(
+                    "Nickname must be at least {} character",
+                    NICKNAME_MIN_LENGTH
+                ));
             }
             if nickname.len() > NICKNAME_MAX_LENGTH {
-                return Err(format!("Nickname must be at most {} characters", NICKNAME_MAX_LENGTH));
+                return Err(format!(
+                    "Nickname must be at most {} characters",
+                    NICKNAME_MAX_LENGTH
+                ));
             }
             if nickname.starts_with('@') || nickname.starts_with('#') {
                 return Err("Nickname cannot start with @ or #".to_string());
             }
         }
-        if let Some(ref image_uri) = self.image_uri {
-            if image_uri.len() > MAX_IMAGE_URI_LENGTH {
-                return Err(format!("image_uri must be at most {} characters", MAX_IMAGE_URI_LENGTH));
+        if let Some(ref image_uri) = self.image_uri
+            && image_uri.len() > MAX_IMAGE_URI_LENGTH {
+                return Err(format!(
+                    "image_uri must be at most {} characters",
+                    MAX_IMAGE_URI_LENGTH
+                ));
             }
-        }
         Ok(())
     }
 }
@@ -101,7 +117,10 @@ pub struct UpdateXRequest {
 impl UpdateXRequest {
     pub fn validate(&self) -> Result<(), String> {
         if self.x_image_uri.len() > MAX_IMAGE_URI_LENGTH {
-            return Err(format!("x_image_uri must be at most {} characters", MAX_IMAGE_URI_LENGTH));
+            return Err(format!(
+                "x_image_uri must be at most {} characters",
+                MAX_IMAGE_URI_LENGTH
+            ));
         }
         Ok(())
     }

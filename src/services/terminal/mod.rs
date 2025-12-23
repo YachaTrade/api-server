@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use crate::controllers::terminal::{SwapEventRow, MintEventRow, BurnEventRow};
+use crate::controllers::terminal::{BurnEventRow, MintEventRow, SwapEventRow};
 
 /// Truncate BigDecimal to maximum 50 decimal places and convert to string
 fn to_truncated_string(value: &BigDecimal) -> String {
@@ -184,13 +184,25 @@ impl TerminalService {
         let mut events: Vec<Event> = Vec::new();
 
         // Process swap events
-        events.extend(swap_rows.into_iter().map(|row| Self::convert_swap_event(row)));
+        events.extend(
+            swap_rows
+                .into_iter()
+                .map(Self::convert_swap_event),
+        );
 
         // Process mint events (join events)
-        events.extend(mint_rows.into_iter().map(|row| Self::convert_mint_event(row)));
+        events.extend(
+            mint_rows
+                .into_iter()
+                .map(Self::convert_mint_event),
+        );
 
         // Process burn events (exit events)
-        events.extend(burn_rows.into_iter().map(|row| Self::convert_burn_event(row)));
+        events.extend(
+            burn_rows
+                .into_iter()
+                .map(Self::convert_burn_event),
+        );
 
         // Sort events by block_number, tx_index, and log_index
         events.sort_by(|a, b| {
@@ -227,37 +239,36 @@ impl TerminalService {
         let is_native_token0 = WMON.to_lowercase() < row.token_id.to_lowercase();
 
         // Map amounts based on token order and is_buy
-        let (asset0_in, asset1_in, asset0_out, asset1_out) =
-            match (is_native_token0, row.is_buy) {
-                // token0 = WMON (native), token1 = token, Buy: native in, token out
-                (true, true) => (
-                    Some(to_truncated_string(&native_amount_decimalized)),
-                    None,
-                    None,
-                    Some(to_truncated_string(&token_amount_decimalized)),
-                ),
-                // token0 = WMON (native), token1 = token, Sell: token in, native out
-                (true, false) => (
-                    None,
-                    Some(to_truncated_string(&token_amount_decimalized)),
-                    Some(to_truncated_string(&native_amount_decimalized)),
-                    None,
-                ),
-                // token0 = token, token1 = WMON (native), Buy: native in, token out
-                (false, true) => (
-                    None,
-                    Some(to_truncated_string(&native_amount_decimalized)),
-                    Some(to_truncated_string(&token_amount_decimalized)),
-                    None,
-                ),
-                // token0 = token, token1 = WMON (native), Sell: token in, native out
-                (false, false) => (
-                    Some(to_truncated_string(&token_amount_decimalized)),
-                    None,
-                    None,
-                    Some(to_truncated_string(&native_amount_decimalized)),
-                ),
-            };
+        let (asset0_in, asset1_in, asset0_out, asset1_out) = match (is_native_token0, row.is_buy) {
+            // token0 = WMON (native), token1 = token, Buy: native in, token out
+            (true, true) => (
+                Some(to_truncated_string(&native_amount_decimalized)),
+                None,
+                None,
+                Some(to_truncated_string(&token_amount_decimalized)),
+            ),
+            // token0 = WMON (native), token1 = token, Sell: token in, native out
+            (true, false) => (
+                None,
+                Some(to_truncated_string(&token_amount_decimalized)),
+                Some(to_truncated_string(&native_amount_decimalized)),
+                None,
+            ),
+            // token0 = token, token1 = WMON (native), Buy: native in, token out
+            (false, true) => (
+                None,
+                Some(to_truncated_string(&native_amount_decimalized)),
+                Some(to_truncated_string(&token_amount_decimalized)),
+                None,
+            ),
+            // token0 = token, token1 = WMON (native), Sell: token in, native out
+            (false, false) => (
+                Some(to_truncated_string(&token_amount_decimalized)),
+                None,
+                None,
+                Some(to_truncated_string(&native_amount_decimalized)),
+            ),
+        };
 
         // Calculate reserves based on token order
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
@@ -275,15 +286,14 @@ impl TerminalService {
 
         // Calculate priceNative = amount(asset1) / amount(asset0)
         // This is the price of asset0 quoted in asset1
-        let price_native =
-            match is_native_token0 {
-                // token0 = native, token1 = token
-                // priceNative = amount(asset1) / amount(asset0) = token_amount / native_amount
-                true => to_truncated_string(&(&token_amount_decimalized / &native_amount_decimalized)),
-                // token0 = token, token1 = native
-                // priceNative = amount(asset1) / amount(asset0) = native_amount / token_amount
-                false => to_truncated_string(&(&native_amount_decimalized / &token_amount_decimalized)),
-            };
+        let price_native = match is_native_token0 {
+            // token0 = native, token1 = token
+            // priceNative = amount(asset1) / amount(asset0) = token_amount / native_amount
+            true => to_truncated_string(&(&token_amount_decimalized / &native_amount_decimalized)),
+            // token0 = token, token1 = native
+            // priceNative = amount(asset1) / amount(asset0) = native_amount / token_amount
+            false => to_truncated_string(&(&native_amount_decimalized / &token_amount_decimalized)),
+        };
 
         Event::Swap {
             block: Block {

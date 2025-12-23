@@ -75,7 +75,10 @@ impl LeaderboardController {
         .map_err(|err| anyhow!("Failed to fetch hype point leaderboard: {}", err))?;
 
         let (total_count, total_hype_point) = if let Some(first) = rows.first() {
-            (first.total_count, first.total_hype_point.normalized().to_plain_string())
+            (
+                first.total_count,
+                first.total_hype_point.normalized().to_plain_string(),
+            )
         } else {
             (0, "0".to_string())
         };

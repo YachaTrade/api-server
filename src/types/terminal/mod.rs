@@ -196,7 +196,10 @@ impl EventsQuery {
             return Err("from_block must be <= to_block".to_string());
         }
         if self.to_block - self.from_block > Self::MAX_BLOCK_RANGE {
-            return Err(format!("Block range must not exceed {}", Self::MAX_BLOCK_RANGE));
+            return Err(format!(
+                "Block range must not exceed {}",
+                Self::MAX_BLOCK_RANGE
+            ));
         }
         Ok(())
     }

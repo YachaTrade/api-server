@@ -49,11 +49,10 @@ impl AuthSessionRequest {
             return Err("Invalid nonce length".to_string());
         }
         // wallet_address validation
-        if let Some(ref addr) = self.wallet_address {
-            if !valid_evm_address(addr) {
+        if let Some(ref addr) = self.wallet_address
+            && !valid_evm_address(addr) {
                 return Err("Invalid wallet address format".to_string());
             }
-        }
         Ok(())
     }
 }

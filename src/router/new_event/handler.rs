@@ -2,8 +2,7 @@ use axum::{extract::State, response::Json};
 
 use crate::{
     result::AppJsonResult, router::new_event::path::NewEventPath,
-    services::new_event::NewEventService, state::AppState,
-    types::new_event::NewEventResponse,
+    services::new_event::NewEventService, state::AppState, types::new_event::NewEventResponse,
 };
 
 /// Get latest new events (buy/sell/create)

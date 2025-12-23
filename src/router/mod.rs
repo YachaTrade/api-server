@@ -10,8 +10,8 @@ pub mod search;
 pub mod token;
 pub mod trade;
 
-pub mod terminal;
 pub mod hype;
+pub mod terminal;
 
 pub mod cms;
 pub mod health;

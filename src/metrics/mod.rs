@@ -13,6 +13,12 @@ pub struct Metrics {
     pub db: DBMetrics,
 }
 
+impl Default for Metrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Metrics {
     pub fn new() -> Self {
         Self {
@@ -22,7 +28,7 @@ impl Metrics {
 }
 
 /// 전역 메트릭 인스턴스
-pub static METRICS: Lazy<Metrics> = Lazy::new(|| Metrics::new());
+pub static METRICS: Lazy<Metrics> = Lazy::new(Metrics::new);
 
 pub async fn run_metrics_logging() -> Result<()> {
     match monitor::metrics_logging_task().await {

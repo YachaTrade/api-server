@@ -78,7 +78,7 @@ async fn connect_primary() -> sqlx::Pool<sqlx::Postgres> {
             // URL에서 비밀번호 마스킹
             let masked_url = primary_db_url
                 .split('@')
-                .last()
+                .next_back()
                 .unwrap_or("unknown");
             panic!(
                 "Failed to connect to primary PostgreSQL database (host: {}) | Error: {} | Debug: {:?} | Source: {:?}",
@@ -163,7 +163,9 @@ async fn connect_replica() -> sqlx::Pool<sqlx::Postgres> {
         .unwrap_or_else(|err| {
             panic!(
                 "Failed to connect to replica PostgreSQL database: {} | Debug: {:?} | Source: {:?}",
-                err, err, err.source()
+                err,
+                err,
+                err.source()
             )
         });
 

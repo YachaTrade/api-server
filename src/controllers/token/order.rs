@@ -82,7 +82,8 @@ impl OrderController {
 
         let order_by_clone = order_by;
         let tokens = with_cache(&GLOBAL_CACHE.cache, &cache_key, || async move {
-            self.fetch_order_tokens(order_by_clone, pagination, is_nsfw).await
+            self.fetch_order_tokens(order_by_clone, pagination, is_nsfw)
+                .await
         })
         .await?;
 
@@ -181,7 +182,7 @@ impl OrderController {
                 measure_postgres!(
                     "token_order.fetch_creation_time",
                     sqlx::query_as::<_, OrderTokenRow>(&query)
-                        .bind(pagination.limit as i64)
+                        .bind(pagination.limit)
                         .bind(offset)
                         .bind(time_24h_ago)
                         .fetch_all(self.db.get_read_pool())
@@ -281,7 +282,7 @@ impl OrderController {
                         .bind(pagination.limit)
                         .bind(offset)
                         .bind(time_24h_ago)
-                        .fetch_all(&*self.db.get_read_pool())
+                        .fetch_all(self.db.get_read_pool())
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by latest trade: {}", err))?
             }
@@ -375,7 +376,7 @@ impl OrderController {
                         .bind(pagination.limit)
                         .bind(offset)
                         .bind(time_24h_ago)
-                        .fetch_all(&*self.db.get_read_pool())
+                        .fetch_all(self.db.get_read_pool())
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by market cap: {}", err))?
             }
@@ -384,7 +385,11 @@ impl OrderController {
         Ok(rows.into_iter().map(OrderToken::from).collect())
     }
 
-    pub async fn get_total_count_by_type(&self, _order_type: &TokenOrderType, is_nsfw: bool) -> Result<i64> {
+    pub async fn get_total_count_by_type(
+        &self,
+        _order_type: &TokenOrderType,
+        is_nsfw: bool,
+    ) -> Result<i64> {
         // is_nsfw = true: return all tokens (total_count)
         // is_nsfw = false: return only SFW tokens (sfw_count)
         let column = if is_nsfw { "total_count" } else { "sfw_count" };
@@ -392,8 +397,7 @@ impl OrderController {
 
         let row = measure_postgres!(
             "token_order.get_total_count_by_type",
-            sqlx::query_as::<_, CountRow>(&query)
-                .fetch_one(self.db.get_read_pool())
+            sqlx::query_as::<_, CountRow>(&query).fetch_one(self.db.get_read_pool())
         )
         .map_err(|e| anyhow!("Failed to get total_count: {}", e))?;
 

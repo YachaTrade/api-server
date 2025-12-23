@@ -298,7 +298,7 @@ impl SearchController {
                         LIMIT 25
                         "#,
                     )
-                    .bind(&query)
+                    .bind(query)
                     .fetch_all(pool),
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
@@ -569,6 +569,7 @@ struct SearchAccountRow {
     image_uri: String,
     x_handle: Option<String>,
     x_image_uri: Option<String>,
+    #[allow(dead_code)]
     is_blue_label: Option<bool>,
 }
 

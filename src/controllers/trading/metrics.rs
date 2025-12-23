@@ -68,15 +68,12 @@ impl MetricsController {
         token_id: &str,
         timeframe: TimeFrame,
     ) -> Result<MetricItem> {
-        let cache_key = cache_key!(
-            "metrics",
-            token_id,
-            timeframe.to_string()
-        );
+        let cache_key = cache_key!("metrics", token_id, timeframe.to_string());
 
         let token_id_clone = token_id.to_string();
         with_cache(&GLOBAL_CACHE.cache, &cache_key, || async move {
-            self.fetch_metric_for_timeframe_internal(&token_id_clone, timeframe).await
+            self.fetch_metric_for_timeframe_internal(&token_id_clone, timeframe)
+                .await
         })
         .await
     }
@@ -218,7 +215,9 @@ impl MetricsController {
             .fetch_optional(self.db.get_read_pool())
         )?;
 
-        let start_price = start_result.and_then(|row| row.price).map(|price| price.normalized().to_plain_string());
+        let start_price = start_result
+            .and_then(|row| row.price)
+            .map(|price| price.normalized().to_plain_string());
 
         let current_price = current_result.map(|row| row.price.normalized().to_plain_string());
 

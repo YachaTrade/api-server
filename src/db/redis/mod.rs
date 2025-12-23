@@ -10,24 +10,25 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-        GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
-        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
-        HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION,
-        ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_TRADE_EXPIRATION, TOKEN_CREATED_EXPIRATION,
+        GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
+        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_REWARD_ADD_HISTORY_EXPIRATION,
+        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
+        GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
+        HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
+        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION,
+        TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
         common::{info::AccountInfo, pagination::PaginationParams},
         hype::{
-            AmountResponse, HypeEpochResponse, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeTokenResponse,
-            HypeVoteHistoryResponse,
+            AmountResponse, HypeEpochResponse, HypePointResponse, HypeRewardAddHistoryResponse,
+            HypeTokenResponse, HypeVoteHistoryResponse,
         },
         leaderboard::HypePointLeaderboardResponse,
         metadata::TerminalMetadataResponse,
-        profile::PointHistoryResponse,
         new_event::NewEventResponse,
+        profile::PointHistoryResponse,
         profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
         token::{
@@ -119,9 +120,7 @@ impl RedisDatabase {
         // Use GETDEL for atomic get-and-delete operation
         let message: Option<String> = measure_redis!(
             "redis.get_and_delete_sign_message",
-            redis::cmd("GETDEL")
-                .arg(&key)
-                .query_async(&mut conn)
+            redis::cmd("GETDEL").arg(&key).query_async(&mut conn)
         )?;
 
         let elapsed = start_time.elapsed();
@@ -566,7 +565,7 @@ impl RedisDatabase {
     pub async fn set_hype_token_response(&self, response: &HypeTokenResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_token");
+        let key = "hype_token".to_string();
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_token_response",
@@ -581,7 +580,7 @@ impl RedisDatabase {
     pub async fn get_hype_token_response(&self) -> Result<HypeTokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_token");
+        let key = "hype_token".to_string();
         let response_json: String =
             measure_redis!("redis.get_hype_token_response", conn.get::<_, String>(key))?;
         let elapsed = start_time.elapsed();
@@ -593,7 +592,7 @@ impl RedisDatabase {
     pub async fn set_hype_token_latest_response(&self, response: &HypeTokenResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_token_latest");
+        let key = "hype_token_latest".to_string();
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_token_latest_response",
@@ -601,18 +600,26 @@ impl RedisDatabase {
         )?;
 
         let elapsed = start_time.elapsed();
-        debug!("set_hype_token_latest_response() completed in {:?}", elapsed);
+        debug!(
+            "set_hype_token_latest_response() completed in {:?}",
+            elapsed
+        );
         Ok(())
     }
 
     pub async fn get_hype_token_latest_response(&self) -> Result<HypeTokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_token_latest");
-        let response_json: String =
-            measure_redis!("redis.get_hype_token_latest_response", conn.get::<_, String>(key))?;
+        let key = "hype_token_latest".to_string();
+        let response_json: String = measure_redis!(
+            "redis.get_hype_token_latest_response",
+            conn.get::<_, String>(key)
+        )?;
         let elapsed = start_time.elapsed();
-        debug!("get_hype_token_latest_response() completed in {:?}", elapsed);
+        debug!(
+            "get_hype_token_latest_response() completed in {:?}",
+            elapsed
+        );
         let response_json: HypeTokenResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -674,7 +681,7 @@ impl RedisDatabase {
     pub async fn set_total_hype_point_response(&self, response: &AmountResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("total_hype_point");
+        let key = "total_hype_point".to_string();
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_total_hype_point_response",
@@ -682,26 +689,20 @@ impl RedisDatabase {
         )?;
 
         let elapsed = start_time.elapsed();
-        debug!(
-            "set_total_hype_point_response() completed in {:?}",
-            elapsed
-        );
+        debug!("set_total_hype_point_response() completed in {:?}", elapsed);
         Ok(())
     }
 
     pub async fn get_total_hype_point_response(&self) -> Result<AmountResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("total_hype_point");
+        let key = "total_hype_point".to_string();
         let response_json: String = measure_redis!(
             "redis.get_total_hype_point_response",
             conn.get::<_, String>(key)
         )?;
         let elapsed = start_time.elapsed();
-        debug!(
-            "get_total_hype_point_response() completed in {:?}",
-            elapsed
-        );
+        debug!("get_total_hype_point_response() completed in {:?}", elapsed);
         let response_json: AmountResponse = serde_json::from_str(&response_json)?;
         Ok(response_json)
     }
@@ -709,7 +710,7 @@ impl RedisDatabase {
     pub async fn set_community_treasury_response(&self, response: &AmountResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("community_treasury");
+        let key = "community_treasury".to_string();
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_community_treasury_response",
@@ -727,7 +728,7 @@ impl RedisDatabase {
     pub async fn get_community_treasury_response(&self) -> Result<AmountResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("community_treasury");
+        let key = "community_treasury".to_string();
         let response_json: String = measure_redis!(
             "redis.get_community_treasury_response",
             conn.get::<_, String>(key)
@@ -908,7 +909,6 @@ impl RedisDatabase {
         let response: HypePointResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
-
 
     pub async fn set_hype_reward_add_history_response(
         &self,
@@ -1297,7 +1297,10 @@ impl RedisDatabase {
         Ok(())
     }
 
-    pub async fn get_terminal_metadata(&self, token_address: &str) -> Result<Option<TerminalMetadataResponse>> {
+    pub async fn get_terminal_metadata(
+        &self,
+        token_address: &str,
+    ) -> Result<Option<TerminalMetadataResponse>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("terminal_metadata:{}", token_address);
@@ -1323,14 +1326,21 @@ impl RedisDatabase {
     }
 
     // Trend Caching
-    pub async fn set_trend_response(&self, response: &crate::types::trend::TrendResponse) -> Result<()> {
+    pub async fn set_trend_response(
+        &self,
+        response: &crate::types::trend::TrendResponse,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = "trend:all";
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_trend_response",
-            conn.pset_ex::<String, String, ()>(key.to_string(), json, *GET_TREND_TOKEN_RESPONSE_EXPIRATION)
+            conn.pset_ex::<String, String, ()>(
+                key.to_string(),
+                json,
+                *GET_TREND_TOKEN_RESPONSE_EXPIRATION
+            )
         )?;
 
         let elapsed = start_time.elapsed();
@@ -1351,7 +1361,11 @@ impl RedisDatabase {
     }
 
     // Account Info Caching
-    pub async fn set_account_info(&self, account_id: &str, account_info: &AccountInfo) -> Result<()> {
+    pub async fn set_account_info(
+        &self,
+        account_id: &str,
+        account_info: &AccountInfo,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
         let key = format!("account:info:{}", account_id);
@@ -1375,10 +1389,8 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("account:info:{}", account_id);
 
-        let account_json: Option<String> = measure_redis!(
-            "redis.get_account_info",
-            conn.get::<_, Option<String>>(key)
-        )?;
+        let account_json: Option<String> =
+            measure_redis!("redis.get_account_info", conn.get::<_, Option<String>>(key))?;
 
         let elapsed = start_time.elapsed();
         debug!(

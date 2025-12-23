@@ -171,7 +171,7 @@ impl SwapController {
                 "#,
             )
             .bind(account_id)
-            .bind(pagination.limit as i64)
+            .bind(pagination.limit)
             .bind(offset)
             .fetch_all(self.db.get_read_pool())
         )
@@ -297,8 +297,8 @@ impl SwapController {
         }
 
         // Handle volume_ranges (multi-range filter using value field)
-        if let Some(ranges) = &query.volume_ranges {
-            if !ranges.is_empty() {
+        if let Some(ranges) = &query.volume_ranges
+            && !ranges.is_empty() {
                 query_sql.push_str(" AND (");
                 for (i, range) in ranges.iter().enumerate() {
                     if i > 0 {
@@ -316,9 +316,8 @@ impl SwapController {
                         next_param += 1;
                     }
                 }
-                query_sql.push_str(")");
+                query_sql.push(')');
             }
-        }
 
         query_sql.push_str(&format!(
             " ORDER BY s.block_number {}, s.tx_index {}, s.log_index {}",
@@ -432,8 +431,8 @@ impl SwapController {
         }
 
         // Handle volume_ranges (multi-range filter using value field)
-        if let Some(ranges) = &query_params.volume_ranges {
-            if !ranges.is_empty() {
+        if let Some(ranges) = &query_params.volume_ranges
+            && !ranges.is_empty() {
                 query.push_str(" AND (");
                 for (i, range) in ranges.iter().enumerate() {
                     if i > 0 {
@@ -451,9 +450,8 @@ impl SwapController {
                         next_param += 1;
                     }
                 }
-                query.push_str(")");
+                query.push(')');
             }
-        }
 
         match query_params.trade_type.as_str() {
             "BUY" => query.push_str(" AND s.is_buy = true"),

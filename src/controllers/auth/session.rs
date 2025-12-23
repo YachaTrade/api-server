@@ -55,7 +55,6 @@ impl SessionController {
             .bind(&account.nickname)
             .bind(&account.image_uri)
             .bind(&account.bio)
-       
             .fetch_one(self.db.get_write_pool())
         )
         .map_err(|err| anyhow!("Failed to set session: {}", err))?;

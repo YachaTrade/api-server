@@ -9,9 +9,7 @@ use crate::{
     result::AppJsonResult,
     services::token::order::TokenOrderService,
     state::AppState,
-    types::{
-        token::order::{OrderQuery, OrderTokenResponse, TokenOrderType},
-    },
+    types::token::order::{OrderQuery, OrderTokenResponse, TokenOrderType},
 };
 
 use super::path::OrderPath;
@@ -103,4 +101,3 @@ pub async fn get_latest_trade_order(
 
     Ok(Json(response))
 }
-

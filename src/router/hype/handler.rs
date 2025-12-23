@@ -12,9 +12,9 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         hype::{
-            AmountResponse, HypeEpochResponse, HypePointResponse,
-            HypeRewardAddHistoryResponse, HypeTokenQuery,
-            HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest, HypeVoteResponse,
+            AmountResponse, HypeEpochResponse, HypePointResponse, HypeRewardAddHistoryResponse,
+            HypeTokenQuery, HypeTokenResponse, HypeVoteHistoryResponse, HypeVoteRequest,
+            HypeVoteResponse,
         },
     },
 };
@@ -135,7 +135,6 @@ pub async fn get_hype_vote_history(
 
     Ok(Json(response))
 }
-
 
 /// Get Hype Reward Add History
 #[utoipa::path(

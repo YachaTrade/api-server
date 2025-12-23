@@ -7,9 +7,9 @@ use tracing::{info, instrument};
 use super::path::TerminalPath;
 use crate::{
     result::{AppError, AppJsonResult},
-    services::{terminal::TerminalService, metadata::MetadataService},
+    services::{metadata::MetadataService, terminal::TerminalService},
     state::AppState,
-    types::{terminal::*, metadata::TerminalMetadataResponse},
+    types::{metadata::TerminalMetadataResponse, terminal::*},
     utils::valid_evm_address,
 };
 
@@ -24,9 +24,7 @@ use crate::{
     tag = "Terminal"
 )]
 #[instrument(skip(state))]
-pub async fn get_latest_block(
-    State(state): State<AppState>,
-) -> AppJsonResult<LatestBlockResponse> {
+pub async fn get_latest_block(State(state): State<AppState>) -> AppJsonResult<LatestBlockResponse> {
     let service = TerminalService::new(state.postgres.clone());
     let response = service.get_latest_block().await?;
 
@@ -131,7 +129,9 @@ pub async fn get_terminal_metadata(
     Path(token_address): Path<String>,
 ) -> AppJsonResult<TerminalMetadataResponse> {
     if !valid_evm_address(&token_address) {
-        return Err(AppError::BadRequest("Invalid token address format".to_string()));
+        return Err(AppError::BadRequest(
+            "Invalid token address format".to_string(),
+        ));
     }
 
     info!("Getting terminal metadata for token: {}", token_address);
@@ -144,7 +144,10 @@ pub async fn get_terminal_metadata(
 
     let response = service.get_terminal_metadata(&token_address).await?;
 
-    info!("✅ Terminal metadata retrieved for token: {}", token_address);
+    info!(
+        "✅ Terminal metadata retrieved for token: {}",
+        token_address
+    );
 
     Ok(Json(response))
 }

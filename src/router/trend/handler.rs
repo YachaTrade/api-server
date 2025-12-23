@@ -3,9 +3,7 @@ use tracing::instrument;
 
 use super::path::TrendPath;
 use crate::{
-    result::AppJsonResult,
-    services::trend::TrendService,
-    state::AppState,
+    result::AppJsonResult, services::trend::TrendService, state::AppState,
     types::trend::TrendResponse,
 };
 
@@ -26,4 +24,3 @@ pub async fn get_trend(State(state): State<AppState>) -> AppJsonResult<TrendResp
 
     Ok(Json(response))
 }
-

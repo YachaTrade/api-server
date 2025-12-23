@@ -1,8 +1,4 @@
-use axum::{
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde_json::json;
 
 use crate::metrics::METRICS;
@@ -37,8 +33,9 @@ pub async fn health_check() -> impl IntoResponse {
                     "postgres_ms": PG_THRESHOLD_MS,
                     "redis_ms": REDIS_THRESHOLD_MS
                 }
-            }))
-        ).into_response();
+            })),
+        )
+            .into_response();
     }
 
     (
@@ -51,6 +48,7 @@ pub async fn health_check() -> impl IntoResponse {
                 "postgres_timeouts": pg_timeouts,
                 "redis_timeouts": redis_timeouts
             }
-        }))
-    ).into_response()
+        })),
+    )
+        .into_response()
 }

@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::raffle::{RaffleCheckResponse, RafflePrizes, RaffleRound, RaffleRoundResponse, RaffleStatusResponse},
+    types::raffle::{
+        RaffleCheckResponse, RafflePrizes, RaffleRound, RaffleRoundResponse, RaffleStatusResponse,
+    },
 };
 
 pub struct RaffleController {

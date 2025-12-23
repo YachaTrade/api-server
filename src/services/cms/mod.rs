@@ -4,7 +4,7 @@ use alloy::primitives::Address;
 
 use crate::{
     controllers::cms::CmsController,
-    db::{postgres::PostgresDatabase, redis::RedisDatabase},
+    db::postgres::PostgresDatabase,
     result::AppError,
     types::cms::{CmsActionResponse, InsertTrendRequest, SetNsfwRequest},
     utils::single_flight::GLOBAL_CACHE,
@@ -12,12 +12,11 @@ use crate::{
 
 pub struct CmsService {
     postgres: Arc<PostgresDatabase>,
-    redis: Arc<RedisDatabase>,
 }
 
 impl CmsService {
-    pub fn new(postgres: Arc<PostgresDatabase>, redis: Arc<RedisDatabase>) -> Self {
-        Self { postgres, redis }
+    pub fn new(postgres: Arc<PostgresDatabase>) -> Self {
+        Self { postgres }
     }
 
     pub async fn set_nsfw(
@@ -54,8 +53,9 @@ impl CmsService {
     ) -> Result<CmsActionResponse, AppError> {
         // Validate all token_ids are valid EVM addresses
         for token_id in &request.token_ids {
-            Address::from_str(token_id)
-                .map_err(|_| AppError::BadRequest(format!("Invalid token_id format: {}", token_id)))?;
+            Address::from_str(token_id).map_err(|_| {
+                AppError::BadRequest(format!("Invalid token_id format: {}", token_id))
+            })?;
         }
 
         let controller = CmsController::new(self.postgres.clone());

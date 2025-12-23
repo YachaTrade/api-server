@@ -9,7 +9,10 @@ use crate::{
     state::AppState,
     types::{
         common::pagination::PaginationParams,
-        profile::{CreatedTokensResponse, HoldTokenResponse, PointHistoryResponse, ProfileResponse, SwapHistoryResponse},
+        profile::{
+            CreatedTokensResponse, HoldTokenResponse, PointHistoryResponse, ProfileResponse,
+            SwapHistoryResponse,
+        },
     },
     utils::valid_evm_address,
 };

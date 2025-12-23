@@ -1,7 +1,10 @@
 use crate::{
     types::common::{
         info::{AccountInfo, TokenInfo},
-        pagination::{default_direction, default_page, deserialize_limit, deserialize_page, validate_direction, DEFAULT_LIMIT},
+        pagination::{
+            DEFAULT_LIMIT, default_direction, default_page, deserialize_limit, deserialize_page,
+            validate_direction,
+        },
     },
     utils::valid_evm_address,
 };
@@ -92,18 +95,20 @@ pub struct SwapQuery {
     pub account_id: Option<String>,
 
     /// Trade type filter: "BUY", "SELL", or "ALL" (default)
-    #[serde(default = "default_trade_type", deserialize_with = "normalize_trade_type")]
+    #[serde(
+        default = "default_trade_type",
+        deserialize_with = "normalize_trade_type"
+    )]
     pub trade_type: String,
 }
 
 impl SwapQuery {
     /// Validate the query parameters
     pub fn validate(&self) -> Result<(), String> {
-        if self.account_id.is_some() {
-            if !valid_evm_address(self.account_id.as_ref().unwrap()) {
+        if self.account_id.is_some()
+            && !valid_evm_address(self.account_id.as_ref().unwrap()) {
                 return Err("Invalid account ID format".to_string());
             }
-        }
 
         // Validate trade_type
         if !["BUY", "SELL", "ALL"].contains(&self.trade_type.as_str()) {
@@ -149,13 +154,17 @@ where
                             return Err(Error::custom(format!(
                                 "Invalid volume range: '{}'. Valid values: small, medium, large",
                                 trimmed
-                            )))
+                            )));
                         }
                     };
                     ranges.push(range);
                 }
             }
-            Ok(if ranges.is_empty() { None } else { Some(ranges) })
+            Ok(if ranges.is_empty() {
+                None
+            } else {
+                Some(ranges)
+            })
         }
     }
 }

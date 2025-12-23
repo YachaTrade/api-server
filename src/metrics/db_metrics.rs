@@ -10,6 +10,12 @@ pub struct DBMetrics {
     pub redis_total_response_time_ms: AtomicU64,
 }
 
+impl Default for DBMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DBMetrics {
     pub fn new() -> Self {
         Self {

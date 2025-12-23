@@ -16,7 +16,7 @@ where
     D: Deserializer<'de>,
 {
     let value = i64::deserialize(deserializer)?;
-    if value < 1 || value > MAX_LIMIT {
+    if !(1..=MAX_LIMIT).contains(&value) {
         Err(serde::de::Error::custom(format!(
             "Invalid limit: must be between 1 and {}",
             MAX_LIMIT
@@ -32,7 +32,7 @@ where
     D: Deserializer<'de>,
 {
     let value = i32::deserialize(deserializer)?;
-    if value < 1 || value > MAX_CHART_LIMIT {
+    if !(1..=MAX_CHART_LIMIT).contains(&value) {
         Err(serde::de::Error::custom(format!(
             "Invalid countback: must be between 1 and {}",
             MAX_CHART_LIMIT

@@ -1,21 +1,22 @@
-use bytes::Bytes;
-use std::{sync::Arc, io::Cursor, time::Instant, env};
-use uuid::Uuid;
-use image::{GenericImageView, ImageFormat, imageops::FilterType};
-use tracing::info;
-use resvg::usvg;
-use tiny_skia::Pixmap;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_rekognition::Client;
 use aws_sdk_rekognition::primitives::Blob;
 use aws_sdk_rekognition::types::Image;
+use bytes::Bytes;
+use image::{GenericImageView, ImageFormat, imageops::FilterType};
+use resvg::usvg;
+use std::{env, io::Cursor, sync::Arc, time::Instant};
+use tiny_skia::Pixmap;
+use tracing::info;
+use uuid::Uuid;
 
 use crate::{
     controllers::metadata::MetadataController,
-    db::{R2::R2Client, postgres::PostgresDatabase, redis::RedisDatabase},
+    db::{r2::R2Client, postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::metadata::{
-        TerminalMetadataResponse, TokenMetadata, UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse,
+        TerminalMetadataResponse, TokenMetadata, UploadImageResponse, UploadMetadataRequest,
+        UploadMetadataResponse,
     },
 };
 
@@ -42,7 +43,11 @@ impl MetadataService {
     }
 
     /// Validate image by detecting actual format from magic bytes
-    fn validate_image(&self, data: &[u8], _content_type: &Option<String>) -> Result<String, AppError> {
+    fn validate_image(
+        &self,
+        data: &[u8],
+        _content_type: &Option<String>,
+    ) -> Result<String, AppError> {
         // Check actual file format by magic bytes only
         if data.len() < 4 {
             return Err(AppError::BadRequest("File too small".to_string()));
@@ -80,7 +85,12 @@ impl MetadataService {
     }
 
     /// Convert SVG to PNG
-    fn convert_svg_to_png(&self, svg_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
+    fn convert_svg_to_png(
+        &self,
+        svg_data: &[u8],
+        max_width: u32,
+        max_height: u32,
+    ) -> Result<Vec<u8>, AppError> {
         info!("🎨 Starting SVG to PNG conversion");
         let start_time = Instant::now();
 
@@ -91,7 +101,9 @@ impl MetadataService {
         let svg_size = tree.size();
         info!("📐 SVG size: {}x{}", svg_size.width(), svg_size.height());
 
-        let scale = (max_width as f32 / svg_size.width()).min(max_height as f32 / svg_size.height()).min(1.0);
+        let scale = (max_width as f32 / svg_size.width())
+            .min(max_height as f32 / svg_size.height())
+            .min(1.0);
         let target_width = (svg_size.width() * scale) as u32;
         let target_height = (svg_size.height() * scale) as u32;
 
@@ -110,7 +122,8 @@ impl MetadataService {
             &mut pixmap.as_mut(),
         );
 
-        let png_data = pixmap.encode_png()
+        let png_data = pixmap
+            .encode_png()
             .map_err(|e| AppError::InternalError(format!("Failed to encode PNG: {}", e)))?;
 
         let conversion_time = start_time.elapsed();
@@ -124,7 +137,12 @@ impl MetadataService {
     }
 
     /// Convert any image format to PNG for validation with optional resize
-    fn convert_to_png(&self, image_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
+    fn convert_to_png(
+        &self,
+        image_data: &[u8],
+        max_width: u32,
+        max_height: u32,
+    ) -> Result<Vec<u8>, AppError> {
         info!("🚀 Starting image conversion process");
         let start_time = Instant::now();
 
@@ -374,7 +392,10 @@ impl MetadataService {
             .map_err(|err| AppError::InternalError(err.to_string()))?;
 
         // Cache the result in Redis (ignore cache errors)
-        let _ = self.redis.set_terminal_metadata(token_address, &response).await;
+        let _ = self
+            .redis
+            .set_terminal_metadata(token_address, &response)
+            .await;
 
         Ok(response)
     }

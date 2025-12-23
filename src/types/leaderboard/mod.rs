@@ -32,7 +32,10 @@ pub struct HypePointLeaderboardResponse {
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct LeaderboardQuery {
     #[param(default = 10, minimum = 1, maximum = 100)]
-    #[serde(default = "default_leaderboard_limit", deserialize_with = "deserialize_limit")]
+    #[serde(
+        default = "default_leaderboard_limit",
+        deserialize_with = "deserialize_limit"
+    )]
     pub limit: i64,
     #[param(default = 0, minimum = 0)]
     #[serde(default = "default_offset", deserialize_with = "deserialize_offset")]

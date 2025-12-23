@@ -7,8 +7,7 @@ use crate::{
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::{
-        common::pagination::PaginationParams,
-        profile::HoldTokenResponse,
+        common::pagination::PaginationParams, profile::HoldTokenResponse,
         trading::position::TokenHolderResponse,
     },
 };
