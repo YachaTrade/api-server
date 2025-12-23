@@ -6,7 +6,7 @@ pub const MAX_LIMIT: i64 = 100;
 /// Default limit for pagination
 pub const DEFAULT_LIMIT: i64 = 10;
 /// Maximum limit for chart data
-pub const MAX_CHART_LIMIT: i32 = 2000;
+pub const MAX_CHART_LIMIT: i32 = 3000;
 /// Default limit for chart data
 pub const DEFAULT_CHART_LIMIT: i32 = 500;
 
