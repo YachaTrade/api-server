@@ -327,7 +327,7 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 
 ### API 기능
 
-- **Swagger UI**: `/swagger-ui`에서 사용 가능
+- **Swagger UI**: `/dev-sw`에서 사용 가능
 - **헬스 체크**: `/health`에서 사용 가능
 - **페이지네이션**: `PaginationParams` 쿼리 파라미터를 통해 지원
 - **파일 업로드**: 봇 모듈에서 지원 (multipart/form-data)
