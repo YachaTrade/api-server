@@ -134,9 +134,13 @@ pub async fn update_metadata(
                 })?);
             }
             "image" => {
-                image_data = Some(field.bytes().await.map_err(|e| {
+                let bytes = field.bytes().await.map_err(|e| {
                     AppError::BadRequest(format!("Failed to read image: {}", e))
-                })?);
+                })?;
+                // Only set image_data if not empty
+                if !bytes.is_empty() {
+                    image_data = Some(bytes);
+                }
             }
             _ => {
                 info!("Ignoring unknown field: {}", name);
