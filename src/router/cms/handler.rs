@@ -172,14 +172,18 @@ pub struct UpdateMetadataMultipart {
     /// Token address (required)
     pub token_id: String,
     /// Token description (optional)
+    #[schema(nullable = true)]
     pub description: Option<String>,
     /// Website URL (optional, must start with https://)
+    #[schema(nullable = true)]
     pub website: Option<String>,
     /// Twitter/X URL (optional, must start with https://x.com/)
+    #[schema(nullable = true)]
     pub twitter: Option<String>,
     /// Telegram URL (optional, must start with https://t.me/)
+    #[schema(nullable = true)]
     pub telegram: Option<String>,
     /// Image file (optional)
-    #[schema(value_type = String, format = Binary)]
+    #[schema(value_type = Option<String>, format = Binary, nullable = true)]
     pub image: Option<String>,
 }
