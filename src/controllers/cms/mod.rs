@@ -75,18 +75,18 @@ impl CmsController {
             .await
             .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
 
-        // Verify admin status with FOR UPDATE to lock the row during transaction
+        // Verify admin status
         let is_admin = measure_postgres!(
             "cms.trend.verify_admin",
-            sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM admin WHERE account_id = $1 FOR UPDATE"
+            sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM admin WHERE account_id = $1)"
             )
             .bind(account_id)
             .fetch_one(&mut *tx)
         )
         .map_err(|err| anyhow!("Failed to verify admin status: {}", err))?;
 
-        if is_admin == 0 {
+        if !is_admin {
             return Err(anyhow!("Admin access required"));
         }
 
