@@ -23,12 +23,11 @@ pub struct Chart {
 #[derive(Default)]
 pub enum ChartType {
     #[default]
-    Price,        // MON/TOKEN 가격 (기본)
+    Price, // MON/TOKEN 가격 (기본)
     PriceUsd,     // USD 가격
     MarketCap,    // 시가총액 (MON) = price * total_supply
     MarketCapUsd, // 시가총액 (USD) = usd_price * total_supply
 }
-
 
 fn default_countback() -> i32 {
     DEFAULT_CHART_LIMIT

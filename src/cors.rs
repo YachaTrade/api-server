@@ -9,13 +9,13 @@ pub fn get_cors() -> CorsLayer {
     // Allow CORS
     // From: https://github.com/MystenLabs/sui/blob/13df03f2fad0e80714b596f55b04e0b7cea37449/crates/sui-faucet/src/main.rs#L85
     // License: Apache-2.0
-    let origins = ["https://nad.fun".parse::<HeaderValue>().unwrap(),
+    let origins = [
+        "https://nad.fun".parse::<HeaderValue>().unwrap(),
         "https://nadapp.net".parse::<HeaderValue>().unwrap(),
-        "https://symphony.io".parse::<HeaderValue>().unwrap()];
+        "https://symphony.io".parse::<HeaderValue>().unwrap(),
+    ];
 
     let is_dev = env::var("ENVIRONMENT").map(|e| e == "DEV").unwrap_or(false);
-
-    
 
     CorsLayer::new()
         .allow_methods([

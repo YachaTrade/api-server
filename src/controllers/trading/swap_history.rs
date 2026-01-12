@@ -298,26 +298,27 @@ impl SwapController {
 
         // Handle volume_ranges (multi-range filter using value field)
         if let Some(ranges) = &query.volume_ranges
-            && !ranges.is_empty() {
-                query_sql.push_str(" AND (");
-                for (i, range) in ranges.iter().enumerate() {
-                    if i > 0 {
-                        query_sql.push_str(" OR ");
-                    }
-                    if range.max_value().is_some() {
-                        // Range with upper limit: min <= value < max
-                        query_sql.push_str(&format!("(s.value >= ${}", next_param));
-                        next_param += 1;
-                        query_sql.push_str(&format!(" AND s.value < ${})", next_param));
-                        next_param += 1;
-                    } else {
-                        // Range without upper limit (Large): value >= min
-                        query_sql.push_str(&format!("s.value >= ${}", next_param));
-                        next_param += 1;
-                    }
+            && !ranges.is_empty()
+        {
+            query_sql.push_str(" AND (");
+            for (i, range) in ranges.iter().enumerate() {
+                if i > 0 {
+                    query_sql.push_str(" OR ");
                 }
-                query_sql.push(')');
+                if range.max_value().is_some() {
+                    // Range with upper limit: min <= value < max
+                    query_sql.push_str(&format!("(s.value >= ${}", next_param));
+                    next_param += 1;
+                    query_sql.push_str(&format!(" AND s.value < ${})", next_param));
+                    next_param += 1;
+                } else {
+                    // Range without upper limit (Large): value >= min
+                    query_sql.push_str(&format!("s.value >= ${}", next_param));
+                    next_param += 1;
+                }
             }
+            query_sql.push(')');
+        }
 
         query_sql.push_str(&format!(
             " ORDER BY s.block_number {}, s.tx_index {}, s.log_index {}",
@@ -432,26 +433,27 @@ impl SwapController {
 
         // Handle volume_ranges (multi-range filter using value field)
         if let Some(ranges) = &query_params.volume_ranges
-            && !ranges.is_empty() {
-                query.push_str(" AND (");
-                for (i, range) in ranges.iter().enumerate() {
-                    if i > 0 {
-                        query.push_str(" OR ");
-                    }
-                    if range.max_value().is_some() {
-                        // Range with upper limit: min <= value < max
-                        query.push_str(&format!("(s.value >= ${}", next_param));
-                        next_param += 1;
-                        query.push_str(&format!(" AND s.value < ${})", next_param));
-                        next_param += 1;
-                    } else {
-                        // Range without upper limit (Large): value >= min
-                        query.push_str(&format!("s.value >= ${}", next_param));
-                        next_param += 1;
-                    }
+            && !ranges.is_empty()
+        {
+            query.push_str(" AND (");
+            for (i, range) in ranges.iter().enumerate() {
+                if i > 0 {
+                    query.push_str(" OR ");
                 }
-                query.push(')');
+                if range.max_value().is_some() {
+                    // Range with upper limit: min <= value < max
+                    query.push_str(&format!("(s.value >= ${}", next_param));
+                    next_param += 1;
+                    query.push_str(&format!(" AND s.value < ${})", next_param));
+                    next_param += 1;
+                } else {
+                    // Range without upper limit (Large): value >= min
+                    query.push_str(&format!("s.value >= ${}", next_param));
+                    next_param += 1;
+                }
             }
+            query.push(')');
+        }
 
         match query_params.trade_type.as_str() {
             "BUY" => query.push_str(" AND s.is_buy = true"),
