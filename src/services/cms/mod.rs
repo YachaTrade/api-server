@@ -116,7 +116,6 @@ impl CmsService {
         session_address: &str,
         request: UpdateMetadataRequest,
         image_data: Option<Bytes>,
-        image_content_type: Option<String>,
     ) -> Result<UpdateMetadataResponse, AppError> {
         // Validate token_id is a valid EVM address
         let token_address: Address = Address::from_str(&request.token_id)
@@ -156,18 +155,33 @@ impl CmsService {
             metadata.telegram = Some(telegram);
         }
 
-        // Handle image upload if provided
+        // Handle image upload if provided - generate new image URI
         if let Some(image_bytes) = image_data {
-            let content_type = image_content_type.unwrap_or_else(|| "image/png".to_string());
-            let image_uri = self
-                .upload_and_replace_image(&metadata.image_uri, &image_bytes, &content_type)
-                .await?;
+            let image_uri = self.upload_new_image(&image_bytes).await?;
             metadata.image_uri = image_uri;
         }
 
         // Upload updated metadata to the same URL
         self.upload_metadata_to_uri(&metadata_uri, &metadata)
             .await?;
+
+        // Update token table in DB
+        controller
+            .update_token_metadata(
+                &request.token_id,
+                metadata.description.as_deref(),
+                Some(&metadata.image_uri),
+                metadata.website.as_deref(),
+                metadata.twitter.as_deref(),
+                metadata.telegram.as_deref(),
+            )
+            .await
+            .map_err(|err| {
+                error!("Failed to update token table: {}", err);
+                AppError::InternalError(format!("Failed to update token: {}", err))
+            })?;
+
+        info!("Updated token table for: {}", request.token_id);
 
         Ok(UpdateMetadataResponse {
             success: true,
@@ -213,29 +227,63 @@ impl CmsService {
         Ok(metadata)
     }
 
-    async fn upload_and_replace_image(
-        &self,
-        current_image_uri: &str,
-        image_data: &Bytes,
-        content_type: &str,
-    ) -> Result<String, AppError> {
-        // Extract image_id from current URI (e.g., https://storage.nadapp.net/coin/UUID)
-        let image_id = current_image_uri
-            .strip_prefix("https://storage.nadapp.net/coin/")
-            .ok_or_else(|| AppError::BadRequest("Invalid current image URI format".to_string()))?;
+    async fn upload_new_image(&self, image_data: &Bytes) -> Result<String, AppError> {
+        // Validate image format by magic bytes
+        let validated_format = self.validate_image(image_data)?;
 
-        // Upload to the same path to overwrite
+        // Generate new UUID for image
+        let image_id = uuid::Uuid::new_v4().to_string();
+
+        // Upload with new image_id and validated format
         let image_uri = self
             .r2
-            .upload_metadata_image_file(image_id, image_data, content_type)
+            .upload_metadata_image_file(&image_id, image_data, &validated_format)
             .await
             .map_err(|e| {
                 error!("Failed to upload image: {}", e);
                 AppError::InternalError(format!("Failed to upload image: {}", e))
             })?;
 
-        info!("Uploaded image to: {}", image_uri);
+        info!("Uploaded new image to: {}", image_uri);
         Ok(image_uri)
+    }
+
+    fn validate_image(&self, data: &[u8]) -> Result<String, AppError> {
+        const ALLOWED_IMAGE_TYPES: [&str; 4] =
+            ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
+
+        if data.len() < 4 {
+            return Err(AppError::BadRequest("File too small".to_string()));
+        }
+
+        let actual_format = if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            "image/jpeg"
+        } else if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+            "image/png"
+        } else if data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP" {
+            "image/webp"
+        } else if data.starts_with(b"<svg") || data.starts_with(b"<?xml") {
+            if let Ok(content) = std::str::from_utf8(data) {
+                if content.contains("<svg") {
+                    "image/svg+xml"
+                } else {
+                    return Err(AppError::BadRequest("Invalid SVG format".to_string()));
+                }
+            } else {
+                return Err(AppError::BadRequest("Invalid SVG encoding".to_string()));
+            }
+        } else {
+            return Err(AppError::BadRequest("Invalid image format".to_string()));
+        };
+
+        if !ALLOWED_IMAGE_TYPES.contains(&actual_format) {
+            return Err(AppError::BadRequest(format!(
+                "Unsupported image type: {}",
+                actual_format
+            )));
+        }
+
+        Ok(actual_format.to_string())
     }
 
     async fn upload_metadata_to_uri(

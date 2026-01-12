@@ -157,4 +157,40 @@ impl CmsController {
 
         Ok(())
     }
+
+    /// Update token table metadata fields
+    pub async fn update_token_metadata(
+        &self,
+        token_id: &str,
+        description: Option<&str>,
+        image_uri: Option<&str>,
+        website: Option<&str>,
+        twitter: Option<&str>,
+        telegram: Option<&str>,
+    ) -> Result<()> {
+        measure_postgres!(
+            "cms.update_token_metadata",
+            sqlx::query(
+                r#"
+                UPDATE token SET
+                    description = COALESCE($2, description),
+                    image_uri = COALESCE($3, image_uri),
+                    website = COALESCE($4, website),
+                    twitter = COALESCE($5, twitter),
+                    telegram = COALESCE($6, telegram)
+                WHERE token_id = $1
+                "#
+            )
+            .bind(token_id)
+            .bind(description)
+            .bind(image_uri)
+            .bind(website)
+            .bind(twitter)
+            .bind(telegram)
+            .execute(self.db.get_write_pool())
+        )
+        .map_err(|err| anyhow!("Failed to update token: {}", err))?;
+
+        Ok(())
+    }
 }
