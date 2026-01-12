@@ -99,7 +99,6 @@ pub async fn update_metadata(
     let mut twitter: Option<String> = None;
     let mut telegram: Option<String> = None;
     let mut image_data: Option<Bytes> = None;
-    let mut image_content_type: Option<String> = None;
 
     // Parse multipart form data
     while let Some(field) = multipart.next_field().await.map_err(|e| {
@@ -120,16 +119,14 @@ pub async fn update_metadata(
                 })?);
             }
             "website" => {
-                website =
-                    Some(field.text().await.map_err(|e| {
-                        AppError::BadRequest(format!("Failed to read website: {}", e))
-                    })?);
+                website = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read website: {}", e))
+                })?);
             }
             "twitter" => {
-                twitter =
-                    Some(field.text().await.map_err(|e| {
-                        AppError::BadRequest(format!("Failed to read twitter: {}", e))
-                    })?);
+                twitter = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read twitter: {}", e))
+                })?);
             }
             "telegram" => {
                 telegram = Some(field.text().await.map_err(|e| {
@@ -137,11 +134,9 @@ pub async fn update_metadata(
                 })?);
             }
             "image" => {
-                image_content_type = field.content_type().map(|s| s.to_string());
-                image_data =
-                    Some(field.bytes().await.map_err(|e| {
-                        AppError::BadRequest(format!("Failed to read image: {}", e))
-                    })?);
+                image_data = Some(field.bytes().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read image: {}", e))
+                })?);
             }
             _ => {
                 info!("Ignoring unknown field: {}", name);
@@ -165,7 +160,7 @@ pub async fn update_metadata(
 
     let service = CmsService::new(state.postgres.clone(), state.r2.clone());
     let response = service
-        .update_metadata(&session_address, request, image_data, image_content_type)
+        .update_metadata(&session_address, request, image_data)
         .await?;
 
     Ok(Json(response))
