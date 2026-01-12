@@ -2,6 +2,7 @@
 pub enum CmsPath {
     SetNsfw,
     InsertTrend,
+    UpdateMetadata,
 }
 
 impl CmsPath {
@@ -9,6 +10,7 @@ impl CmsPath {
         match self {
             CmsPath::SetNsfw => "/cms/token/nsfw",
             CmsPath::InsertTrend => "/cms/trend/insert",
+            CmsPath::UpdateMetadata => "/cms/token/metadata",
         }
     }
 
@@ -16,6 +18,7 @@ impl CmsPath {
         match self {
             CmsPath::SetNsfw => "/cms/token/nsfw",
             CmsPath::InsertTrend => "/cms/trend/insert",
+            CmsPath::UpdateMetadata => "/cms/token/metadata",
         }
     }
 }

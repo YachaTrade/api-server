@@ -15,4 +15,9 @@ pub fn router(state: AppState) -> Router<AppState> {
             CmsPath::InsertTrend.as_str(),
             post(handler::insert_trend).layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
+        .route(
+            CmsPath::UpdateMetadata.as_str(),
+            post(handler::update_metadata)
+                .layer(from_fn_with_state(state.clone(), authenticate_user)),
+        )
 }

@@ -1,12 +1,19 @@
-use axum::{Extension, Json, extract::State};
-use tracing::instrument;
+use axum::{
+    Extension, Json,
+    extract::{Multipart, State},
+};
+use bytes::Bytes;
+use tracing::{error, info, instrument};
 
 use super::path::CmsPath;
 use crate::{
     result::{AppError, AppJsonResult},
     services::cms::CmsService,
     state::AppState,
-    types::cms::{CmsActionResponse, InsertTrendRequest, SetNsfwRequest},
+    types::cms::{
+        CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
+        UpdateMetadataResponse,
+    },
 };
 
 /// Set token NSFW status (Admin only)
@@ -30,7 +37,7 @@ pub async fn set_nsfw(
 ) -> AppJsonResult<CmsActionResponse> {
     payload.validate().map_err(AppError::BadRequest)?;
 
-    let service = CmsService::new(state.postgres.clone());
+    let service = CmsService::new(state.postgres.clone(), state.r2.clone());
     let response = service.set_nsfw(&session_address, payload).await?;
 
     Ok(Json(response))
@@ -57,8 +64,127 @@ pub async fn insert_trend(
 ) -> AppJsonResult<CmsActionResponse> {
     payload.validate().map_err(AppError::BadRequest)?;
 
-    let service = CmsService::new(state.postgres.clone());
+    let service = CmsService::new(state.postgres.clone(), state.r2.clone());
     let response = service.insert_trend(&session_address, payload).await?;
 
     Ok(Json(response))
+}
+
+/// Update token metadata (Admin only)
+/// Accepts multipart/form-data with optional fields: token_id (required), description, website, twitter, telegram, image
+#[utoipa::path(
+    post,
+    path = CmsPath::UpdateMetadata.docs_str(),
+    request_body(
+        content_type = "multipart/form-data",
+        content = UpdateMetadataMultipart,
+    ),
+    responses(
+        (status = 200, description = "Metadata updated successfully", body = UpdateMetadataResponse),
+        (status = 401, description = "Unauthorized - Not an admin"),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "CMS"
+)]
+#[instrument(skip(state, multipart))]
+pub async fn update_metadata(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    mut multipart: Multipart,
+) -> AppJsonResult<UpdateMetadataResponse> {
+    let mut token_id: Option<String> = None;
+    let mut description: Option<String> = None;
+    let mut website: Option<String> = None;
+    let mut twitter: Option<String> = None;
+    let mut telegram: Option<String> = None;
+    let mut image_data: Option<Bytes> = None;
+    let mut image_content_type: Option<String> = None;
+
+    // Parse multipart form data
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        error!("Failed to read multipart field: {}", e);
+        AppError::BadRequest(format!("Failed to read form data: {}", e))
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+
+        match name.as_str() {
+            "token_id" => {
+                token_id = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read token_id: {}", e))
+                })?);
+            }
+            "description" => {
+                description = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read description: {}", e))
+                })?);
+            }
+            "website" => {
+                website =
+                    Some(field.text().await.map_err(|e| {
+                        AppError::BadRequest(format!("Failed to read website: {}", e))
+                    })?);
+            }
+            "twitter" => {
+                twitter =
+                    Some(field.text().await.map_err(|e| {
+                        AppError::BadRequest(format!("Failed to read twitter: {}", e))
+                    })?);
+            }
+            "telegram" => {
+                telegram = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read telegram: {}", e))
+                })?);
+            }
+            "image" => {
+                image_content_type = field.content_type().map(|s| s.to_string());
+                image_data =
+                    Some(field.bytes().await.map_err(|e| {
+                        AppError::BadRequest(format!("Failed to read image: {}", e))
+                    })?);
+            }
+            _ => {
+                info!("Ignoring unknown field: {}", name);
+            }
+        }
+    }
+
+    // Validate required field
+    let token_id =
+        token_id.ok_or_else(|| AppError::BadRequest("token_id is required".to_string()))?;
+
+    let request = UpdateMetadataRequest {
+        token_id,
+        description,
+        website,
+        twitter,
+        telegram,
+    };
+
+    request.validate().map_err(AppError::BadRequest)?;
+
+    let service = CmsService::new(state.postgres.clone(), state.r2.clone());
+    let response = service
+        .update_metadata(&session_address, request, image_data, image_content_type)
+        .await?;
+
+    Ok(Json(response))
+}
+
+/// Schema for update metadata multipart form
+#[derive(utoipa::ToSchema)]
+pub struct UpdateMetadataMultipart {
+    /// Token address (required)
+    pub token_id: String,
+    /// Token description (optional)
+    pub description: Option<String>,
+    /// Website URL (optional, must start with https://)
+    pub website: Option<String>,
+    /// Twitter/X URL (optional, must start with https://x.com/)
+    pub twitter: Option<String>,
+    /// Telegram URL (optional, must start with https://t.me/)
+    pub telegram: Option<String>,
+    /// Image file (optional)
+    #[schema(value_type = String, format = Binary)]
+    pub image: Option<String>,
 }
