@@ -2,7 +2,7 @@ pub mod handler;
 pub mod path;
 
 use crate::{middleware::authenticate_user, state::AppState};
-use axum::{Router, middleware::from_fn_with_state, routing::post};
+use axum::{Router, extract::DefaultBodyLimit, middleware::from_fn_with_state, routing::post};
 use path::CmsPath;
 
 pub fn router(state: AppState) -> Router<AppState> {
@@ -18,6 +18,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route(
             CmsPath::UpdateMetadata.as_str(),
             post(handler::update_metadata)
+                .layer(DefaultBodyLimit::max(5_000_000)) // 5MB for image upload
                 .layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
 }
