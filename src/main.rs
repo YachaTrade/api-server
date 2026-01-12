@@ -121,6 +121,7 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------CMS----------------
         router::cms::handler::set_nsfw,
         router::cms::handler::insert_trend,
+        router::cms::handler::update_metadata,
 
     ),
     components(
@@ -262,6 +263,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::SetNsfwRequest,
             types::cms::InsertTrendRequest,
             types::cms::CmsActionResponse,
+            types::cms::UpdateMetadataRequest,
+            types::cms::UpdateMetadataResponse,
+            router::cms::handler::UpdateMetadataMultipart,
 
         )
     ),
