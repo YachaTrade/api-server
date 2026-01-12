@@ -78,9 +78,10 @@ pub struct UpdateAccountRequest {
 impl UpdateAccountRequest {
     pub fn validate(&self) -> Result<(), String> {
         if let Some(ref bio) = self.bio
-            && bio.len() > MAX_BIO_LENGTH {
-                return Err(format!("Bio must be at most {} characters", MAX_BIO_LENGTH));
-            }
+            && bio.len() > MAX_BIO_LENGTH
+        {
+            return Err(format!("Bio must be at most {} characters", MAX_BIO_LENGTH));
+        }
         if let Some(ref nickname) = self.nickname {
             if nickname.len() < NICKNAME_MIN_LENGTH {
                 return Err(format!(
@@ -99,12 +100,13 @@ impl UpdateAccountRequest {
             }
         }
         if let Some(ref image_uri) = self.image_uri
-            && image_uri.len() > MAX_IMAGE_URI_LENGTH {
-                return Err(format!(
-                    "image_uri must be at most {} characters",
-                    MAX_IMAGE_URI_LENGTH
-                ));
-            }
+            && image_uri.len() > MAX_IMAGE_URI_LENGTH
+        {
+            return Err(format!(
+                "image_uri must be at most {} characters",
+                MAX_IMAGE_URI_LENGTH
+            ));
+        }
         Ok(())
     }
 }

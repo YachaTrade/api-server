@@ -105,10 +105,9 @@ pub struct SwapQuery {
 impl SwapQuery {
     /// Validate the query parameters
     pub fn validate(&self) -> Result<(), String> {
-        if self.account_id.is_some()
-            && !valid_evm_address(self.account_id.as_ref().unwrap()) {
-                return Err("Invalid account ID format".to_string());
-            }
+        if self.account_id.is_some() && !valid_evm_address(self.account_id.as_ref().unwrap()) {
+            return Err("Invalid account ID format".to_string());
+        }
 
         // Validate trade_type
         if !["BUY", "SELL", "ALL"].contains(&self.trade_type.as_str()) {

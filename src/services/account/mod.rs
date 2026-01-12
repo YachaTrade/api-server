@@ -39,11 +39,12 @@ impl AccountService {
     ) -> Result<AccountResponse, AppError> {
         // Validate nickname: cannot start with @
         if let Some(ref nickname) = req.nickname
-            && nickname.starts_with('@') {
-                return Err(AppError::BadRequest(
-                    "Nickname cannot start with '@'".to_string(),
-                ));
-            }
+            && nickname.starts_with('@')
+        {
+            return Err(AppError::BadRequest(
+                "Nickname cannot start with '@'".to_string(),
+            ));
+        }
 
         let controller = AccountController::new(self.postgres.clone());
         let account_info = controller

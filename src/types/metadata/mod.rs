@@ -97,12 +97,13 @@ impl TokenMetadata {
 
         // Validate description: max 500 chars (optional)
         if let Some(ref desc) = self.description
-            && desc.len() > MAX_DESCRIPTION_LENGTH {
-                return Err(AppError::BadRequest(format!(
-                    "Description must be at most {} characters",
-                    MAX_DESCRIPTION_LENGTH
-                )));
-            }
+            && desc.len() > MAX_DESCRIPTION_LENGTH
+        {
+            return Err(AppError::BadRequest(format!(
+                "Description must be at most {} characters",
+                MAX_DESCRIPTION_LENGTH
+            )));
+        }
 
         // Validate image_uri is not empty
         if self.image_uri.trim().is_empty() {
@@ -124,27 +125,33 @@ impl TokenMetadata {
 
         // Validate website URL - must start with https://
         if let Some(website_url) = &self.website
-            && !website_url.is_empty() && !website_url.starts_with("https://") {
-                return Err(AppError::BadRequest(
-                    "Invalid website URL - must start with https://".to_string(),
-                ));
-            }
+            && !website_url.is_empty()
+            && !website_url.starts_with("https://")
+        {
+            return Err(AppError::BadRequest(
+                "Invalid website URL - must start with https://".to_string(),
+            ));
+        }
 
         // Validate Twitter URL - must start with https://x.com/
         if let Some(twitter_url) = &self.twitter
-            && !twitter_url.is_empty() && !twitter_url.starts_with("https://x.com/") {
-                return Err(AppError::BadRequest(
-                    "Invalid X (Twitter) URL - must start with https://x.com/".to_string(),
-                ));
-            }
+            && !twitter_url.is_empty()
+            && !twitter_url.starts_with("https://x.com/")
+        {
+            return Err(AppError::BadRequest(
+                "Invalid X (Twitter) URL - must start with https://x.com/".to_string(),
+            ));
+        }
 
         // Validate Telegram URL - must start with https://t.me/
         if let Some(telegram_url) = &self.telegram
-            && !telegram_url.is_empty() && !telegram_url.starts_with("https://t.me/") {
-                return Err(AppError::BadRequest(
-                    "Invalid Telegram URL - must start with https://t.me/".to_string(),
-                ));
-            }
+            && !telegram_url.is_empty()
+            && !telegram_url.starts_with("https://t.me/")
+        {
+            return Err(AppError::BadRequest(
+                "Invalid Telegram URL - must start with https://t.me/".to_string(),
+            ));
+        }
 
         Ok(())
     }

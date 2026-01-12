@@ -184,25 +184,13 @@ impl TerminalService {
         let mut events: Vec<Event> = Vec::new();
 
         // Process swap events
-        events.extend(
-            swap_rows
-                .into_iter()
-                .map(Self::convert_swap_event),
-        );
+        events.extend(swap_rows.into_iter().map(Self::convert_swap_event));
 
         // Process mint events (join events)
-        events.extend(
-            mint_rows
-                .into_iter()
-                .map(Self::convert_mint_event),
-        );
+        events.extend(mint_rows.into_iter().map(Self::convert_mint_event));
 
         // Process burn events (exit events)
-        events.extend(
-            burn_rows
-                .into_iter()
-                .map(Self::convert_burn_event),
-        );
+        events.extend(burn_rows.into_iter().map(Self::convert_burn_event));
 
         // Sort events by block_number, tx_index, and log_index
         events.sort_by(|a, b| {

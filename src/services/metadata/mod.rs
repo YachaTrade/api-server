@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     controllers::metadata::MetadataController,
-    db::{r2::R2Client, postgres::PostgresDatabase, redis::RedisDatabase},
+    db::{postgres::PostgresDatabase, r2::R2Client, redis::RedisDatabase},
     result::AppError,
     types::metadata::{
         TerminalMetadataResponse, TokenMetadata, UploadImageResponse, UploadMetadataRequest,
