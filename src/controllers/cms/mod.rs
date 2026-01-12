@@ -124,4 +124,37 @@ impl CmsController {
 
         Ok(CmsActionResponse { success: true })
     }
+
+    /// Verify admin status for update metadata operation
+    pub async fn verify_admin(&self, account_id: &str) -> Result<bool> {
+        let is_admin = measure_postgres!(
+            "cms.verify_admin",
+            sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM admin WHERE account_id = $1)"
+            )
+            .bind(account_id)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to verify admin status: {}", err))?;
+
+        Ok(is_admin)
+    }
+
+    /// Update metadata_uri for a token
+    pub async fn update_token_metadata_uri(
+        &self,
+        token_id: &str,
+        metadata_uri: &str,
+    ) -> Result<()> {
+        measure_postgres!(
+            "cms.update_token_metadata_uri",
+            sqlx::query("UPDATE token SET metadata_uri = $1 WHERE token_id = $2")
+                .bind(metadata_uri)
+                .bind(token_id)
+                .execute(self.db.get_write_pool())
+        )
+        .map_err(|err| anyhow!("Failed to update token metadata_uri: {}", err))?;
+
+        Ok(())
+    }
 }
