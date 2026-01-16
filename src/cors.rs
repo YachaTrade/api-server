@@ -4,6 +4,7 @@ use axum::http::{
 };
 use std::{env, time::Duration};
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tracing::{info, warn};
 
 pub fn get_cors() -> CorsLayer {
     // Allow CORS
@@ -29,17 +30,28 @@ pub fn get_cors() -> CorsLayer {
         .allow_credentials(true)
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE, CONTENT_LENGTH])
         .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _| {
-            origin
+            let result = origin
                 .to_str()
                 .map(|origin_string| {
-                    origins
+                    let allowed = origins
                         .iter()
                         .any(|allowed_origin| allowed_origin == origin)
                         || origin_string.ends_with(".nad.fun")
                         || origin_string.ends_with(".symphony.io")
-                        || (is_dev && origin_string.starts_with("http://localhost:"))
+                        || origin_string.starts_with("http://localhost:");
+
+                    if allowed {
+                        info!("[CORS] Origin allowed: {}", origin_string);
+                    } else {
+                        warn!("[CORS] Origin rejected: {}", origin_string);
+                    }
+                    allowed
                 })
-                .unwrap_or(false)
+                .unwrap_or_else(|_| {
+                    warn!("[CORS] Invalid origin header: {:?}", origin);
+                    false
+                });
+            result
         }))
         .max_age(Duration::from_secs(86400))
 }
