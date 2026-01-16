@@ -77,15 +77,10 @@ pub async fn auth_session(
     cookie.set_secure(true);
     cookie.set_path("/");
 
-    // 환경에 따른 쿠키 설정
-    let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "DEV".to_string());
-    if environment == "LIVE" {
-        cookie.set_domain(".nad.fun");
-        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    } else {
-        // DEV 환경
-        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
-    }
+    // cross-site 쿠키 설정 (nadapp.net → nad.fun)
+    // domain 설정 없음 = nadapp.net
+    // SameSite::None = cross-site 요청에서도 쿠키 전송
+    cookie.set_same_site(tower_cookies::cookie::SameSite::None);
 
     cookie.set_max_age(Duration::hours(24));
 
@@ -130,15 +125,10 @@ pub async fn auth_delete_session(
     cookie.set_secure(true);
     cookie.set_path("/");
 
-    // 환경에 따른 쿠키 설정
-    let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "DEV".to_string());
-    if environment == "LIVE" {
-        cookie.set_domain(".nad.fun");
-        cookie.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    } else {
-        // DEV 환경
-        cookie.set_same_site(tower_cookies::cookie::SameSite::None);
-    }
+    // cross-site 쿠키 설정 (nadapp.net → nad.fun)
+    // domain 설정 없음 = nadapp.net
+    // SameSite::None = cross-site 요청에서도 쿠키 전송
+    cookie.set_same_site(tower_cookies::cookie::SameSite::None);
 
     cookie.set_max_age(Duration::ZERO);
 
