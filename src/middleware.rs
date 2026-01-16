@@ -10,19 +10,15 @@ use axum::{
 };
 use std::env;
 use tower_cookies::Cookies;
-use tracing::error;
+use tracing::{error, info};
 
 /// 허용된 Origin인지 검증
 fn is_allowed_origin(origin: &str) -> bool {
-    let is_dev = env::var("ENVIRONMENT")
-        .map(|e| e == "DEV")
-        .unwrap_or(false);
-
     origin == "https://nad.fun"
         || origin == "https://nadapp.net"
         || origin.ends_with(".nad.fun")
         || origin.ends_with(".symphony.io")
-        || (is_dev && origin.starts_with("http://localhost:"))
+        || origin.starts_with("http://localhost:")
 }
 
 #[derive(Clone, Debug)]
@@ -37,16 +33,22 @@ pub async fn authenticate_user(
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
+    info!("[AUTH] authenticate_user called, path: {}", req.uri().path());
+
     // Origin 헤더 검증 (CSRF 방어)
     if let Some(origin) = req.headers().get(ORIGIN) {
         let origin_str = origin.to_str().map_err(|_| {
-            error!("Invalid Origin header: {:?}", origin);
+            error!("[AUTH] Invalid Origin header: {:?}", origin);
             AppError::AuthError("Invalid Origin header".to_string())
         })?;
+        info!("[AUTH] Origin header: {}", origin_str);
         if !is_allowed_origin(origin_str) {
-            error!("Origin not allowed: {}", origin_str);
+            error!("[AUTH] Origin not allowed: {}", origin_str);
             return Err(AppError::AuthError("Origin not allowed".to_string()));
         }
+        info!("[AUTH] Origin allowed: {}", origin_str);
+    } else {
+        info!("[AUTH] No Origin header present");
     }
 
     let cookie_name =
