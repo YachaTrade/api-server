@@ -14,3 +14,7 @@ tests/
 deploy/
 
 stress-test/
+*.sh
+
+
+haproxy/
