@@ -6,7 +6,7 @@ use crate::{
     controllers::leaderboard::LeaderboardController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    types::leaderboard::{HypePointLeaderboardResponse, LeaderboardQuery},
+    types::leaderboard::{HypePointLeaderboardResponse, LeaderboardQuery, PnlLeaderboardResponse},
 };
 
 pub struct LeaderboardService {
@@ -46,6 +46,18 @@ impl LeaderboardService {
         {
             error!("Failed to set hype point leaderboard response: {}", err);
         }
+
+        Ok(response)
+    }
+
+    pub async fn get_pnl_leaderboard(
+        &self,
+        query: &LeaderboardQuery,
+    ) -> Result<PnlLeaderboardResponse, AppError> {
+        let controller = LeaderboardController::new(self.postgres.clone());
+        let response = controller.get_pnl_leaderboard(query).await.map_err(|err| {
+            AppError::InternalError(format!("Failed to get pnl leaderboard: {}", err))
+        })?;
 
         Ok(response)
     }
