@@ -117,6 +117,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------Leaderboard----------------
         router::leaderboard::handler::get_hype_point_leaderboard,
+        router::leaderboard::handler::get_pnl_leaderboard,
 
         // ----------------CMS----------------
         router::cms::handler::set_nsfw,
@@ -258,6 +259,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::leaderboard::HypePointLeaderboardEntry,
             types::leaderboard::HypePointLeaderboardResponse,
             types::leaderboard::LeaderboardQuery,
+            types::leaderboard::Pnl,
+            types::leaderboard::PnlLeaderboardEntry,
+            types::leaderboard::PnlLeaderboardResponse,
 
             // CMS
             types::cms::SetNsfwRequest,

@@ -41,3 +41,30 @@ pub struct LeaderboardQuery {
     #[serde(default = "default_offset", deserialize_with = "deserialize_offset")]
     pub offset: i64,
 }
+
+// PnL Leaderboard Types
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Pnl {
+    /// 실현 손익 (MON)
+    pub realized_native: String,
+    /// 수익률 % (native 기준)
+    pub native_percent: String,
+    /// 실현 손익 (USD)
+    pub realized_usd: String,
+    /// 수익률 % (usd 기준)
+    pub usd_percent: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PnlLeaderboardEntry {
+    pub rank: i64,
+    pub account_info: AccountInfo,
+    pub pnl: Pnl,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PnlLeaderboardResponse {
+    pub ranks: Vec<PnlLeaderboardEntry>,
+    pub total_count: i64,
+}
