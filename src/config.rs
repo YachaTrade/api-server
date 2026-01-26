@@ -69,6 +69,12 @@ lazy_static! {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(10000);
 
+    // PnL Leaderboard cache expiration (default: 5 minutes = 300000ms)
+    pub static ref PNL_LEADERBOARD_RESPONSE_EXPIRATION: u64 = env::var("PNL_LEADERBOARD_RESPONSE_EXPIRATION")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(300000);
+
     pub static ref NSFW_STATUS_EXPIRATION: u64 = env::var("NSFW_STATUS_EXPIRATION")
         .expect("NSFW_STATUS_EXPIRATION must be set")
         .parse::<u64>()
