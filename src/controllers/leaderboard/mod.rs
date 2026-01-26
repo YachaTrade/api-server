@@ -151,7 +151,7 @@ impl LeaderboardController {
                         ps.unrealized_native,
                         ps.unrealized_usd,
                         COUNT(*) OVER () as total_count
-                    FROM pnl_summary ps
+                    FROM pnl_aggregator ps
                 )
                 SELECT
                     r.rank,
