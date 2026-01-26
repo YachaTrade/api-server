@@ -39,6 +39,8 @@ struct PnlLeaderboardRow {
     total_invested_usd: BigDecimal,
     realized_native: BigDecimal,
     realized_usd: BigDecimal,
+    unrealized_native: BigDecimal,
+    unrealized_usd: BigDecimal,
     total_count: i64,
 }
 
@@ -56,7 +58,7 @@ impl LeaderboardController {
         query: &LeaderboardQuery,
     ) -> Result<HypePointLeaderboardResponse> {
         let limit = query.limit;
-        let offset = query.offset;
+        let offset = (query.page - 1) * limit;
 
         let rows = measure_postgres!(
             "leaderboard.get_hype_point_leaderboard",
@@ -132,28 +134,24 @@ impl LeaderboardController {
         query: &LeaderboardQuery,
     ) -> Result<PnlLeaderboardResponse> {
         let limit = query.limit;
-        let offset = query.offset;
+        let offset = (query.page - 1) * limit;
 
         let rows = measure_postgres!(
             "leaderboard.get_pnl_leaderboard",
             sqlx::query_as::<_, PnlLeaderboardRow>(
                 r#"
-                WITH pnl_data AS (
+                WITH ranked AS (
                     SELECT
-                        account_id,
-                        SUM(native_out) as total_invested_native,
-                        SUM(usd_out) as total_invested_usd,
-                        SUM(native_in - native_out) as realized_native,
-                        SUM(usd_in - usd_out) as realized_usd
-                    FROM position
-                    GROUP BY account_id
-                ),
-                ranked AS (
-                    SELECT
-                        ROW_NUMBER() OVER (ORDER BY realized_native DESC) as rank,
-                        pnl_data.*,
+                        ROW_NUMBER() OVER (ORDER BY (ps.realized_native + ps.unrealized_native) DESC) as rank,
+                        ps.account_id,
+                        ps.total_invested_native,
+                        ps.total_invested_usd,
+                        ps.realized_native,
+                        ps.realized_usd,
+                        ps.unrealized_native,
+                        ps.unrealized_usd,
                         COUNT(*) OVER () as total_count
-                    FROM pnl_data
+                    FROM pnl_summary ps
                 )
                 SELECT
                     r.rank,
@@ -165,6 +163,8 @@ impl LeaderboardController {
                     r.total_invested_usd,
                     r.realized_native,
                     r.realized_usd,
+                    r.unrealized_native,
+                    r.unrealized_usd,
                     r.total_count
                 FROM ranked r
                 JOIN account a ON r.account_id = a.account_id
@@ -184,8 +184,11 @@ impl LeaderboardController {
         let ranks = rows
             .into_iter()
             .map(|row| {
+                let total_native = &row.realized_native + &row.unrealized_native;
+                let total_usd = &row.realized_usd + &row.unrealized_usd;
+
                 let native_percent = if row.total_invested_native > BigDecimal::from(0) {
-                    (&row.realized_native / &row.total_invested_native * BigDecimal::from(100))
+                    (&total_native / &row.total_invested_native * BigDecimal::from(100))
                         .round(2)
                         .to_string()
                 } else {
@@ -193,7 +196,7 @@ impl LeaderboardController {
                 };
 
                 let usd_percent = if row.total_invested_usd > BigDecimal::from(0) {
-                    (&row.realized_usd / &row.total_invested_usd * BigDecimal::from(100))
+                    (&total_usd / &row.total_invested_usd * BigDecimal::from(100))
                         .round(2)
                         .to_string()
                 } else {
@@ -210,8 +213,12 @@ impl LeaderboardController {
                     },
                     pnl: Pnl {
                         realized_native: row.realized_native.round(0).to_string(),
+                        unrealized_native: row.unrealized_native.round(0).to_string(),
+                        total_native: total_native.round(0).to_string(),
                         native_percent,
                         realized_usd: row.realized_usd.round(2).to_string(),
+                        unrealized_usd: row.unrealized_usd.round(2).to_string(),
+                        total_usd: total_usd.round(2).to_string(),
                         usd_percent,
                     },
                 }
