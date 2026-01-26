@@ -138,33 +138,15 @@ impl LeaderboardController {
             "leaderboard.get_pnl_leaderboard",
             sqlx::query_as::<_, PnlLeaderboardRow>(
                 r#"
-                WITH position_agg AS (
+                WITH pnl_data AS (
                     SELECT
                         account_id,
                         SUM(native_out) as total_invested_native,
                         SUM(usd_out) as total_invested_usd,
-                        SUM(native_in - native_out) as position_pnl_native,
-                        SUM(usd_in - usd_out) as position_pnl_usd
+                        SUM(native_in - native_out) as realized_native,
+                        SUM(usd_in - usd_out) as realized_usd
                     FROM position
                     GROUP BY account_id
-                ),
-                fee_agg AS (
-                    SELECT
-                        account_id,
-                        SUM(native_amount) as total_fee_native,
-                        SUM(usd_amount) as total_fee_usd
-                    FROM fee
-                    GROUP BY account_id
-                ),
-                pnl_data AS (
-                    SELECT
-                        p.account_id,
-                        p.total_invested_native,
-                        p.total_invested_usd,
-                        p.position_pnl_native + COALESCE(f.total_fee_native, 0) as realized_native,
-                        p.position_pnl_usd + COALESCE(f.total_fee_usd, 0) as realized_usd
-                    FROM position_agg p
-                    LEFT JOIN fee_agg f ON p.account_id = f.account_id
                 ),
                 ranked AS (
                     SELECT
