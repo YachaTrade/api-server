@@ -25,7 +25,7 @@ impl LeaderboardService {
     ) -> Result<HypePointLeaderboardResponse, AppError> {
         if let Ok(cached) = self
             .redis
-            .get_hype_point_leaderboard_response(query.limit, query.offset)
+            .get_hype_point_leaderboard_response(query.page, query.limit)
             .await
         {
             return Ok(cached);
@@ -41,7 +41,7 @@ impl LeaderboardService {
 
         if let Err(err) = self
             .redis
-            .set_hype_point_leaderboard_response(query.limit, query.offset, &response)
+            .set_hype_point_leaderboard_response(query.page, query.limit, &response)
             .await
         {
             error!("Failed to set hype point leaderboard response: {}", err);
@@ -54,10 +54,26 @@ impl LeaderboardService {
         &self,
         query: &LeaderboardQuery,
     ) -> Result<PnlLeaderboardResponse, AppError> {
+        if let Ok(cached) = self
+            .redis
+            .get_pnl_leaderboard_response(query.page, query.limit)
+            .await
+        {
+            return Ok(cached);
+        }
+
         let controller = LeaderboardController::new(self.postgres.clone());
         let response = controller.get_pnl_leaderboard(query).await.map_err(|err| {
             AppError::InternalError(format!("Failed to get pnl leaderboard: {}", err))
         })?;
+
+        if let Err(err) = self
+            .redis
+            .set_pnl_leaderboard_response(query.page, query.limit, &response)
+            .await
+        {
+            error!("Failed to set pnl leaderboard response: {}", err);
+        }
 
         Ok(response)
     }

@@ -15,8 +15,8 @@ use crate::{
         GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
         GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
         HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
-        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION,
-        TOKEN_TRADE_EXPIRATION,
+        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, PNL_LEADERBOARD_RESPONSE_EXPIRATION,
+        SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -25,7 +25,7 @@ use crate::{
             AmountResponse, HypeEpochResponse, HypePointResponse, HypeRewardAddHistoryResponse,
             HypeTokenResponse, HypeVoteHistoryResponse,
         },
-        leaderboard::HypePointLeaderboardResponse,
+        leaderboard::{HypePointLeaderboardResponse, PnlLeaderboardResponse},
         metadata::TerminalMetadataResponse,
         new_event::NewEventResponse,
         profile::PointHistoryResponse,
@@ -1412,13 +1412,13 @@ impl RedisDatabase {
 impl RedisDatabase {
     pub async fn set_hype_point_leaderboard_response(
         &self,
+        page: i64,
         limit: i64,
-        offset: i64,
         response: &HypePointLeaderboardResponse,
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("leaderboard:hype_point:limit:{}:offset:{}", limit, offset);
+        let key = format!("leaderboard:hype_point:page:{}:limit:{}", page, limit);
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_point_leaderboard_response",
@@ -1427,30 +1427,74 @@ impl RedisDatabase {
 
         let elapsed = start_time.elapsed();
         debug!(
-            "set_hype_point_leaderboard_response(limit: {}, offset: {}) completed in {:?}",
-            limit, offset, elapsed
+            "set_hype_point_leaderboard_response(page: {}, limit: {}) completed in {:?}",
+            page, limit, elapsed
         );
         Ok(())
     }
 
     pub async fn get_hype_point_leaderboard_response(
         &self,
+        page: i64,
         limit: i64,
-        offset: i64,
     ) -> Result<HypePointLeaderboardResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("leaderboard:hype_point:limit:{}:offset:{}", limit, offset);
+        let key = format!("leaderboard:hype_point:page:{}:limit:{}", page, limit);
         let response_json: String = measure_redis!(
             "redis.get_hype_point_leaderboard_response",
             conn.get::<_, String>(key)
         )?;
         let elapsed = start_time.elapsed();
         debug!(
-            "get_hype_point_leaderboard_response(limit: {}, offset: {}) completed in {:?}",
-            limit, offset, elapsed
+            "get_hype_point_leaderboard_response(page: {}, limit: {}) completed in {:?}",
+            page, limit, elapsed
         );
         let response: HypePointLeaderboardResponse = serde_json::from_str(&response_json)?;
+        Ok(response)
+    }
+
+    pub async fn set_pnl_leaderboard_response(
+        &self,
+        page: i64,
+        limit: i64,
+        response: &PnlLeaderboardResponse,
+    ) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("leaderboard:pnl:page:{}:limit:{}", page, limit);
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_pnl_leaderboard_response",
+            conn.pset_ex::<String, String, ()>(key, json, *PNL_LEADERBOARD_RESPONSE_EXPIRATION)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_pnl_leaderboard_response(page: {}, limit: {}) completed in {:?}",
+            page, limit, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_pnl_leaderboard_response(
+        &self,
+        page: i64,
+        limit: i64,
+    ) -> Result<PnlLeaderboardResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("leaderboard:pnl:page:{}:limit:{}", page, limit);
+        let response_json: String = measure_redis!(
+            "redis.get_pnl_leaderboard_response",
+            conn.get::<_, String>(key)
+        )?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_pnl_leaderboard_response(page: {}, limit: {}) completed in {:?}",
+            page, limit, elapsed
+        );
+        let response: PnlLeaderboardResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 }
