@@ -71,4 +71,5 @@ pub struct PnlLeaderboardEntry {
 pub struct PnlLeaderboardResponse {
     pub ranks: Vec<PnlLeaderboardEntry>,
     pub total_count: i64,
+    pub last_updated_at: i64,
 }
