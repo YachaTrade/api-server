@@ -42,6 +42,7 @@ struct PnlLeaderboardRow {
     unrealized_native: BigDecimal,
     unrealized_usd: BigDecimal,
     total_count: i64,
+    last_updated_at: i64,
 }
 
 pub struct LeaderboardController {
@@ -150,7 +151,8 @@ impl LeaderboardController {
                         ps.realized_usd,
                         ps.unrealized_native,
                         ps.unrealized_usd,
-                        COUNT(*) OVER () as total_count
+                        COUNT(*) OVER () as total_count,
+                        MAX(ps.updated_at) OVER () as last_updated_at
                     FROM pnl_aggregator ps
                 )
                 SELECT
@@ -165,7 +167,8 @@ impl LeaderboardController {
                     r.realized_usd,
                     r.unrealized_native,
                     r.unrealized_usd,
-                    r.total_count
+                    r.total_count,
+                    r.last_updated_at
                 FROM ranked r
                 JOIN account a ON r.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -180,6 +183,7 @@ impl LeaderboardController {
         .map_err(|err| anyhow!("Failed to fetch pnl leaderboard: {}", err))?;
 
         let total_count = rows.first().map(|r| r.total_count).unwrap_or(0);
+        let last_updated_at = rows.first().map(|r| r.last_updated_at).unwrap_or(0);
 
         let ranks = rows
             .into_iter()
@@ -225,6 +229,10 @@ impl LeaderboardController {
             })
             .collect();
 
-        Ok(PnlLeaderboardResponse { ranks, total_count })
+        Ok(PnlLeaderboardResponse {
+            ranks,
+            total_count,
+            last_updated_at,
+        })
     }
 }
