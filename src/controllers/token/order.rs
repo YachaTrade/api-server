@@ -372,6 +372,101 @@ impl OrderController {
                 )
                 .map_err(|err| anyhow!("Failed to fetch tokens by market cap: {}", err))?
             }
+            TokenOrderType::Hackathon => {
+                let current_time = current_unix_timestamp();
+                let time_24h_ago = current_time - 86400;
+
+                let nsfw_filter = if is_nsfw { "TRUE" } else { "t.is_nsfw = false" };
+
+                let query = format!(
+                    r#"
+                    WITH latest_price AS (
+                        SELECT price
+                        FROM price
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
+                    SELECT
+                        t.token_id,
+                        t.name,
+                        t.symbol,
+                        t.image_uri as token_image_uri,
+                        t.description,
+                        t.twitter,
+                        t.telegram,
+                        t.website,
+                        t.is_graduated,
+                        t.is_nsfw,
+                        t.is_cto,
+                        t.created_at,
+                        t.creator,
+                        t.token_holder_count as holder_count,
+                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                        a.bio as creator_bio,
+                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        m.market_type,
+                        COALESCE(m.pool_id, '') as market_id,
+                        (m.price * COALESCE(lp.price, 0)) as token_price,
+                        COALESCE(lp.price, 0) as native_price,
+                        m.price,
+                        (m.price * COALESCE(lp.price, 0)) as price_usd,
+                        t.total_supply,
+                        COALESCE(m.reserve_native, 0) as reserve_native,
+                        COALESCE(m.reserve_token, 0) as reserve_token,
+                        m.volume,
+                        m.ath_price,
+                        m.ath_price_native,
+                        COALESCE(
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                AND ph.created_at <= $3
+                                ORDER BY
+                                    ph.created_at DESC,
+                                    ph.tx_index DESC,
+                                    ph.log_index DESC
+                                LIMIT 1
+                            ),
+                            (
+                                SELECT ph.price
+                                FROM price_history ph
+                                WHERE ph.token_id = t.token_id
+                                ORDER BY
+                                    ph.created_at ASC,
+                                    ph.tx_index ASC,
+                                    ph.log_index ASC
+                                LIMIT 1
+                            )
+                        ) as price_24h_ago
+                    FROM (
+                        SELECT m.token_id, m.price, m.market_type, m.pool_id, m.reserve_native, m.reserve_token, m.volume, m.ath_price, m.ath_price_native
+                        FROM market m
+                        INNER JOIN hackathon h ON m.token_id = h.token_id
+                        JOIN token t ON m.token_id = t.token_id
+                        WHERE {}
+                        ORDER BY m.price {}
+                        LIMIT $1 OFFSET $2
+                    ) m
+                    JOIN token t ON m.token_id = t.token_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    CROSS JOIN latest_price lp
+                    ORDER BY m.price {}
+                    "#,
+                    nsfw_filter, order_direction, order_direction
+                );
+
+                measure_postgres!(
+                    "token_order.fetch_hackathon",
+                    sqlx::query_as::<_, OrderTokenRow>(&query)
+                        .bind(pagination.limit)
+                        .bind(offset)
+                        .bind(time_24h_ago)
+                        .fetch_all(self.db.get_read_pool())
+                )
+                .map_err(|err| anyhow!("Failed to fetch hackathon tokens: {}", err))?
+            }
         };
 
         Ok(rows.into_iter().map(OrderToken::from).collect())
@@ -379,21 +474,45 @@ impl OrderController {
 
     pub async fn get_total_count_by_type(
         &self,
-        _order_type: &TokenOrderType,
+        order_type: &TokenOrderType,
         is_nsfw: bool,
     ) -> Result<i64> {
-        // is_nsfw = true: return all tokens (total_count)
-        // is_nsfw = false: return only SFW tokens (sfw_count)
-        let column = if is_nsfw { "total_count" } else { "sfw_count" };
-        let query = format!("SELECT {} as count FROM token_count", column);
+        match order_type {
+            TokenOrderType::Hackathon => {
+                let nsfw_filter = if is_nsfw { "TRUE" } else { "t.is_nsfw = false" };
+                let query = format!(
+                    r#"
+                    SELECT COUNT(*) as count
+                    FROM hackathon h
+                    JOIN token t ON h.token_id = t.token_id
+                    WHERE {}
+                    "#,
+                    nsfw_filter
+                );
 
-        let row = measure_postgres!(
-            "token_order.get_total_count_by_type",
-            sqlx::query_as::<_, CountRow>(&query).fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|e| anyhow!("Failed to get total_count: {}", e))?;
+                let row = measure_postgres!(
+                    "token_order.get_hackathon_count",
+                    sqlx::query_as::<_, CountRow>(&query).fetch_one(self.db.get_read_pool())
+                )
+                .map_err(|e| anyhow!("Failed to get hackathon count: {}", e))?;
 
-        Ok(row.count)
+                Ok(row.count)
+            }
+            _ => {
+                // is_nsfw = true: return all tokens (total_count)
+                // is_nsfw = false: return only SFW tokens (sfw_count)
+                let column = if is_nsfw { "total_count" } else { "sfw_count" };
+                let query = format!("SELECT {} as count FROM token_count", column);
+
+                let row = measure_postgres!(
+                    "token_order.get_total_count_by_type",
+                    sqlx::query_as::<_, CountRow>(&query).fetch_one(self.db.get_read_pool())
+                )
+                .map_err(|e| anyhow!("Failed to get total_count: {}", e))?;
+
+                Ok(row.count)
+            }
+        }
     }
 
     pub fn build_order_response(tokens: Vec<OrderToken>, total_count: i64) -> OrderTokenResponse {
@@ -437,6 +556,7 @@ impl From<OrderTokenRow> for OrderToken {
                     image_uri: row.creator_image_uri,
                 },
                 is_cto: row.is_cto,
+                hackathon_info: None,
             },
             market_info: MarketInfo {
                 market_type: match row.market_type.as_str() {

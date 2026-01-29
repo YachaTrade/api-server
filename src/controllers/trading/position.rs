@@ -312,6 +312,7 @@ impl PositionController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
+                        hackathon_info: None,
                     },
                     balance_info: BalanceInfo {
                         balance: row.balance.normalized().to_plain_string(),

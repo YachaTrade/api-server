@@ -281,6 +281,7 @@ impl TokenCreatedController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
+                        hackathon_info: None,
                     },
                     market_info: MarketInfo {
                         market_type: match row.market_type.as_str() {

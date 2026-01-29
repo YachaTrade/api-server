@@ -115,6 +115,10 @@ lazy_static! {
     pub static ref RPC_URL: String = env::var("RPC_URL")
         .expect("RPC_URL must be set");
 
+    // GitHub API Token (for higher rate limit: 5000/hour)
+    pub static ref GITHUB_TOKEN: String = env::var("GITHUB_TOKEN")
+        .expect("GITHUB_TOKEN must be set");
+
     pub static ref BONDING_CURVE:String = env::var("BONDING_CURVE")
         .expect("BONDING_CURVE must be set");
     pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")

@@ -8,14 +8,16 @@ use tracing::{error, info};
 
 use crate::{
     config::RPC_URL,
-    controllers::cms::CmsController,
+    controllers::{cms::CmsController, hackathon::HackathonController},
     db::{postgres::PostgresDatabase, r2::R2Client},
     result::AppError,
+    services::github::GitHubService,
     types::{
         cms::{
             CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
             UpdateMetadataResponse,
         },
+        hackathon::{RegisterHackathonRequest, RegisterHackathonResponse},
         metadata::TokenMetadata,
     },
     utils::single_flight::GLOBAL_CACHE,
@@ -308,5 +310,112 @@ impl CmsService {
 
         info!("Uploaded metadata to: {}", metadata_uri);
         Ok(())
+    }
+
+    /// Register hackathon project (with transaction)
+    /// 1. Verify token exists in token table
+    /// 2. Fetch creator info from GitHub API
+    /// 3. Fetch project info from GitHub API
+    /// 4. Insert all in single transaction (hackathon, creator, project)
+    pub async fn register_hackathon(
+        &self,
+        session_address: &str,
+        request: RegisterHackathonRequest,
+    ) -> Result<RegisterHackathonResponse, AppError> {
+        // Validate token_id is a valid EVM address
+        Address::from_str(&request.token_id)
+            .map_err(|_| AppError::BadRequest("Invalid token_id format".to_string()))?;
+
+        // Verify admin status
+        let cms_controller = CmsController::new(self.postgres.clone());
+        let is_admin = cms_controller
+            .verify_admin(session_address)
+            .await
+            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
+
+        if !is_admin {
+            return Err(AppError::AuthError("Admin access required".to_string()));
+        }
+
+        let hackathon_controller = HackathonController::new(self.postgres.clone());
+
+        // Verify token exists in token table (FK constraint)
+        let token_exists = hackathon_controller
+            .token_exists(&request.token_id)
+            .await
+            .map_err(|e| {
+                error!("Failed to check token existence: {}", e);
+                AppError::InternalError(format!("Failed to check token existence: {}", e))
+            })?;
+
+        if !token_exists {
+            return Err(AppError::BadRequest(format!(
+                "Token not found: {}",
+                request.token_id
+            )));
+        }
+
+        // Fetch creator info from GitHub API
+        let github_service = GitHubService::new();
+        let creator_info = github_service
+            .get_creator_info(&request.github_id)
+            .await
+            .map_err(|e| {
+                error!("Failed to fetch GitHub creator info: {}", e);
+                AppError::InternalError(format!("Failed to fetch GitHub creator info: {}", e))
+            })?;
+
+        info!("Fetched GitHub creator info: {:?}", creator_info);
+
+        // Fetch project info from GitHub API
+        let project_info = github_service
+            .get_project_info(&request.project_github_url)
+            .await
+            .map_err(|e| {
+                error!("Failed to fetch GitHub project info: {}", e);
+                AppError::InternalError(format!("Failed to fetch GitHub project info: {}", e))
+            })?;
+
+        info!("Fetched GitHub project info: {:?}", project_info);
+
+        // Insert all in single transaction
+        use crate::controllers::hackathon::RegisterHackathonParams;
+
+        let params = RegisterHackathonParams {
+            token_id: &request.token_id,
+            github_id: &request.github_id,
+            creator_info: &creator_info,
+            twitter: &request.twitter,
+            discord: request.discord.as_deref(),
+            telegram: request.telegram.as_deref(),
+            linkedin: request.linkedin.as_deref(),
+            account_id: &request.account_id,
+            project_github_url: &request.project_github_url,
+            project_name: &request.project_name,
+            project_description: &request.project_description,
+            keywords: &request.keywords,
+            screenshot_uri: &request.screenshot_uri,
+            website: request.website.as_deref(),
+            youtube: request.youtube.as_deref(),
+            project_info: &project_info,
+        };
+
+        hackathon_controller
+            .register_hackathon_tx(params)
+            .await
+            .map_err(|e| {
+                error!("Failed to register hackathon: {}", e);
+                AppError::InternalError(format!("Failed to register hackathon: {}", e))
+            })?;
+
+        info!(
+            "Successfully registered hackathon project: {}",
+            request.token_id
+        );
+
+        Ok(RegisterHackathonResponse {
+            success: true,
+            token_id: request.token_id,
+        })
     }
 }

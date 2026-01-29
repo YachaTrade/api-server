@@ -176,6 +176,7 @@ impl NewEventController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
+                    hackathon_info: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,
@@ -256,6 +257,7 @@ impl NewEventController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
+                    hackathon_info: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,
@@ -330,6 +332,7 @@ impl NewEventController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
+                    hackathon_info: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,

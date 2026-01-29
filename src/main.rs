@@ -92,6 +92,8 @@ use utoipa_swagger_ui::SwaggerUi;
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
+        router::order::handler::get_hackathon_order,
+
 
         // ----------------New Event----------------
         router::new_event::handler::get_new_event,
@@ -270,6 +272,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::UpdateMetadataRequest,
             types::cms::UpdateMetadataResponse,
             router::cms::handler::UpdateMetadataMultipart,
+
+            // Hackathon
+            types::hackathon::HackathonInfo,
+            types::hackathon::HackathonCreatorInfo,
+            types::hackathon::HackathonProjectInfo,
 
         )
     ),

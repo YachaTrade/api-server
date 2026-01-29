@@ -205,6 +205,7 @@ impl SwapController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
+                    hackathon_info: None,
                 },
                 swap_info: SwapInfo {
                     event_type: if row.is_buy {
