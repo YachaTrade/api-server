@@ -125,6 +125,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::set_nsfw,
         router::cms::handler::insert_trend,
         router::cms::handler::update_metadata,
+        router::cms::handler::register_hackathon,
 
     ),
     components(
@@ -277,6 +278,8 @@ use utoipa_swagger_ui::SwaggerUi;
             types::hackathon::HackathonInfo,
             types::hackathon::HackathonCreatorInfo,
             types::hackathon::HackathonProjectInfo,
+            types::hackathon::RegisterHackathonRequest,
+            types::hackathon::RegisterHackathonResponse,
 
         )
     ),

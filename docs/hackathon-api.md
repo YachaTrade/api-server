@@ -15,7 +15,7 @@ Hackathon API는 해커톤 프로젝트 등록 및 조회를 위한 API입니다
 ```sql
 CREATE TABLE hackathon (
     token_id TEXT PRIMARY KEY REFERENCES token(token_id),
-    created_at BIGINT NOT NULL
+    created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
 );
 ```
 
@@ -23,20 +23,20 @@ CREATE TABLE hackathon (
 ```sql
 CREATE TABLE hackathon_creator (
     github_id TEXT PRIMARY KEY,
-    image_uri TEXT,              -- GitHub 프로필 이미지
-    name TEXT,                   -- GitHub 이름
-    github_url TEXT,             -- GitHub 프로필 URL
-    follower_count INTEGER,      -- 팔로워 수
-    following_count INTEGER,     -- 팔로잉 수
-    repo_count INTEGER,          -- 공개 레포 수
-    star_count INTEGER,          -- 총 스타 수 (모든 레포 합계)
-    bio TEXT,                    -- GitHub 바이오
-    twitter TEXT NOT NULL,       -- 트위터 (필수)
-    discord TEXT,                -- 디스코드
-    telegram TEXT,               -- 텔레그램
-    linkedin TEXT,               -- 링크드인
-    account_id TEXT NOT NULL,    -- 지갑 주소
-    created_at BIGINT NOT NULL
+    image_uri TEXT,                    -- GitHub 프로필 이미지
+    name TEXT,                         -- GitHub 이름
+    github_url TEXT,                   -- GitHub 프로필 URL
+    follower_count INTEGER DEFAULT 0,  -- 팔로워 수
+    following_count INTEGER DEFAULT 0, -- 팔로잉 수
+    repo_count INTEGER DEFAULT 0,      -- 공개 레포 수
+    star_count INTEGER DEFAULT 0,      -- 총 스타 수 (모든 레포 합계)
+    bio TEXT,                          -- GitHub 바이오
+    twitter TEXT NOT NULL,             -- 트위터 (필수)
+    discord TEXT,                      -- 디스코드
+    telegram TEXT,                     -- 텔레그램
+    linkedin TEXT,                     -- 링크드인
+    account_id TEXT NOT NULL,          -- 지갑 주소
+    created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
 );
 ```
 
@@ -45,18 +45,18 @@ CREATE TABLE hackathon_creator (
 CREATE TABLE hackathon_project (
     token_id TEXT PRIMARY KEY REFERENCES hackathon(token_id),
     github_id TEXT NOT NULL REFERENCES hackathon_creator(github_id),
-    github_url TEXT NOT NULL,    -- 프로젝트 GitHub URL
-    name TEXT NOT NULL,          -- 프로젝트 이름
-    description TEXT NOT NULL,   -- 프로젝트 설명
-    keywords TEXT NOT NULL,      -- 키워드 (쉼표 구분)
-    screenshot_uri TEXT NOT NULL,-- 스크린샷 이미지 URL
-    website TEXT,                -- 웹사이트 URL
-    youtube TEXT,                -- YouTube URL
-    star_count INTEGER,          -- 프로젝트 스타 수
-    fork_count INTEGER,          -- 프로젝트 포크 수
-    topics TEXT,                 -- GitHub 토픽 (쉼표 구분)
-    language TEXT,               -- 주요 프로그래밍 언어
-    created_at BIGINT NOT NULL
+    github_url TEXT NOT NULL,          -- 프로젝트 GitHub URL
+    name TEXT NOT NULL,                -- 프로젝트 이름
+    description TEXT NOT NULL,         -- 프로젝트 설명
+    keywords TEXT NOT NULL,            -- 키워드 (쉼표 구분)
+    screenshot_uri TEXT NOT NULL,      -- 스크린샷 이미지 URL
+    website TEXT,                      -- 웹사이트 URL
+    youtube TEXT,                      -- YouTube URL
+    star_count INTEGER DEFAULT 0,      -- 프로젝트 스타 수
+    fork_count INTEGER DEFAULT 0,      -- 프로젝트 포크 수
+    topics TEXT,                       -- GitHub 토픽 (쉼표 구분)
+    language TEXT,                     -- 주요 프로그래밍 언어
+    created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
 );
 ```
 
@@ -216,15 +216,18 @@ CREATE TABLE hackathon_project (
         "market_type": "CURVE",
         "token_id": "0x...",
         "market_id": "0x...",
+        "reserve_native": "100",
+        "reserve_token": "500000000",
         "token_price": "0.001",
         "native_price": "3000",
         "price": "0.000001",
         "price_usd": "0.003",
+        "price_native": "0.000001",
         "total_supply": "1000000000",
-        "reserve_native": "100",
-        "reserve_token": "500000000",
         "volume": "50000",
         "ath_price": "0.000002",
+        "ath_price_usd": "0.006",
+        "ath_price_native": "0.000002",
         "holder_count": 150
       },
       "percent": 15.5
@@ -378,14 +381,14 @@ interface MarketInfo {
   market_type: "CURVE" | "DEX";
   token_id: string;
   market_id: string;
+  reserve_native: string;
+  reserve_token: string;
   token_price: string;
   native_price: string;
   price: string;
   price_usd: string;
   price_native: string;
   total_supply: string;
-  reserve_native: string;
-  reserve_token: string;
   volume: string;
   ath_price: string;
   ath_price_usd: string;
