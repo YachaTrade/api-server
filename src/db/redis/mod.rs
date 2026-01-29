@@ -68,6 +68,16 @@ impl RedisDatabase {
         }
     }
 
+    /// Flush all Redis data
+    pub async fn flush_all(&self) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        redis::cmd("FLUSHALL")
+            .query_async::<()>(&mut conn)
+            .await?;
+        info!("Redis FLUSHALL completed");
+        Ok(())
+    }
+
     //session
 
     //nonce -> address -> nonce
