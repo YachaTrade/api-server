@@ -83,13 +83,14 @@ impl UpdateAccountRequest {
             return Err(format!("Bio must be at most {} characters", MAX_BIO_LENGTH));
         }
         if let Some(ref nickname) = self.nickname {
-            if nickname.len() < NICKNAME_MIN_LENGTH {
+            let char_count = nickname.chars().count();
+            if char_count < NICKNAME_MIN_LENGTH {
                 return Err(format!(
                     "Nickname must be at least {} character",
                     NICKNAME_MIN_LENGTH
                 ));
             }
-            if nickname.len() > NICKNAME_MAX_LENGTH {
+            if char_count > NICKNAME_MAX_LENGTH {
                 return Err(format!(
                     "Nickname must be at most {} characters",
                     NICKNAME_MAX_LENGTH
