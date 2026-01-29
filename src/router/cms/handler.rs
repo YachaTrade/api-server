@@ -23,6 +23,9 @@ use crate::{
 #[utoipa::path(
     post,
     path = CmsPath::SetNsfw.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication (Admin only)")
+    ),
     request_body = SetNsfwRequest,
     responses(
         (status = 200, description = "NSFW status updated successfully", body = CmsActionResponse),
@@ -50,6 +53,9 @@ pub async fn set_nsfw(
 #[utoipa::path(
     post,
     path = CmsPath::InsertTrend.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication (Admin only)")
+    ),
     request_body = InsertTrendRequest,
     responses(
         (status = 200, description = "Trend tokens inserted successfully", body = CmsActionResponse),
@@ -78,6 +84,9 @@ pub async fn insert_trend(
 #[utoipa::path(
     post,
     path = CmsPath::UpdateMetadata.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication (Admin only)")
+    ),
     request_body(
         content_type = "multipart/form-data",
         content = UpdateMetadataMultipart,
@@ -200,6 +209,9 @@ pub struct UpdateMetadataMultipart {
 #[utoipa::path(
     post,
     path = CmsPath::RegisterHackathon.docs_str(),
+    params(
+        ("session" = String, Cookie, description = "Session cookie for authentication (Admin only)")
+    ),
     request_body = RegisterHackathonRequest,
     responses(
         (status = 200, description = "Hackathon registered successfully", body = RegisterHackathonResponse),
