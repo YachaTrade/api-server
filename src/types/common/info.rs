@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
+use crate::types::hackathon::HackathonInfo;
+
 // ==================== Core Info Structs ====================
 
 /// Token information with metadata and creator
@@ -24,6 +26,9 @@ pub struct TokenInfo {
     pub created_at: i64,
     pub creator: AccountInfo,
     pub is_cto: bool,
+    #[serde(default, skip_deserializing)]
+    #[sqlx(skip)]
+    pub hackathon_info: Option<HackathonInfo>,
 }
 
 /// Account information

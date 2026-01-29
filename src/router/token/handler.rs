@@ -6,13 +6,17 @@ use tracing::instrument;
 
 use super::path::TokenPath;
 use crate::{
+    controllers::hackathon::HackathonController,
     result::{AppError, AppJsonResult},
     services::token::{detail::TokenService, metadata::TokenMetadataService, salt::SaltService},
     state::AppState,
-    types::token::{
-        TokenResponse,
-        metadata::TokenMetadataResponse,
-        salt::{MineSaltRequest, MineSaltResponse},
+    types::{
+        hackathon::HackathonTokenListResponse,
+        token::{
+            TokenResponse,
+            metadata::TokenMetadataResponse,
+            salt::{MineSaltRequest, MineSaltResponse},
+        },
     },
     utils::valid_evm_address,
 };
@@ -96,4 +100,27 @@ pub async fn salt(
     let response = service.mine_salt(payload).await?;
 
     Ok(Json(response))
+}
+
+/// Get all hackathon token IDs
+#[utoipa::path(
+    get,
+    path = TokenPath::Hackathon.docs_str(),
+    responses(
+        (status = 200, description = "Hackathon token IDs fetched successfully", body = HackathonTokenListResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Token"
+)]
+#[instrument(skip(state))]
+pub async fn get_hackathon_tokens(
+    State(state): State<AppState>,
+) -> AppJsonResult<HackathonTokenListResponse> {
+    let controller = HackathonController::new(state.postgres.clone());
+    let token_ids = controller
+        .get_hackathon_token_ids()
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+    Ok(Json(HackathonTokenListResponse { token_ids }))
 }

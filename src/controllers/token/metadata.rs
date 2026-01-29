@@ -146,6 +146,7 @@ impl TokenMetadataController {
                 image_uri: row.creator_image_uri,
             },
             is_cto: row.is_cto,
+            hackathon_info: None,
         };
 
         let mut market_id = row.market_id;

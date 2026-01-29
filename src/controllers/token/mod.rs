@@ -111,6 +111,7 @@ impl TokenController {
                 image_uri: row.creator_image_uri,
             },
             is_cto: row.is_cto,
+            hackathon_info: None,
         };
 
         Ok(TokenResponse { token_info })

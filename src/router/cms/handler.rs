@@ -10,9 +10,12 @@ use crate::{
     result::{AppError, AppJsonResult},
     services::cms::CmsService,
     state::AppState,
-    types::cms::{
-        CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
-        UpdateMetadataResponse,
+    types::{
+        cms::{
+            CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
+            UpdateMetadataResponse,
+        },
+        hackathon::{RegisterHackathonRequest, RegisterHackathonResponse},
     },
 };
 
@@ -190,4 +193,34 @@ pub struct UpdateMetadataMultipart {
     /// Image file (optional)
     #[schema(value_type = Option<String>, format = Binary, nullable = true)]
     pub image: Option<String>,
+}
+
+/// Register hackathon project (Admin only)
+/// Fetches GitHub info and stores creator + project data
+#[utoipa::path(
+    post,
+    path = CmsPath::RegisterHackathon.docs_str(),
+    request_body = RegisterHackathonRequest,
+    responses(
+        (status = 200, description = "Hackathon registered successfully", body = RegisterHackathonResponse),
+        (status = 401, description = "Unauthorized - Not an admin"),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "CMS"
+)]
+#[instrument(skip(state, payload))]
+pub async fn register_hackathon(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Json(payload): Json<RegisterHackathonRequest>,
+) -> AppJsonResult<RegisterHackathonResponse> {
+    payload.validate().map_err(AppError::BadRequest)?;
+
+    let service = CmsService::new(state.postgres.clone(), state.r2.clone());
+    let response = service
+        .register_hackathon(&session_address, payload)
+        .await?;
+
+    Ok(Json(response))
 }

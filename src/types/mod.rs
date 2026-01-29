@@ -6,6 +6,7 @@ pub mod account;
 pub mod new_event;
 
 pub mod cms;
+pub mod hackathon;
 pub mod hype;
 pub mod leaderboard;
 pub mod metadata;

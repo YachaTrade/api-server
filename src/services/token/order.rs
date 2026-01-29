@@ -6,6 +6,7 @@ use crate::{
     controllers::token::order::OrderController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
+    services::hackathon::HackathonService,
     types::{
         common::pagination::PaginationParams,
         token::order::{OrderQuery, OrderTokenResponse, TokenOrderType},
@@ -42,16 +43,28 @@ impl TokenOrderService {
         }
 
         let controller = OrderController::new(self.postgres.clone());
+        let hackathon_service = HackathonService::new(self.postgres.clone());
 
-        let tokens = controller
-            .get_order_tokens(order_type, &pagination, query.is_nsfw)
-            .await
-            .map_err(|err| AppError::InternalError(err.to_string()))?;
+        let (tokens_result, total_count_result) = tokio::join!(
+            controller.get_order_tokens(order_type, &pagination, query.is_nsfw),
+            controller.get_total_count_by_type(&order_type, query.is_nsfw)
+        );
 
-        let total_count = controller
-            .get_total_count_by_type(&order_type, query.is_nsfw)
-            .await
-            .map_err(|err| AppError::InternalError(err.to_string()))?;
+        let mut tokens = tokens_result.map_err(|err| AppError::InternalError(err.to_string()))?;
+        let total_count =
+            total_count_result.map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        // Fetch hackathon_info in parallel
+        let token_ids: Vec<String> = tokens.iter().map(|t| t.token_info.token_id.clone()).collect();
+        let hackathon_map = hackathon_service
+            .get_hackathon_infos_by_token_ids(&token_ids)
+            .await;
+
+        // Inject hackathon_info into tokens
+        for token in &mut tokens {
+            token.token_info.hackathon_info =
+                hackathon_map.get(&token.token_info.token_id).cloned();
+        }
 
         let response = OrderController::build_order_response(tokens, total_count);
 

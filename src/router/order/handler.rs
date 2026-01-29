@@ -101,3 +101,31 @@ pub async fn get_latest_trade_order(
 
     Ok(Json(response))
 }
+
+/// Get hackathon tokens ordered by market cap
+#[utoipa::path(
+    get,
+    path = OrderPath::Hackathon.docs_str(),
+    params(
+        ("page" = Option<i64>, Query, description = "Page number for pagination"),
+        ("limit" = Option<i64>, Query, description = "Number of items per page"),
+        ("direction" = Option<String>, Query, description = "Direction of pagination (ASC or DESC) Default:DESC"),
+        ("is_nsfw" = Option<bool>, Query, description = "Filter NSFW tokens (default: false)")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved hackathon tokens ordered by market cap", body = OrderTokenResponse),
+        (status = 400, description = "Bad request - Invalid pagination parameters"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Order"
+)]
+#[instrument(skip(state))]
+pub async fn get_hackathon_order(
+    State(state): State<AppState>,
+    Query(query): Query<OrderQuery>,
+) -> AppJsonResult<OrderTokenResponse> {
+    let service = TokenOrderService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_order(TokenOrderType::Hackathon, &query).await?;
+
+    Ok(Json(response))
+}
