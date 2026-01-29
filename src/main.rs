@@ -29,7 +29,7 @@ use axum::{
 use clap::Parser;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
-use tracing::info;
+use tracing::{info, warn};
 use utoipa::OpenApi;
 
 use utoipa_swagger_ui::SwaggerUi;
@@ -333,6 +333,12 @@ async fn main() -> Result<()> {
 
     let app_state = AppState::new().await;
     info!("AppState initialized");
+
+    // Redis 전체 초기화 (FLUSHALL)
+    info!("Flushing Redis...");
+    if let Err(e) = app_state.redis.flush_all().await {
+        warn!("Failed to flush Redis: {}", e);
+    }
 
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new().route("/", get(|| async { "Hello, World!" }));
