@@ -119,6 +119,12 @@ lazy_static! {
     pub static ref GITHUB_TOKEN: String = env::var("GITHUB_TOKEN")
         .expect("GITHUB_TOKEN must be set");
 
+    // Hackathon GitHub data refresh interval (in seconds, default: 3600 = 1 hour)
+    pub static ref HACKATHON_REFRESH_INTERVAL_SECS: i64 = env::var("HACKATHON_REFRESH_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(3600);
+
     pub static ref BONDING_CURVE:String = env::var("BONDING_CURVE")
         .expect("BONDING_CURVE must be set");
     pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")
