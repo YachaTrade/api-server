@@ -69,21 +69,29 @@ impl GitHubService {
     pub async fn get_creator_info(&self, github_id: &str) -> Result<GitHubCreatorInfo> {
         let url = format!("https://api.github.com/users/{}", github_id);
 
-        let user: GitHubUser = self
-            .client
-            .get(&url)
-            .header("User-Agent", "nads-pump-api")
-            .header("Accept", "application/vnd.github.v3+json")
-            .header("Authorization", format!("Bearer {}", &*GITHUB_TOKEN))
-            .send()
-            .await?
-            .error_for_status()
-            .map_err(|e| anyhow!("GitHub API error: {}", e))?
-            .json()
-            .await?;
+        // Fetch user info and total stars in parallel
+        let user_future = async {
+            self.client
+                .get(&url)
+                .header("User-Agent", "nads-pump-api")
+                .header("Accept", "application/vnd.github.v3+json")
+                .header("Authorization", format!("Bearer {}", &*GITHUB_TOKEN))
+                .send()
+                .await?
+                .error_for_status()
+                .map_err(|e| anyhow!("GitHub API error: {}", e))?
+                .json::<GitHubUser>()
+                .await
+                .map_err(|e| anyhow!("Failed to parse GitHub user: {}", e))
+        };
 
-        // 총 스타 수 계산
-        let star_count = self.get_total_stars(github_id).await.unwrap_or(0);
+        let (user_result, star_count) = tokio::join!(
+            user_future,
+            self.get_total_stars(github_id)
+        );
+
+        let user = user_result?;
+        let star_count = star_count.unwrap_or(0);
 
         Ok(GitHubCreatorInfo {
             image_uri: user.avatar_url,

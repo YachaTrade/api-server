@@ -355,27 +355,24 @@ impl CmsService {
             )));
         }
 
-        // Fetch creator info from GitHub API
+        // Fetch creator info and project info from GitHub API in parallel
         let github_service = GitHubService::new();
-        let creator_info = github_service
-            .get_creator_info(&request.github_id)
-            .await
-            .map_err(|e| {
-                error!("Failed to fetch GitHub creator info: {}", e);
-                AppError::InternalError(format!("Failed to fetch GitHub creator info: {}", e))
-            })?;
+        let (creator_result, project_result) = tokio::join!(
+            github_service.get_creator_info(&request.github_id),
+            github_service.get_project_info(&request.project_github_url)
+        );
+
+        let creator_info = creator_result.map_err(|e| {
+            error!("Failed to fetch GitHub creator info: {}", e);
+            AppError::InternalError(format!("Failed to fetch GitHub creator info: {}", e))
+        })?;
+
+        let project_info = project_result.map_err(|e| {
+            error!("Failed to fetch GitHub project info: {}", e);
+            AppError::InternalError(format!("Failed to fetch GitHub project info: {}", e))
+        })?;
 
         info!("Fetched GitHub creator info: {:?}", creator_info);
-
-        // Fetch project info from GitHub API
-        let project_info = github_service
-            .get_project_info(&request.project_github_url)
-            .await
-            .map_err(|e| {
-                error!("Failed to fetch GitHub project info: {}", e);
-                AppError::InternalError(format!("Failed to fetch GitHub project info: {}", e))
-            })?;
-
         info!("Fetched GitHub project info: {:?}", project_info);
 
         // Insert all in single transaction
