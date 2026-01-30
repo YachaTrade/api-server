@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::types::common::info::TokenInfo;
-use crate::utils::valid_evm_address;
+use crate::utils::validate_token_id;
 
 #[derive(Debug, Deserialize)]
 pub struct HypeTokenQuery {
@@ -83,7 +83,7 @@ pub struct HypeVoteRequest {
 
 impl HypeVoteRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if !valid_evm_address(&self.token_id) {
+        if validate_token_id(&self.token_id).is_none() {
             return Err("Invalid token_id format".to_string());
         }
         // amount must be a valid positive number

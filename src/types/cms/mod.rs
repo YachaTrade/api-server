@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::utils::valid_evm_address;
+use crate::utils::validate_token_id;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SetNsfwRequest {
@@ -11,7 +11,7 @@ pub struct SetNsfwRequest {
 
 impl SetNsfwRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if !valid_evm_address(&self.token_id) {
+        if validate_token_id(&self.token_id).is_none() {
             return Err("Invalid token_id format".to_string());
         }
         Ok(())
@@ -39,7 +39,7 @@ impl InsertTrendRequest {
             ));
         }
         for token_id in &self.token_ids {
-            if !valid_evm_address(token_id) {
+            if validate_token_id(token_id).is_none() {
                 return Err(format!("Invalid token_id: {}", token_id));
             }
         }
@@ -58,7 +58,7 @@ pub struct UpdateMetadataRequest {
 
 impl UpdateMetadataRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if !valid_evm_address(&self.token_id) {
+        if validate_token_id(&self.token_id).is_none() {
             return Err("Invalid token_id format".to_string());
         }
 
