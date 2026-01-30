@@ -26,7 +26,7 @@ use crate::{
             swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
-    utils::validate_token_id,
+    utils::valid_token_id,
 };
 
 ///Get swap history for a token
@@ -55,7 +55,7 @@ pub async fn get_swap_history(
     Query(query): Query<SwapQuery>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
-    let token_id = validate_token_id(&token_id).ok_or_else(|| {
+    let token_id = valid_token_id(&token_id).ok_or_else(|| {
         error!("Invalid token ID format: {:?}", token_id);
         AppError::BadRequest("Invalid token ID".to_string())
     })?;
@@ -92,7 +92,7 @@ pub async fn get_holder(
     Query(params): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenHolderResponse> {
-    let token_id = validate_token_id(&token_id).ok_or_else(|| {
+    let token_id = valid_token_id(&token_id).ok_or_else(|| {
         error!("Invalid token ID format: {}", token_id);
         AppError::BadRequest("Invalid token ID".to_string())
     })?;
@@ -122,7 +122,7 @@ pub async fn get_market(
     Path(token_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<MarketResponse> {
-    let token_id = validate_token_id(&token_id).ok_or_else(|| {
+    let token_id = valid_token_id(&token_id).ok_or_else(|| {
         error!("Invalid token ID format: {}", token_id);
         AppError::BadRequest("Invalid token ID".to_string())
     })?;
@@ -158,7 +158,7 @@ pub async fn get_prices(
     Path(token_id): Path<String>,
     Query(query): Query<GetBarsRequest>,
 ) -> AppJsonResult<BarResponse> {
-    let token_id = validate_token_id(&token_id).ok_or_else(|| {
+    let token_id = valid_token_id(&token_id).ok_or_else(|| {
         error!("Invalid token ID format: {}", token_id);
         AppError::BadRequest("Invalid token ID".to_string())
     })?;
@@ -250,7 +250,7 @@ pub async fn get_metrics(
             .collect::<Vec<_>>()
     );
 
-    let token_id = validate_token_id(&token_id).ok_or_else(|| {
+    let token_id = valid_token_id(&token_id).ok_or_else(|| {
         error!("Invalid token ID format: {}", token_id);
         AppError::BadRequest("Invalid token ID".to_string())
     })?;

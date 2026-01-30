@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::common::info::AccountInfo;
-use crate::utils::valid_evm_address;
+use crate::utils::valid_account_id;
 
 // ==================== GET /auth/nonce ====================
 
@@ -13,7 +13,7 @@ pub struct AuthNonceRequest {
 
 impl AuthNonceRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if !valid_evm_address(&self.address) {
+        if valid_account_id(&self.address).is_none() {
             return Err("Invalid address format".to_string());
         }
         Ok(())
@@ -50,7 +50,7 @@ impl AuthSessionRequest {
         }
         // wallet_address validation
         if let Some(ref addr) = self.wallet_address
-            && !valid_evm_address(addr)
+            && valid_account_id(addr).is_none()
         {
             return Err("Invalid wallet address format".to_string());
         }

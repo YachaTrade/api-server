@@ -1,7 +1,7 @@
 use std::{env, str::FromStr, sync::Arc};
 
 use alloy::{
-    primitives::{Address, keccak256},
+    primitives::keccak256,
     signers::Signature,
 };
 use chrono::Utc;
@@ -14,6 +14,7 @@ use crate::{
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::auth::{AuthNonceRequest, AuthNonceResponse, AuthSessionRequest, AuthSessionResponse},
+    utils::valid_account_id,
 };
 
 pub struct AuthService {
@@ -31,8 +32,8 @@ impl AuthService {
         payload: AuthNonceRequest,
     ) -> Result<AuthNonceResponse, AppError> {
         let nonce = Uuid::new_v4().to_string();
-        Address::from_str(&payload.address)
-            .map_err(|err| AppError::BadRequest(format!("Invalid address: {}", err)))?;
+        let address = valid_account_id(&payload.address)
+            .ok_or_else(|| AppError::BadRequest("Invalid address".to_string()))?;
 
         let domain = env::var("APP_DOMAIN").unwrap_or_else(|_| "https://testnet.nad.fun".into());
         let chain_id = env::var("CHAIN_ID")
@@ -43,11 +44,11 @@ impl AuthService {
 
         let message = format!(
             "Account:\n\n{}\n\nURI: {}\n\nVersion: 1\n\nChain ID: {}\n\nNonce: {}\n\nIssued At: {}",
-            payload.address, domain, chain_id, nonce, issued_at
+            address, domain, chain_id, nonce, issued_at
         );
 
         self.redis
-            .set_sign_message(&payload.address, &message)
+            .set_sign_message(&address, &message)
             .await
             .map_err(|err| AppError::RedisError(err.to_string()))?;
 

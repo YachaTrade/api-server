@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 use crate::types::metadata::{
     MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH,
 };
-use crate::utils::valid_evm_address;
+use crate::utils::valid_account_id;
 
 /// Request parameters for mining a salt to generate a vanity token address
 /// Matches Solidity's TokenCreationParams struct
@@ -32,7 +32,7 @@ pub struct MineSaltRequest {
 impl MineSaltRequest {
     pub fn validate(&self) -> Result<(), String> {
         // creator address validation
-        if !valid_evm_address(&self.creator) {
+        if valid_account_id(&self.creator).is_none() {
             return Err("Invalid creator address format".to_string());
         }
         // name validation

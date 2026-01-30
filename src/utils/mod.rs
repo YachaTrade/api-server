@@ -6,24 +6,19 @@ use alloy::primitives::Address;
 
 use crate::config::VANITY_ADDRESS_SUFFIX;
 
-pub fn valid_evm_address(address: &str) -> bool {
-    Address::from_str(address).is_ok()
-}
-
-/// EVM 주소를 검증하고 체크섬된 주소로 반환
-pub fn normalize_evm_address(address: &str) -> Option<String> {
+/// Account ID 검증: EVM 주소 형식 확인 후 체크섬 주소 반환
+pub fn valid_account_id(address: &str) -> Option<String> {
     Address::from_str(address)
         .map(|addr| addr.to_checksum(None))
         .ok()
 }
 
-/// 토큰 ID 검증: EVM 주소 형식 + VANITY_ADDRESS_SUFFIX로 끝나는지 확인 후 체크섬 주소 반환
-pub fn validate_token_id(token_id: &str) -> Option<String> {
+/// Token ID 검증: EVM 주소 형식 + VANITY_ADDRESS_SUFFIX 확인 후 체크섬 주소 반환
+pub fn valid_token_id(token_id: &str) -> Option<String> {
     if !token_id.to_lowercase().ends_with(&VANITY_ADDRESS_SUFFIX.to_lowercase()) {
         return None;
     }
-
-    normalize_evm_address(token_id)
+    valid_account_id(token_id)
 }
 
 pub fn current_unix_timestamp() -> i64 {

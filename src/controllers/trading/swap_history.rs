@@ -17,7 +17,10 @@ use crate::{
         profile::SwapHistoryResponse,
         trading::swap_history::{SwapQuery, TokenSwap, TokenSwapResponse},
     },
-    utils::single_flight::{GLOBAL_CACHE, with_cache},
+    utils::{
+        valid_account_id,
+        single_flight::{GLOBAL_CACHE, with_cache},
+    },
 };
 
 pub struct SwapController {
@@ -286,7 +289,7 @@ impl SwapController {
         WHERE s.token_id = $1"#
             .to_string();
 
-        let normalized_account = query.normalized_account_id();
+        let normalized_account = query.account_id.as_ref().and_then(|id| valid_account_id(id));
         if normalized_account.is_some() {
             query_sql.push_str(&format!(" AND s.account_id = ${}", next_param));
             next_param += 1;
@@ -403,7 +406,7 @@ impl SwapController {
         token_id: &str,
         query_params: &SwapQuery,
     ) -> Result<i64> {
-        let normalized_account = query_params.normalized_account_id();
+        let normalized_account = query_params.account_id.as_ref().and_then(|id| valid_account_id(id));
 
         // Check if we can use cached count (no filters applied)
         if query_params.volume_ranges.is_none()

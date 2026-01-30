@@ -20,7 +20,7 @@ use crate::{
         hackathon::{RegisterHackathonRequest, RegisterHackathonResponse},
         metadata::TokenMetadata,
     },
-    utils::single_flight::GLOBAL_CACHE,
+    utils::{single_flight::GLOBAL_CACHE, valid_account_id, valid_token_id},
 };
 
 sol! {
@@ -322,9 +322,11 @@ impl CmsService {
         session_address: &str,
         request: RegisterHackathonRequest,
     ) -> Result<RegisterHackathonResponse, AppError> {
-        // Validate token_id is a valid EVM address
-        Address::from_str(&request.token_id)
-            .map_err(|_| AppError::BadRequest("Invalid token_id format".to_string()))?;
+        // Validate and normalize token_id/account_id to checksum format
+        let token_id = valid_token_id(&request.token_id)
+            .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
+        let account_id = valid_account_id(&request.account_id)
+            .ok_or_else(|| AppError::BadRequest("Invalid account_id format".to_string()))?;
 
         // Verify admin status
         let cms_controller = CmsController::new(self.postgres.clone());
@@ -341,7 +343,7 @@ impl CmsService {
 
         // Verify token exists in token table (FK constraint)
         let token_exists = hackathon_controller
-            .token_exists(&request.token_id)
+            .token_exists(&token_id)
             .await
             .map_err(|e| {
                 error!("Failed to check token existence: {}", e);
@@ -351,7 +353,7 @@ impl CmsService {
         if !token_exists {
             return Err(AppError::BadRequest(format!(
                 "Token not found: {}",
-                request.token_id
+                token_id
             )));
         }
 
@@ -379,14 +381,14 @@ impl CmsService {
         use crate::controllers::hackathon::RegisterHackathonParams;
 
         let params = RegisterHackathonParams {
-            token_id: &request.token_id,
+            token_id: &token_id,
             github_id: &request.github_id,
             creator_info: &creator_info,
             twitter: &request.twitter,
             discord: request.discord.as_deref(),
             telegram: request.telegram.as_deref(),
             linkedin: request.linkedin.as_deref(),
-            account_id: &request.account_id,
+            account_id: &account_id,
             project_github_url: &request.project_github_url,
             project_name: &request.project_name,
             project_description: &request.project_description,
@@ -407,12 +409,12 @@ impl CmsService {
 
         info!(
             "Successfully registered hackathon project: {}",
-            request.token_id
+            token_id
         );
 
         Ok(RegisterHackathonResponse {
             success: true,
-            token_id: request.token_id,
+            token_id,
         })
     }
 }

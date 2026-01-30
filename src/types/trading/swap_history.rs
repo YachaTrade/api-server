@@ -6,7 +6,7 @@ use crate::{
             validate_direction,
         },
     },
-    utils::{normalize_evm_address, valid_evm_address},
+    utils::valid_account_id,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
@@ -105,7 +105,7 @@ pub struct SwapQuery {
 impl SwapQuery {
     /// Validate the query parameters
     pub fn validate(&self) -> Result<(), String> {
-        if self.account_id.is_some() && !valid_evm_address(self.account_id.as_ref().unwrap()) {
+        if self.account_id.is_some() && valid_account_id(self.account_id.as_ref().unwrap()).is_none() {
             return Err("Invalid account ID format".to_string());
         }
 
@@ -115,13 +115,6 @@ impl SwapQuery {
         }
 
         Ok(())
-    }
-
-    /// Get normalized (checksummed) account_id
-    pub fn normalized_account_id(&self) -> Option<String> {
-        self.account_id
-            .as_ref()
-            .and_then(|id| normalize_evm_address(id))
     }
 }
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::utils::{valid_evm_address, validate_token_id};
+use crate::utils::{valid_account_id, valid_token_id};
 
 /// Request body for hackathon registration
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -63,10 +63,10 @@ impl RegisterHackathonRequest {
         if self.screenshot_uri.is_empty() {
             return Err("screenshot_uri is required".to_string());
         }
-        if validate_token_id(&self.token_id).is_none() {
+        if valid_token_id(&self.token_id).is_none() {
             return Err("Invalid token_id format".to_string());
         }
-        if !valid_evm_address(&self.account_id) {
+        if valid_account_id(&self.account_id).is_none() {
             return Err("Invalid account_id format".to_string());
         }
         Ok(())

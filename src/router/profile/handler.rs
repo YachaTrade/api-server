@@ -14,7 +14,7 @@ use crate::{
             SwapHistoryResponse,
         },
     },
-    utils::normalize_evm_address,
+    utils::valid_account_id,
 };
 
 use axum::{
@@ -44,7 +44,7 @@ pub async fn get_profile(
     Path(account_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<ProfileResponse> {
-    let account_id = normalize_evm_address(&account_id)
+    let account_id = valid_account_id(&account_id)
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
     let account_controller = AccountController::new(state.postgres.clone());
@@ -83,7 +83,7 @@ pub async fn get_hold_token(
     Query(query): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<HoldTokenResponse> {
-    let account_id = normalize_evm_address(&account_id)
+    let account_id = valid_account_id(&account_id)
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
     let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
@@ -115,7 +115,7 @@ pub async fn get_token_created(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<CreatedTokensResponse> {
-    let account_id = normalize_evm_address(&account_id)
+    let account_id = valid_account_id(&account_id)
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
     let token_created_service =
@@ -148,7 +148,7 @@ pub async fn get_swap_history(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<SwapHistoryResponse> {
-    let account_id = normalize_evm_address(&account_id)
+    let account_id = valid_account_id(&account_id)
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
     let swap_service = SwapService::new(state.postgres.clone(), state.redis.clone());

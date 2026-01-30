@@ -15,7 +15,7 @@ use crate::{
         },
     },
     utils::{
-        normalize_evm_address,
+        valid_account_id,
         single_flight::{GLOBAL_CACHE, with_cache},
     },
 };
@@ -200,7 +200,7 @@ impl SearchController {
         match pattern {
             SearchPattern::TwitterHandle => Ok(vec![]),
             SearchPattern::EvmAddress => {
-                let checksummed = normalize_evm_address(query).unwrap_or_else(|| query.to_string());
+                let checksummed = valid_account_id(query).unwrap_or_else(|| query.to_string());
                 sqlx::query_as::<_, SearchTokenRow>(
                     r#"
                     WITH latest_price AS (
@@ -420,7 +420,7 @@ impl SearchController {
             .await
             .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
             SearchPattern::EvmAddress => {
-                let checksummed = normalize_evm_address(query).unwrap_or_else(|| query.to_string());
+                let checksummed = valid_account_id(query).unwrap_or_else(|| query.to_string());
                 sqlx::query_as::<_, SearchAccountRow>(
                     r#"
                     SELECT
