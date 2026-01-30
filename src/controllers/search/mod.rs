@@ -14,7 +14,10 @@ use crate::{
             TokenSearchResult,
         },
     },
-    utils::single_flight::{GLOBAL_CACHE, with_cache},
+    utils::{
+        normalize_evm_address,
+        single_flight::{GLOBAL_CACHE, with_cache},
+    },
 };
 
 pub struct SearchController {
@@ -196,8 +199,10 @@ impl SearchController {
 
         match pattern {
             SearchPattern::TwitterHandle => Ok(vec![]),
-            SearchPattern::EvmAddress => sqlx::query_as::<_, SearchTokenRow>(
-                r#"
+            SearchPattern::EvmAddress => {
+                let checksummed = normalize_evm_address(query).unwrap_or_else(|| query.to_string());
+                sqlx::query_as::<_, SearchTokenRow>(
+                    r#"
                     WITH latest_price AS (
                         SELECT price
                         FROM price
@@ -239,14 +244,15 @@ impl SearchController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
                     CROSS JOIN latest_price lp
-                    WHERE LOWER(t.token_id) = LOWER($1)
+                    WHERE t.token_id = $1
                     LIMIT 1
                     "#,
-            )
-            .bind(query)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
+                )
+                .bind(checksummed)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| anyhow::anyhow!("Database error: {}", e))
+            }
             SearchPattern::Universal => {
                 let query_clone = query.to_string();
 
@@ -413,8 +419,10 @@ impl SearchController {
             .fetch_all(pool)
             .await
             .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
-            SearchPattern::EvmAddress => sqlx::query_as::<_, SearchAccountRow>(
-                r#"
+            SearchPattern::EvmAddress => {
+                let checksummed = normalize_evm_address(query).unwrap_or_else(|| query.to_string());
+                sqlx::query_as::<_, SearchAccountRow>(
+                    r#"
                     SELECT
                         a.account_id,
                         a.nickname,
@@ -430,14 +438,15 @@ impl SearchController {
                         WHERE account_id = a.account_id
                         LIMIT 1
                     ) ax ON true
-                    WHERE LOWER(a.account_id) = LOWER($1)
+                    WHERE a.account_id = $1
                     LIMIT 1
                     "#,
-            )
-            .bind(query)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
+                )
+                .bind(checksummed)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| anyhow::anyhow!("Database error: {}", e))
+            }
             SearchPattern::Universal => {
                 let (nickname_future, x_handle_future) = (
                     sqlx::query_as::<_, SearchAccountRow>(
