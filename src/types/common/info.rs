@@ -26,7 +26,7 @@ pub struct TokenInfo {
     pub created_at: i64,
     pub creator: AccountInfo,
     pub is_cto: bool,
-    #[serde(default, skip_deserializing)]
+    #[serde(default)]
     #[sqlx(skip)]
     pub hackathon_info: Option<HackathonInfo>,
 }
