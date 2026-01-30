@@ -6,7 +6,7 @@ use crate::{
             validate_direction,
         },
     },
-    utils::valid_evm_address,
+    utils::{normalize_evm_address, valid_evm_address},
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
@@ -115,6 +115,13 @@ impl SwapQuery {
         }
 
         Ok(())
+    }
+
+    /// Get normalized (checksummed) account_id
+    pub fn normalized_account_id(&self) -> Option<String> {
+        self.account_id
+            .as_ref()
+            .and_then(|id| normalize_evm_address(id))
     }
 }
 

@@ -14,7 +14,7 @@ use crate::{
             SwapHistoryResponse,
         },
     },
-    utils::valid_evm_address,
+    utils::normalize_evm_address,
 };
 
 use axum::{
@@ -44,9 +44,8 @@ pub async fn get_profile(
     Path(account_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<ProfileResponse> {
-    if !valid_evm_address(&account_id) {
-        return Err(AppError::BadRequest("Invalid account ID".to_string()));
-    }
+    let account_id = normalize_evm_address(&account_id)
+        .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
     let account_controller = AccountController::new(state.postgres.clone());
     let account_info = account_controller
@@ -84,9 +83,9 @@ pub async fn get_hold_token(
     Query(query): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<HoldTokenResponse> {
-    if !valid_evm_address(&account_id) {
-        return Err(AppError::BadRequest("Invalid account ID".to_string()));
-    }
+    let account_id = normalize_evm_address(&account_id)
+        .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
+
     let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
     let response = position_service
         .get_hold_token_by_account(&account_id, &query)
@@ -116,9 +115,9 @@ pub async fn get_token_created(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<CreatedTokensResponse> {
-    if !valid_evm_address(&account_id) {
-        return Err(AppError::BadRequest("Invalid account ID".to_string()));
-    }
+    let account_id = normalize_evm_address(&account_id)
+        .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
+
     let token_created_service =
         TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
     let response = token_created_service
@@ -149,9 +148,9 @@ pub async fn get_swap_history(
     Query(pagination): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<SwapHistoryResponse> {
-    if !valid_evm_address(&account_id) {
-        return Err(AppError::BadRequest("Invalid account ID".to_string()));
-    }
+    let account_id = normalize_evm_address(&account_id)
+        .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
+
     let swap_service = SwapService::new(state.postgres.clone(), state.redis.clone());
     let response = swap_service
         .get_swaps_by_account(&account_id, pagination)
