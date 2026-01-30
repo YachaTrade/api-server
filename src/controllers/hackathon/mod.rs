@@ -39,6 +39,8 @@ struct HackathonTokenRow {
     fork_count: i32,
     topics: Option<String>,
     language: Option<String>,
+    // Timestamps
+    project_updated_at: i64,
 }
 
 pub struct HackathonController {
@@ -94,6 +96,11 @@ impl HackathonController {
     /// 2. Upsert creator
     /// 3. Insert/update project
     pub async fn register_hackathon_tx(&self, params: RegisterHackathonParams<'_>) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
         let mut tx = self.db.get_write_pool().begin().await?;
 
         // 1. Insert hackathon (whitelist entry)
@@ -112,9 +119,9 @@ impl HackathonController {
             INSERT INTO hackathon_creator (
                 github_id, image_uri, name, github_url,
                 follower_count, following_count, repo_count, star_count, bio,
-                twitter, discord, telegram, linkedin, account_id
+                twitter, discord, telegram, linkedin, account_id, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             ON CONFLICT (github_id) DO UPDATE SET
                 image_uri = EXCLUDED.image_uri,
                 name = EXCLUDED.name,
@@ -128,7 +135,8 @@ impl HackathonController {
                 discord = EXCLUDED.discord,
                 telegram = EXCLUDED.telegram,
                 linkedin = EXCLUDED.linkedin,
-                account_id = EXCLUDED.account_id
+                account_id = EXCLUDED.account_id,
+                updated_at = EXCLUDED.updated_at
         "#;
         sqlx::query(creator_query)
             .bind(params.github_id)
@@ -145,6 +153,7 @@ impl HackathonController {
             .bind(params.telegram)
             .bind(params.linkedin)
             .bind(params.account_id)
+            .bind(now)
             .execute(&mut *tx)
             .await?;
 
@@ -154,9 +163,9 @@ impl HackathonController {
             INSERT INTO hackathon_project (
                 token_id, github_id, github_url, name, description,
                 keywords, screenshot_uri, website, youtube,
-                star_count, fork_count, topics, language
+                star_count, fork_count, topics, language, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT (token_id) DO UPDATE SET
                 github_id = EXCLUDED.github_id,
                 github_url = EXCLUDED.github_url,
@@ -169,7 +178,8 @@ impl HackathonController {
                 star_count = EXCLUDED.star_count,
                 fork_count = EXCLUDED.fork_count,
                 topics = EXCLUDED.topics,
-                language = EXCLUDED.language
+                language = EXCLUDED.language,
+                updated_at = EXCLUDED.updated_at
         "#;
         sqlx::query(project_query)
             .bind(params.token_id)
@@ -185,6 +195,7 @@ impl HackathonController {
             .bind(params.project_info.fork_count)
             .bind(&topics_str)
             .bind(&params.project_info.language)
+            .bind(now)
             .execute(&mut *tx)
             .await?;
 
@@ -197,9 +208,12 @@ impl HackathonController {
         Ok(())
     }
 
-    /// Get hackathon info for a single token
-    /// Returns None if not found or on error (fail-safe)
-    pub async fn get_hackathon_info(&self, token_id: &str) -> Option<HackathonInfo> {
+    /// Get hackathon info for a single token with updated_at timestamp
+    /// Returns (Option<HackathonInfo>, Option<updated_at>)
+    pub async fn get_hackathon_info_with_timestamp(
+        &self,
+        token_id: &str,
+    ) -> Option<(HackathonInfo, i64)> {
         let query = r#"
             SELECT
                 hp.token_id,
@@ -227,7 +241,8 @@ impl HackathonController {
                 hp.star_count as project_star_count,
                 hp.fork_count,
                 hp.topics,
-                hp.language
+                hp.language,
+                hp.updated_at as project_updated_at
             FROM hackathon_project hp
             JOIN hackathon_creator hc ON hp.github_id = hc.github_id
             WHERE hp.token_id = $1
@@ -239,7 +254,18 @@ impl HackathonController {
             .await
             .ok()?;
 
-        row.map(HackathonInfo::from)
+        row.map(|r| {
+            let updated_at = r.project_updated_at;
+            (HackathonInfo::from(r), updated_at)
+        })
+    }
+
+    /// Get hackathon info for a single token
+    /// Returns None if not found or on error (fail-safe)
+    pub async fn get_hackathon_info(&self, token_id: &str) -> Option<HackathonInfo> {
+        self.get_hackathon_info_with_timestamp(token_id)
+            .await
+            .map(|(info, _)| info)
     }
 
     /// Get hackathon infos for multiple tokens (batch query)
@@ -282,7 +308,8 @@ impl HackathonController {
                 hp.star_count as project_star_count,
                 hp.fork_count,
                 hp.topics,
-                hp.language
+                hp.language,
+                hp.updated_at as project_updated_at
             FROM hackathon_project hp
             JOIN hackathon_creator hc ON hp.github_id = hc.github_id
             WHERE hp.token_id IN ({})
@@ -306,6 +333,80 @@ impl HackathonController {
                 (token_id, HackathonInfo::from(row))
             })
             .collect()
+    }
+
+    /// Update GitHub info for creator and project
+    /// Called when data is stale (>1 hour since last update)
+    pub async fn update_github_info_tx(
+        &self,
+        token_id: &str,
+        github_id: &str,
+        creator_info: &GitHubCreatorInfo,
+        project_info: &GitHubProjectInfo,
+    ) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let mut tx = self.db.get_write_pool().begin().await?;
+
+        // Update creator
+        let creator_query = r#"
+            UPDATE hackathon_creator SET
+                image_uri = $2,
+                name = $3,
+                github_url = $4,
+                follower_count = $5,
+                following_count = $6,
+                repo_count = $7,
+                star_count = $8,
+                bio = $9,
+                updated_at = $10
+            WHERE github_id = $1
+        "#;
+        sqlx::query(creator_query)
+            .bind(github_id)
+            .bind(&creator_info.image_uri)
+            .bind(&creator_info.name)
+            .bind(&creator_info.github_url)
+            .bind(creator_info.follower_count)
+            .bind(creator_info.following_count)
+            .bind(creator_info.repo_count)
+            .bind(creator_info.star_count)
+            .bind(&creator_info.bio)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+
+        // Update project
+        let topics_str = project_info.topics.as_ref().map(|t| t.join(","));
+        let project_query = r#"
+            UPDATE hackathon_project SET
+                star_count = $2,
+                fork_count = $3,
+                topics = $4,
+                language = $5,
+                updated_at = $6
+            WHERE token_id = $1
+        "#;
+        sqlx::query(project_query)
+            .bind(token_id)
+            .bind(project_info.star_count)
+            .bind(project_info.fork_count)
+            .bind(&topics_str)
+            .bind(&project_info.language)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+
+        info!(
+            "Updated GitHub info for hackathon project: {} (github_id: {})",
+            token_id, github_id
+        );
+        Ok(())
     }
 }
 
