@@ -153,4 +153,8 @@ lazy_static! {
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(10000); // Default: 10 seconds
+
+    // Token address suffix for vanity addresses
+    pub static ref VANITY_ADDRESS_SUFFIX: String = env::var("VANITY_ADDRESS_SUFFIX")
+        .unwrap_or_else(|_| "7777".to_string());
 }

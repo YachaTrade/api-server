@@ -10,7 +10,7 @@ use crate::{
     services::{metadata::MetadataService, terminal::TerminalService},
     state::AppState,
     types::{metadata::TerminalMetadataResponse, terminal::*},
-    utils::valid_evm_address,
+    utils::validate_token_id,
 };
 
 /// Get latest block
@@ -128,11 +128,8 @@ pub async fn get_terminal_metadata(
     State(state): State<AppState>,
     Path(token_address): Path<String>,
 ) -> AppJsonResult<TerminalMetadataResponse> {
-    if !valid_evm_address(&token_address) {
-        return Err(AppError::BadRequest(
-            "Invalid token address format".to_string(),
-        ));
-    }
+    let token_address = validate_token_id(&token_address)
+        .ok_or_else(|| AppError::BadRequest("Invalid token address format".to_string()))?;
 
     info!("Getting terminal metadata for token: {}", token_address);
 
