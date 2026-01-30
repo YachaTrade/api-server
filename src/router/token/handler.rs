@@ -18,7 +18,7 @@ use crate::{
             salt::{MineSaltRequest, MineSaltResponse},
         },
     },
-    utils::validate_token_id,
+    utils::valid_token_id,
 };
 
 /// Get token metadata
@@ -40,7 +40,7 @@ pub async fn get_token(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
 ) -> AppJsonResult<TokenResponse> {
-    let token_id = validate_token_id(&token_id)
+    let token_id = valid_token_id(&token_id)
         .ok_or_else(|| AppError::BadRequest("Invalid token ID".to_string()))?;
 
     let service = TokenService::new(state.postgres.clone(), state.redis.clone());
@@ -67,7 +67,7 @@ pub async fn get_token_metadata(
     State(state): State<AppState>,
     Path(token_address): Path<String>,
 ) -> AppJsonResult<TokenMetadataResponse> {
-    let token_address = validate_token_id(&token_address)
+    let token_address = valid_token_id(&token_address)
         .ok_or_else(|| AppError::BadRequest("Invalid token ID".to_string()))?;
 
     let service = TokenMetadataService::new(state.postgres.clone(), state.redis.clone());

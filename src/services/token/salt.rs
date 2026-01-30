@@ -9,7 +9,7 @@ use tracing::{error, info};
 use crate::{
     result::AppError,
     types::token::salt::{MineSaltRequest, MineSaltResponse},
-    utils::valid_evm_address,
+    utils::valid_account_id,
 };
 
 // 최대 시도 횟수: 1천만번 (suffix가 "143"일 경우 평균 ~4096번에 찾음)
@@ -85,7 +85,7 @@ impl SaltService {
     /// - 총 42자리 (0x + 40자리 hex)
     /// - 모두 16진수 문자
     fn validate_request(&self, request: &MineSaltRequest) -> Result<(), AppError> {
-        if !valid_evm_address(&request.creator) {
+        if valid_account_id(&request.creator).is_none() {
             return Err(AppError::BadRequest(format!(
                 "Invalid creator address: {}",
                 request.creator
@@ -446,7 +446,7 @@ impl MiningConfig {
             .map_err(|_| AppError::InternalError(format!("{} not set", env_var)))?;
 
         // EVM 주소 형식 검증
-        if !valid_evm_address(&addr_str) {
+        if valid_account_id(&addr_str).is_none() {
             return Err(AppError::InternalError(format!(
                 "Invalid {} address: {}",
                 env_var, addr_str
