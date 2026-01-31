@@ -16,5 +16,10 @@
       "Bash(done)"
     ],
     "deny": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "context7",
+    "filesystem",
+    "github"
+  ]
 }

@@ -55,14 +55,17 @@ pub async fn get_hype_token(
     ),
     tag = "Hype"
 )]
-#[instrument(skip(state))]
+#[instrument(skip(_state))]
 pub async fn get_hype_token_latest(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> AppJsonResult<HypeTokenResponse> {
-    let service = HypeService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.get_hype_token_latest().await?;
+    // let service = HypeService::new(state.postgres.clone(), state.redis.clone());
+    // let response = service.get_hype_token_latest().await?;
 
-    Ok(Json(response))
+    Ok(Json(HypeTokenResponse {
+        tokens: vec![],
+        total_count: 0,
+    }))
 }
 
 /// Get Hype Point
