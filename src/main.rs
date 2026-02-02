@@ -2,7 +2,7 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS},
     cors::get_cors,
     router::{
-        self, account, api_key, auth, cms, health, hype, leaderboard, metadata, metrics, new_event,
+        self, account, agent, api_key, auth, cms, health, hype, leaderboard, metadata, metrics, new_event,
         order, profile, raffle, search, terminal, token, trade, trend,
     },
     state::AppState,
@@ -126,6 +126,17 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::insert_trend,
         router::cms::handler::update_metadata,
         router::cms::handler::register_hackathon,
+
+        // ----------------Agent----------------
+        router::agent::handler::get_chart,
+        router::agent::handler::get_swap_history,
+        router::agent::handler::get_market,
+        router::agent::handler::get_metrics,
+        router::agent::handler::get_token,
+        router::agent::handler::get_holdings,
+        router::agent::handler::upload_image,
+        router::agent::handler::upload_metadata,
+        router::agent::handler::get_tokens_created,
 
     ),
     components(
@@ -299,6 +310,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Trend",description="Trend token endpoints"),
         (name="Leaderboard",description="Leaderboard endpoints"),
         (name="CMS",description="CMS admin endpoints"),
+        (name="Agent",description="Agent API endpoints for AI integrations"),
     ),
     security(
         ("session_cookie" = [])
@@ -366,6 +378,7 @@ async fn main() -> Result<()> {
         .merge(leaderboard::router())
         .merge(api_key::router(app_state.clone()))
         .merge(cms::router(app_state.clone()))
+        .merge(agent::router())
         .merge(SwaggerUi::new("/dev-sw").url("/dev-sw/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
@@ -407,7 +420,7 @@ async fn method_based_timeout(
     // Exempt upload endpoints from timeout restrictions
     let path = req.uri().path();
     let is_upload_endpoint =
-        path.starts_with("/metadata/image") || path.starts_with("/metadata/metadata");
+        path.starts_with("/metadata/image") || path.starts_with("/metadata/metadata") || path.starts_with("/agent/token/image");
 
     if is_upload_endpoint {
         // No timeout for upload endpoints
