@@ -233,7 +233,7 @@ interface AccountInfo {
        │                       │   Create session      │
        │                       │──────────────────────>│
        │   { account_info }    │                       │
-       │   Set-Cookie: session │                       │
+       │   Set-Cookie: nadfun-v3-api │                       │
        │<──────────────────────│                       │
        │                       │                       │
        │  (Authenticated       │                       │
