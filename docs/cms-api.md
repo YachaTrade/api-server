@@ -9,6 +9,8 @@ CMS(Content Management System) API는 관리자 전용 토큰 관리 기능을 �
 - **메타데이터 수정**: 토큰 메타데이터 업데이트 (설명, 링크, 이미지)
 - **해커톤 등록**: 해커톤 프로젝트 등록 (별도 문서 참조: [hackathon-api.md](./hackathon-api.md))
 
+> **참고**: API Key 관리는 일반 사용자용 API로 이동되었습니다. [api-key.md](./api-key.md) 참조
+
 > **인증 필수**: 모든 CMS API는 Admin 권한이 필요합니다.
 
 ---

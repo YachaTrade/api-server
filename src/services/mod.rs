@@ -1,4 +1,5 @@
 pub mod account;
+pub mod api_key;
 pub mod auth;
 pub mod cms;
 pub mod github;
@@ -7,6 +8,7 @@ pub mod hype;
 pub mod leaderboard;
 pub mod metadata;
 pub mod new_event;
+pub mod rate_limiter;
 pub mod search;
 pub mod terminal;
 pub mod token;

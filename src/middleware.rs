@@ -1,4 +1,6 @@
 use crate::controllers::auth::session::SessionController;
+use crate::services::api_key::{update_last_used, validate_api_key};
+use crate::services::rate_limiter::{check_and_increment, RateLimitResult};
 
 use super::{config::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
 
@@ -87,4 +89,75 @@ pub async fn authenticate_user(
     req.extensions_mut().insert(session_address);
 
     Ok(next.run(req).await)
+}
+
+/// API Key 검증 및 Rate Limit 미들웨어 (전역 적용)
+/// - CORS 허용 Origin (nad.fun 등): 통과 (기존 동작)
+/// - Origin 없음 또는 외부 Origin: X-API-Key 필수 + 1 req/sec
+pub async fn api_key_gate(
+    State(state): State<AppState>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response<Body>, AppError> {
+    // 0. 제외할 경로 확인
+    let path = req.uri().path();
+    if path == "/health"
+        || path == "/"
+        || path.starts_with("/cms/")
+        || path.starts_with("/dev-sw")
+    {
+        return Ok(next.run(req).await);
+    }
+
+    // 1. Origin 헤더 확인
+    let origin = req
+        .headers()
+        .get(ORIGIN)
+        .and_then(|v| v.to_str().ok());
+
+    // 2. CORS 허용 Origin이면 API Key 검사 건너뛰기
+    if let Some(origin_str) = origin {
+        if is_allowed_origin(origin_str) {
+            // nad.fun, nadapp.net 등 → 기존 플로우 (API Key 불필요)
+            return Ok(next.run(req).await);
+        }
+    }
+
+    // 3. 외부 Origin 또는 Origin 없음 → API Key 필수
+    let api_key = req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AppError::Unauthorized("X-API-Key header required".to_string()))?;
+
+    // 4. API Key 검증 (Redis 캐시 → DB)
+    let key_info = validate_api_key(&state.postgres, &state.redis, api_key).await?;
+
+    // 5. Rate Limit 확인 (60 req/min)
+    match check_and_increment(&state.redis, &key_info.key_hash).await? {
+        RateLimitResult::Exceeded { retry_after } => {
+            return Err(AppError::TooManyRequests { retry_after });
+        }
+        RateLimitResult::Allowed { .. } => {}
+    }
+
+    // 6. last_used_at 업데이트 (비동기, fire-and-forget)
+    let db = state.postgres.clone();
+    let hash = key_info.key_hash.clone();
+    tokio::spawn(async move {
+        update_last_used(&db, &hash).await;
+    });
+
+    // 7. 요청 처리
+    let mut response = next.run(req).await;
+
+    // 8. Rate Limit 헤더 추가
+    response
+        .headers_mut()
+        .insert("X-RateLimit-Limit", "60".parse().unwrap());
+    response
+        .headers_mut()
+        .insert("X-RateLimit-Window", "1m".parse().unwrap());
+
+    Ok(response)
 }
