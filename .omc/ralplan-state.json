@@ -1,0 +1,11 @@
+{
+  "active": false,
+  "mode": "ralplan",
+  "iteration": 3,
+  "max_iterations": 5,
+  "plan_path": ".omc/plans/agent-router.md",
+  "current_phase": "approved",
+  "started_at": "2026-02-02T06:30:00Z",
+  "approved_at": "2026-02-02T07:00:00Z",
+  "task_description": "/agent 라우터 생성 - trading 데이터(chart, swap_history, market), token data, holding token, create token(리워드 포함)"
+}
