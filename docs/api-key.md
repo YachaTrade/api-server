@@ -6,11 +6,12 @@
 
 ### 동작 방식
 
-| 요청 출처 | API Key 필요 | Rate Limit |
-|----------|-------------|------------|
-| nad.fun, nadapp.net, *.nad.fun, *.symphony.io | X | 없음 |
-| localhost:* | X | 없음 |
-| 기타 외부 Origin / Origin 없음 | O | 60 req/min |
+| 요청 출처 | API Key | Rate Limit |
+|----------|---------|------------|
+| nad.fun, nadapp.net, *.nad.fun, *.symphony.io | 불필요 | 없음 |
+| localhost:* | 불필요 | 없음 |
+| 외부 Origin (API Key 없음) | 선택 | 10 req/min (IP 기반) |
+| 외부 Origin (API Key 있음) | 선택 | 100 req/min (Key 기반) |
 
 ### 제외 경로
 
@@ -41,18 +42,20 @@ X-API-Key: nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ### cURL 예시
 
 ```bash
-curl https://api.nad.fun/token/list \
+curl https://api.nadapp.net/token/list \
   -H "X-API-Key: nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
 ### Rate Limit 응답 헤더
 
-모든 API Key 요청에 다음 헤더가 포함됩니다:
+외부 Origin 요청에 다음 헤더가 포함됩니다:
 
 | 헤더 | 값 | 설명 |
 |------|-----|------|
-| `X-RateLimit-Limit` | 60 | 분당 허용 요청 수 |
+| `X-RateLimit-Limit` | 10 또는 100 | 분당 허용 요청 수 |
+| `X-RateLimit-Remaining` | N | 남은 요청 수 |
 | `X-RateLimit-Window` | 1m | Rate limit 윈도우 |
+| `X-RateLimit-Upgrade` | (API Key 없을 때만) | API Key 사용 안내 |
 
 ### Rate Limit 초과 시
 
@@ -79,7 +82,7 @@ Retry-After: 1
 #### 요청
 
 ```bash
-curl -X POST https://api.nad.fun/api-key \
+curl -X POST https://api.nadapp.net/api-key \
   -H "Content-Type: application/json" \
   -H "Cookie: session=<user_session>" \
   -d '{
@@ -119,7 +122,7 @@ curl -X POST https://api.nad.fun/api-key \
 #### 요청
 
 ```bash
-curl https://api.nad.fun/api-key \
+curl https://api.nadapp.net/api-key \
   -H "Cookie: session=<user_session>"
 ```
 
@@ -169,7 +172,7 @@ curl https://api.nad.fun/api-key \
 #### 요청
 
 ```bash
-curl -X DELETE https://api.nad.fun/api-key/7185139933124608001 \
+curl -X DELETE https://api.nadapp.net/api-key/7185139933124608001 \
   -H "Cookie: session=<user_session>"
 ```
 
@@ -254,7 +257,7 @@ export NAD_API_KEY="nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 // JavaScript 사용 예시
 const apiKey = process.env.NAD_API_KEY;
 
-fetch('https://api.nad.fun/token/list', {
+fetch('https://api.nadapp.net/token/list', {
   headers: {
     'X-API-Key': apiKey
   }
