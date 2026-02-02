@@ -1,16 +1,19 @@
 use crate::controllers::auth::session::SessionController;
 use crate::services::api_key::{update_last_used, validate_api_key};
-use crate::services::rate_limiter::{check_and_increment, RateLimitResult};
+use crate::services::rate_limiter::{
+    check_and_increment, RateLimitResult, RATE_LIMIT_WITHOUT_API_KEY, RATE_LIMIT_WITH_API_KEY,
+};
 
 use super::{config::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
 
 use axum::{
     body::Body,
-    extract::State,
+    extract::{ConnectInfo, State},
     http::{header::ORIGIN, Request, Response},
     middleware::Next,
 };
 use std::env;
+use std::net::SocketAddr;
 use tower_cookies::Cookies;
 use tracing::{error, info};
 
@@ -93,7 +96,8 @@ pub async fn authenticate_user(
 
 /// API Key 검증 및 Rate Limit 미들웨어 (전역 적용)
 /// - CORS 허용 Origin (nad.fun 등): 통과 (기존 동작)
-/// - Origin 없음 또는 외부 Origin: X-API-Key 필수 + 1 req/sec
+/// - 외부 Origin + API Key: 100 req/min
+/// - 외부 Origin + No API Key: 10 req/min (IP 기반)
 pub async fn api_key_gate(
     State(state): State<AppState>,
     req: Request<Body>,
@@ -125,46 +129,103 @@ pub async fn api_key_gate(
     // 2. CORS 허용 Origin이면 API Key 검사 건너뛰기
     if let Some(origin_str) = origin {
         if is_allowed_origin(origin_str) {
-            // nad.fun, nadapp.net 등 → 기존 플로우 (API Key 불필요)
+            // nad.fun, nadapp.net 등 → 기존 플로우 (API Key 불필요, Rate Limit 없음)
             return Ok(next.run(req).await);
         }
     }
 
-    // 3. 외부 Origin 또는 Origin 없음 → API Key 필수
+    // 3. 외부 Origin 또는 Origin 없음 → API Key 선택적 (Rate Limit 차등 적용)
     let api_key = req
         .headers()
         .get("X-API-Key")
+        .and_then(|v| v.to_str().ok());
+
+    // 4. IP 주소 추출 (API Key 없을 때 rate limit용)
+    // Cloudflare -> HAProxy -> API Server 구조에서 원본 IP 추출
+    let (client_ip, ip_source) = if let Some(ip) = req
+        .headers()
+        .get("CF-Connecting-IP")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AppError::Unauthorized("X-API-Key header required".to_string()))?;
+        .map(|s| s.trim().to_string())
+    {
+        (ip, "CF-Connecting-IP")
+    } else if let Some(ip) = req
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string())
+    {
+        (ip, "X-Forwarded-For")
+    } else if let Some(ip) = req
+        .headers()
+        .get("X-Real-IP")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+    {
+        (ip, "X-Real-IP")
+    } else if let Some(ip) = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ci| ci.0.ip().to_string())
+    {
+        (ip, "ConnectInfo")
+    } else {
+        ("unknown".to_string(), "fallback")
+    };
 
-    // 4. API Key 검증 (Redis 캐시 → DB)
-    let key_info = validate_api_key(&state.postgres, &state.redis, api_key).await?;
+    info!(
+        "[RATE_LIMIT] path={}, client_ip={}, source={}, api_key={}",
+        path,
+        client_ip,
+        ip_source,
+        api_key.map(|_| "present").unwrap_or("none")
+    );
 
-    // 5. Rate Limit 확인 (60 req/min)
-    match check_and_increment(&state.redis, &key_info.key_hash).await? {
-        RateLimitResult::Exceeded { retry_after } => {
+    let (rate_limit_id, rate_limit, has_api_key) = if let Some(key) = api_key {
+        // 5a. API Key 있음 → 검증 후 100 req/min
+        let key_info = validate_api_key(&state.postgres, &state.redis, key).await?;
+
+        // last_used_at 업데이트 (Redis에 저장, 주기적으로 DB 동기화)
+        let redis = state.redis.clone();
+        let hash = key_info.key_hash.clone();
+        tokio::spawn(async move {
+            update_last_used(&redis, &hash).await;
+        });
+
+        (format!("key:{}", key_info.key_hash), RATE_LIMIT_WITH_API_KEY, true)
+    } else {
+        // 5b. API Key 없음 → IP 기반 10 req/min
+        (format!("ip:{}", client_ip), RATE_LIMIT_WITHOUT_API_KEY, false)
+    };
+
+    // 6. Rate Limit 확인
+    match check_and_increment(&state.redis, &rate_limit_id, rate_limit).await? {
+        RateLimitResult::Exceeded { retry_after, limit: _ } => {
             return Err(AppError::TooManyRequests { retry_after });
         }
-        RateLimitResult::Allowed { .. } => {}
+        RateLimitResult::Allowed { remaining, limit } => {
+            // 7. 요청 처리
+            let mut response = next.run(req).await;
+
+            // 8. Rate Limit 헤더 추가
+            response
+                .headers_mut()
+                .insert("X-RateLimit-Limit", limit.to_string().parse().unwrap());
+            response
+                .headers_mut()
+                .insert("X-RateLimit-Remaining", remaining.to_string().parse().unwrap());
+            response
+                .headers_mut()
+                .insert("X-RateLimit-Window", "1m".parse().unwrap());
+
+            if !has_api_key {
+                response
+                    .headers_mut()
+                    .insert("X-RateLimit-Upgrade", "Get API key for 100 req/min".parse().unwrap());
+            }
+
+            return Ok(response);
+        }
     }
-
-    // 6. last_used_at 업데이트 (Redis에 저장, 주기적으로 DB 동기화)
-    let redis = state.redis.clone();
-    let hash = key_info.key_hash.clone();
-    tokio::spawn(async move {
-        update_last_used(&redis, &hash).await;
-    });
-
-    // 7. 요청 처리
-    let mut response = next.run(req).await;
-
-    // 8. Rate Limit 헤더 추가
-    response
-        .headers_mut()
-        .insert("X-RateLimit-Limit", "60".parse().unwrap());
-    response
-        .headers_mut()
-        .insert("X-RateLimit-Window", "1m".parse().unwrap());
-
-    Ok(response)
 }

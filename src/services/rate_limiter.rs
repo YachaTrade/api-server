@@ -3,20 +3,22 @@ use crate::result::AppError;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Rate limit configuration
-const RATE_LIMIT_PER_MINUTE: u64 = 60;
+pub const RATE_LIMIT_WITH_API_KEY: u64 = 100;    // With API key: 100 req/min
+pub const RATE_LIMIT_WITHOUT_API_KEY: u64 = 10;  // Without API key: 10 req/min
 
 /// Rate limit check result
 #[derive(Debug)]
 pub enum RateLimitResult {
-    Allowed { remaining: u64 },
-    Exceeded { retry_after: u64 },
+    Allowed { remaining: u64, limit: u64 },
+    Exceeded { retry_after: u64, limit: u64 },
 }
 
-/// Check rate limit and increment counter (60 requests per minute)
-/// Redis key format: rate:{key_hash}:min:{unix_minute}
+/// Check rate limit and increment counter
+/// Redis key format: rate:{identifier}:min:{unix_minute}
 pub async fn check_and_increment(
     redis: &RedisDatabase,
-    key_hash: &str,
+    identifier: &str,
+    limit: u64,
 ) -> Result<RateLimitResult, AppError> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -27,7 +29,7 @@ pub async fn check_and_increment(
     let seconds_into_minute = now % 60;
     let retry_after = 60 - seconds_into_minute;
 
-    let redis_key = format!("rate:{}:min:{}", key_hash, current_minute);
+    let redis_key = format!("rate:{}:min:{}", identifier, current_minute);
 
     // Atomic INCR + EXPIRE
     let count = redis
@@ -35,10 +37,10 @@ pub async fn check_and_increment(
         .await
         .map_err(|e| AppError::InternalError(format!("Rate limit check failed: {}", e)))?;
 
-    if count > RATE_LIMIT_PER_MINUTE {
-        return Ok(RateLimitResult::Exceeded { retry_after });
+    if count > limit {
+        return Ok(RateLimitResult::Exceeded { retry_after, limit });
     }
 
-    let remaining = RATE_LIMIT_PER_MINUTE - count;
-    Ok(RateLimitResult::Allowed { remaining })
+    let remaining = limit - count;
+    Ok(RateLimitResult::Allowed { remaining, limit })
 }
