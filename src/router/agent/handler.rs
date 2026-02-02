@@ -12,7 +12,7 @@ use crate::{
     result::{AppError, AppJsonResult},
     services::{
         metadata::MetadataService,
-        token::{create::TokenCreatedService, detail::TokenService},
+        token::{create::TokenCreatedService, detail::TokenService, salt::SaltService},
         trading::{
             chart::ChartService, market::MarketService, metrics::MetricsService,
             position::PositionService, swap_history::SwapService,
@@ -23,7 +23,7 @@ use crate::{
         common::pagination::PaginationParams,
         metadata::{UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
         profile::{CreatedTokensResponse, HoldTokenResponse},
-        token::TokenResponse,
+        token::{TokenResponse, salt::{MineSaltRequest, MineSaltResponse}},
         trading::{
             chart::{BarResponse, GetBarsRequest},
             market::MarketResponse,
@@ -323,4 +323,32 @@ pub async fn get_tokens_created(
     })?;
     let service = TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
     Ok(Json(service.get_tokens_created(&account_id, &pagination).await?))
+}
+
+// ============================================================================
+// Salt Mining Handler
+// ============================================================================
+
+#[utoipa::path(
+    post,
+    path = "/agent/salt",
+    request_body = MineSaltRequest,
+    responses(
+        (status = 200, description = "Salt mined successfully", body = MineSaltResponse),
+        (status = 400, description = "Invalid parameters"),
+        (status = 401, description = "API key required"),
+        (status = 408, description = "Request timeout - max iterations reached"),
+    ),
+    security(("api_key" = [])),
+    tag = "Agent"
+)]
+#[instrument(skip(_state))]
+pub async fn salt(
+    State(_state): State<AppState>,
+    Json(payload): Json<MineSaltRequest>,
+) -> AppJsonResult<MineSaltResponse> {
+    info!("Agent: Salt mining for creator: {}", payload.creator);
+    payload.validate().map_err(AppError::BadRequest)?;
+    let service = SaltService::new();
+    Ok(Json(service.mine_salt(payload).await?))
 }
