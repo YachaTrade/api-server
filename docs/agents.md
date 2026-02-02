@@ -9,7 +9,7 @@ AI 에이전트 및 외부 서비스를 위한 통합 API입니다. Trading 데�
 모든 Agent API는 `X-API-Key` 헤더가 필요합니다.
 
 ```bash
-curl https://api.nad.fun/agent/token/0x1234... \
+curl https://api.nadapp.net/agent/token/0x1234... \
   -H "X-API-Key: nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
@@ -31,7 +31,7 @@ curl https://api.nad.fun/agent/token/0x1234... \
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/chart/0x1234...?resolution=60&from=1704067200&to=1704153600" \
+curl "https://api.nadapp.net/agent/chart/0x1234...?resolution=60&from=1704067200&to=1704153600" \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -80,7 +80,7 @@ curl "https://api.nad.fun/agent/chart/0x1234...?resolution=60&from=1704067200&to
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/swap-history/0x1234...?page=1&limit=20&trade_type=BUY" \
+curl "https://api.nadapp.net/agent/swap-history/0x1234...?page=1&limit=20&trade_type=BUY" \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -131,7 +131,7 @@ curl "https://api.nad.fun/agent/swap-history/0x1234...?page=1&limit=20&trade_typ
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/market/0x1234..." \
+curl "https://api.nadapp.net/agent/market/0x1234..." \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -178,7 +178,7 @@ curl "https://api.nad.fun/agent/market/0x1234..." \
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/metrics/0x1234...?timeframes=1,5,60,1D" \
+curl "https://api.nadapp.net/agent/metrics/0x1234...?timeframes=1,5,60,1D" \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -227,7 +227,7 @@ curl "https://api.nad.fun/agent/metrics/0x1234...?timeframes=1,5,60,1D" \
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/token/0x1234..." \
+curl "https://api.nadapp.net/agent/token/0x1234..." \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -269,7 +269,7 @@ curl "https://api.nad.fun/agent/token/0x1234..." \
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/holdings/0xabc...?page=1&limit=20" \
+curl "https://api.nadapp.net/agent/holdings/0xabc...?page=1&limit=20" \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -326,7 +326,7 @@ curl "https://api.nad.fun/agent/holdings/0xabc...?page=1&limit=20" \
 #### 요청
 
 ```bash
-curl -X POST "https://api.nad.fun/agent/token/image" \
+curl -X POST "https://api.nadapp.net/agent/token/image" \
   -H "X-API-Key: nadfun_xxx" \
   -H "Content-Type: image/png" \
   --data-binary @token_image.png
@@ -355,7 +355,7 @@ curl -X POST "https://api.nad.fun/agent/token/image" \
 #### 요청
 
 ```bash
-curl -X POST "https://api.nad.fun/agent/token/metadata" \
+curl -X POST "https://api.nadapp.net/agent/token/metadata" \
   -H "X-API-Key: nadfun_xxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -408,7 +408,7 @@ curl -X POST "https://api.nad.fun/agent/token/metadata" \
 #### 요청
 
 ```bash
-curl "https://api.nad.fun/agent/token/created/0xabc...?page=1&limit=10" \
+curl "https://api.nadapp.net/agent/token/created/0xabc...?page=1&limit=10" \
   -H "X-API-Key: nadfun_xxx"
 ```
 
@@ -463,7 +463,7 @@ curl "https://api.nad.fun/agent/token/created/0xabc...?page=1&limit=10" \
 #### 요청
 
 ```bash
-curl -X POST "https://api.nad.fun/agent/salt" \
+curl -X POST "https://api.nadapp.net/agent/salt" \
   -H "X-API-Key: nadfun_xxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -709,7 +709,7 @@ interface MineSaltResponse {
 import requests
 
 API_KEY = "nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-BASE_URL = "https://api.nad.fun"
+BASE_URL = "https://api.nadapp.net"
 
 headers = {"X-API-Key": API_KEY}
 
@@ -744,7 +744,7 @@ print(f"Is NSFW: {image_data['is_nsfw']}")
 
 ```typescript
 const API_KEY = "nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-const BASE_URL = "https://api.nad.fun";
+const BASE_URL = "https://api.nadapp.net";
 
 const headers = { "X-API-Key": API_KEY };
 
