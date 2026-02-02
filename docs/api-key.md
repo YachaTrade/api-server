@@ -33,17 +33,27 @@
 
 ## API Key 사용법
 
+API Key는 **선택적**입니다. 없이도 API 사용 가능하지만 Rate Limit이 다릅니다.
+
+### API Key 없이 사용 (10 req/min)
+
+```bash
+# IP 기반 Rate Limit 적용
+curl https://api.nadapp.net/token/list
+```
+
+### API Key 사용 (100 req/min)
+
+```bash
+# Key 기반 Rate Limit 적용 (10배 더 많은 요청 가능)
+curl https://api.nadapp.net/token/list \
+  -H "X-API-Key: nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
 ### 요청 헤더
 
 ```
 X-API-Key: nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-### cURL 예시
-
-```bash
-curl https://api.nadapp.net/token/list \
-  -H "X-API-Key: nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
 ### Rate Limit 응답 헤더
@@ -61,13 +71,24 @@ curl https://api.nadapp.net/token/list \
 
 ```json
 HTTP/1.1 429 Too Many Requests
-Retry-After: 1
+Retry-After: 45
 
 {
   "error": "Rate limit exceeded",
-  "retry_after": 1
+  "retry_after": 45
 }
 ```
+
+> `retry_after`는 다음 분(minute)까지 남은 초(seconds)입니다.
+
+### IP 식별 방식
+
+API Key 없이 요청 시 다음 순서로 클라이언트 IP를 식별합니다:
+
+1. `CF-Connecting-IP` (Cloudflare)
+2. `X-Forwarded-For` (프록시 체인 첫번째 IP)
+3. `X-Real-IP` (nginx/haproxy)
+4. 직접 연결 IP
 
 ---
 
