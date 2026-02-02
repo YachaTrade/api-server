@@ -119,7 +119,7 @@ pub async fn auth_delete_session(
     service.delete_session(&session_info.session_id).await?;
 
     // Remove session cookie by setting its expiry to a past date
-    let cookie_name = env::var("COOKIE_NAME").unwrap_or_else(|_| "api-session".to_string());
+    let cookie_name = env::var("COOKIE_NAME").unwrap_or_else(|_| "nadfun-v3-api".to_string());
     let mut cookie = Cookie::new(cookie_name, "");
     cookie.set_http_only(true);
     cookie.set_secure(true);

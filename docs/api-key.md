@@ -105,7 +105,7 @@ API Key 없이 요청 시 다음 순서로 클라이언트 IP를 식별합니다
 ```bash
 curl -X POST https://api.nadapp.net/api-key \
   -H "Content-Type: application/json" \
-  -H "Cookie: session=<user_session>" \
+  -H "Cookie: nadfun-v3-api=<session_token>" \
   -d '{
     "name": "My Integration",
     "description": "External service integration",
@@ -144,7 +144,7 @@ curl -X POST https://api.nadapp.net/api-key \
 
 ```bash
 curl https://api.nadapp.net/api-key \
-  -H "Cookie: session=<user_session>"
+  -H "Cookie: nadfun-v3-api=<session_token>"
 ```
 
 #### 응답
@@ -194,7 +194,7 @@ curl https://api.nadapp.net/api-key \
 
 ```bash
 curl -X DELETE https://api.nadapp.net/api-key/7185139933124608001 \
-  -H "Cookie: session=<user_session>"
+  -H "Cookie: nadfun-v3-api=<session_token>"
 ```
 
 #### 응답
