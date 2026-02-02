@@ -1574,4 +1574,120 @@ impl RedisDatabase {
 
         Ok(())
     }
+
+    /// Increment API key usage counter in Redis (fast, in-memory)
+    /// Returns the current count after increment
+    pub async fn incr_api_key_usage(&self, key_hash: &str) -> Result<i64> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("apikey:usage:{}", key_hash);
+
+        let count: i64 = redis::cmd("INCR")
+            .arg(&redis_key)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(count)
+    }
+
+    /// Get API key usage count from Redis
+    pub async fn get_api_key_usage(&self, key_hash: &str) -> Result<i64> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("apikey:usage:{}", key_hash);
+
+        let count: Option<i64> = redis::cmd("GET")
+            .arg(&redis_key)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(count.unwrap_or(0))
+    }
+
+    /// Get and reset API key usage count (atomic GETSET with 0)
+    /// Used for periodic DB sync
+    pub async fn get_and_reset_api_key_usage(&self, key_hash: &str) -> Result<i64> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("apikey:usage:{}", key_hash);
+
+        // GETSET returns old value and sets new value atomically
+        let count: Option<i64> = redis::cmd("GETSET")
+            .arg(&redis_key)
+            .arg(0i64)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(count.unwrap_or(0))
+    }
+
+    /// Get all API key usage keys (for batch sync)
+    /// Uses SCAN instead of KEYS to avoid blocking Redis
+    pub async fn get_all_api_key_usage_keys(&self) -> Result<Vec<String>> {
+        let mut conn = self.conn.as_ref().clone();
+        let mut keys = Vec::new();
+        let mut cursor: u64 = 0;
+
+        loop {
+            let (new_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg("apikey:usage:*")
+                .arg("COUNT")
+                .arg(100)
+                .query_async(&mut conn)
+                .await?;
+
+            keys.extend(batch);
+            cursor = new_cursor;
+
+            if cursor == 0 {
+                break;
+            }
+        }
+
+        Ok(keys)
+    }
+
+    /// Delete API key usage data (called on key deletion)
+    pub async fn delete_api_key_usage_data(&self, key_hash: &str) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let usage_key = format!("apikey:usage:{}", key_hash);
+        let last_used_key = format!("apikey:last_used:{}", key_hash);
+
+        let _: () = redis::cmd("DEL")
+            .arg(&usage_key)
+            .arg(&last_used_key)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Update last_used timestamp in Redis (lightweight)
+    pub async fn set_api_key_last_used(&self, key_hash: &str) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("apikey:last_used:{}", key_hash);
+        let now = chrono::Utc::now().timestamp();
+
+        // Store with 24h TTL (will be synced to DB periodically)
+        let _: () = redis::cmd("SETEX")
+            .arg(&redis_key)
+            .arg(86400u64) // 24 hours
+            .arg(now)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get last_used timestamp from Redis
+    pub async fn get_api_key_last_used(&self, key_hash: &str) -> Result<Option<i64>> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("apikey:last_used:{}", key_hash);
+
+        let timestamp: Option<i64> = redis::cmd("GET")
+            .arg(&redis_key)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(timestamp)
+    }
 }

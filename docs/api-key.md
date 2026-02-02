@@ -21,6 +21,12 @@
 - `/dev-sw*`
 - `/api-key/*` (API Key 관리 - 세션 인증 사용)
 - `/auth/*` (인증 엔드포인트)
+- `/latest-block`, `/asset`, `/pair`, `/events` (Terminal 엔드포인트)
+
+### 제한사항
+
+- **계정당 최대 5개** API Key 생성 가능
+- 초과 시 기존 키 삭제 후 생성 필요
 
 ---
 
@@ -95,7 +101,7 @@ curl -X POST https://api.nad.fun/api-key \
 
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "id": 7185139933124608001,
   "api_key": "nadfun_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "key_prefix": "nadfun_xxxxxxxx",
   "name": "My Integration"
@@ -123,7 +129,7 @@ curl https://api.nad.fun/api-key \
 {
   "api_keys": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "id": 7185139933124608001,
       "key_prefix": "nadfun_xxxxxxxx",
       "name": "My Integration",
       "description": "External service integration",
@@ -143,7 +149,7 @@ curl https://api.nad.fun/api-key \
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `id` | UUID | API Key 고유 ID |
+| `id` | i64 | API Key 고유 ID (Snowflake ID) |
 | `key_prefix` | string | Key 앞 12자리 (식별용) |
 | `name` | string | API Key 이름 |
 | `description` | string | 설명 |
@@ -156,14 +162,14 @@ curl https://api.nad.fun/api-key \
 
 ---
 
-### 3. API Key 비활성화 (`DELETE /api-key/:id`)
+### 3. API Key 삭제 (`DELETE /api-key/:id`)
 
-자신의 API Key를 비활성화(revoke)합니다.
+자신의 API Key를 삭제합니다. (복구 불가)
 
 #### 요청
 
 ```bash
-curl -X DELETE https://api.nad.fun/api-key/550e8400-e29b-41d4-a716-446655440000 \
+curl -X DELETE https://api.nad.fun/api-key/7185139933124608001 \
   -H "Cookie: session=<user_session>"
 ```
 
@@ -190,7 +196,7 @@ interface CreateApiKeyRequest {
 
 // API Key 생성 응답 (api_key는 이때만 반환됨!)
 interface CreateApiKeyResponse {
-  id: string;
+  id: number;  // Snowflake ID
   api_key: string;  // 한 번만 반환!
   key_prefix: string;
   name: string;
@@ -198,7 +204,7 @@ interface CreateApiKeyResponse {
 
 // API Key 정보 (목록 조회용)
 interface ApiKeyInfo {
-  id: string;
+  id: number;  // Snowflake ID
   key_prefix: string;
   name: string;
   description?: string;
@@ -236,7 +242,8 @@ interface ApiKeyListResponse {
 1. **API Key 보관**: 생성 시 한 번만 반환되므로 안전하게 보관
 2. **환경 변수**: 코드에 하드코딩하지 말고 환경 변수로 관리
 3. **만료 설정**: 가능하면 만료 기간을 설정하여 주기적으로 갱신
-4. **비활성화**: 유출 시 즉시 비활성화 처리
+4. **즉시 삭제**: 유출 시 즉시 삭제 처리 (복구 불가)
+5. **계정당 5개 제한**: 최대 5개까지 생성 가능, 초과 시 기존 키 삭제 필요
 
 ```bash
 # 환경 변수 예시

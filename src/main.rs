@@ -356,6 +356,26 @@ async fn main() -> Result<()> {
         warn!("Failed to flush Redis: {}", e);
     }
 
+    // Background task: API Key 사용량 주기적 DB 동기화 (5분마다)
+    let sync_state = app_state.clone();
+    tokio::spawn(async move {
+        use api_server::services::api_key::sync_api_key_usage_to_db;
+        let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
+        loop {
+            interval.tick().await;
+            match sync_api_key_usage_to_db(&sync_state.postgres, &sync_state.redis).await {
+                Ok(count) => {
+                    if count > 0 {
+                        info!("API key usage synced to DB: {} keys", count);
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to sync API key usage: {:?}", e);
+                }
+            }
+        }
+    });
+
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new().route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()

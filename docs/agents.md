@@ -335,7 +335,7 @@ curl -X POST "https://api.nadapp.net/agent/token/image" \
 #### 제한사항
 
 - 최대 파일 크기: **5MB**
-- 지원 형식: PNG, JPG, GIF, WEBP, SVG
+- 지원 형식: PNG, JPG, WEBP, SVG (GIF 미지원)
 
 #### 응답: `UploadImageResponse`
 

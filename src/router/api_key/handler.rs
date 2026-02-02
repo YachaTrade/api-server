@@ -3,12 +3,11 @@ use axum::{
     extract::{Path, State},
 };
 use tracing::instrument;
-use uuid::Uuid;
 
 use super::path::ApiKeyPath;
 use crate::{
     result::AppJsonResult,
-    services::api_key::{create_api_key, list_api_keys_by_owner, revoke_api_key_by_owner},
+    services::api_key::{create_api_key, delete_api_key_by_owner, list_api_keys_by_owner},
     state::AppState,
     types::api_key::{ApiKeyInfo, ApiKeyListResponse, CreateApiKeyRequest, CreateApiKeyResponse},
 };
@@ -67,16 +66,16 @@ pub async fn list_api_keys_handler(
     Ok(Json(ApiKeyListResponse { api_keys, total }))
 }
 
-/// Revoke an API key (only if owned by the authenticated user)
+/// Delete an API key (only if owned by the authenticated user)
 #[utoipa::path(
     delete,
     path = ApiKeyPath::ApiKeyId.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication"),
-        ("id" = Uuid, Path, description = "API key ID to revoke")
+        ("id" = i64, Path, description = "API key ID to delete")
     ),
     responses(
-        (status = 200, description = "API key revoked successfully"),
+        (status = 200, description = "API key deleted successfully"),
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "API key not found or not owned by user"),
         (status = 500, description = "Internal server error")
@@ -84,12 +83,12 @@ pub async fn list_api_keys_handler(
     tag = "API Key"
 )]
 #[instrument(skip(state))]
-pub async fn revoke_api_key_handler(
+pub async fn delete_api_key_handler(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<i64>,
 ) -> AppJsonResult<serde_json::Value> {
-    revoke_api_key_by_owner(&state.postgres, &state.redis, id, &session_address).await?;
+    delete_api_key_by_owner(&state.postgres, &state.redis, id, &session_address).await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

@@ -2,12 +2,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 /// Database model for API keys
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ApiKey {
-    pub id: Uuid,
+    pub id: i64,
     pub key_hash: String,
     pub key_prefix: String,
     pub name: String,
@@ -36,9 +35,8 @@ impl ApiKey {
 /// Cached API key info stored in Redis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedApiKey {
-    pub id: Uuid,
+    pub id: i64,
     pub key_hash: String,
-    pub is_active: bool,
     pub expires_at: Option<DateTime<Utc>>,
 }
 
@@ -59,7 +57,7 @@ pub struct CreateApiKeyRequest {
 /// NOTE: api_key is only returned once at creation time
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CreateApiKeyResponse {
-    pub id: Uuid,
+    pub id: i64,
     /// Full API key - ONLY returned at creation time, store securely!
     pub api_key: String,
     pub key_prefix: String,
@@ -69,7 +67,7 @@ pub struct CreateApiKeyResponse {
 /// API key info for listing (without sensitive data)
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApiKeyInfo {
-    pub id: Uuid,
+    pub id: i64,
     pub key_prefix: String,
     pub name: String,
     pub description: Option<String>,
