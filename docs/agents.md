@@ -457,6 +457,54 @@ curl "https://api.nad.fun/agent/token/created/0xabc...?page=1&limit=10" \
 
 ---
 
+### 10. Mine Salt (`POST /agent/salt`)
+
+특정 suffix로 끝나는 토큰 주소를 생성하기 위한 salt 값을 마이닝합니다.
+
+#### 요청
+
+```bash
+curl -X POST "https://api.nad.fun/agent/salt" \
+  -H "X-API-Key: nadfun_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
+    "name": "My Token",
+    "symbol": "MTK",
+    "metadata_uri": "https://storage.nadapp.net/metadata/abc123.json"
+  }'
+```
+
+#### Request Body: `MineSaltRequest`
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `creator` | string | O | 토큰 생성자 주소 (0x + 40 hex) |
+| `name` | string | O | 토큰 이름 (1-32자) |
+| `symbol` | string | O | 토큰 심볼 (1-10자, 영문숫자만) |
+| `metadata_uri` | string | O | 메타데이터 URI (허용된 도메인 필수) |
+
+#### 응답: `MineSaltResponse`
+
+```json
+{
+  "salt": "0x000000000000000000000000000000000000000000000000000000000000a3f5",
+  "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f7777"
+}
+```
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `salt` | string | 원하는 주소를 생성하는 salt 값 (0x + 64 hex) |
+| `address` | string | 계산된 토큰 주소 (suffix로 끝남) |
+
+#### 에러 응답
+
+- `400 Bad Request`: 파라미터 검증 실패
+- `408 Request Timeout`: 최대 반복 횟수 도달 (주소를 찾지 못함)
+
+---
+
 ## TypeScript Interfaces
 
 ```typescript
@@ -623,6 +671,19 @@ interface CreatedTokensResponse {
     reward_info: RewardInfo;
   }>;
   total_count: number;
+}
+
+// POST /agent/salt
+interface MineSaltRequest {
+  creator: string;
+  name: string;
+  symbol: string;
+  metadata_uri: string;
+}
+
+interface MineSaltResponse {
+  salt: string;
+  address: string;
 }
 ```
 

@@ -9,6 +9,7 @@ pub enum AgentPath {
     UploadImage,
     UploadMetadata,
     GetTokensCreated,
+    Salt,
 }
 
 impl AgentPath {
@@ -23,6 +24,7 @@ impl AgentPath {
             AgentPath::UploadImage => "/agent/token/image",
             AgentPath::UploadMetadata => "/agent/token/metadata",
             AgentPath::GetTokensCreated => "/agent/token/created/:account_id",
+            AgentPath::Salt => "/agent/salt",
         }
     }
 
@@ -37,6 +39,7 @@ impl AgentPath {
             AgentPath::UploadImage => "/agent/token/image",
             AgentPath::UploadMetadata => "/agent/token/metadata",
             AgentPath::GetTokensCreated => "/agent/token/created/{account_id}",
+            AgentPath::Salt => "/agent/salt",
         }
     }
 }

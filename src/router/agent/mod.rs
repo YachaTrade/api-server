@@ -22,4 +22,5 @@ pub fn router() -> Router<AppState> {
             post(handler::upload_metadata).layer(DefaultBodyLimit::max(5_000_000)),
         )
         .route(AgentPath::GetTokensCreated.as_str(), get(handler::get_tokens_created))
+        .route(AgentPath::Salt.as_str(), post(handler::salt))
 }

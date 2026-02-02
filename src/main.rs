@@ -137,6 +137,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::agent::handler::upload_image,
         router::agent::handler::upload_metadata,
         router::agent::handler::get_tokens_created,
+        router::agent::handler::salt,
 
     ),
     components(
