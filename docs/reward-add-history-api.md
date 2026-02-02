@@ -24,7 +24,7 @@ GET /hype/reward_add_history
 ```bash
 curl -X GET "https://api.example.com/hype/reward_add_history?page=1&limit=10" \
   -H "accept: application/json" \
-  -H "Cookie: session=your_session_cookie"
+  -H "Cookie: nadfun-v3-api=<session_token>"
 ```
 
 **응답 예시:**
@@ -230,12 +230,12 @@ if history:
 # 기본 요청 (페이지 1, 20개 항목)
 curl -X GET "https://api.example.com/hype/reward_add_history?page=1&limit=20" \
   -H "accept: application/json" \
-  -H "Cookie: session=your_session_cookie"
+  -H "Cookie: nadfun-v3-api=<session_token>"
 
 # 특정 페이지 요청
 curl -X GET "https://api.example.com/hype/reward_add_history?page=2&limit=10" \
   -H "accept: application/json" \
-  -H "Cookie: session=your_session_cookie" | jq '.'
+  -H "Cookie: nadfun-v3-api=<session_token>" | jq '.'
 ```
 
 ## 구현 세부사항
