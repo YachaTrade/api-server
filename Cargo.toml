@@ -15,6 +15,7 @@ sqlx = { version = "0.8.1", features = [
     "bigdecimal",
     "chrono",
     "json",
+    "uuid",
 ] }
 
 # Redis cache and session store
@@ -122,8 +123,11 @@ urlencoding = "2.1"
 url = "2.5.4"
 
 # Random & UUID
-uuid = "1.11.0"
+uuid = { version = "1.11.0", features = ["serde", "v4"] }
 rand = "0.8.5"
+
+# Cryptography
+sha2 = "0.10"  # SHA256 hashing for API keys
 
 # Parallel processing
 rayon = "1.10.0"

@@ -24,6 +24,7 @@ pub enum AppError {
     NotFound(String),
     InternalError(String),
     Conflict,
+    TooManyRequests { retry_after: u64 },
 }
 
 impl From<RedisError> for AppError {
@@ -68,6 +69,19 @@ impl IntoResponse for AppError {
                 )
             }
             AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
+            AppError::TooManyRequests { retry_after } => {
+                // 429 응답에 Retry-After 헤더 포함
+                let body = Json(json!({
+                    "error": "Rate limit exceeded",
+                    "retry_after": retry_after
+                }));
+                let mut response = (StatusCode::TOO_MANY_REQUESTS, body).into_response();
+                response.headers_mut().insert(
+                    "Retry-After",
+                    retry_after.to_string().parse().unwrap(),
+                );
+                return response;
+            }
         };
 
         let body = Json(json!({

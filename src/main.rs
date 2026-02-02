@@ -2,8 +2,8 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS},
     cors::get_cors,
     router::{
-        self, account, auth, cms, health, hype, leaderboard, metadata, metrics, new_event, order,
-        profile, raffle, search, terminal, token, trade, trend,
+        self, account, api_key, auth, cms, health, hype, leaderboard, metadata, metrics, new_event,
+        order, profile, raffle, search, terminal, token, trade, trend,
     },
     state::AppState,
     types,
@@ -364,10 +364,12 @@ async fn main() -> Result<()> {
         .merge(terminal::router())
         .merge(trend::router(app_state.clone()))
         .merge(leaderboard::router())
+        .merge(api_key::router(app_state.clone()))
         .merge(cms::router(app_state.clone()))
         .merge(SwaggerUi::new("/dev-sw").url("/dev-sw/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
+        .layer(axum_middleware::from_fn_with_state(app_state.clone(), api_server::middleware::api_key_gate))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
         // .layer(GovernorLayer {

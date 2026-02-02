@@ -1508,3 +1508,70 @@ impl RedisDatabase {
         Ok(response)
     }
 }
+
+// API Key Rate Limiting
+impl RedisDatabase {
+    /// Atomic INCR with EXPIRE (for rate limiting)
+    /// Returns the current count after increment
+    pub async fn incr_with_expire(&self, key: &str, ttl_secs: u64) -> Result<u64> {
+        let mut conn = self.conn.as_ref().clone();
+
+        // Use INCR command
+        let count: u64 = redis::cmd("INCR")
+            .arg(key)
+            .query_async(&mut conn)
+            .await?;
+
+        // Set TTL only on first increment (when count == 1)
+        if count == 1 {
+            let _: () = redis::cmd("EXPIRE")
+                .arg(key)
+                .arg(ttl_secs)
+                .query_async(&mut conn)
+                .await?;
+        }
+
+        Ok(count)
+    }
+
+    /// Cache API key info (JSON string)
+    pub async fn cache_api_key(&self, key_hash: &str, info: &str, ttl_secs: u64) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("api_key:{}", key_hash);
+
+        let _: () = redis::cmd("SETEX")
+            .arg(&redis_key)
+            .arg(ttl_secs)
+            .arg(info)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get cached API key info
+    pub async fn get_cached_api_key(&self, key_hash: &str) -> Result<Option<String>> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("api_key:{}", key_hash);
+
+        let result: Option<String> = redis::cmd("GET")
+            .arg(&redis_key)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(result)
+    }
+
+    /// Delete cached API key (on revocation)
+    pub async fn delete_cached_api_key(&self, key_hash: &str) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let redis_key = format!("api_key:{}", key_hash);
+
+        let _: () = redis::cmd("DEL")
+            .arg(&redis_key)
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+}
