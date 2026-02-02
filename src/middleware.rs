@@ -148,11 +148,11 @@ pub async fn api_key_gate(
         RateLimitResult::Allowed { .. } => {}
     }
 
-    // 6. last_used_at 업데이트 (비동기, fire-and-forget)
-    let db = state.postgres.clone();
+    // 6. last_used_at 업데이트 (Redis에 저장, 주기적으로 DB 동기화)
+    let redis = state.redis.clone();
     let hash = key_info.key_hash.clone();
     tokio::spawn(async move {
-        update_last_used(&db, &hash).await;
+        update_last_used(&redis, &hash).await;
     });
 
     // 7. 요청 처리

@@ -27,6 +27,6 @@ pub fn router(app_state: AppState) -> Router<AppState> {
         )
         .route(
             ApiKeyPath::ApiKeyId.as_str(),
-            delete(handler::revoke_api_key_handler).layer(auth_layer),
+            delete(handler::delete_api_key_handler).layer(auth_layer),
         )
 }
