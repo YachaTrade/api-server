@@ -253,8 +253,7 @@ curl "https://api.nad.fun/agent/token/0x1234..." \
       "bio": "",
       "image_uri": "https://..."
     },
-    "is_cto": false,
-    "hackathon_info": null
+    "is_cto": false
   }
 }
 ```
@@ -531,7 +530,6 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  hackathon_info?: HackathonInfo;
 }
 
 interface MarketInfo {
