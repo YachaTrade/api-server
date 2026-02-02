@@ -105,6 +105,8 @@ pub async fn api_key_gate(
         || path == "/"
         || path.starts_with("/cms/")
         || path.starts_with("/dev-sw")
+        || path.starts_with("/api-key")  // API Key 관리 엔드포인트 (세션 인증 사용)
+        || path.starts_with("/auth/")    // 인증 엔드포인트
     {
         return Ok(next.run(req).await);
     }
