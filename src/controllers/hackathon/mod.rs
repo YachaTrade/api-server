@@ -465,13 +465,13 @@ impl HackathonController {
                 let github = m.github_username.as_ref().map(|username| {
                     HackathonMemberGitHubInfo {
                         username: username.clone(),
-                        image_uri: m.github_image_uri.clone(),
-                        name: m.github_name.clone(),
-                        url: m.github_url.clone(),
-                        follower_count: m.github_follower_count,
-                        following_count: m.github_following_count,
-                        repo_count: m.github_repo_count,
-                        star_count: m.github_star_count,
+                        image_uri: m.github_image_uri.clone().unwrap_or_default(),
+                        name: m.github_name.clone().unwrap_or_default(),
+                        url: m.github_url.clone().unwrap_or_default(),
+                        follower_count: m.github_follower_count.unwrap_or_default(),
+                        following_count: m.github_following_count.unwrap_or_default(),
+                        repo_count: m.github_repo_count.unwrap_or_default(),
+                        star_count: m.github_star_count.unwrap_or_default(),
                         bio: m.github_bio.clone(),
                         fetch_pending: m.github_fetched_at.is_none(),
                     }

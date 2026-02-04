@@ -162,13 +162,13 @@ interface HackathonTeamMemberInfo {
 
 interface HackathonMemberGitHubInfo {
   username: string;
-  image_uri?: string;
-  name?: string;
-  url?: string;
-  follower_count?: number;
-  following_count?: number;
-  repo_count?: number;
-  star_count?: number;
+  image_uri: string;
+  name: string;
+  url: string;
+  follower_count: number;
+  following_count: number;
+  repo_count: number;
+  star_count: number;
   bio?: string;
   fetch_pending: boolean;
 }
@@ -180,7 +180,6 @@ interface HackathonProjectInfo {
   github_url: string;
   demo_video_url: string;
   agent_moltbook_url?: string;
-  website?: string;
   github_star_count: number;
   github_fork_count: number;
   github_description?: string;
