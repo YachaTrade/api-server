@@ -49,8 +49,6 @@ pub struct RegisterHackathonRequest {
     // === Project (optional) ===
     /// Agent Moltbook URL (optional)
     pub agent_moltbook_url: Option<String>,
-    /// Website URL (optional)
-    pub website: Option<String>,
 }
 
 impl RegisterHackathonRequest {
@@ -146,14 +144,6 @@ impl RegisterHackathonRequest {
                 return Err("agent_moltbook_url must start with https://".to_string());
             }
         }
-        if let Some(ref url) = self.website {
-            if !url.trim().is_empty()
-                && !url.starts_with("http://")
-                && !url.starts_with("https://")
-            {
-                return Err("website must start with http:// or https://".to_string());
-            }
-        }
 
         Ok(())
     }
@@ -240,7 +230,6 @@ pub struct HackathonProjectInfo {
     pub github_url: String,
     pub demo_video_url: String,
     pub agent_moltbook_url: Option<String>,
-    pub website: Option<String>,
     // GitHub repo stats
     pub github_star_count: i32,
     pub github_fork_count: i32,
