@@ -288,10 +288,14 @@ use utoipa_swagger_ui::SwaggerUi;
 
             // Hackathon
             types::hackathon::HackathonInfo,
-            types::hackathon::HackathonCreatorInfo,
+            types::hackathon::HackathonTeamInfo,
+            types::hackathon::HackathonTeamMemberInfo,
+            types::hackathon::HackathonMemberGitHubInfo,
             types::hackathon::HackathonProjectInfo,
+            types::hackathon::TeamMemberInput,
             types::hackathon::RegisterHackathonRequest,
             types::hackathon::RegisterHackathonResponse,
+            types::hackathon::HackathonTokenListResponse,
 
         )
     ),

@@ -16,8 +16,6 @@ pub fn get_cors() -> CorsLayer {
         "https://symphony.io".parse::<HeaderValue>().unwrap(),
     ];
 
-    let is_dev = env::var("ENVIRONMENT").map(|e| e == "DEV").unwrap_or(false);
-
     CorsLayer::new()
         .allow_methods([
             http::Method::GET,

@@ -1,47 +1,64 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use anyhow::Result;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     db::postgres::PostgresDatabase,
     services::github::{GitHubCreatorInfo, GitHubProjectInfo},
-    types::hackathon::{HackathonCreatorInfo, HackathonInfo, HackathonProjectInfo},
+    types::hackathon::{
+        HackathonInfo, HackathonMemberGitHubInfo, HackathonProjectInfo, HackathonTeamInfo,
+        HackathonTeamMemberInfo, TeamMemberInput,
+    },
 };
 
+// ===== DB Row Types =====
+
 #[derive(Debug, sqlx::FromRow)]
-struct HackathonTokenRow {
-    token_id: String,
-    // Creator fields
-    github_id: String,
-    creator_image_uri: Option<String>,
-    creator_name: Option<String>,
-    creator_github_url: Option<String>,
-    follower_count: i32,
-    following_count: i32,
-    repo_count: i32,
-    creator_star_count: i32,
-    bio: Option<String>,
-    twitter: String,
+struct TeamMemberRow {
+    team_id: i64,
+    email: String,
     discord: Option<String>,
-    telegram: Option<String>,
+    github_username: Option<String>,
+    twitter: Option<String>,
     linkedin: Option<String>,
-    account_id: String,
-    // Project fields
-    project_github_url: String,
-    project_name: String,
-    description: String,
-    keywords: String,
-    screenshot_uri: String,
-    website: Option<String>,
-    youtube: Option<String>,
-    project_star_count: i32,
-    fork_count: i32,
-    topics: Option<String>,
-    language: Option<String>,
-    // Timestamps
-    project_updated_at: i64,
+    github_image_uri: Option<String>,
+    github_name: Option<String>,
+    github_url: Option<String>,
+    github_follower_count: Option<i32>,
+    github_following_count: Option<i32>,
+    github_repo_count: Option<i32>,
+    github_star_count: Option<i32>,
+    github_bio: Option<String>,
+    github_fetched_at: Option<i64>,
 }
+
+#[derive(Debug, sqlx::FromRow)]
+struct ProjectWithTeamRow {
+    // Project fields
+    token_id: String,
+    team_id: i64,
+    project_name: String,
+    project_description: String,
+    monad_integration: String,
+    github_url: String,
+    demo_video_url: String,
+    agent_moltbook_url: Option<String>,
+    screenshot_uri: Option<String>,
+    website: Option<String>,
+    github_star_count: Option<i32>,
+    github_fork_count: Option<i32>,
+    github_description: Option<String>,
+    github_topics: Option<String>,
+    github_language: Option<String>,
+    // Team fields
+    team_name: String,
+}
+
+// ===== Controller =====
 
 pub struct HackathonController {
     db: Arc<PostgresDatabase>,
@@ -50,21 +67,18 @@ pub struct HackathonController {
 /// Parameters for hackathon registration
 pub struct RegisterHackathonParams<'a> {
     pub token_id: &'a str,
-    pub github_id: &'a str,
-    pub creator_info: &'a GitHubCreatorInfo,
-    pub twitter: &'a str,
-    pub discord: Option<&'a str>,
-    pub telegram: Option<&'a str>,
-    pub linkedin: Option<&'a str>,
-    pub account_id: &'a str,
-    pub project_github_url: &'a str,
+    pub team_name: &'a str,
+    pub members: &'a [TeamMemberInput],
     pub project_name: &'a str,
     pub project_description: &'a str,
-    pub keywords: &'a str,
-    pub screenshot_uri: &'a str,
+    pub monad_integration: &'a str,
+    pub project_github_url: &'a str,
+    pub demo_video_url: &'a str,
+    pub agent_moltbook_url: Option<&'a str>,
+    pub screenshot_uri: Option<&'a str>,
     pub website: Option<&'a str>,
-    pub youtube: Option<&'a str>,
-    pub project_info: &'a GitHubProjectInfo,
+    pub project_github_info: Option<&'a GitHubProjectInfo>,
+    pub members_github_info: &'a HashMap<String, GitHubCreatorInfo>,
 }
 
 impl HackathonController {
@@ -92,14 +106,17 @@ impl HackathonController {
     }
 
     /// Register hackathon with transaction (atomic operation)
-    /// 1. Insert hackathon (whitelist)
-    /// 2. Upsert creator
-    /// 3. Insert/update project
-    pub async fn register_hackathon_tx(&self, params: RegisterHackathonParams<'_>) -> Result<()> {
+    /// Returns (team_id, github_fetch_pending)
+    pub async fn register_hackathon_tx(
+        &self,
+        params: RegisterHackathonParams<'_>,
+    ) -> Result<(i64, bool)> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
+
+        let mut github_fetch_pending = false;
 
         let mut tx = self.db.get_write_pool().begin().await?;
 
@@ -114,87 +131,138 @@ impl HackathonController {
             .execute(&mut *tx)
             .await?;
 
-        // 2. Upsert creator
-        let creator_query = r#"
-            INSERT INTO hackathon_creator (
-                github_id, image_uri, name, github_url,
-                follower_count, following_count, repo_count, star_count, bio,
-                twitter, discord, telegram, linkedin, account_id, updated_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            ON CONFLICT (github_id) DO UPDATE SET
-                image_uri = EXCLUDED.image_uri,
-                name = EXCLUDED.name,
-                github_url = EXCLUDED.github_url,
-                follower_count = EXCLUDED.follower_count,
-                following_count = EXCLUDED.following_count,
-                repo_count = EXCLUDED.repo_count,
-                star_count = EXCLUDED.star_count,
-                bio = EXCLUDED.bio,
-                twitter = EXCLUDED.twitter,
-                discord = EXCLUDED.discord,
-                telegram = EXCLUDED.telegram,
-                linkedin = EXCLUDED.linkedin,
-                account_id = EXCLUDED.account_id,
-                updated_at = EXCLUDED.updated_at
+        // 2. Insert team (snowflake ID auto-generated by DB)
+        let team_query = r#"
+            INSERT INTO hackathon_team (name, created_at, updated_at)
+            VALUES ($1, $2, $2)
+            RETURNING id
         "#;
-        sqlx::query(creator_query)
-            .bind(params.github_id)
-            .bind(&params.creator_info.image_uri)
-            .bind(&params.creator_info.name)
-            .bind(&params.creator_info.github_url)
-            .bind(params.creator_info.follower_count)
-            .bind(params.creator_info.following_count)
-            .bind(params.creator_info.repo_count)
-            .bind(params.creator_info.star_count)
-            .bind(&params.creator_info.bio)
-            .bind(params.twitter)
-            .bind(params.discord)
-            .bind(params.telegram)
-            .bind(params.linkedin)
-            .bind(params.account_id)
+        let (team_id,): (i64,) = sqlx::query_as(team_query)
+            .bind(params.team_name)
             .bind(now)
-            .execute(&mut *tx)
+            .fetch_one(&mut *tx)
             .await?;
 
-        // 3. Insert/update project
-        let topics_str = params.project_info.topics.as_ref().map(|t| t.join(","));
+        // 3. Insert team members (snowflake ID auto-generated by DB)
+        for member in params.members {
+            let github_username = member
+                .github_username
+                .as_ref()
+                .filter(|s| !s.trim().is_empty());
+
+            // Get GitHub info if available
+            let github_info = github_username
+                .and_then(|username| params.members_github_info.get(&username.to_lowercase()));
+
+            let (
+                github_image_uri,
+                github_name,
+                github_url,
+                github_follower_count,
+                github_following_count,
+                github_repo_count,
+                github_star_count,
+                github_bio,
+                github_fetched_at,
+            ) = if let Some(info) = github_info {
+                (
+                    info.image_uri.clone(),
+                    info.name.clone(),
+                    Some(info.github_url.clone()),
+                    Some(info.follower_count),
+                    Some(info.following_count),
+                    Some(info.repo_count),
+                    Some(info.star_count),
+                    info.bio.clone(),
+                    Some(now),
+                )
+            } else {
+                if github_username.is_some() {
+                    github_fetch_pending = true;
+                }
+                (None, None, None, None, None, None, None, None, None)
+            };
+
+            let member_query = r#"
+                INSERT INTO hackathon_team_member (
+                    team_id, email, discord, github_username, twitter, linkedin,
+                    github_image_uri, github_name, github_url,
+                    github_follower_count, github_following_count, github_repo_count,
+                    github_star_count, github_bio, github_fetched_at,
+                    created_at, updated_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+            "#;
+            sqlx::query(member_query)
+                .bind(team_id)
+                .bind(member.email.trim().to_lowercase())
+                .bind(&member.discord)
+                .bind(github_username)
+                .bind(&member.twitter)
+                .bind(&member.linkedin)
+                .bind(&github_image_uri)
+                .bind(&github_name)
+                .bind(&github_url)
+                .bind(github_follower_count)
+                .bind(github_following_count)
+                .bind(github_repo_count)
+                .bind(github_star_count)
+                .bind(&github_bio)
+                .bind(github_fetched_at)
+                .bind(now)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // 4. Insert project
+        let (
+            project_github_star_count,
+            project_github_fork_count,
+            project_github_description,
+            project_github_topics,
+            project_github_language,
+            project_github_fetched_at,
+        ) = if let Some(info) = params.project_github_info {
+            (
+                Some(info.star_count),
+                Some(info.fork_count),
+                info.description.clone(),
+                info.topics.as_ref().map(|t| t.join(",")),
+                info.language.clone(),
+                Some(now),
+            )
+        } else {
+            github_fetch_pending = true;
+            (None, None, None, None, None, None)
+        };
+
         let project_query = r#"
             INSERT INTO hackathon_project (
-                token_id, github_id, github_url, name, description,
-                keywords, screenshot_uri, website, youtube,
-                star_count, fork_count, topics, language, updated_at
+                token_id, team_id, name, description, monad_integration,
+                github_url, demo_video_url, agent_moltbook_url, screenshot_uri, website,
+                github_star_count, github_fork_count, github_description,
+                github_topics, github_language, github_fetched_at,
+                created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-            ON CONFLICT (token_id) DO UPDATE SET
-                github_id = EXCLUDED.github_id,
-                github_url = EXCLUDED.github_url,
-                name = EXCLUDED.name,
-                description = EXCLUDED.description,
-                keywords = EXCLUDED.keywords,
-                screenshot_uri = EXCLUDED.screenshot_uri,
-                website = EXCLUDED.website,
-                youtube = EXCLUDED.youtube,
-                star_count = EXCLUDED.star_count,
-                fork_count = EXCLUDED.fork_count,
-                topics = EXCLUDED.topics,
-                language = EXCLUDED.language,
-                updated_at = EXCLUDED.updated_at
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)
         "#;
         sqlx::query(project_query)
             .bind(params.token_id)
-            .bind(params.github_id)
-            .bind(params.project_github_url)
+            .bind(team_id)
             .bind(params.project_name)
             .bind(params.project_description)
-            .bind(params.keywords)
+            .bind(params.monad_integration)
+            .bind(params.project_github_url)
+            .bind(params.demo_video_url)
+            .bind(params.agent_moltbook_url)
             .bind(params.screenshot_uri)
             .bind(params.website)
-            .bind(params.youtube)
-            .bind(params.project_info.star_count)
-            .bind(params.project_info.fork_count)
-            .bind(&topics_str)
-            .bind(&params.project_info.language)
+            .bind(project_github_star_count)
+            .bind(project_github_fork_count)
+            .bind(&project_github_description)
+            .bind(&project_github_topics)
+            .bind(&project_github_language)
+            .bind(project_github_fetched_at)
             .bind(now)
             .execute(&mut *tx)
             .await?;
@@ -202,75 +270,64 @@ impl HackathonController {
         tx.commit().await?;
 
         info!(
-            "Registered hackathon project in transaction: {}",
-            params.token_id
+            "Registered hackathon project: {} (team_id: {})",
+            params.token_id, team_id
         );
-        Ok(())
-    }
-
-    /// Get hackathon info for a single token with updated_at timestamp
-    /// Returns (Option<HackathonInfo>, Option<updated_at>)
-    pub async fn get_hackathon_info_with_timestamp(
-        &self,
-        token_id: &str,
-    ) -> Option<(HackathonInfo, i64)> {
-        let query = r#"
-            SELECT
-                hp.token_id,
-                hc.github_id,
-                hc.image_uri as creator_image_uri,
-                hc.name as creator_name,
-                hc.github_url as creator_github_url,
-                hc.follower_count,
-                hc.following_count,
-                hc.repo_count,
-                hc.star_count as creator_star_count,
-                hc.bio,
-                hc.twitter,
-                hc.discord,
-                hc.telegram,
-                hc.linkedin,
-                hc.account_id,
-                hp.github_url as project_github_url,
-                hp.name as project_name,
-                hp.description,
-                hp.keywords,
-                hp.screenshot_uri,
-                hp.website,
-                hp.youtube,
-                hp.star_count as project_star_count,
-                hp.fork_count,
-                hp.topics,
-                hp.language,
-                hp.updated_at as project_updated_at
-            FROM hackathon_project hp
-            JOIN hackathon_creator hc ON hp.github_id = hc.github_id
-            WHERE hp.token_id = $1
-        "#;
-
-        let row = sqlx::query_as::<_, HackathonTokenRow>(query)
-            .bind(token_id)
-            .fetch_optional(self.db.get_read_pool())
-            .await
-            .ok()?;
-
-        row.map(|r| {
-            let updated_at = r.project_updated_at;
-            (HackathonInfo::from(r), updated_at)
-        })
+        Ok((team_id, github_fetch_pending))
     }
 
     /// Get hackathon info for a single token
-    /// Returns None if not found or on error (fail-safe)
     pub async fn get_hackathon_info(&self, token_id: &str) -> Option<HackathonInfo> {
-        self.get_hackathon_info_with_timestamp(token_id)
+        // Step 1: Get project with team
+        let project_query = r#"
+            SELECT
+                p.token_id,
+                p.team_id,
+                p.name as project_name,
+                p.description as project_description,
+                p.monad_integration,
+                p.github_url,
+                p.demo_video_url,
+                p.agent_moltbook_url,
+                p.screenshot_uri,
+                p.website,
+                p.github_star_count,
+                p.github_fork_count,
+                p.github_description,
+                p.github_topics,
+                p.github_language,
+                t.name as team_name
+            FROM hackathon_project p
+            JOIN hackathon_team t ON p.team_id = t.id
+            WHERE p.token_id = $1
+        "#;
+
+        let project: ProjectWithTeamRow = sqlx::query_as(project_query)
+            .bind(token_id)
+            .fetch_optional(self.db.get_read_pool())
             .await
-            .map(|(info, _)| info)
+            .ok()??;
+
+        // Step 2: Get team members
+        let members_query = r#"
+            SELECT team_id, email, discord, github_username, twitter, linkedin,
+                   github_image_uri, github_name, github_url,
+                   github_follower_count, github_following_count, github_repo_count,
+                   github_star_count, github_bio, github_fetched_at
+            FROM hackathon_team_member
+            WHERE team_id = $1
+        "#;
+
+        let members: Vec<TeamMemberRow> = sqlx::query_as(members_query)
+            .bind(project.team_id)
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .ok()?;
+
+        Some(self.build_hackathon_info(project, members))
     }
 
     /// Get hackathon infos for multiple tokens (batch query)
-    /// Returns a HashMap<token_id, HackathonInfo> for easy lookup
-    /// Returns empty HashMap on error (fail-safe)
     pub async fn get_hackathon_infos_by_token_ids(
         &self,
         token_ids: &[String],
@@ -279,183 +336,296 @@ impl HackathonController {
             return HashMap::new();
         }
 
+        // Step 1: Query projects with teams
         let placeholders: Vec<String> = (1..=token_ids.len()).map(|i| format!("${}", i)).collect();
-        let query = format!(
+        let project_query = format!(
             r#"
             SELECT
-                hp.token_id,
-                hc.github_id,
-                hc.image_uri as creator_image_uri,
-                hc.name as creator_name,
-                hc.github_url as creator_github_url,
-                hc.follower_count,
-                hc.following_count,
-                hc.repo_count,
-                hc.star_count as creator_star_count,
-                hc.bio,
-                hc.twitter,
-                hc.discord,
-                hc.telegram,
-                hc.linkedin,
-                hc.account_id,
-                hp.github_url as project_github_url,
-                hp.name as project_name,
-                hp.description,
-                hp.keywords,
-                hp.screenshot_uri,
-                hp.website,
-                hp.youtube,
-                hp.star_count as project_star_count,
-                hp.fork_count,
-                hp.topics,
-                hp.language,
-                hp.updated_at as project_updated_at
-            FROM hackathon_project hp
-            JOIN hackathon_creator hc ON hp.github_id = hc.github_id
-            WHERE hp.token_id IN ({})
+                p.token_id,
+                p.team_id,
+                p.name as project_name,
+                p.description as project_description,
+                p.monad_integration,
+                p.github_url,
+                p.demo_video_url,
+                p.agent_moltbook_url,
+                p.screenshot_uri,
+                p.website,
+                p.github_star_count,
+                p.github_fork_count,
+                p.github_description,
+                p.github_topics,
+                p.github_language,
+                t.name as team_name
+            FROM hackathon_project p
+            JOIN hackathon_team t ON p.team_id = t.id
+            WHERE p.token_id IN ({})
             "#,
             placeholders.join(", ")
         );
 
-        let mut query_builder = sqlx::query_as::<_, HackathonTokenRow>(&query);
+        let mut query_builder = sqlx::query_as::<_, ProjectWithTeamRow>(&project_query);
         for token_id in token_ids {
             query_builder = query_builder.bind(token_id);
         }
 
-        let rows = match query_builder.fetch_all(self.db.get_read_pool()).await {
+        let projects = match query_builder.fetch_all(self.db.get_read_pool()).await {
             Ok(rows) => rows,
-            Err(_) => return HashMap::new(),
+            Err(e) => {
+                error!("Failed to fetch hackathon projects: {}", e);
+                return HashMap::new();
+            }
         };
 
-        rows.into_iter()
-            .map(|row| {
-                let token_id = row.token_id.clone();
-                (token_id, HackathonInfo::from(row))
-            })
-            .collect()
-    }
+        if projects.is_empty() {
+            return HashMap::new();
+        }
 
-    /// Update GitHub info for creator and project
-    /// Called when data is stale (>1 hour since last update)
-    pub async fn update_github_info_tx(
-        &self,
-        token_id: &str,
-        github_id: &str,
-        creator_info: &GitHubCreatorInfo,
-        project_info: &GitHubProjectInfo,
-    ) -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
-
-        let mut tx = self.db.get_write_pool().begin().await?;
-
-        // Update creator
-        let creator_query = r#"
-            UPDATE hackathon_creator SET
-                image_uri = $2,
-                name = $3,
-                github_url = $4,
-                follower_count = $5,
-                following_count = $6,
-                repo_count = $7,
-                star_count = $8,
-                bio = $9,
-                updated_at = $10
-            WHERE github_id = $1
-        "#;
-        sqlx::query(creator_query)
-            .bind(github_id)
-            .bind(&creator_info.image_uri)
-            .bind(&creator_info.name)
-            .bind(&creator_info.github_url)
-            .bind(creator_info.follower_count)
-            .bind(creator_info.following_count)
-            .bind(creator_info.repo_count)
-            .bind(creator_info.star_count)
-            .bind(&creator_info.bio)
-            .bind(now)
-            .execute(&mut *tx)
-            .await?;
-
-        // Update project
-        let topics_str = project_info.topics.as_ref().map(|t| t.join(","));
-        let project_query = r#"
-            UPDATE hackathon_project SET
-                star_count = $2,
-                fork_count = $3,
-                topics = $4,
-                language = $5,
-                updated_at = $6
-            WHERE token_id = $1
-        "#;
-        sqlx::query(project_query)
-            .bind(token_id)
-            .bind(project_info.star_count)
-            .bind(project_info.fork_count)
-            .bind(&topics_str)
-            .bind(&project_info.language)
-            .bind(now)
-            .execute(&mut *tx)
-            .await?;
-
-        tx.commit().await?;
-
-        info!(
-            "Updated GitHub info for hackathon project: {} (github_id: {})",
-            token_id, github_id
-        );
-        Ok(())
-    }
-}
-
-impl From<HackathonTokenRow> for HackathonInfo {
-    fn from(row: HackathonTokenRow) -> Self {
-        let keywords: Vec<String> = row
-            .keywords
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        // Step 2: Collect unique team_ids
+        let team_ids: Vec<i64> = projects
+            .iter()
+            .map(|p| p.team_id)
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect();
 
-        let topics: Option<Vec<String>> = row.topics.map(|t| {
+        // Step 3: Query all members for these teams
+        let member_placeholders: Vec<String> =
+            (1..=team_ids.len()).map(|i| format!("${}", i)).collect();
+        let members_query = format!(
+            r#"
+            SELECT team_id, email, discord, github_username, twitter, linkedin,
+                   github_image_uri, github_name, github_url,
+                   github_follower_count, github_following_count, github_repo_count,
+                   github_star_count, github_bio, github_fetched_at
+            FROM hackathon_team_member
+            WHERE team_id IN ({})
+            "#,
+            member_placeholders.join(", ")
+        );
+
+        let mut member_query_builder = sqlx::query_as::<_, TeamMemberRow>(&members_query);
+        for team_id in &team_ids {
+            member_query_builder = member_query_builder.bind(team_id);
+        }
+
+        let members = match member_query_builder.fetch_all(self.db.get_read_pool()).await {
+            Ok(rows) => rows,
+            Err(e) => {
+                error!("Failed to fetch hackathon team members: {}", e);
+                return HashMap::new();
+            }
+        };
+
+        // Step 4: Group members by team_id
+        let mut members_by_team: HashMap<i64, Vec<TeamMemberRow>> = HashMap::new();
+        for member in members {
+            members_by_team
+                .entry(member.team_id)
+                .or_default()
+                .push(member);
+        }
+
+        // Step 5: Assemble final result
+        let mut result: HashMap<String, HackathonInfo> = HashMap::new();
+        for project in projects {
+            let team_members = members_by_team
+                .remove(&project.team_id)
+                .unwrap_or_default();
+
+            let token_id = project.token_id.clone();
+            let hackathon_info = self.build_hackathon_info(project, team_members);
+            result.insert(token_id, hackathon_info);
+        }
+
+        result
+    }
+
+    /// Build HackathonInfo from DB rows
+    fn build_hackathon_info(
+        &self,
+        project: ProjectWithTeamRow,
+        members: Vec<TeamMemberRow>,
+    ) -> HackathonInfo {
+        let team_members: Vec<HackathonTeamMemberInfo> = members
+            .into_iter()
+            .map(|m| {
+                let github = m.github_username.as_ref().map(|username| {
+                    HackathonMemberGitHubInfo {
+                        username: username.clone(),
+                        image_uri: m.github_image_uri.clone(),
+                        name: m.github_name.clone(),
+                        url: m.github_url.clone(),
+                        follower_count: m.github_follower_count,
+                        following_count: m.github_following_count,
+                        repo_count: m.github_repo_count,
+                        star_count: m.github_star_count,
+                        bio: m.github_bio.clone(),
+                        fetch_pending: m.github_fetched_at.is_none(),
+                    }
+                });
+
+                HackathonTeamMemberInfo {
+                    email: m.email,
+                    discord: m.discord,
+                    twitter: m.twitter,
+                    linkedin: m.linkedin,
+                    github,
+                }
+            })
+            .collect();
+
+        let topics: Option<Vec<String>> = project.github_topics.map(|t| {
             t.split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect()
         });
 
-        Self {
-            creator: HackathonCreatorInfo {
-                github_id: row.github_id,
-                image_uri: row.creator_image_uri,
-                name: row.creator_name,
-                github_url: row.creator_github_url,
-                follower_count: row.follower_count,
-                following_count: row.following_count,
-                repo_count: row.repo_count,
-                star_count: row.creator_star_count,
-                bio: row.bio,
-                twitter: row.twitter,
-                discord: row.discord,
-                telegram: row.telegram,
-                linkedin: row.linkedin,
-                account_id: row.account_id,
+        HackathonInfo {
+            team: HackathonTeamInfo {
+                id: project.team_id.to_string(),
+                name: project.team_name,
+                members: team_members,
             },
             project: HackathonProjectInfo {
-                github_url: row.project_github_url,
-                name: row.project_name,
-                description: row.description,
-                keywords,
-                screenshot_uri: row.screenshot_uri,
-                website: row.website,
-                youtube: row.youtube,
-                star_count: row.project_star_count,
-                fork_count: row.fork_count,
-                topics,
-                language: row.language,
+                name: project.project_name,
+                description: project.project_description,
+                monad_integration: project.monad_integration,
+                github_url: project.github_url,
+                demo_video_url: project.demo_video_url,
+                agent_moltbook_url: project.agent_moltbook_url,
+                screenshot_uri: project.screenshot_uri,
+                website: project.website,
+                github_star_count: project.github_star_count.unwrap_or(0),
+                github_fork_count: project.github_fork_count.unwrap_or(0),
+                github_description: project.github_description,
+                github_topics: topics,
+                github_language: project.github_language,
             },
         }
+    }
+
+    /// Get project's github_fetched_at timestamp
+    pub async fn get_project_github_fetched_at(&self, token_id: &str) -> Option<i64> {
+        let query = "SELECT github_fetched_at FROM hackathon_project WHERE token_id = $1";
+        let result: Option<(Option<i64>,)> = sqlx::query_as(query)
+            .bind(token_id)
+            .fetch_optional(self.db.get_read_pool())
+            .await
+            .ok()?;
+        result.and_then(|(ts,)| ts)
+    }
+
+    /// Update GitHub info for project
+    pub async fn update_project_github_info(
+        &self,
+        token_id: &str,
+        info: &GitHubProjectInfo,
+    ) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let topics_str = info.topics.as_ref().map(|t| t.join(","));
+
+        let query = r#"
+            UPDATE hackathon_project SET
+                github_star_count = $2,
+                github_fork_count = $3,
+                github_description = $4,
+                github_topics = $5,
+                github_language = $6,
+                github_fetched_at = $7,
+                updated_at = $7
+            WHERE token_id = $1
+        "#;
+
+        sqlx::query(query)
+            .bind(token_id)
+            .bind(info.star_count)
+            .bind(info.fork_count)
+            .bind(&info.description)
+            .bind(&topics_str)
+            .bind(&info.language)
+            .bind(now)
+            .execute(self.db.get_write_pool())
+            .await?;
+
+        Ok(())
+    }
+
+    /// Update GitHub info for team member
+    pub async fn update_member_github_info(
+        &self,
+        member_id: i64,
+        info: &GitHubCreatorInfo,
+    ) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let query = r#"
+            UPDATE hackathon_team_member SET
+                github_image_uri = $2,
+                github_name = $3,
+                github_url = $4,
+                github_follower_count = $5,
+                github_following_count = $6,
+                github_repo_count = $7,
+                github_star_count = $8,
+                github_bio = $9,
+                github_fetched_at = $10,
+                updated_at = $10
+            WHERE id = $1
+        "#;
+
+        sqlx::query(query)
+            .bind(member_id)
+            .bind(&info.image_uri)
+            .bind(&info.name)
+            .bind(&info.github_url)
+            .bind(info.follower_count)
+            .bind(info.following_count)
+            .bind(info.repo_count)
+            .bind(info.star_count)
+            .bind(&info.bio)
+            .bind(now)
+            .execute(self.db.get_write_pool())
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get members that need GitHub refresh for a token
+    /// Returns Vec<(member_id, github_username)>
+    pub async fn get_members_needing_refresh(
+        &self,
+        token_id: &str,
+        stale_threshold: i64,
+    ) -> Vec<(i64, String)> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let query = r#"
+            SELECT m.id, m.github_username
+            FROM hackathon_team_member m
+            JOIN hackathon_project p ON m.team_id = p.team_id
+            WHERE p.token_id = $1
+              AND m.github_username IS NOT NULL
+              AND (m.github_fetched_at IS NULL OR $2 - m.github_fetched_at > $3)
+        "#;
+
+        sqlx::query_as::<_, (i64, String)>(query)
+            .bind(token_id)
+            .bind(now)
+            .bind(stale_threshold)
+            .fetch_all(self.db.get_read_pool())
+            .await
+            .unwrap_or_default()
     }
 }

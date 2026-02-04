@@ -4,8 +4,9 @@
 
 Hackathon API는 해커톤 프로젝트 등록 및 조회를 위한 API입니다.
 
-- **프로젝트 등록**: GitHub 정보를 자동으로 가져와 DB에 저장
-- **토큰 목록 조회**: 해커톤에 등록된 토큰 ID 목록 반환
+- **팀 기반 구조**: 1-3명의 팀 멤버로 구성
+- **GitHub 자동 연동**: 프로젝트 및 멤버 GitHub 정보 자동 fetch
+- **Stale Data 자동 갱신**: 1시간 이상 된 데이터는 조회 시 자동 refresh
 
 ---
 
@@ -19,44 +20,64 @@ CREATE TABLE hackathon (
 );
 ```
 
-### hackathon_creator (개발자 정보)
+### hackathon_team (팀 정보)
 ```sql
-CREATE TABLE hackathon_creator (
-    github_id TEXT PRIMARY KEY,
-    image_uri TEXT,                    -- GitHub 프로필 이미지
-    name TEXT,                         -- GitHub 이름
-    github_url TEXT,                   -- GitHub 프로필 URL
-    follower_count INTEGER DEFAULT 0,  -- 팔로워 수
-    following_count INTEGER DEFAULT 0, -- 팔로잉 수
-    repo_count INTEGER DEFAULT 0,      -- 공개 레포 수
-    star_count INTEGER DEFAULT 0,      -- 총 스타 수 (모든 레포 합계)
-    bio TEXT,                          -- GitHub 바이오
-    twitter TEXT NOT NULL,             -- 트위터 (필수)
-    discord TEXT,                      -- 디스코드
-    telegram TEXT,                     -- 텔레그램
-    linkedin TEXT,                     -- 링크드인
-    account_id TEXT NOT NULL,          -- 지갑 주소
-    created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
+CREATE TABLE hackathon_team (
+    id BIGINT PRIMARY KEY,                  -- Snowflake ID (자동 생성)
+    name TEXT NOT NULL,                     -- 팀 이름
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+);
+```
+
+### hackathon_team_member (팀 멤버)
+```sql
+CREATE TABLE hackathon_team_member (
+    id BIGINT PRIMARY KEY,                  -- Snowflake ID (자동 생성)
+    team_id BIGINT NOT NULL REFERENCES hackathon_team(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,                    -- 이메일 (필수)
+    discord TEXT,                           -- 디스코드
+    github_username TEXT,                   -- GitHub 사용자명 (통계 자동 fetch)
+    twitter TEXT,                           -- 트위터
+    linkedin TEXT,                          -- 링크드인 URL
+    -- GitHub 통계 (자동 fetch)
+    github_image_uri TEXT,
+    github_name TEXT,
+    github_url TEXT,
+    github_follower_count INTEGER,
+    github_following_count INTEGER,
+    github_repo_count INTEGER,
+    github_star_count INTEGER,
+    github_bio TEXT,
+    github_fetched_at BIGINT,               -- 마지막 fetch 시간
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    CONSTRAINT unique_team_email UNIQUE (team_id, email)
 );
 ```
 
 ### hackathon_project (프로젝트 정보)
 ```sql
 CREATE TABLE hackathon_project (
-    token_id TEXT PRIMARY KEY REFERENCES hackathon(token_id),
-    github_id TEXT NOT NULL REFERENCES hackathon_creator(github_id),
-    github_url TEXT NOT NULL,          -- 프로젝트 GitHub URL
-    name TEXT NOT NULL,                -- 프로젝트 이름
-    description TEXT NOT NULL,         -- 프로젝트 설명
-    keywords TEXT NOT NULL,            -- 키워드 (쉼표 구분)
-    screenshot_uri TEXT NOT NULL,      -- 스크린샷 이미지 URL
-    website TEXT,                      -- 웹사이트 URL
-    youtube TEXT,                      -- YouTube URL
-    star_count INTEGER DEFAULT 0,      -- 프로젝트 스타 수
-    fork_count INTEGER DEFAULT 0,      -- 프로젝트 포크 수
-    topics TEXT,                       -- GitHub 토픽 (쉼표 구분)
-    language TEXT,                     -- 주요 프로그래밍 언어
-    created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
+    token_id TEXT PRIMARY KEY REFERENCES hackathon(token_id) ON DELETE CASCADE,
+    team_id BIGINT NOT NULL REFERENCES hackathon_team(id),
+    name TEXT NOT NULL,                     -- 프로젝트 이름
+    description TEXT NOT NULL,              -- 프로젝트 설명
+    monad_integration TEXT NOT NULL,        -- Monad 통합 설명
+    github_url TEXT NOT NULL,               -- 프로젝트 GitHub URL
+    demo_video_url TEXT NOT NULL,           -- 데모 비디오 URL
+    agent_moltbook_url TEXT,                -- Agent Moltbook 링크 (옵션)
+    screenshot_uri TEXT,                    -- 스크린샷 (옵션)
+    website TEXT,                           -- 웹사이트 (옵션)
+    -- GitHub repo 통계 (자동 fetch)
+    github_star_count INTEGER DEFAULT 0,
+    github_fork_count INTEGER DEFAULT 0,
+    github_description TEXT,
+    github_topics TEXT,                     -- 쉼표 구분
+    github_language TEXT,
+    github_fetched_at BIGINT,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
 );
 ```
 
@@ -76,20 +97,29 @@ CREATE TABLE hackathon_project (
 #### Request Body
 ```json
 {
-  "github_id": "MonkeyGyu",
-  "twitter": "@username",
-  "discord": "username#1234",
-  "telegram": "@username",
-  "linkedin": "https://linkedin.com/in/username",
-  "project_github_url": "https://github.com/owner/repo",
+  "token_id": "0x1234567890abcdef...",
+  "team_name": "Awesome Team",
+  "members": [
+    {
+      "email": "member1@example.com",
+      "discord": "member1#1234",
+      "github_username": "member1",
+      "twitter": "@member1",
+      "linkedin": "https://linkedin.com/in/member1"
+    },
+    {
+      "email": "member2@example.com",
+      "github_username": "member2"
+    }
+  ],
   "project_name": "My Awesome Project",
   "project_description": "A decentralized application for...",
-  "keywords": "defi,nft,trading",
+  "monad_integration": "Uses Monad for high-speed transaction processing...",
+  "project_github_url": "https://github.com/owner/repo",
+  "demo_video_url": "https://youtube.com/watch?v=xxxxx",
+  "agent_moltbook_url": "https://moltbook.com/agent/xxx",
   "screenshot_uri": "https://storage.nadapp.net/screenshots/uuid.png",
-  "website": "https://myproject.com",
-  "youtube": "https://youtube.com/watch?v=xxxxx",
-  "token_id": "0x1234567890abcdef...",
-  "account_id": "0xabcdef1234567890..."
+  "website": "https://myproject.com"
 }
 ```
 
@@ -97,46 +127,66 @@ CREATE TABLE hackathon_project (
 
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
-| `github_id` | string | O | GitHub 사용자명 |
-| `twitter` | string | O | 트위터 핸들 |
-| `discord` | string | X | 디스코드 핸들 |
-| `telegram` | string | X | 텔레그램 핸들 |
-| `linkedin` | string | X | 링크드인 URL |
-| `project_github_url` | string | O | 프로젝트 GitHub URL (`https://github.com/`으로 시작) |
+| `token_id` | string | O | 토큰 컨트랙트 주소 (EVM 형식) |
+| `team_name` | string | O | 팀 이름 |
+| `members` | array | O | 팀 멤버 (1-3명) |
+| `members[].email` | string | O | 멤버 이메일 |
+| `members[].discord` | string | X | 디스코드 핸들 |
+| `members[].github_username` | string | X | GitHub 사용자명 (통계 자동 fetch) |
+| `members[].twitter` | string | X | 트위터 핸들 |
+| `members[].linkedin` | string | X | 링크드인 URL (`https://`로 시작) |
 | `project_name` | string | O | 프로젝트 이름 |
 | `project_description` | string | O | 프로젝트 설명 |
-| `keywords` | string | O | 키워드 (쉼표 구분) |
-| `screenshot_uri` | string | O | 스크린샷 이미지 URL |
+| `monad_integration` | string | O | Monad 통합 설명 |
+| `project_github_url` | string | O | 프로젝트 GitHub URL (`https://github.com/`으로 시작) |
+| `demo_video_url` | string | O | 데모 비디오 URL (`https://`로 시작) |
+| `agent_moltbook_url` | string | X | Agent Moltbook 링크 |
+| `screenshot_uri` | string | X | 스크린샷 이미지 URL |
 | `website` | string | X | 웹사이트 URL |
-| `youtube` | string | X | YouTube URL |
-| `token_id` | string | O | 토큰 컨트랙트 주소 (EVM 형식) |
-| `account_id` | string | O | 개발자 지갑 주소 (EVM 형식) |
+
+#### Validation Rules
+- `members`: 최소 1명, 최대 3명
+- `email`: 필수, `@`와 `.` 포함
+- `email`: 팀 내 중복 불가
+- `github_username`: 팀 내 중복 불가
+- `linkedin`: `https://`로 시작
+- `token_id`: 이미 등록된 경우 에러 (재등록 불가)
 
 #### 처리 과정
 
 1. Admin 권한 확인
-2. `token_id`가 `token` 테이블에 존재하는지 확인
-3. GitHub API 호출 → Creator 정보 가져오기
-   - 프로필 이미지, 이름, 팔로워/팔로잉 수, 레포 수, 총 스타 수, 바이오
-4. GitHub API 호출 → Project 정보 가져오기
-   - 스타 수, 포크 수, 토픽, 주요 언어
-5. 트랜잭션으로 DB Insert
+2. Request validation
+3. `token_id`가 `token` 테이블에 존재하는지 확인
+4. GitHub API 병렬 호출:
+   - Project GitHub info (stars, forks, topics, language)
+   - Members GitHub info (avatar, followers, repos, stars)
+5. 트랜잭션으로 DB Insert:
    - `hackathon` 테이블 (화이트리스트)
-   - `hackathon_creator` 테이블 (upsert)
-   - `hackathon_project` 테이블 (upsert)
+   - `hackathon_team` 테이블
+   - `hackathon_team_member` 테이블 (각 멤버)
+   - `hackathon_project` 테이블
 
 #### 응답
 ```json
 {
   "success": true,
-  "token_id": "0x1234567890abcdef..."
+  "token_id": "0x1234567890abcdef...",
+  "team_id": "7654321098765432100",
+  "github_fetch_pending": false
 }
 ```
 
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `success` | boolean | 성공 여부 |
+| `token_id` | string | 등록된 토큰 ID |
+| `team_id` | string | 생성된 팀 ID (Snowflake) |
+| `github_fetch_pending` | boolean | GitHub 정보 fetch 실패로 pending 상태인지 |
+
 #### 에러 응답
-- `400`: 잘못된 요청 (유효하지 않은 token_id, 필수 필드 누락, token 미존재)
+- `400`: 잘못된 요청 (유효하지 않은 token_id, validation 실패, token 미존재, 이미 등록됨)
 - `401`: 인증 실패 (Admin 권한 없음)
-- `500`: 내부 서버 에러 (GitHub API 실패, DB 에러)
+- `500`: 내부 서버 에러 (DB 에러)
 
 ---
 
@@ -161,96 +211,15 @@ CREATE TABLE hackathon_project (
 
 - `created_at` 내림차순 정렬 (최신순)
 
-#### 에러 응답
-- `500`: 내부 서버 에러
-
 ---
 
-### 3. 해커톤 토큰 정렬 조회 (`GET /order/hackathon`)
-
-해커톤 토큰 목록을 마켓캡 순으로 정렬하여 반환합니다. 기존 Order API와 동일한 응답 형식입니다.
-
-#### 요청
-- **Method**: `GET`
-- **인증**: 불필요
-
-#### Query Parameters
-
-| 파라미터 | 타입 | 기본값 | 설명 |
-|----------|------|--------|------|
-| `page` | integer | 1 | 페이지 번호 |
-| `limit` | integer | 20 | 페이지당 항목 수 |
-| `direction` | string | DESC | 정렬 방향 (ASC/DESC) |
-| `is_nsfw` | boolean | false | NSFW 토큰 포함 여부 |
-
-#### 응답
-```json
-{
-  "tokens": [
-    {
-      "token_info": {
-        "token_id": "0x...",
-        "name": "Token Name",
-        "symbol": "TKN",
-        "image_uri": "https://...",
-        "description": "...",
-        "is_graduated": false,
-        "is_nsfw": false,
-        "twitter": "https://x.com/...",
-        "telegram": "https://t.me/...",
-        "website": "https://...",
-        "created_at": 1234567890,
-        "creator": {
-          "account_id": "0x...",
-          "nickname": "Creator",
-          "bio": "...",
-          "image_uri": "https://..."
-        },
-        "is_cto": false,
-        "hackathon_info": {
-          "creator": { ... },
-          "project": { ... }
-        }
-      },
-      "market_info": {
-        "market_type": "CURVE",
-        "token_id": "0x...",
-        "market_id": "0x...",
-        "reserve_native": "100",
-        "reserve_token": "500000000",
-        "token_price": "0.001",
-        "native_price": "3000",
-        "price": "0.000001",
-        "price_usd": "0.003",
-        "price_native": "0.000001",
-        "total_supply": "1000000000",
-        "volume": "50000",
-        "ath_price": "0.000002",
-        "ath_price_usd": "0.006",
-        "ath_price_native": "0.000002",
-        "holder_count": 150
-      },
-      "percent": 15.5
-    }
-  ],
-  "total_count": 25
-}
-```
-
-#### 특징
-- 마켓캡(price) 기준 정렬
-- `hackathon_info` 필드에 개발자/프로젝트 정보 자동 포함
-- 24시간 가격 변동률(`percent`) 포함
-
-#### 에러 응답
-- `400`: 잘못된 페이지네이션 파라미터
-- `500`: 내부 서버 에러
-
----
-
-### 4. 해커톤 토큰 상세 조회 (기존 API 활용)
+### 3. 해커톤 토큰 상세 조회 (기존 API 활용)
 
 `GET /token/:token_id` API를 사용하면 `hackathon_info` 필드에 해커톤 정보가 포함됩니다.
+
+#### Stale Data 자동 갱신
+- `github_fetched_at`이 1시간 이상 지난 경우 자동으로 GitHub API 재호출
+- Project 및 Member 모두 갱신
 
 #### 응답 예시 (hackathon_info 부분)
 ```json
@@ -259,34 +228,62 @@ CREATE TABLE hackathon_project (
     "token_id": "0x...",
     "name": "Token Name",
     "hackathon_info": {
-      "creator": {
-        "github_id": "MonkeyGyu",
-        "image_uri": "https://avatars.githubusercontent.com/...",
-        "name": "Gyu",
-        "github_url": "https://github.com/MonkeyGyu",
-        "follower_count": 100,
-        "following_count": 50,
-        "repo_count": 30,
-        "star_count": 500,
-        "bio": "Developer",
-        "twitter": "@username",
-        "discord": "username#1234",
-        "telegram": "@username",
-        "linkedin": "https://linkedin.com/in/username",
-        "account_id": "0x..."
+      "team": {
+        "id": "7654321098765432100",
+        "name": "Awesome Team",
+        "members": [
+          {
+            "email": "member1@example.com",
+            "discord": "member1#1234",
+            "twitter": "@member1",
+            "linkedin": "https://linkedin.com/in/member1",
+            "github": {
+              "username": "member1",
+              "image_uri": "https://avatars.githubusercontent.com/...",
+              "name": "Member One",
+              "url": "https://github.com/member1",
+              "follower_count": 100,
+              "following_count": 50,
+              "repo_count": 30,
+              "star_count": 500,
+              "bio": "Developer",
+              "fetch_pending": false
+            }
+          },
+          {
+            "email": "member2@example.com",
+            "discord": null,
+            "twitter": null,
+            "linkedin": null,
+            "github": {
+              "username": "member2",
+              "image_uri": "https://avatars.githubusercontent.com/...",
+              "name": "Member Two",
+              "url": "https://github.com/member2",
+              "follower_count": 50,
+              "following_count": 20,
+              "repo_count": 15,
+              "star_count": 100,
+              "bio": null,
+              "fetch_pending": false
+            }
+          }
+        ]
       },
       "project": {
-        "github_url": "https://github.com/owner/repo",
         "name": "My Project",
         "description": "Project description",
-        "keywords": ["defi", "nft", "trading"],
+        "monad_integration": "Uses Monad for...",
+        "github_url": "https://github.com/owner/repo",
+        "demo_video_url": "https://youtube.com/...",
+        "agent_moltbook_url": "https://moltbook.com/...",
         "screenshot_uri": "https://storage.nadapp.net/...",
         "website": "https://myproject.com",
-        "youtube": "https://youtube.com/...",
-        "star_count": 150,
-        "fork_count": 30,
-        "topics": ["blockchain", "web3"],
-        "language": "TypeScript"
+        "github_star_count": 150,
+        "github_fork_count": 30,
+        "github_description": "A great project",
+        "github_topics": ["blockchain", "web3", "monad"],
+        "github_language": "TypeScript"
       }
     }
   }
@@ -300,30 +297,28 @@ CREATE TABLE hackathon_project (
 ### 요청 타입
 
 ```typescript
-// POST /cms/hackathon/register
-interface RegisterHackathonRequest {
-  github_id: string;
-  twitter: string;
+// 팀 멤버 입력
+interface TeamMemberInput {
+  email: string;              // 필수
   discord?: string;
-  telegram?: string;
-  linkedin?: string;
-  project_github_url: string;
-  project_name: string;
-  project_description: string;
-  keywords: string;
-  screenshot_uri: string;
-  website?: string;
-  youtube?: string;
-  token_id: string;
-  account_id: string;
+  github_username?: string;   // 있으면 GitHub 통계 자동 fetch
+  twitter?: string;
+  linkedin?: string;          // https://로 시작
 }
 
-// GET /order/hackathon
-interface OrderQuery {
-  page?: number;       // default: 1
-  limit?: number;      // default: 20
-  direction?: string;  // "ASC" | "DESC", default: "DESC"
-  is_nsfw?: boolean;   // default: false
+// POST /cms/hackathon/register
+interface RegisterHackathonRequest {
+  token_id: string;
+  team_name: string;
+  members: TeamMemberInput[];  // 1-3명
+  project_name: string;
+  project_description: string;
+  monad_integration: string;
+  project_github_url: string;  // https://github.com/으로 시작
+  demo_video_url: string;      // https://로 시작
+  agent_moltbook_url?: string;
+  screenshot_uri?: string;
+  website?: string;
 }
 ```
 
@@ -334,6 +329,8 @@ interface OrderQuery {
 interface RegisterHackathonResponse {
   success: boolean;
   token_id: string;
+  team_id: string;
+  github_fetch_pending: boolean;
 }
 
 // GET /token/hackathon
@@ -341,95 +338,53 @@ interface HackathonTokenListResponse {
   token_ids: string[];
 }
 
-// GET /order/hackathon
-interface OrderTokenResponse {
-  tokens: OrderToken[];
-  total_count: number;
-}
-
-interface OrderToken {
-  token_info: TokenInfo;
-  market_info: MarketInfo;
-  percent: number;  // 24h 가격 변동률
-}
-
-interface TokenInfo {
-  token_id: string;
-  name: string;
-  symbol: string;
-  image_uri: string;
-  description?: string;
-  is_graduated: boolean;
-  is_nsfw: boolean;
-  twitter?: string;
-  telegram?: string;
-  website?: string;
-  created_at: number;
-  creator: AccountInfo;
-  is_cto: boolean;
-  hackathon_info?: HackathonInfo;
-}
-
-interface AccountInfo {
-  account_id: string;
-  nickname: string;
-  bio: string;
-  image_uri: string;
-}
-
-interface MarketInfo {
-  market_type: "CURVE" | "DEX";
-  token_id: string;
-  market_id: string;
-  reserve_native: string;
-  reserve_token: string;
-  token_price: string;
-  native_price: string;
-  price: string;
-  price_usd: string;
-  price_native: string;
-  total_supply: string;
-  volume: string;
-  ath_price: string;
-  ath_price_usd: string;
-  ath_price_native: string;
-  holder_count: number;
-}
-
+// HackathonInfo (TokenInfo에 포함)
 interface HackathonInfo {
-  creator: HackathonCreatorInfo;
+  team: HackathonTeamInfo;
   project: HackathonProjectInfo;
 }
 
-interface HackathonCreatorInfo {
-  github_id: string;
+interface HackathonTeamInfo {
+  id: string;
+  name: string;
+  members: HackathonTeamMemberInfo[];
+}
+
+interface HackathonTeamMemberInfo {
+  email: string;
+  discord?: string;
+  twitter?: string;
+  linkedin?: string;
+  github?: HackathonMemberGitHubInfo;
+}
+
+interface HackathonMemberGitHubInfo {
+  username: string;
   image_uri?: string;
   name?: string;
-  github_url?: string;
-  follower_count: number;
-  following_count: number;
-  repo_count: number;
-  star_count: number;
+  url?: string;
+  follower_count?: number;
+  following_count?: number;
+  repo_count?: number;
+  star_count?: number;
   bio?: string;
-  twitter: string;
-  discord?: string;
-  telegram?: string;
-  linkedin?: string;
-  account_id: string;
+  fetch_pending: boolean;  // true if stats not fetched yet
 }
 
 interface HackathonProjectInfo {
-  github_url: string;
   name: string;
   description: string;
-  keywords: string[];
-  screenshot_uri: string;
+  monad_integration: string;
+  github_url: string;
+  demo_video_url: string;
+  agent_moltbook_url?: string;
+  screenshot_uri?: string;
   website?: string;
-  youtube?: string;
-  star_count: number;
-  fork_count: number;
-  topics?: string[];
-  language?: string;
+  github_star_count: number;
+  github_fork_count: number;
+  github_description?: string;
+  github_topics?: string[];
+  github_language?: string;
 }
 ```
 
@@ -439,14 +394,14 @@ interface HackathonProjectInfo {
 
 ### 사용되는 GitHub API
 
-1. **User API**: `GET https://api.github.com/users/{github_id}`
+1. **User API**: `GET https://api.github.com/users/{username}`
    - 프로필 정보 (avatar, name, followers, following, public_repos, bio)
 
-2. **User Repos API**: `GET https://api.github.com/users/{github_id}/repos`
+2. **User Repos API**: `GET https://api.github.com/users/{username}/repos`
    - 총 스타 수 계산 (모든 레포의 stargazers_count 합계)
 
 3. **Repository API**: `GET https://api.github.com/repos/{owner}/{repo}`
-   - 프로젝트 정보 (stars, forks, topics, language)
+   - 프로젝트 정보 (stars, forks, topics, language, description)
 
 ### Rate Limit
 
@@ -455,6 +410,12 @@ interface HackathonProjectInfo {
 
 현재 환경변수 `GITHUB_TOKEN`에 설정된 토큰으로 인증하여 5,000 requests/hour 사용 중.
 
+### 자동 갱신
+
+- **HACKATHON_REFRESH_INTERVAL_SECS**: 기본 3600초 (1시간)
+- 조회 시 `github_fetched_at`이 기준보다 오래되면 자동 갱신
+- Project와 Members 모두 갱신
+
 ---
 
 ## 환경변수
@@ -462,4 +423,7 @@ interface HackathonProjectInfo {
 ```env
 # GitHub API Token (필수)
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
+
+# GitHub 데이터 갱신 주기 (초, 기본: 3600)
+HACKATHON_REFRESH_INTERVAL_SECS=3600
 ```
