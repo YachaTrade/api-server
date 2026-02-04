@@ -341,6 +341,20 @@ impl CmsService {
             response.registered, response.skipped, response.failed
         );
 
+        // Return error if any registration failed
+        if response.failed > 0 {
+            let failed_tokens: Vec<&str> = response
+                .results
+                .iter()
+                .filter(|r| r.status == "error")
+                .map(|r| r.token_id.as_str())
+                .collect();
+            return Err(AppError::BadRequest(format!(
+                "Invalid token addresses: {}",
+                failed_tokens.join(", ")
+            )));
+        }
+
         Ok(response)
     }
 }
