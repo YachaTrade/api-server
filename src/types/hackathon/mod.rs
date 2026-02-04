@@ -1,83 +1,176 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use utoipa::ToSchema;
 
-use crate::utils::{valid_account_id, valid_token_id};
+use crate::utils::valid_token_id;
+
+// ===== Request Types =====
+
+/// Team member information for registration
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TeamMemberInput {
+    /// Contact email (required)
+    pub email: String,
+    /// Discord handle (optional)
+    pub discord: Option<String>,
+    /// GitHub username (optional, enables auto-fetch of stats)
+    pub github_username: Option<String>,
+    /// Twitter handle (optional)
+    pub twitter: Option<String>,
+    /// LinkedIn URL (optional)
+    pub linkedin: Option<String>,
+}
 
 /// Request body for hackathon registration
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RegisterHackathonRequest {
-    /// Creator's GitHub ID (username)
-    pub github_id: String,
-    /// Twitter handle (required)
-    pub twitter: String,
-    /// Discord handle (optional)
-    pub discord: Option<String>,
-    /// Telegram handle (optional)
-    pub telegram: Option<String>,
-    /// LinkedIn URL (optional)
-    pub linkedin: Option<String>,
-    /// Project GitHub URL (e.g., https://github.com/owner/repo)
-    pub project_github_url: String,
+    // === Token ===
+    /// Token contract address (CA)
+    pub token_id: String,
+
+    // === Team ===
+    /// Team name (required)
+    pub team_name: String,
+    /// Team members (1-3, at least 1 required)
+    pub members: Vec<TeamMemberInput>,
+
+    // === Project (required) ===
     /// Project name
     pub project_name: String,
     /// Project description
     pub project_description: String,
-    /// Keywords (comma-separated)
-    pub keywords: String,
-    /// Screenshot URI (uploaded image URL)
-    pub screenshot_uri: String,
+    /// Monad integration description
+    pub monad_integration: String,
+    /// Project GitHub URL
+    pub project_github_url: String,
+    /// Demo video URL
+    pub demo_video_url: String,
+
+    // === Project (optional) ===
+    /// Agent Moltbook URL (optional)
+    pub agent_moltbook_url: Option<String>,
+    /// Screenshot URI (optional)
+    pub screenshot_uri: Option<String>,
     /// Website URL (optional)
     pub website: Option<String>,
-    /// YouTube URL (optional)
-    pub youtube: Option<String>,
-    /// Token contract address
-    pub token_id: String,
-    /// Developer wallet address
-    pub account_id: String,
 }
 
 impl RegisterHackathonRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if self.github_id.is_empty() {
-            return Err("github_id is required".to_string());
-        }
-        if self.twitter.is_empty() {
-            return Err("twitter is required".to_string());
-        }
-        if self.project_github_url.is_empty()
-            || !self.project_github_url.starts_with("https://github.com/")
-        {
-            return Err(
-                "Invalid project_github_url - must start with https://github.com/".to_string(),
-            );
-        }
-        if self.project_name.is_empty() {
-            return Err("project_name is required".to_string());
-        }
-        if self.project_description.is_empty() {
-            return Err("project_description is required".to_string());
-        }
-        if self.keywords.is_empty() {
-            return Err("keywords is required".to_string());
-        }
-        if self.screenshot_uri.is_empty() {
-            return Err("screenshot_uri is required".to_string());
-        }
+        // Token validation
         if valid_token_id(&self.token_id).is_none() {
             return Err("Invalid token_id format".to_string());
         }
-        if valid_account_id(&self.account_id).is_none() {
-            return Err("Invalid account_id format".to_string());
+
+        // Team validation
+        if self.team_name.trim().is_empty() {
+            return Err("team_name is required".to_string());
         }
+        if self.members.is_empty() {
+            return Err("At least 1 team member is required".to_string());
+        }
+        if self.members.len() > 3 {
+            return Err("Maximum 3 team members allowed".to_string());
+        }
+
+        // Validate each member and check for duplicates
+        let mut seen_emails: HashSet<String> = HashSet::new();
+        let mut seen_github_usernames: HashSet<String> = HashSet::new();
+
+        for (i, member) in self.members.iter().enumerate() {
+            // Email validation: required, must contain '@' and '.'
+            let email = member.email.trim().to_lowercase();
+            if email.is_empty() {
+                return Err(format!("Email is required for member {}", i + 1));
+            }
+            if !email.contains('@') || !email.contains('.') {
+                return Err(format!(
+                    "Invalid email format for member {}: must contain '@' and '.'",
+                    i + 1
+                ));
+            }
+
+            // Check for duplicate email
+            if seen_emails.contains(&email) {
+                return Err(format!("Duplicate email '{}' found in members", email));
+            }
+            seen_emails.insert(email);
+
+            // Check for duplicate github_username (if provided)
+            if let Some(ref gh_username) = member.github_username {
+                let gh_username_lower = gh_username.trim().to_lowercase();
+                if !gh_username_lower.is_empty() {
+                    if seen_github_usernames.contains(&gh_username_lower) {
+                        return Err(format!(
+                            "Duplicate github_username '{}' found in members",
+                            gh_username
+                        ));
+                    }
+                    seen_github_usernames.insert(gh_username_lower);
+                }
+            }
+
+            // LinkedIn URL validation (if provided)
+            if let Some(ref linkedin) = member.linkedin {
+                if !linkedin.trim().is_empty() && !linkedin.starts_with("https://") {
+                    return Err(format!(
+                        "LinkedIn URL for member {} must start with https://",
+                        i + 1
+                    ));
+                }
+            }
+        }
+
+        // Project validation
+        if self.project_name.trim().is_empty() {
+            return Err("project_name is required".to_string());
+        }
+        if self.project_description.trim().is_empty() {
+            return Err("project_description is required".to_string());
+        }
+        if self.monad_integration.trim().is_empty() {
+            return Err("monad_integration is required".to_string());
+        }
+        if !self.project_github_url.starts_with("https://github.com/") {
+            return Err("project_github_url must start with https://github.com/".to_string());
+        }
+        if self.demo_video_url.trim().is_empty() {
+            return Err("demo_video_url is required".to_string());
+        }
+        // Demo video URL validation
+        if !self.demo_video_url.starts_with("https://") {
+            return Err("demo_video_url must start with https://".to_string());
+        }
+
+        // Optional URL validations
+        if let Some(ref url) = self.agent_moltbook_url {
+            if !url.trim().is_empty() && !url.starts_with("https://") {
+                return Err("agent_moltbook_url must start with https://".to_string());
+            }
+        }
+        if let Some(ref url) = self.website {
+            if !url.trim().is_empty()
+                && !url.starts_with("http://")
+                && !url.starts_with("https://")
+            {
+                return Err("website must start with http:// or https://".to_string());
+            }
+        }
+
         Ok(())
     }
 }
+
+// ===== Response Types =====
 
 /// Response for hackathon registration
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RegisterHackathonResponse {
     pub success: bool,
     pub token_id: String,
+    pub team_id: String,
+    /// Indicates if GitHub stats fetch was deferred (e.g., API failure)
+    pub github_fetch_pending: bool,
 }
 
 /// Response for hackathon token list
@@ -86,42 +179,63 @@ pub struct HackathonTokenListResponse {
     pub token_ids: Vec<String>,
 }
 
+/// Team member info in API responses
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct HackathonCreatorInfo {
-    pub github_id: String,
-    pub image_uri: Option<String>,
-    pub name: Option<String>,
-    pub github_url: Option<String>,
-    pub follower_count: i32,
-    pub following_count: i32,
-    pub repo_count: i32,
-    pub star_count: i32,
-    pub bio: Option<String>,
-    pub twitter: String,
+pub struct HackathonTeamMemberInfo {
+    pub email: String,
     pub discord: Option<String>,
-    pub telegram: Option<String>,
+    pub twitter: Option<String>,
     pub linkedin: Option<String>,
-    pub account_id: String,
+    /// GitHub info (if github_username was provided)
+    pub github: Option<HackathonMemberGitHubInfo>,
 }
 
+/// GitHub info for a team member
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HackathonMemberGitHubInfo {
+    pub username: String,
+    pub image_uri: Option<String>,
+    pub name: Option<String>,
+    pub url: Option<String>,
+    pub follower_count: Option<i32>,
+    pub following_count: Option<i32>,
+    pub repo_count: Option<i32>,
+    pub star_count: Option<i32>,
+    pub bio: Option<String>,
+    /// True if stats haven't been fetched yet
+    pub fetch_pending: bool,
+}
+
+/// Team info in API responses
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HackathonTeamInfo {
+    pub id: String,
+    pub name: String,
+    pub members: Vec<HackathonTeamMemberInfo>,
+}
+
+/// Project info in API responses
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HackathonProjectInfo {
-    pub github_url: String,
     pub name: String,
     pub description: String,
-    pub keywords: Vec<String>,
-    pub screenshot_uri: String,
+    pub monad_integration: String,
+    pub github_url: String,
+    pub demo_video_url: String,
+    pub agent_moltbook_url: Option<String>,
+    pub screenshot_uri: Option<String>,
     pub website: Option<String>,
-    pub youtube: Option<String>,
-    pub star_count: i32,
-    pub fork_count: i32,
-    pub topics: Option<Vec<String>>,
-    pub language: Option<String>,
+    // GitHub repo stats
+    pub github_star_count: i32,
+    pub github_fork_count: i32,
+    pub github_description: Option<String>,
+    pub github_topics: Option<Vec<String>>,
+    pub github_language: Option<String>,
 }
 
 /// Hackathon info to be embedded in TokenInfo
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HackathonInfo {
-    pub creator: HackathonCreatorInfo,
+    pub team: HackathonTeamInfo,
     pub project: HackathonProjectInfo,
 }

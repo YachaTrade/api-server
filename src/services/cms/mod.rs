@@ -8,10 +8,10 @@ use tracing::{error, info};
 
 use crate::{
     config::RPC_URL,
-    controllers::{cms::CmsController, hackathon::HackathonController},
+    controllers::cms::CmsController,
     db::{postgres::PostgresDatabase, r2::R2Client},
     result::AppError,
-    services::github::GitHubService,
+    services::hackathon::HackathonService,
     types::{
         cms::{
             CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
@@ -20,7 +20,7 @@ use crate::{
         hackathon::{RegisterHackathonRequest, RegisterHackathonResponse},
         metadata::TokenMetadata,
     },
-    utils::{single_flight::GLOBAL_CACHE, valid_account_id, valid_token_id},
+    utils::{single_flight::GLOBAL_CACHE, valid_token_id},
 };
 
 sol! {
@@ -313,20 +313,16 @@ impl CmsService {
     }
 
     /// Register hackathon project (with transaction)
-    /// 1. Verify token exists in token table
-    /// 2. Fetch creator info from GitHub API
-    /// 3. Fetch project info from GitHub API
-    /// 4. Insert all in single transaction (hackathon, creator, project)
+    /// 1. Verify admin status
+    /// 2. Delegate to HackathonService (handles GitHub fetch + DB insert)
     pub async fn register_hackathon(
         &self,
         session_address: &str,
         request: RegisterHackathonRequest,
     ) -> Result<RegisterHackathonResponse, AppError> {
-        // Validate and normalize token_id/account_id to checksum format
+        // Validate token_id format
         let token_id = valid_token_id(&request.token_id)
             .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
-        let account_id = valid_account_id(&request.account_id)
-            .ok_or_else(|| AppError::BadRequest("Invalid account_id format".to_string()))?;
 
         // Verify admin status
         let cms_controller = CmsController::new(self.postgres.clone());
@@ -339,68 +335,15 @@ impl CmsService {
             return Err(AppError::AuthError("Admin access required".to_string()));
         }
 
-        let hackathon_controller = HackathonController::new(self.postgres.clone());
+        // Delegate to HackathonService
+        let hackathon_service = HackathonService::new(self.postgres.clone());
 
-        // Verify token exists in token table (FK constraint)
-        let token_exists = hackathon_controller
-            .token_exists(&token_id)
-            .await
-            .map_err(|e| {
-                error!("Failed to check token existence: {}", e);
-                AppError::InternalError(format!("Failed to check token existence: {}", e))
-            })?;
+        // Create request with normalized token_id
+        let mut normalized_request = request;
+        normalized_request.token_id = token_id.clone();
 
-        if !token_exists {
-            return Err(AppError::BadRequest(format!(
-                "Token not found: {}",
-                token_id
-            )));
-        }
-
-        // Fetch creator info and project info from GitHub API in parallel
-        let github_service = GitHubService::new();
-        let (creator_result, project_result) = tokio::join!(
-            github_service.get_creator_info(&request.github_id),
-            github_service.get_project_info(&request.project_github_url)
-        );
-
-        let creator_info = creator_result.map_err(|e| {
-            error!("Failed to fetch GitHub creator info: {}", e);
-            AppError::InternalError(format!("Failed to fetch GitHub creator info: {}", e))
-        })?;
-
-        let project_info = project_result.map_err(|e| {
-            error!("Failed to fetch GitHub project info: {}", e);
-            AppError::InternalError(format!("Failed to fetch GitHub project info: {}", e))
-        })?;
-
-        info!("Fetched GitHub creator info: {:?}", creator_info);
-        info!("Fetched GitHub project info: {:?}", project_info);
-
-        // Insert all in single transaction
-        use crate::controllers::hackathon::RegisterHackathonParams;
-
-        let params = RegisterHackathonParams {
-            token_id: &token_id,
-            github_id: &request.github_id,
-            creator_info: &creator_info,
-            twitter: &request.twitter,
-            discord: request.discord.as_deref(),
-            telegram: request.telegram.as_deref(),
-            linkedin: request.linkedin.as_deref(),
-            account_id: &account_id,
-            project_github_url: &request.project_github_url,
-            project_name: &request.project_name,
-            project_description: &request.project_description,
-            keywords: &request.keywords,
-            screenshot_uri: &request.screenshot_uri,
-            website: request.website.as_deref(),
-            youtube: request.youtube.as_deref(),
-            project_info: &project_info,
-        };
-
-        hackathon_controller
-            .register_hackathon_tx(params)
+        let (team_id, github_fetch_pending) = hackathon_service
+            .register_hackathon(&normalized_request)
             .await
             .map_err(|e| {
                 error!("Failed to register hackathon: {}", e);
@@ -408,13 +351,15 @@ impl CmsService {
             })?;
 
         info!(
-            "Successfully registered hackathon project: {}",
-            token_id
+            "Successfully registered hackathon project: {} (team_id: {}, github_pending: {})",
+            token_id, team_id, github_fetch_pending
         );
 
         Ok(RegisterHackathonResponse {
             success: true,
             token_id,
+            team_id,
+            github_fetch_pending,
         })
     }
 }

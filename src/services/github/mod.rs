@@ -22,6 +22,7 @@ pub struct GitHubUser {
 pub struct GitHubRepo {
     pub stargazers_count: i32,
     pub forks_count: i32,
+    pub description: Option<String>,
     pub topics: Option<Vec<String>>,
     pub language: Option<String>,
 }
@@ -50,6 +51,7 @@ pub struct GitHubCreatorInfo {
 pub struct GitHubProjectInfo {
     pub star_count: i32,
     pub fork_count: i32,
+    pub description: Option<String>,
     pub topics: Option<Vec<String>>,
     pub language: Option<String>,
 }
@@ -149,6 +151,7 @@ impl GitHubService {
         Ok(GitHubProjectInfo {
             star_count: repo_info.stargazers_count,
             fork_count: repo_info.forks_count,
+            description: repo_info.description,
             topics: repo_info.topics,
             language: repo_info.language,
         })
