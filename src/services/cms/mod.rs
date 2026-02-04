@@ -333,7 +333,7 @@ impl CmsService {
         }
 
         // Delegate to HackathonService
-        let hackathon_service = HackathonService::new(self.postgres.clone());
+        let hackathon_service = Arc::new(HackathonService::new(self.postgres.clone()));
         let response = hackathon_service.register_hackathon_batch(requests).await;
 
         info!(

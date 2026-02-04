@@ -67,7 +67,6 @@ CREATE TABLE hackathon_project (
     github_url TEXT NOT NULL,               -- 프로젝트 GitHub URL
     demo_video_url TEXT NOT NULL,           -- 데모 비디오 URL
     agent_moltbook_url TEXT,                -- Agent Moltbook 링크 (옵션)
-    website TEXT,                           -- 웹사이트 (옵션)
     -- GitHub repo 통계 (자동 fetch)
     github_star_count INTEGER DEFAULT 0,
     github_fork_count INTEGER DEFAULT 0,
@@ -116,8 +115,7 @@ CREATE TABLE hackathon_project (
   "monad_integration": "Uses Monad for high-speed transaction processing...",
   "project_github_url": "https://github.com/owner/repo",
   "demo_video_url": "https://youtube.com/watch?v=xxxxx",
-  "agent_moltbook_url": "https://moltbook.com/agent/xxx",
-  "website": "https://myproject.com"
+  "agent_moltbook_url": "https://moltbook.com/agent/xxx"
 }
 ```
 
@@ -139,7 +137,6 @@ CREATE TABLE hackathon_project (
 | `project_github_url` | string | O | 프로젝트 GitHub URL (`https://github.com/`으로 시작) |
 | `demo_video_url` | string | O | 데모 비디오 URL (`https://`로 시작) |
 | `agent_moltbook_url` | string | X | Agent Moltbook 링크 |
-| `website` | string | X | 웹사이트 URL |
 
 #### Validation Rules
 - `members`: 최소 1명, 최대 3명
@@ -274,7 +271,6 @@ CREATE TABLE hackathon_project (
         "github_url": "https://github.com/owner/repo",
         "demo_video_url": "https://youtube.com/...",
         "agent_moltbook_url": "https://moltbook.com/...",
-        "website": "https://myproject.com",
         "github_star_count": 150,
         "github_fork_count": 30,
         "github_description": "A great project",
@@ -313,7 +309,6 @@ interface RegisterHackathonRequest {
   project_github_url: string;  // https://github.com/으로 시작
   demo_video_url: string;      // https://로 시작
   agent_moltbook_url?: string;
-  website?: string;
 }
 ```
 
@@ -373,7 +368,6 @@ interface HackathonProjectInfo {
   github_url: string;
   demo_video_url: string;
   agent_moltbook_url?: string;
-  website?: string;
   github_star_count: number;
   github_fork_count: number;
   github_description?: string;

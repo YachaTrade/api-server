@@ -47,7 +47,6 @@ struct ProjectWithTeamRow {
     github_url: String,
     demo_video_url: String,
     agent_moltbook_url: Option<String>,
-    website: Option<String>,
     github_star_count: Option<i32>,
     github_fork_count: Option<i32>,
     github_description: Option<String>,
@@ -74,7 +73,6 @@ pub struct RegisterHackathonParams<'a> {
     pub project_github_url: &'a str,
     pub demo_video_url: &'a str,
     pub agent_moltbook_url: Option<&'a str>,
-    pub website: Option<&'a str>,
     pub project_github_info: Option<&'a GitHubProjectInfo>,
     pub members_github_info: &'a HashMap<String, GitHubCreatorInfo>,
 }
@@ -259,12 +257,12 @@ impl HackathonController {
         let project_query = r#"
             INSERT INTO hackathon_project (
                 token_id, team_id, name, description, monad_integration,
-                github_url, demo_video_url, agent_moltbook_url, website,
+                github_url, demo_video_url, agent_moltbook_url,
                 github_star_count, github_fork_count, github_description,
                 github_topics, github_language, github_fetched_at,
                 created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
         "#;
         sqlx::query(project_query)
             .bind(params.token_id)
@@ -275,7 +273,6 @@ impl HackathonController {
             .bind(params.project_github_url)
             .bind(params.demo_video_url)
             .bind(params.agent_moltbook_url)
-            .bind(params.website)
             .bind(project_github_star_count)
             .bind(project_github_fork_count)
             .bind(&project_github_description)
@@ -308,7 +305,6 @@ impl HackathonController {
                 p.github_url,
                 p.demo_video_url,
                 p.agent_moltbook_url,
-                p.website,
                 p.github_star_count,
                 p.github_fork_count,
                 p.github_description,
@@ -367,7 +363,6 @@ impl HackathonController {
                 p.github_url,
                 p.demo_video_url,
                 p.agent_moltbook_url,
-                p.website,
                 p.github_star_count,
                 p.github_fork_count,
                 p.github_description,
@@ -512,7 +507,6 @@ impl HackathonController {
                 github_url: project.github_url,
                 demo_video_url: project.demo_video_url,
                 agent_moltbook_url: project.agent_moltbook_url,
-                website: project.website,
                 github_star_count: project.github_star_count.unwrap_or(0),
                 github_fork_count: project.github_fork_count.unwrap_or(0),
                 github_description: project.github_description,

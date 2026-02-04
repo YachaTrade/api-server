@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 
 use crate::{
@@ -70,7 +71,6 @@ impl HackathonService {
             project_github_url: &request.project_github_url,
             demo_video_url: &request.demo_video_url,
             agent_moltbook_url: request.agent_moltbook_url.as_deref(),
-            website: request.website.as_deref(),
             project_github_info: project_github_info.as_ref(),
             members_github_info: &members_github_info,
         };
@@ -84,73 +84,85 @@ impl HackathonService {
         }
     }
 
-    /// Register multiple hackathon projects (batch)
+    /// Register multiple hackathon projects (batch) - parallel execution
     pub async fn register_hackathon_batch(
-        &self,
+        self: Arc<Self>,
         requests: Vec<RegisterHackathonRequest>,
     ) -> RegisterHackathonBatchResponse {
-        let mut results = Vec::with_capacity(requests.len());
+        let mut set: JoinSet<RegisterHackathonItemResult> = JoinSet::new();
+
+        for request in requests {
+            let service = self.clone();
+            set.spawn(async move {
+                // Normalize token_id
+                let token_id = match valid_token_id(&request.token_id) {
+                    Some(id) => id,
+                    None => {
+                        return RegisterHackathonItemResult {
+                            token_id: request.token_id.clone(),
+                            status: "error".to_string(),
+                            team_id: None,
+                            error: Some("Invalid token_id format".to_string()),
+                            github_fetch_pending: false,
+                        };
+                    }
+                };
+
+                let mut normalized_request = request;
+                normalized_request.token_id = token_id.clone();
+
+                match service.register_hackathon(&normalized_request).await {
+                    Ok(Some((team_id, github_fetch_pending))) => {
+                        info!(
+                            "Registered hackathon: {} (team_id: {})",
+                            token_id, team_id
+                        );
+                        RegisterHackathonItemResult {
+                            token_id,
+                            status: "registered".to_string(),
+                            team_id: Some(team_id),
+                            error: None,
+                            github_fetch_pending,
+                        }
+                    }
+                    Ok(None) => {
+                        info!("Skipped hackathon (already exists): {}", token_id);
+                        RegisterHackathonItemResult {
+                            token_id,
+                            status: "skipped".to_string(),
+                            team_id: None,
+                            error: None,
+                            github_fetch_pending: false,
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to register hackathon {}: {}", token_id, e);
+                        RegisterHackathonItemResult {
+                            token_id,
+                            status: "error".to_string(),
+                            team_id: None,
+                            error: Some(e),
+                            github_fetch_pending: false,
+                        }
+                    }
+                }
+            });
+        }
+
+        // Collect results
+        let mut results = Vec::new();
         let mut registered = 0;
         let mut skipped = 0;
         let mut failed = 0;
 
-        for request in requests {
-            // Normalize token_id
-            let token_id = match valid_token_id(&request.token_id) {
-                Some(id) => id,
-                None => {
-                    failed += 1;
-                    results.push(RegisterHackathonItemResult {
-                        token_id: request.token_id.clone(),
-                        status: "error".to_string(),
-                        team_id: None,
-                        error: Some("Invalid token_id format".to_string()),
-                        github_fetch_pending: false,
-                    });
-                    continue;
+        while let Some(result) = set.join_next().await {
+            if let Ok(item) = result {
+                match item.status.as_str() {
+                    "registered" => registered += 1,
+                    "skipped" => skipped += 1,
+                    _ => failed += 1,
                 }
-            };
-
-            let mut normalized_request = request;
-            normalized_request.token_id = token_id.clone();
-
-            match self.register_hackathon(&normalized_request).await {
-                Ok(Some((team_id, github_fetch_pending))) => {
-                    registered += 1;
-                    info!(
-                        "Registered hackathon: {} (team_id: {})",
-                        token_id, team_id
-                    );
-                    results.push(RegisterHackathonItemResult {
-                        token_id,
-                        status: "registered".to_string(),
-                        team_id: Some(team_id),
-                        error: None,
-                        github_fetch_pending,
-                    });
-                }
-                Ok(None) => {
-                    skipped += 1;
-                    info!("Skipped hackathon (already exists): {}", token_id);
-                    results.push(RegisterHackathonItemResult {
-                        token_id,
-                        status: "skipped".to_string(),
-                        team_id: None,
-                        error: None,
-                        github_fetch_pending: false,
-                    });
-                }
-                Err(e) => {
-                    failed += 1;
-                    error!("Failed to register hackathon {}: {}", token_id, e);
-                    results.push(RegisterHackathonItemResult {
-                        token_id,
-                        status: "error".to_string(),
-                        team_id: None,
-                        error: Some(e),
-                        github_fetch_pending: false,
-                    });
-                }
+                results.push(item);
             }
         }
 
