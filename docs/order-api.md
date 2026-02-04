@@ -181,34 +181,43 @@ Order API는 토큰 목록을 다양한 기준으로 정렬하여 조회하는 A
         },
         "is_cto": false,
         "hackathon_info": {
-          "creator": {
-            "github_id": "MonkeyGyu",
-            "image_uri": "https://avatars.githubusercontent.com/...",
-            "name": "Gyu",
-            "github_url": "https://github.com/MonkeyGyu",
-            "follower_count": 100,
-            "following_count": 50,
-            "repo_count": 30,
-            "star_count": 500,
-            "bio": "Developer",
-            "twitter": "@username",
-            "discord": "username#1234",
-            "telegram": "@username",
-            "linkedin": "https://linkedin.com/in/username",
-            "account_id": "0x..."
+          "team": {
+            "id": "7654321098765432100",
+            "name": "Awesome Team",
+            "members": [
+              {
+                "email": "member@example.com",
+                "discord": "member#1234",
+                "twitter": "@member",
+                "linkedin": "https://linkedin.com/in/member",
+                "github": {
+                  "username": "member1",
+                  "image_uri": "https://avatars.githubusercontent.com/...",
+                  "name": "Member One",
+                  "url": "https://github.com/member1",
+                  "follower_count": 100,
+                  "following_count": 50,
+                  "repo_count": 30,
+                  "star_count": 500,
+                  "bio": "Developer",
+                  "fetch_pending": false
+                }
+              }
+            ]
           },
           "project": {
-            "github_url": "https://github.com/owner/repo",
             "name": "My Project",
             "description": "Project description",
-            "keywords": ["defi", "nft", "trading"],
-            "screenshot_uri": "https://storage.nadapp.net/...",
+            "monad_integration": "Uses Monad for...",
+            "github_url": "https://github.com/owner/repo",
+            "demo_video_url": "https://youtube.com/...",
+            "agent_moltbook_url": "https://moltbook.com/...",
             "website": "https://myproject.com",
-            "youtube": "https://youtube.com/...",
-            "star_count": 150,
-            "fork_count": 30,
-            "topics": ["blockchain", "web3"],
-            "language": "TypeScript"
+            "github_star_count": 150,
+            "github_fork_count": 30,
+            "github_description": "A great project",
+            "github_topics": ["blockchain", "web3"],
+            "github_language": "TypeScript"
           }
         }
       },
@@ -322,39 +331,50 @@ interface MarketInfo {
 }
 
 interface HackathonInfo {
-  creator: HackathonCreatorInfo;
+  team: HackathonTeamInfo;
   project: HackathonProjectInfo;
 }
 
-interface HackathonCreatorInfo {
-  github_id: string;
+interface HackathonTeamInfo {
+  id: string;
+  name: string;
+  members: HackathonTeamMemberInfo[];
+}
+
+interface HackathonTeamMemberInfo {
+  email: string;
+  discord?: string;
+  twitter?: string;
+  linkedin?: string;
+  github?: HackathonMemberGitHubInfo;
+}
+
+interface HackathonMemberGitHubInfo {
+  username: string;
   image_uri?: string;
   name?: string;
-  github_url?: string;
-  follower_count: number;
-  following_count: number;
-  repo_count: number;
-  star_count: number;
+  url?: string;
+  follower_count?: number;
+  following_count?: number;
+  repo_count?: number;
+  star_count?: number;
   bio?: string;
-  twitter: string;
-  discord?: string;
-  telegram?: string;
-  linkedin?: string;
-  account_id: string;
+  fetch_pending: boolean;
 }
 
 interface HackathonProjectInfo {
-  github_url: string;
   name: string;
   description: string;
-  keywords: string[];
-  screenshot_uri: string;
+  monad_integration: string;
+  github_url: string;
+  demo_video_url: string;
+  agent_moltbook_url?: string;
   website?: string;
-  youtube?: string;
-  star_count: number;
-  fork_count: number;
-  topics?: string[];
-  language?: string;
+  github_star_count: number;
+  github_fork_count: number;
+  github_description?: string;
+  github_topics?: string[];
+  github_language?: string;
 }
 ```
 

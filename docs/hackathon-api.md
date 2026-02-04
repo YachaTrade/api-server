@@ -67,7 +67,6 @@ CREATE TABLE hackathon_project (
     github_url TEXT NOT NULL,               -- 프로젝트 GitHub URL
     demo_video_url TEXT NOT NULL,           -- 데모 비디오 URL
     agent_moltbook_url TEXT,                -- Agent Moltbook 링크 (옵션)
-    screenshot_uri TEXT,                    -- 스크린샷 (옵션)
     website TEXT,                           -- 웹사이트 (옵션)
     -- GitHub repo 통계 (자동 fetch)
     github_star_count INTEGER DEFAULT 0,
@@ -118,7 +117,6 @@ CREATE TABLE hackathon_project (
   "project_github_url": "https://github.com/owner/repo",
   "demo_video_url": "https://youtube.com/watch?v=xxxxx",
   "agent_moltbook_url": "https://moltbook.com/agent/xxx",
-  "screenshot_uri": "https://storage.nadapp.net/screenshots/uuid.png",
   "website": "https://myproject.com"
 }
 ```
@@ -141,7 +139,6 @@ CREATE TABLE hackathon_project (
 | `project_github_url` | string | O | 프로젝트 GitHub URL (`https://github.com/`으로 시작) |
 | `demo_video_url` | string | O | 데모 비디오 URL (`https://`로 시작) |
 | `agent_moltbook_url` | string | X | Agent Moltbook 링크 |
-| `screenshot_uri` | string | X | 스크린샷 이미지 URL |
 | `website` | string | X | 웹사이트 URL |
 
 #### Validation Rules
@@ -277,7 +274,6 @@ CREATE TABLE hackathon_project (
         "github_url": "https://github.com/owner/repo",
         "demo_video_url": "https://youtube.com/...",
         "agent_moltbook_url": "https://moltbook.com/...",
-        "screenshot_uri": "https://storage.nadapp.net/...",
         "website": "https://myproject.com",
         "github_star_count": 150,
         "github_fork_count": 30,
@@ -317,7 +313,6 @@ interface RegisterHackathonRequest {
   project_github_url: string;  // https://github.com/으로 시작
   demo_video_url: string;      // https://로 시작
   agent_moltbook_url?: string;
-  screenshot_uri?: string;
   website?: string;
 }
 ```
@@ -378,7 +373,6 @@ interface HackathonProjectInfo {
   github_url: string;
   demo_video_url: string;
   agent_moltbook_url?: string;
-  screenshot_uri?: string;
   website?: string;
   github_star_count: number;
   github_fork_count: number;

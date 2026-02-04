@@ -49,8 +49,6 @@ pub struct RegisterHackathonRequest {
     // === Project (optional) ===
     /// Agent Moltbook URL (optional)
     pub agent_moltbook_url: Option<String>,
-    /// Screenshot URI (optional)
-    pub screenshot_uri: Option<String>,
     /// Website URL (optional)
     pub website: Option<String>,
 }
@@ -163,14 +161,33 @@ impl RegisterHackathonRequest {
 
 // ===== Response Types =====
 
-/// Response for hackathon registration
+/// Result for each item in registration
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct RegisterHackathonResponse {
-    pub success: bool,
+pub struct RegisterHackathonItemResult {
     pub token_id: String,
-    pub team_id: String,
-    /// Indicates if GitHub stats fetch was deferred (e.g., API failure)
+    /// "registered", "skipped" (already exists), or "error"
+    pub status: String,
+    /// Team ID if registered
+    pub team_id: Option<String>,
+    /// Error message if failed
+    pub error: Option<String>,
+    /// Indicates if GitHub stats fetch was deferred
     pub github_fetch_pending: bool,
+}
+
+/// Batch response for hackathon registration
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RegisterHackathonBatchResponse {
+    /// Total items processed
+    pub total: usize,
+    /// Successfully registered count
+    pub registered: usize,
+    /// Skipped (already exists) count
+    pub skipped: usize,
+    /// Failed count
+    pub failed: usize,
+    /// Individual results
+    pub results: Vec<RegisterHackathonItemResult>,
 }
 
 /// Response for hackathon token list
@@ -223,7 +240,6 @@ pub struct HackathonProjectInfo {
     pub github_url: String,
     pub demo_video_url: String,
     pub agent_moltbook_url: Option<String>,
-    pub screenshot_uri: Option<String>,
     pub website: Option<String>,
     // GitHub repo stats
     pub github_star_count: i32,

@@ -15,7 +15,7 @@ use crate::{
             CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
             UpdateMetadataResponse,
         },
-        hackathon::{RegisterHackathonRequest, RegisterHackathonResponse},
+        hackathon::{RegisterHackathonBatchResponse, RegisterHackathonRequest},
     },
 };
 
@@ -204,17 +204,19 @@ pub struct UpdateMetadataMultipart {
     pub image: Option<String>,
 }
 
-/// Register hackathon project (Admin only)
-/// Fetches GitHub info and stores creator + project data
+/// Register hackathon projects (Admin only)
+/// Accepts array of hackathon registrations
+/// Fetches GitHub info and stores team + project data for each item
+/// Skips items that already exist (returns "skipped" status)
 #[utoipa::path(
     post,
     path = CmsPath::RegisterHackathon.docs_str(),
     params(
         ("session" = String, Cookie, description = "Session cookie for authentication (Admin only)")
     ),
-    request_body = RegisterHackathonRequest,
+    request_body = Vec<RegisterHackathonRequest>,
     responses(
-        (status = 200, description = "Hackathon registered successfully", body = RegisterHackathonResponse),
+        (status = 200, description = "Registration completed", body = RegisterHackathonBatchResponse),
         (status = 401, description = "Unauthorized - Not an admin"),
         (status = 400, description = "Bad request"),
         (status = 500, description = "Internal server error")
@@ -225,9 +227,19 @@ pub struct UpdateMetadataMultipart {
 pub async fn register_hackathon(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(payload): Json<RegisterHackathonRequest>,
-) -> AppJsonResult<RegisterHackathonResponse> {
-    payload.validate().map_err(AppError::BadRequest)?;
+    Json(payload): Json<Vec<RegisterHackathonRequest>>,
+) -> AppJsonResult<RegisterHackathonBatchResponse> {
+    if payload.is_empty() {
+        return Err(AppError::BadRequest(
+            "At least 1 item is required".to_string(),
+        ));
+    }
+
+    for (i, item) in payload.iter().enumerate() {
+        if let Err(e) = item.validate() {
+            return Err(AppError::BadRequest(format!("Item {}: {}", i + 1, e)));
+        }
+    }
 
     let service = CmsService::new(state.postgres.clone(), state.r2.clone());
     let response = service
