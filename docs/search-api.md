@@ -201,39 +201,50 @@ interface MarketInfo {
 }
 
 interface HackathonInfo {
-  creator: HackathonCreatorInfo;
+  team: HackathonTeamInfo;
   project: HackathonProjectInfo;
 }
 
-interface HackathonCreatorInfo {
-  github_id: string;
+interface HackathonTeamInfo {
+  id: string;
+  name: string;
+  members: HackathonTeamMemberInfo[];
+}
+
+interface HackathonTeamMemberInfo {
+  email: string;
+  discord?: string;
+  twitter?: string;
+  linkedin?: string;
+  github?: HackathonMemberGitHubInfo;
+}
+
+interface HackathonMemberGitHubInfo {
+  username: string;
   image_uri?: string;
   name?: string;
-  github_url?: string;
-  follower_count: number;
-  following_count: number;
-  repo_count: number;
-  star_count: number;
+  url?: string;
+  follower_count?: number;
+  following_count?: number;
+  repo_count?: number;
+  star_count?: number;
   bio?: string;
-  twitter: string;
-  discord?: string;
-  telegram?: string;
-  linkedin?: string;
-  account_id: string;
+  fetch_pending: boolean;
 }
 
 interface HackathonProjectInfo {
-  github_url: string;
   name: string;
   description: string;
-  keywords: string[];
-  screenshot_uri: string;
+  monad_integration: string;
+  github_url: string;
+  demo_video_url: string;
+  agent_moltbook_url?: string;
   website?: string;
-  youtube?: string;
-  star_count: number;
-  fork_count: number;
-  topics?: string[];
-  language?: string;
+  github_star_count: number;
+  github_fork_count: number;
+  github_description?: string;
+  github_topics?: string[];
+  github_language?: string;
 }
 ```
 

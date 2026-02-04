@@ -17,10 +17,10 @@ use crate::{
             CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
             UpdateMetadataResponse,
         },
-        hackathon::{RegisterHackathonRequest, RegisterHackathonResponse},
+        hackathon::{RegisterHackathonBatchResponse, RegisterHackathonRequest},
         metadata::TokenMetadata,
     },
-    utils::{single_flight::GLOBAL_CACHE, valid_token_id},
+    utils::single_flight::GLOBAL_CACHE,
 };
 
 sol! {
@@ -312,18 +312,15 @@ impl CmsService {
         Ok(())
     }
 
-    /// Register hackathon project (with transaction)
+    /// Register hackathon projects (accepts array)
     /// 1. Verify admin status
-    /// 2. Delegate to HackathonService (handles GitHub fetch + DB insert)
+    /// 2. Delegate to HackathonService (handles GitHub fetch + DB insert for each)
+    /// Skips items that already exist
     pub async fn register_hackathon(
         &self,
         session_address: &str,
-        request: RegisterHackathonRequest,
-    ) -> Result<RegisterHackathonResponse, AppError> {
-        // Validate token_id format
-        let token_id = valid_token_id(&request.token_id)
-            .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
-
+        requests: Vec<RegisterHackathonRequest>,
+    ) -> Result<RegisterHackathonBatchResponse, AppError> {
         // Verify admin status
         let cms_controller = CmsController::new(self.postgres.clone());
         let is_admin = cms_controller
@@ -337,29 +334,13 @@ impl CmsService {
 
         // Delegate to HackathonService
         let hackathon_service = HackathonService::new(self.postgres.clone());
-
-        // Create request with normalized token_id
-        let mut normalized_request = request;
-        normalized_request.token_id = token_id.clone();
-
-        let (team_id, github_fetch_pending) = hackathon_service
-            .register_hackathon(&normalized_request)
-            .await
-            .map_err(|e| {
-                error!("Failed to register hackathon: {}", e);
-                AppError::InternalError(format!("Failed to register hackathon: {}", e))
-            })?;
+        let response = hackathon_service.register_hackathon_batch(requests).await;
 
         info!(
-            "Successfully registered hackathon project: {} (team_id: {}, github_pending: {})",
-            token_id, team_id, github_fetch_pending
+            "Hackathon registration complete: {} registered, {} skipped, {} failed",
+            response.registered, response.skipped, response.failed
         );
 
-        Ok(RegisterHackathonResponse {
-            success: true,
-            token_id,
-            team_id,
-            github_fetch_pending,
-        })
+        Ok(response)
     }
 }

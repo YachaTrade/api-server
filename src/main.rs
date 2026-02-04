@@ -294,7 +294,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::hackathon::HackathonProjectInfo,
             types::hackathon::TeamMemberInput,
             types::hackathon::RegisterHackathonRequest,
-            types::hackathon::RegisterHackathonResponse,
+            types::hackathon::RegisterHackathonBatchResponse,
             types::hackathon::HackathonTokenListResponse,
 
         )
