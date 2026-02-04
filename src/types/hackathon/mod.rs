@@ -201,13 +201,13 @@ pub struct HackathonTeamMemberInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HackathonMemberGitHubInfo {
     pub username: String,
-    pub image_uri: Option<String>,
-    pub name: Option<String>,
-    pub url: Option<String>,
-    pub follower_count: Option<i32>,
-    pub following_count: Option<i32>,
-    pub repo_count: Option<i32>,
-    pub star_count: Option<i32>,
+    pub image_uri: String,
+    pub name: String,
+    pub url: String,
+    pub follower_count: i32,
+    pub following_count: i32,
+    pub repo_count: i32,
+    pub star_count: i32,
     pub bio: Option<String>,
     /// True if stats haven't been fetched yet
     pub fetch_pending: bool,

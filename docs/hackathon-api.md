@@ -350,13 +350,13 @@ interface HackathonTeamMemberInfo {
 
 interface HackathonMemberGitHubInfo {
   username: string;
-  image_uri?: string;
-  name?: string;
-  url?: string;
-  follower_count?: number;
-  following_count?: number;
-  repo_count?: number;
-  star_count?: number;
+  image_uri: string;
+  name: string;
+  url: string;
+  follower_count: number;
+  following_count: number;
+  repo_count: number;
+  star_count: number;
   bio?: string;
   fetch_pending: boolean;  // true if stats not fetched yet
 }
