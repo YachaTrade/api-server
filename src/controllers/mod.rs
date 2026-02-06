@@ -1,5 +1,6 @@
 pub mod account;
 pub mod auth;
+pub mod chester;
 pub mod cms;
 pub mod hackathon;
 pub mod hype;

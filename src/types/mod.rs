@@ -1,5 +1,6 @@
 pub mod api_key;
 pub mod auth;
+pub mod chester;
 pub mod common;
 
 pub mod account;

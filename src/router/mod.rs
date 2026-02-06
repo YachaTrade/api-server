@@ -21,5 +21,6 @@ pub mod leaderboard;
 pub mod metadata;
 pub mod metrics;
 pub mod new_event;
+pub mod chester;
 pub mod raffle;
 pub mod trend;

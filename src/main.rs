@@ -2,8 +2,8 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, cms, health, hype, leaderboard, metadata, metrics, new_event,
-        order, profile, raffle, search, terminal, token, trade, trend,
+        self, account, agent, api_key, auth, chester, cms, health, hype, leaderboard, metadata,
+        metrics, new_event, order, profile, raffle, search, terminal, token, trade, trend,
     },
     state::AppState,
     types,
@@ -97,6 +97,11 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------New Event----------------
         router::new_event::handler::get_new_event,
+
+        // ----------------Chester----------------
+        router::chester::handler::get_volume,
+        router::chester::handler::get_round,
+        router::chester::handler::get_rewards,
 
         // ----------------Raffle----------------
         router::raffle::handler::get_eligible,
@@ -256,6 +261,12 @@ use utoipa_swagger_ui::SwaggerUi;
             types::new_event::NewEvent,
             types::new_event::EventType,
 
+            // Chester
+            types::chester::ChesterVolumeResponse,
+            types::chester::ChesterInfoResponse,
+            types::chester::ChesterRewardItem,
+            types::chester::ChesterRewardsResponse,
+
             // Raffle
             types::raffle::RaffleRoundResponse,
             types::raffle::RaffleStatusResponse,
@@ -309,6 +320,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Order",description="Order endpoints"),
         (name="Hype",description="Hype Token endpoints"),
         (name="New Event",description="New Event endpoints"),
+        (name="Chester",description="Chester round endpoints"),
         (name="Raffle",description="Raffle endpoints"),
         (name="Metadata",description="Metadata upload endpoints"),
         (name="Terminal",description="Gecko Terminal API endpoints"),
@@ -395,6 +407,7 @@ async fn main() -> Result<()> {
         .merge(order::router())
         .merge(hype::router(app_state.clone()))
         // .merge(bot::router()) // bot 모듈이 존재하지 않음
+        .merge(chester::router())
         .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
