@@ -15,11 +15,13 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 **Response 200**
 ```json
 {
-  "total_usd_volume": "12345.67"
+  "volume_usd": "12345.67",
+  "fee_usd": "123.45"
 }
 ```
 
-- `total_usd_volume`: swap 테이블에서 실시간 집계된 USD 거래량 (NUMERIC → String)
+- `volume_usd`: swap 테이블에서 실시간 집계된 USD 거래량
+- `fee_usd`: point_history 테이블에서 실시간 집계된 USD 수수료
 
 ---
 

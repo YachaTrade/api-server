@@ -18,7 +18,9 @@ pub fn chest_level_threshold() -> Value {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChesterVolumeResponse {
     /// Cumulative USD trading volume for the active round
-    pub total_usd_volume: String,
+    pub volume_usd: String,
+    /// Cumulative USD fee for the active round
+    pub fee_usd: String,
 }
 
 /// Round info response
