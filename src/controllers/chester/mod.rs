@@ -75,7 +75,7 @@ impl ChesterController {
             sqlx::query!(
                 r#"
                 SELECT rw.token_id, rw.amount
-                FROM chester_round_reward rw
+                FROM chester_reward rw
                 INNER JOIN chester_round cr ON cr.round = rw.round AND cr.status = 'ACTIVE'
                 "#
             )
