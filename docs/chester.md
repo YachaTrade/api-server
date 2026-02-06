@@ -96,13 +96,12 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 | start_at | BIGINT | 시작 시간 (epoch) |
 | end_at | BIGINT | 종료 시간 (epoch) |
 | status | VARCHAR | ACTIVE / COMPLETED / READY |
-| chest_level_threshold | JSONB | 레벨별 임계값 |
 | created_at | BIGINT | 생성 시간 (epoch) |
 
-- `EXCLUDE USING gist`: 시간 범위 중복 방지
 - `UNIQUE INDEX`: ACTIVE 상태는 최대 1개
+- `chest_level_threshold`: 코드에서 하드코딩 (DB 미저장)
 
-### chester_round_reward
+### chester_reward
 | Column | Type | Description |
 |--------|------|-------------|
 | round | BIGINT (FK) | 라운드 번호 |
