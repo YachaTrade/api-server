@@ -23,7 +23,7 @@ impl ChesterController {
     }
 
     pub async fn get_volume(&self, account_id: &str) -> Result<ChesterVolumeResponse> {
-        let result = measure_postgres!(
+        let volume = measure_postgres!(
             "chester.get_volume",
             sqlx::query!(
                 r#"
@@ -38,10 +38,28 @@ impl ChesterController {
             )
             .fetch_one(self.db.get_read_pool())
         )
-        .map_err(|err| anyhow!("Failed to get chester round volume: {}", err))?;
+        .map_err(|err| anyhow!("Failed to get chester volume: {}", err))?;
+
+        let fee = measure_postgres!(
+            "chester.get_fee",
+            sqlx::query!(
+                r#"
+                SELECT COALESCE(SUM(ph.value), 0) as "total_fee_usd!"
+                FROM point_history ph
+                INNER JOIN chester_round cr ON cr.status = 'ACTIVE'
+                WHERE ph.account_id = $1
+                  AND ph.created_at >= cr.start_at
+                  AND ph.created_at <= cr.end_at
+                "#,
+                account_id
+            )
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get chester fee: {}", err))?;
 
         Ok(ChesterVolumeResponse {
-            total_usd_volume: result.total_usd_volume.normalized().to_plain_string(),
+            volume_usd: volume.total_usd_volume.normalized().to_plain_string(),
+            fee_usd: fee.total_fee_usd.normalized().to_plain_string(),
         })
     }
 
