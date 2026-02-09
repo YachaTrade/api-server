@@ -6,7 +6,6 @@ use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 
 use crate::{
-    config::WMON,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::chester::{
@@ -124,14 +123,13 @@ impl ChesterController {
         let apr_usd = Self::fetch_apr_usd().await;
 
         // 4. Calculate USD values
-        let wmon = WMON.to_lowercase();
         let decimals = BigDecimal::from(10u64.pow(18));
 
         let rewards = rows
             .into_iter()
             .map(|r| {
-                // WMON → price table, APR → CoinGecko
-                let price = if r.token_id.to_lowercase() == wmon {
+                // MON → price table, APR → CoinGecko
+                let price = if r.symbol == "MON" {
                     mon_usd.clone()
                 } else {
                     apr_usd.clone()
@@ -156,11 +154,17 @@ impl ChesterController {
     async fn fetch_apr_usd() -> BigDecimal {
         let res = match reqwest::get(COINGECKO_APR_URL).await {
             Ok(r) => r,
-            Err(_) => return BigDecimal::from(0),
+            Err(e) => {
+                tracing::warn!("CoinGecko APR fetch failed: {}", e);
+                return BigDecimal::from(0);
+            }
         };
         let data: HashMap<String, HashMap<String, f64>> = match res.json().await {
             Ok(d) => d,
-            Err(_) => return BigDecimal::from(0),
+            Err(e) => {
+                tracing::warn!("CoinGecko APR parse failed: {}", e);
+                return BigDecimal::from(0);
+            }
         };
         data.get("apriori")
             .and_then(|m| m.get("usd").copied())
