@@ -146,7 +146,15 @@ impl ChesterController {
                     usd_value: usd_value.normalized().to_plain_string(),
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        // Sort by usd_value descending
+        let mut rewards = rewards;
+        rewards.sort_by(|a, b| {
+            let a_val = BigDecimal::from_str(&a.usd_value).unwrap_or(BigDecimal::from(0));
+            let b_val = BigDecimal::from_str(&b.usd_value).unwrap_or(BigDecimal::from(0));
+            b_val.cmp(&a_val)
+        });
 
         Ok(ChesterRewardsResponse { rewards })
     }
