@@ -8,6 +8,7 @@ use tracing::instrument;
 use crate::{
     controllers::chester::ChesterController,
     result::AppJsonResult,
+    services::chester::ChesterService,
     state::AppState,
     types::chester::{
         ChesterInfoResponse, ChesterRewardsResponse, ChesterVolumeResponse,
@@ -71,8 +72,8 @@ pub async fn get_round(
 pub async fn get_rewards(
     State(state): State<AppState>,
 ) -> AppJsonResult<ChesterRewardsResponse> {
-    let controller = ChesterController::new(state.postgres.clone());
-    let response = controller.get_rewards().await?;
+    let service = ChesterService::new(state.postgres.clone());
+    let response = service.get_rewards().await?;
 
     Ok(Json(response))
 }

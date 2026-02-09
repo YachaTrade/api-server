@@ -1,6 +1,7 @@
 pub mod account;
 pub mod api_key;
 pub mod auth;
+pub mod chester;
 pub mod cms;
 pub mod github;
 pub mod hackathon;
