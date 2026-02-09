@@ -152,7 +152,8 @@ impl ChesterController {
     }
 
     async fn fetch_apr_usd() -> BigDecimal {
-        let body = match reqwest::get(COINGECKO_APR_URL).await {
+        let client = reqwest::Client::new();
+        let body = match client.get(COINGECKO_APR_URL).header("User-Agent", "nad.fun").send().await {
             Ok(r) => match r.text().await {
                 Ok(b) => b,
                 Err(e) => {
