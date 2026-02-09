@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COALESCE(SUM(ph.value), 0) as \"total_fee_usd!\"\n                FROM point_history ph\n                INNER JOIN chester_round cr ON cr.status = 'ACTIVE'\n                WHERE ph.account_id = $1\n                  AND ph.created_at >= cr.start_at\n                  AND ph.created_at <= cr.end_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_fee_usd!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "95f40cafd9e96089d7cdbd961eb43cc79e93eea43f9463ef2b0ba5b79e51e233"
+}

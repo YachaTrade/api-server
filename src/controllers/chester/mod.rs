@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
@@ -8,10 +10,12 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::chester::{
-        ChesterInfoResponse, ChesterRewardItem, ChesterRewardsResponse,
-        ChesterVolumeResponse,
+        ChesterInfoResponse, ChesterRewardItem, ChesterRewardsResponse, ChesterVolumeResponse,
     },
 };
+
+const COINGECKO_APR_URL: &str =
+    "https://api.coingecko.com/api/v3/simple/price?ids=apriori&vs_currencies=usd";
 
 pub struct ChesterController {
     pub db: Arc<PostgresDatabase>,
@@ -87,14 +91,15 @@ impl ChesterController {
     }
 
     pub async fn get_rewards(&self) -> Result<ChesterRewardsResponse> {
-        // 1. Fetch raw reward rows
+        // 1. Fetch raw reward rows with token info
         let rows = measure_postgres!(
             "chester.get_rewards",
             sqlx::query!(
                 r#"
-                SELECT rw.token_id, rw.amount
+                SELECT rw.token_id, rw.amount, crt.name, crt.symbol, crt.image_uri
                 FROM chester_reward rw
                 INNER JOIN chester_round cr ON cr.round = rw.round AND cr.status = 'ACTIVE'
+                INNER JOIN chester_reward_token crt ON crt.token_id = rw.token_id
                 "#
             )
             .fetch_all(self.db.get_read_pool())
@@ -115,51 +120,51 @@ impl ChesterController {
         .map(|r| r.price)
         .unwrap_or(BigDecimal::from(0));
 
-        // 3. Fetch market prices (token → MON)
-        let token_ids: Vec<String> = rows.iter().map(|r| r.token_id.clone()).collect();
-        let markets = measure_postgres!(
-            "chester.get_market_prices",
-            sqlx::query!(
-                r#"
-                SELECT token_id, price FROM market WHERE token_id = ANY($1)
-                "#,
-                &token_ids
-            )
-            .fetch_all(self.db.get_read_pool())
-        )
-        .map_err(|err| anyhow!("Failed to get market prices: {}", err))?;
+        // 3. Fetch APR/USD price from CoinGecko
+        let apr_usd = Self::fetch_apr_usd().await;
 
-        let market_map: std::collections::HashMap<String, BigDecimal> = markets
-            .into_iter()
-            .map(|m| (m.token_id.to_lowercase(), m.price))
-            .collect();
-
+        // 4. Calculate USD values
         let wmon = WMON.to_lowercase();
+        let decimals = BigDecimal::from(10u64.pow(18));
 
-        // 4. Calculate USD values in Rust
         let rewards = rows
             .into_iter()
             .map(|r| {
-                let usd_value = if r.token_id.to_lowercase() == wmon {
-                    // WMON: amount * MON/USD price
-                    &r.amount * &mon_usd
+                // WMON → price table, APR → CoinGecko
+                let price = if r.token_id.to_lowercase() == wmon {
+                    mon_usd.clone()
                 } else {
-                    // Others: amount * market_price(token→MON) * MON/USD
-                    let market_price = market_map
-                        .get(&r.token_id.to_lowercase())
-                        .cloned()
-                        .unwrap_or(BigDecimal::from(0));
-                    &r.amount * &market_price * &mon_usd
+                    apr_usd.clone()
                 };
+                let usd_value = &r.amount * &price / &decimals;
 
                 ChesterRewardItem {
                     token_id: r.token_id,
+                    name: r.name,
+                    symbol: r.symbol,
+                    image_uri: r.image_uri,
                     amount: r.amount.normalized().to_plain_string(),
+                    price: price.normalized().to_plain_string(),
                     usd_value: usd_value.normalized().to_plain_string(),
                 }
             })
             .collect();
 
         Ok(ChesterRewardsResponse { rewards })
+    }
+
+    async fn fetch_apr_usd() -> BigDecimal {
+        let res = match reqwest::get(COINGECKO_APR_URL).await {
+            Ok(r) => r,
+            Err(_) => return BigDecimal::from(0),
+        };
+        let data: HashMap<String, HashMap<String, f64>> = match res.json().await {
+            Ok(d) => d,
+            Err(_) => return BigDecimal::from(0),
+        };
+        data.get("apriori")
+            .and_then(|m| m.get("usd").copied())
+            .and_then(|v| BigDecimal::from_str(&v.to_string()).ok())
+            .unwrap_or(BigDecimal::from(0))
     }
 }

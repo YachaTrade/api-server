@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COALESCE(SUM(s.value), 0) as \"total_usd_volume!\"\n                FROM swap s\n                INNER JOIN chester_round cr ON cr.status = 'ACTIVE'\n                WHERE s.account_id = $1\n                  AND s.created_at >= cr.start_at\n                  AND s.created_at <= cr.end_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_usd_volume!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a14466eb6fdf9f26febe1858980aa6869ea17b94b05f928e3f2ded49eb8aeb19"
+}

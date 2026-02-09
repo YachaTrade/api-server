@@ -43,8 +43,16 @@ pub struct ChesterInfoResponse {
 pub struct ChesterRewardItem {
     /// Token contract address
     pub token_id: String,
+    /// Token name
+    pub name: String,
+    /// Token symbol
+    pub symbol: String,
+    /// Token image URI
+    pub image_uri: String,
     /// Raw token amount
     pub amount: String,
+    /// Token price in USD
+    pub price: String,
     /// USD value of the reward
     pub usd_value: String,
 }
