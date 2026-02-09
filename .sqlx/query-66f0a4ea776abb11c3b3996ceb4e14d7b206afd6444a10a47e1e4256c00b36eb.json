@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT COUNT(*) as \"count!\"\n                    FROM swap s\n                    INNER JOIN chester_round cr ON cr.status = 'ACTIVE'\n                    WHERE s.account_id = $1\n                      AND s.created_at >= cr.start_at\n                      AND s.created_at <= cr.end_at\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "66f0a4ea776abb11c3b3996ceb4e14d7b206afd6444a10a47e1e4256c00b36eb"
+}

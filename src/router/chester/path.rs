@@ -2,6 +2,7 @@ pub enum ChesterPath {
     Volume,
     Round,
     Rewards,
+    SwapHistory,
 }
 
 impl ChesterPath {
@@ -10,6 +11,7 @@ impl ChesterPath {
             ChesterPath::Volume => "/chester/volume/:account_id",
             ChesterPath::Round => "/chester/round",
             ChesterPath::Rewards => "/chester/rewards",
+            ChesterPath::SwapHistory => "/chester/history/:account_id",
         }
     }
 
@@ -18,6 +20,7 @@ impl ChesterPath {
             ChesterPath::Volume => "/chester/volume/{account_id}",
             ChesterPath::Round => "/chester/round",
             ChesterPath::Rewards => "/chester/rewards",
+            ChesterPath::SwapHistory => "/chester/history/{account_id}",
         }
     }
 }

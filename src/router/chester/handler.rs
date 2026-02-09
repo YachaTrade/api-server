@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 
 use tracing::instrument;
@@ -9,8 +9,10 @@ use crate::{
     result::AppJsonResult,
     services::chester::ChesterService,
     state::AppState,
-    types::chester::{
-        ChesterInfoResponse, ChesterRewardsResponse, ChesterVolumeResponse,
+    types::{
+        chester::{ChesterInfoResponse, ChesterRewardsResponse, ChesterVolumeResponse},
+        common::pagination::PaginationParams,
+        profile::SwapHistoryResponse,
     },
 };
 
@@ -73,6 +75,34 @@ pub async fn get_rewards(
 ) -> AppJsonResult<ChesterRewardsResponse> {
     let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_rewards().await?;
+
+    Ok(Json(response))
+}
+
+/// Get swap history for an account within the active chester round
+#[utoipa::path(
+    get,
+    path = ChesterPath::SwapHistory.docs_str(),
+    params(
+        ("account_id" = String, Path, description = "Account address"),
+        ("page" = Option<i64>, Query, description = "Page number (default: 1)"),
+        ("limit" = Option<i64>, Query, description = "Items per page (default: 10, max: 100)")
+    ),
+    responses(
+        (status = 200, description = "Swap history within active round", body = SwapHistoryResponse)
+    ),
+    tag = "Chester"
+)]
+#[instrument(skip(state))]
+pub async fn get_swap_history(
+    State(state): State<AppState>,
+    Path(account_id): Path<String>,
+    Query(params): Query<PaginationParams>,
+) -> AppJsonResult<SwapHistoryResponse> {
+    let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
+        .get_swap_history(&account_id, params.page, params.limit)
+        .await?;
 
     Ok(Json(response))
 }
