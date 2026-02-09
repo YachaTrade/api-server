@@ -5,11 +5,10 @@ use utoipa::ToSchema;
 /// Chest level thresholds in USD (hardcoded)
 pub fn chest_level_threshold() -> Value {
     serde_json::json!({
-        "1": "100",
-        "2": "500",
-        "3": "1000",
-        "4": "5000",
-        "5": "10000"
+        "1": "1000",
+        "2": "6000",
+        "3": "16000",
+        "4": "116000",
     })
 }
 
