@@ -102,6 +102,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::chester::handler::get_volume,
         router::chester::handler::get_round,
         router::chester::handler::get_rewards,
+        router::chester::handler::get_swap_history,
 
         // ----------------Raffle----------------
         router::raffle::handler::get_eligible,
