@@ -152,14 +152,20 @@ impl ChesterController {
     }
 
     async fn fetch_apr_usd() -> BigDecimal {
-        let res = match reqwest::get(COINGECKO_APR_URL).await {
-            Ok(r) => r,
+        let body = match reqwest::get(COINGECKO_APR_URL).await {
+            Ok(r) => match r.text().await {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!("CoinGecko APR read failed: {}", e);
+                    return BigDecimal::from(0);
+                }
+            },
             Err(e) => {
                 tracing::warn!("CoinGecko APR fetch failed: {}", e);
                 return BigDecimal::from(0);
             }
         };
-        let data: HashMap<String, HashMap<String, f64>> = match res.json().await {
+        let data: HashMap<String, HashMap<String, f64>> = match serde_json::from_str(&body) {
             Ok(d) => d,
             Err(e) => {
                 tracing::warn!("CoinGecko APR parse failed: {}", e);
