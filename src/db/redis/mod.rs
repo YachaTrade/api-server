@@ -1509,6 +1509,95 @@ impl RedisDatabase {
     }
 }
 
+// Chester cache
+const CHESTER_CACHE_EXPIRATION: u64 = 10_000; // 10 seconds in ms
+const CHESTER_REWARDS_CACHE_EXPIRATION: u64 = 60_000; // 60 seconds in ms
+
+impl RedisDatabase {
+    pub async fn set_chester_round(
+        &self,
+        response: &crate::types::chester::ChesterInfoResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = "chester:round";
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_chester_round",
+            conn.pset_ex::<String, String, ()>(key.to_string(), json, CHESTER_CACHE_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_chester_round(
+        &self,
+    ) -> Result<Option<crate::types::chester::ChesterInfoResponse>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = "chester:round";
+        let json: Option<String> =
+            measure_redis!("redis.get_chester_round", conn.get::<_, Option<String>>(key))?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn set_chester_volume(
+        &self,
+        account_id: &str,
+        response: &crate::types::chester::ChesterVolumeResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("chester:volume:{}", account_id);
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_chester_volume",
+            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_chester_volume(
+        &self,
+        account_id: &str,
+    ) -> Result<Option<crate::types::chester::ChesterVolumeResponse>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("chester:volume:{}", account_id);
+        let json: Option<String> =
+            measure_redis!("redis.get_chester_volume", conn.get::<_, Option<String>>(key))?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn set_chester_rewards(
+        &self,
+        response: &crate::types::chester::ChesterRewardsResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = "chester:rewards";
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_chester_rewards",
+            conn.pset_ex::<String, String, ()>(key.to_string(), json, CHESTER_REWARDS_CACHE_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_chester_rewards(
+        &self,
+    ) -> Result<Option<crate::types::chester::ChesterRewardsResponse>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = "chester:rewards";
+        let json: Option<String> =
+            measure_redis!("redis.get_chester_rewards", conn.get::<_, Option<String>>(key))?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+}
+
 // API Key Rate Limiting
 impl RedisDatabase {
     /// Atomic INCR with EXPIRE (for rate limiting)

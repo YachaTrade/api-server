@@ -6,7 +6,6 @@ use axum::{
 use tracing::instrument;
 
 use crate::{
-    controllers::chester::ChesterController,
     result::AppJsonResult,
     services::chester::ChesterService,
     state::AppState,
@@ -34,8 +33,8 @@ pub async fn get_volume(
     State(state): State<AppState>,
     Path(account_id): Path<String>,
 ) -> AppJsonResult<ChesterVolumeResponse> {
-    let controller = ChesterController::new(state.postgres.clone());
-    let response = controller.get_volume(&account_id).await?;
+    let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_volume(&account_id).await?;
 
     Ok(Json(response))
 }
@@ -53,8 +52,8 @@ pub async fn get_volume(
 pub async fn get_round(
     State(state): State<AppState>,
 ) -> AppJsonResult<Option<ChesterInfoResponse>> {
-    let controller = ChesterController::new(state.postgres.clone());
-    let response = controller.get_round().await?;
+    let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_round().await?;
 
     Ok(Json(response))
 }
@@ -72,7 +71,7 @@ pub async fn get_round(
 pub async fn get_rewards(
     State(state): State<AppState>,
 ) -> AppJsonResult<ChesterRewardsResponse> {
-    let service = ChesterService::new(state.postgres.clone());
+    let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_rewards().await?;
 
     Ok(Json(response))
