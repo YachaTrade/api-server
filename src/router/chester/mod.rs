@@ -21,4 +21,8 @@ pub fn router() -> Router<AppState> {
             ChesterPath::Rewards.as_str(),
             get(handler::get_rewards),
         )
+        .route(
+            ChesterPath::SwapHistory.as_str(),
+            get(handler::get_swap_history),
+        )
 }

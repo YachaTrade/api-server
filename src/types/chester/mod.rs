@@ -62,3 +62,26 @@ pub struct ChesterRewardsResponse {
     /// List of reward items with USD values
     pub rewards: Vec<ChesterRewardItem>,
 }
+
+/// Round history response with pagination
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ChesterHistoryResponse {
+    /// Total number of rounds
+    pub total_count: i64,
+    /// List of rounds
+    pub rounds: Vec<ChesterHistoryItem>,
+}
+
+/// Single round history item
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ChesterHistoryItem {
+    /// Round number
+    pub round: i64,
+    /// Round start time (epoch seconds)
+    pub start_at: i64,
+    /// Round end time (epoch seconds)
+    pub end_at: i64,
+    /// Round status (ACTIVE, COMPLETED, READY)
+    pub status: String,
+}
+

@@ -8,8 +8,12 @@ use bigdecimal::BigDecimal;
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::chester::{
-        ChesterInfoResponse, ChesterRewardItem, ChesterRewardsResponse, ChesterVolumeResponse,
+    types::{
+        chester::{
+            ChesterInfoResponse, ChesterRewardItem, ChesterRewardsResponse, ChesterVolumeResponse,
+        },
+        common::info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
+        profile::SwapHistoryResponse,
     },
 };
 
@@ -157,6 +161,173 @@ impl ChesterController {
         });
 
         Ok(ChesterRewardsResponse { rewards })
+    }
+
+    pub async fn get_swap_history(
+        &self,
+        account_id: &str,
+        page: i64,
+        limit: i64,
+    ) -> Result<SwapHistoryResponse> {
+        let offset = (page - 1) * limit;
+
+        #[derive(sqlx::FromRow)]
+        struct SwapRow {
+            token_id: String,
+            token_name: String,
+            token_symbol: String,
+            token_image_uri: String,
+            token_description: Option<String>,
+            token_twitter: Option<String>,
+            token_telegram: Option<String>,
+            token_website: Option<String>,
+            is_graduated: bool,
+            is_nsfw: bool,
+            is_cto: bool,
+            token_created_at: i64,
+            creator: String,
+            creator_nickname: String,
+            creator_image_uri: String,
+            creator_bio: String,
+            is_buy: bool,
+            native_amount: BigDecimal,
+            token_amount: BigDecimal,
+            native_price: BigDecimal,
+            value: BigDecimal,
+            created_at: i64,
+            transaction_hash: String,
+        }
+
+        let rows = measure_postgres!(
+            "chester.get_swap_history",
+            sqlx::query_as::<_, SwapRow>(
+                r#"
+                WITH latest_price AS (
+                    SELECT price
+                    FROM price
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ),
+                recent_swaps AS (
+                    SELECT
+                        s.token_id,
+                        s.is_buy,
+                        s.native_amount,
+                        s.token_amount,
+                        s.value,
+                        s.created_at,
+                        s.transaction_hash
+                    FROM swap s
+                    INNER JOIN chester_round cr ON cr.status = 'ACTIVE'
+                    WHERE s.account_id = $1
+                      AND s.created_at >= cr.start_at
+                      AND s.created_at <= cr.end_at
+                    ORDER BY s.block_number DESC, s.tx_index DESC, s.log_index DESC
+                    LIMIT $2
+                    OFFSET $3
+                )
+                SELECT
+                    t.token_id,
+                    t.name as token_name,
+                    t.symbol as token_symbol,
+                    t.image_uri as token_image_uri,
+                    t.description as token_description,
+                    t.twitter as token_twitter,
+                    t.telegram as token_telegram,
+                    t.website as token_website,
+                    t.is_graduated,
+                    t.is_nsfw,
+                    t.is_cto,
+                    t.created_at as token_created_at,
+                    t.creator,
+                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    a.bio as creator_bio,
+                    rs.is_buy,
+                    rs.native_amount,
+                    rs.token_amount,
+                    rs.value,
+                    COALESCE(lp.price, 0) as native_price,
+                    rs.created_at,
+                    rs.transaction_hash
+                FROM recent_swaps rs
+                JOIN token t ON rs.token_id = t.token_id
+                JOIN account a ON t.creator = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                CROSS JOIN latest_price lp
+                ORDER BY rs.created_at DESC
+                "#,
+            )
+            .bind(account_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get chester swap history: {}", err))?;
+
+        let total_count = if rows.is_empty() {
+            0
+        } else {
+            measure_postgres!(
+                "chester.get_swap_history_count",
+                sqlx::query!(
+                    r#"
+                    SELECT COUNT(*) as "count!"
+                    FROM swap s
+                    INNER JOIN chester_round cr ON cr.status = 'ACTIVE'
+                    WHERE s.account_id = $1
+                      AND s.created_at >= cr.start_at
+                      AND s.created_at <= cr.end_at
+                    "#,
+                    account_id
+                )
+                .fetch_one(self.db.get_read_pool())
+            )
+            .map_err(|err| anyhow!("Failed to get chester swap history count: {}", err))?
+            .count
+        };
+
+        let swaps = rows
+            .into_iter()
+            .map(|row| TokenSwapInfo {
+                token_info: TokenInfo {
+                    token_id: row.token_id,
+                    name: row.token_name,
+                    symbol: row.token_symbol,
+                    image_uri: row.token_image_uri,
+                    description: row.token_description,
+                    is_graduated: row.is_graduated,
+                    is_nsfw: row.is_nsfw,
+                    twitter: row.token_twitter,
+                    telegram: row.token_telegram,
+                    website: row.token_website,
+                    created_at: row.token_created_at,
+                    creator: AccountInfo {
+                        account_id: row.creator,
+                        nickname: row.creator_nickname,
+                        bio: row.creator_bio,
+                        image_uri: row.creator_image_uri,
+                    },
+                    is_cto: row.is_cto,
+                    hackathon_info: None,
+                },
+                swap_info: SwapInfo {
+                    event_type: if row.is_buy {
+                        SwapType::Buy
+                    } else {
+                        SwapType::Sell
+                    },
+                    native_amount: row.native_amount.normalized().to_plain_string(),
+                    token_amount: row.token_amount.normalized().to_plain_string(),
+                    native_price: row.native_price.normalized().to_plain_string(),
+                    value: row.value.normalized().to_plain_string(),
+                    transaction_hash: row.transaction_hash,
+                    created_at: row.created_at,
+                },
+            })
+            .collect();
+
+        Ok(SwapHistoryResponse { swaps, total_count })
     }
 
     async fn fetch_apr_usd() -> BigDecimal {

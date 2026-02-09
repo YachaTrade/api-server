@@ -4,7 +4,10 @@ use crate::{
     controllers::chester::ChesterController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    types::chester::{ChesterInfoResponse, ChesterRewardsResponse, ChesterVolumeResponse},
+    types::{
+        chester::{ChesterInfoResponse, ChesterRewardsResponse, ChesterVolumeResponse},
+        profile::SwapHistoryResponse,
+    },
 };
 
 pub struct ChesterService {
@@ -47,6 +50,34 @@ impl ChesterService {
         if let Some(ref data) = response {
             let _ = self.redis.set_chester_round(data).await;
         }
+
+        Ok(response)
+    }
+
+    pub async fn get_swap_history(
+        &self,
+        account_id: &str,
+        page: i64,
+        limit: i64,
+    ) -> Result<SwapHistoryResponse, AppError> {
+        if let Ok(Some(cached)) = self
+            .redis
+            .get_chester_swap_history(account_id, page, limit)
+            .await
+        {
+            return Ok(cached);
+        }
+
+        let controller = ChesterController::new(self.postgres.clone());
+        let response = controller
+            .get_swap_history(account_id, page, limit)
+            .await
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        let _ = self
+            .redis
+            .set_chester_swap_history(account_id, page, limit, &response)
+            .await;
 
         Ok(response)
     }
