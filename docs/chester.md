@@ -89,6 +89,50 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 - WMON: `amount * price.price` (MON/USD)
 - 기타 토큰: `amount * market.price * price.price` (token→MON→USD)
 
+### GET /chester/box/rewards
+
+유저의 상자별 보상 결과를 조회합니다. 외부 정산 프로세스에서 생성된 머클 프루프 기반 보상 데이터를 반환합니다.
+
+- **인증**: 필수 (세션 쿠키)
+- **Query Parameter**: `round` (Optional, i64) - 라운드 번호. 미지정 시 최신 라운드
+
+**Response 200**
+```json
+{
+  "rewards": [
+    {
+      "round": 1,
+      "level": 1,
+      "token_id": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+      "name": "MON",
+      "symbol": "MON",
+      "image_uri": "https://example.com/mon.jpg",
+      "amount": "1000000000000000000",
+      "usd_value": "25.50",
+      "status": "AWAITING",
+      "proof": ["0xabc...", "0xdef..."],
+      "transaction_hash": null,
+      "claimed_at": null
+    }
+  ]
+}
+```
+
+- `round`: 라운드 번호
+- `level`: 상자 레벨 (1~4)
+- `token_id`: 보상 토큰 컨트랙트 주소
+- `name` / `symbol` / `image_uri`: 토큰 메타정보 (chester_reward_token JOIN)
+- `amount`: 토큰 수량
+- `usd_value`: USD 환산 가치
+- `status`: `AWAITING` (미클레임) | `CLAIMED` (클레임 완료)
+- `proof`: 머클 프루프 배열
+- `transaction_hash`: 클레임 트랜잭션 해시 (클레임 전 null)
+- `claimed_at`: 클레임 시간 epoch seconds (클레임 전 null)
+
+**캐싱**: `chester:box_rewards:{account_id}:{round}` (TTL 10s)
+
+---
+
 ## DB Schema
 
 ### chester_round
@@ -111,3 +155,21 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 | amount | NUMERIC | 보상 수량 |
 
 - PK: `(round, token_id)`
+
+### chester_box_reward
+| Column | Type | Description |
+|--------|------|-------------|
+| round | BIGINT (FK) | 라운드 번호 |
+| level | INT | 상자 레벨 (1~4) |
+| token_id | VARCHAR(42) | 보상 토큰 주소 |
+| account_id | VARCHAR(42) | 유저 주소 |
+| amount | NUMERIC | 토큰 수량 |
+| usd_value | NUMERIC | USD 환산 가치 |
+| status | VARCHAR | AWAITING / CLAIMED |
+| proof | TEXT[] | 머클 프루프 |
+| transaction_hash | VARCHAR | 클레임 트랜잭션 해시 |
+| claimed_at | BIGINT | 클레임 시간 (epoch) |
+| created_at | BIGINT | 생성 시간 (epoch) |
+
+- PK: `(round, level, token_id, account_id)`
+- INDEX: `account_id`, `(round, account_id)`

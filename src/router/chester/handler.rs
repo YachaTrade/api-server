@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, Query, State},
 };
 
@@ -10,7 +10,10 @@ use crate::{
     services::chester::ChesterService,
     state::AppState,
     types::{
-        chester::{ChesterInfoResponse, ChesterRewardsResponse, ChesterVolumeResponse},
+        chester::{
+            ChesterBoxRewardsQuery, ChesterBoxRewardsResponse, ChesterInfoResponse,
+            ChesterRewardsResponse, ChesterVolumeResponse,
+        },
         common::pagination::PaginationParams,
         profile::SwapHistoryResponse,
     },
@@ -75,6 +78,31 @@ pub async fn get_rewards(
 ) -> AppJsonResult<ChesterRewardsResponse> {
     let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_rewards().await?;
+
+    Ok(Json(response))
+}
+
+/// Get box rewards for the authenticated account
+#[utoipa::path(
+    get,
+    path = ChesterPath::BoxRewards.docs_str(),
+    params(
+        ("round" = Option<i64>, Query, description = "Round number (defaults to latest round)")
+    ),
+    responses(
+        (status = 200, description = "Box rewards for the account", body = ChesterBoxRewardsResponse),
+        (status = 401, description = "Unauthorized - session required")
+    ),
+    tag = "Chester"
+)]
+#[instrument(skip(state, session_address))]
+pub async fn get_box_rewards(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Query(query): Query<ChesterBoxRewardsQuery>,
+) -> AppJsonResult<ChesterBoxRewardsResponse> {
+    let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
+    let response = service.get_box_rewards(&session_address, query.round).await?;
 
     Ok(Json(response))
 }

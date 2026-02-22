@@ -63,6 +63,49 @@ pub struct ChesterRewardsResponse {
     pub rewards: Vec<ChesterRewardItem>,
 }
 
+/// Box reward item for a user
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ChesterBoxRewardItem {
+    /// Round number
+    pub round: i64,
+    /// Box level (1~4)
+    pub level: i32,
+    /// Token contract address
+    pub token_id: String,
+    /// Token name
+    pub name: String,
+    /// Token symbol
+    pub symbol: String,
+    /// Token image URI
+    pub image_uri: String,
+    /// Raw token amount
+    pub amount: String,
+    /// USD value of the reward
+    pub usd_value: String,
+    /// Reward status (AWAITING | CLAIMED)
+    pub status: String,
+    /// Merkle proof
+    pub proof: Vec<String>,
+    /// Claim transaction hash
+    pub transaction_hash: Option<String>,
+    /// Claimed timestamp (epoch seconds)
+    pub claimed_at: Option<i64>,
+}
+
+/// Box rewards response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ChesterBoxRewardsResponse {
+    /// List of box reward items
+    pub rewards: Vec<ChesterBoxRewardItem>,
+}
+
+/// Query params for box rewards
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ChesterBoxRewardsQuery {
+    /// Round number (optional, defaults to latest round)
+    pub round: Option<i64>,
+}
+
 /// Round history response with pagination
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChesterHistoryResponse {

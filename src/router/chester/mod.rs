@@ -1,13 +1,13 @@
 pub mod handler;
 pub mod path;
 
-use axum::{Router, routing::get};
+use axum::{Router, middleware, routing::get};
 
-use crate::state::AppState;
+use crate::{middleware::authenticate_user, state::AppState};
 
 use path::ChesterPath;
 
-pub fn router() -> Router<AppState> {
+pub fn router(app_state: AppState) -> Router<AppState> {
     Router::new()
         .route(
             ChesterPath::Volume.as_str(),
@@ -20,6 +20,13 @@ pub fn router() -> Router<AppState> {
         .route(
             ChesterPath::Rewards.as_str(),
             get(handler::get_rewards),
+        )
+        .route(
+            ChesterPath::BoxRewards.as_str(),
+            get(handler::get_box_rewards).layer(middleware::from_fn_with_state(
+                app_state.clone(),
+                authenticate_user,
+            )),
         )
         .route(
             ChesterPath::SwapHistory.as_str(),

@@ -1619,6 +1619,39 @@ impl RedisDatabase {
         }
     }
 
+    pub async fn set_chester_box_rewards(
+        &self,
+        account_id: &str,
+        round: i64,
+        response: &crate::types::chester::ChesterBoxRewardsResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("chester:box_rewards:{}:{}", account_id, round);
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_chester_box_rewards",
+            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_chester_box_rewards(
+        &self,
+        account_id: &str,
+        round: i64,
+    ) -> Result<Option<crate::types::chester::ChesterBoxRewardsResponse>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("chester:box_rewards:{}:{}", account_id, round);
+        let json: Option<String> = measure_redis!(
+            "redis.get_chester_box_rewards",
+            conn.get::<_, Option<String>>(key)
+        )?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+
     pub async fn get_chester_rewards(
         &self,
     ) -> Result<Option<crate::types::chester::ChesterRewardsResponse>> {

@@ -10,7 +10,8 @@ use crate::{
     measure_postgres,
     types::{
         chester::{
-            ChesterInfoResponse, ChesterRewardItem, ChesterRewardsResponse, ChesterVolumeResponse,
+            ChesterBoxRewardItem, ChesterBoxRewardsResponse, ChesterInfoResponse,
+            ChesterRewardItem, ChesterRewardsResponse, ChesterVolumeResponse,
         },
         common::info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
         profile::SwapHistoryResponse,
@@ -161,6 +162,87 @@ impl ChesterController {
         });
 
         Ok(ChesterRewardsResponse { rewards })
+    }
+
+    pub async fn get_box_rewards(
+        &self,
+        account_id: &str,
+        round: Option<i64>,
+    ) -> Result<ChesterBoxRewardsResponse> {
+        // If round not specified, get the latest round
+        let target_round = match round {
+            Some(r) => r,
+            None => {
+                let row = measure_postgres!(
+                    "chester.get_latest_round",
+                    sqlx::query!(
+                        r#"
+                        SELECT round as "round!"
+                        FROM chester_round
+                        ORDER BY round DESC
+                        LIMIT 1
+                        "#
+                    )
+                    .fetch_optional(self.db.get_read_pool())
+                )
+                .map_err(|err| anyhow!("Failed to get latest chester round: {}", err))?;
+
+                match row {
+                    Some(r) => r.round,
+                    None => return Ok(ChesterBoxRewardsResponse { rewards: vec![] }),
+                }
+            }
+        };
+
+        let rows = measure_postgres!(
+            "chester.get_box_rewards",
+            sqlx::query!(
+                r#"
+                SELECT
+                    cbr.round,
+                    cbr.level,
+                    cbr.token_id,
+                    crt.name,
+                    crt.symbol,
+                    crt.image_uri,
+                    cbr.amount,
+                    cbr.usd_value,
+                    cbr.status,
+                    cbr.proof,
+                    cbr.transaction_hash,
+                    cbr.claimed_at
+                FROM chester_box_reward cbr
+                JOIN chester_reward_token crt ON crt.token_id = cbr.token_id
+                WHERE cbr.account_id = $1
+                  AND cbr.round = $2
+                ORDER BY cbr.level ASC, cbr.usd_value DESC
+                "#,
+                account_id,
+                target_round
+            )
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get chester box rewards: {}", err))?;
+
+        let rewards = rows
+            .into_iter()
+            .map(|r| ChesterBoxRewardItem {
+                round: r.round,
+                level: r.level,
+                token_id: r.token_id,
+                name: r.name,
+                symbol: r.symbol,
+                image_uri: r.image_uri,
+                amount: r.amount.normalized().to_plain_string(),
+                usd_value: r.usd_value.normalized().to_plain_string(),
+                status: r.status,
+                proof: r.proof,
+                transaction_hash: r.transaction_hash,
+                claimed_at: r.claimed_at,
+            })
+            .collect();
+
+        Ok(ChesterBoxRewardsResponse { rewards })
     }
 
     pub async fn get_swap_history(

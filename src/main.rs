@@ -103,6 +103,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::chester::handler::get_round,
         router::chester::handler::get_rewards,
         router::chester::handler::get_swap_history,
+        router::chester::handler::get_box_rewards,
 
         // ----------------Raffle----------------
         router::raffle::handler::get_eligible,
@@ -267,6 +268,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::chester::ChesterInfoResponse,
             types::chester::ChesterRewardItem,
             types::chester::ChesterRewardsResponse,
+            types::chester::ChesterBoxRewardItem,
+            types::chester::ChesterBoxRewardsResponse,
+            types::chester::ChesterBoxRewardsQuery,
 
             // Raffle
             types::raffle::RaffleRoundResponse,
@@ -408,7 +412,7 @@ async fn main() -> Result<()> {
         .merge(order::router())
         .merge(hype::router(app_state.clone()))
         // .merge(bot::router()) // bot 모듈이 존재하지 않음
-        .merge(chester::router())
+        .merge(chester::router(app_state.clone()))
         .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
