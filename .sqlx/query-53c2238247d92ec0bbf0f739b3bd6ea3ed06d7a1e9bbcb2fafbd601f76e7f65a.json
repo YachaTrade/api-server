@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    cbr.round,\n                    cbr.level,\n                    cbr.token_id,\n                    crt.name,\n                    crt.symbol,\n                    crt.image_uri,\n                    cbr.amount,\n                    cbr.usd_value,\n                    cbr.status,\n                    cbr.proof,\n                    cbr.transaction_hash,\n                    cbr.claimed_at\n                FROM chester_box_reward cbr\n                JOIN chester_reward_token crt ON crt.token_id = cbr.token_id\n                WHERE cbr.account_id = $1\n                  AND cbr.round = $2\n                ORDER BY cbr.level ASC, cbr.usd_value DESC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "round",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "level",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "image_uri",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "amount",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "usd_value",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "proof",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "transaction_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "claimed_at",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "53c2238247d92ec0bbf0f739b3bd6ea3ed06d7a1e9bbcb2fafbd601f76e7f65a"
+}
