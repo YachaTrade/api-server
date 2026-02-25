@@ -206,7 +206,6 @@ impl ChesterController {
                     crt.symbol,
                     crt.image_uri,
                     cbr.amount,
-                    cbr.usd_value,
                     cbr.status,
                     cbr.proof,
                     cbr.transaction_hash,
@@ -215,7 +214,7 @@ impl ChesterController {
                 JOIN chester_reward_token crt ON crt.token_id = cbr.token_id
                 WHERE cbr.account_id = $1
                   AND cbr.round = $2
-                ORDER BY cbr.level ASC, cbr.usd_value DESC
+                ORDER BY cbr.level ASC, cbr.amount DESC
                 "#,
                 account_id,
                 target_round
@@ -234,7 +233,6 @@ impl ChesterController {
                 symbol: r.symbol,
                 image_uri: r.image_uri,
                 amount: r.amount.normalized().to_plain_string(),
-                usd_value: r.usd_value.normalized().to_plain_string(),
                 status: r.status,
                 proof: r.proof,
                 transaction_hash: r.transaction_hash,
