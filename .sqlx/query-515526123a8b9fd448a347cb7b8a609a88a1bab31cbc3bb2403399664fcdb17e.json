@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT\n                    cbr.round,\n                    cbr.level,\n                    cbr.token_id,\n                    crt.name,\n                    crt.symbol,\n                    crt.image_uri,\n                    cbr.amount,\n                    cbr.usd_value,\n                    cbr.status,\n                    cbr.proof,\n                    cbr.transaction_hash,\n                    cbr.claimed_at\n                FROM chester_box_reward cbr\n                JOIN chester_reward_token crt ON crt.token_id = cbr.token_id\n                WHERE cbr.account_id = $1\n                  AND cbr.round = $2\n                ORDER BY cbr.level ASC, cbr.usd_value DESC\n                ",
+  "query": "\n                SELECT\n                    cbr.round,\n                    cbr.level,\n                    cbr.token_id,\n                    crt.name,\n                    crt.symbol,\n                    crt.image_uri,\n                    cbr.amount,\n                    cbr.status,\n                    cbr.proof,\n                    cbr.transaction_hash,\n                    cbr.claimed_at\n                FROM chester_box_reward cbr\n                JOIN chester_reward_token crt ON crt.token_id = cbr.token_id\n                WHERE cbr.account_id = $1\n                  AND cbr.round = $2\n                ORDER BY cbr.level ASC, cbr.amount DESC\n                ",
   "describe": {
     "columns": [
       {
@@ -40,26 +40,21 @@
       },
       {
         "ordinal": 7,
-        "name": "usd_value",
-        "type_info": "Numeric"
-      },
-      {
-        "ordinal": 8,
         "name": "status",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "proof",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 10,
+        "ordinal": 9,
         "name": "transaction_hash",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 11,
+        "ordinal": 10,
         "name": "claimed_at",
         "type_info": "Int8"
       }
@@ -80,10 +75,9 @@
       false,
       false,
       false,
-      false,
       true,
       true
     ]
   },
-  "hash": "53c2238247d92ec0bbf0f739b3bd6ea3ed06d7a1e9bbcb2fafbd601f76e7f65a"
+  "hash": "515526123a8b9fd448a347cb7b8a609a88a1bab31cbc3bb2403399664fcdb17e"
 }
