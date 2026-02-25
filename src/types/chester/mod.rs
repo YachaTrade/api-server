@@ -80,8 +80,6 @@ pub struct ChesterBoxRewardItem {
     pub image_uri: String,
     /// Raw token amount
     pub amount: String,
-    /// USD value of the reward
-    pub usd_value: String,
     /// Reward status (AWAITING | CLAIMED)
     pub status: String,
     /// Merkle proof
