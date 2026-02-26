@@ -6,6 +6,7 @@ use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 
 use crate::{
+    config::{APR_CONTRACT_ADDRESS, MON_CONTRACT_ADDRESS},
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
@@ -129,15 +130,18 @@ impl ChesterController {
 
         // 4. Calculate USD values
         let decimals = BigDecimal::from(10u64.pow(18));
+        let mon_addr = MON_CONTRACT_ADDRESS.as_str();
+        let apr_addr = APR_CONTRACT_ADDRESS.as_str();
 
         let rewards = rows
             .into_iter()
             .map(|r| {
-                // MON → price table, APR → CoinGecko
-                let price = if r.symbol == "MON" {
+                let price = if r.token_id == mon_addr {
                     mon_usd.clone()
-                } else {
+                } else if r.token_id == apr_addr {
                     apr_usd.clone()
+                } else {
+                    BigDecimal::from(0)
                 };
                 let usd_value = &r.amount * &price / &decimals;
 

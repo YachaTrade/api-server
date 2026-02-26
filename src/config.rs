@@ -115,6 +115,12 @@ lazy_static! {
     pub static ref RPC_URL: String = env::var("RPC_URL")
         .expect("RPC_URL must be set");
 
+    // Chester reward token contract addresses
+    pub static ref MON_CONTRACT_ADDRESS: String = env::var("MON_CONTRACT_ADDRESS")
+        .expect("MON_CONTRACT_ADDRESS must be set");
+    pub static ref APR_CONTRACT_ADDRESS: String = env::var("APR_CONTRACT_ADDRESS")
+        .expect("APR_CONTRACT_ADDRESS must be set");
+
     // GitHub API Token (for higher rate limit: 5000/hour)
     pub static ref GITHUB_TOKEN: String = env::var("GITHUB_TOKEN")
         .expect("GITHUB_TOKEN must be set");
