@@ -215,7 +215,7 @@ impl ChesterController {
                     cbr.transaction_hash,
                     cbr.claimed_at
                 FROM chester_box_reward cbr
-                JOIN chester_reward_token crt ON crt.token_id = cbr.token_id
+                JOIN chester_reward_token crt ON LOWER(crt.token_id) = LOWER(cbr.token_id)
                 WHERE cbr.account_id = $1
                   AND cbr.round = $2
                 ORDER BY cbr.level ASC, cbr.amount DESC
