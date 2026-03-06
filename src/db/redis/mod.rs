@@ -1652,6 +1652,41 @@ impl RedisDatabase {
         }
     }
 
+    pub async fn set_chester_reward_history(
+        &self,
+        account_id: &str,
+        page: i64,
+        limit: i64,
+        response: &crate::types::chester::ChesterRewardHistoryResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("chester:reward_history:{}:{}:{}", account_id, page, limit);
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_chester_reward_history",
+            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_chester_reward_history(
+        &self,
+        account_id: &str,
+        page: i64,
+        limit: i64,
+    ) -> Result<Option<crate::types::chester::ChesterRewardHistoryResponse>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("chester:reward_history:{}:{}:{}", account_id, page, limit);
+        let json: Option<String> = measure_redis!(
+            "redis.get_chester_reward_history",
+            conn.get::<_, Option<String>>(key)
+        )?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+
     pub async fn get_chester_rewards(
         &self,
     ) -> Result<Option<crate::types::chester::ChesterRewardsResponse>> {

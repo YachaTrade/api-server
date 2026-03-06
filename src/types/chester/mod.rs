@@ -104,6 +104,39 @@ pub struct ChesterBoxRewardsQuery {
     pub round: Option<i64>,
 }
 
+/// Reward history reward item (token or hype point)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RewardHistoryRewardItem {
+    /// Round number
+    pub round: i64,
+    /// Token contract address or "hype" for CHEST points
+    pub token_id: String,
+    /// Raw token amount or point amount
+    pub amount: String,
+    /// Claim transaction hash (null for hype points)
+    pub transaction_hash: Option<String>,
+}
+
+/// Single reward history item grouped by created_at
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RewardHistoryItem {
+    /// Claimed timestamp (epoch seconds)
+    pub created_at: i64,
+    /// Box level (1~4)
+    pub level: i32,
+    /// List of rewards (tokens + hype points)
+    pub rewards: Vec<RewardHistoryRewardItem>,
+}
+
+/// Reward history response with pagination
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ChesterRewardHistoryResponse {
+    /// List of reward history items
+    pub histories: Vec<RewardHistoryItem>,
+    /// Total number of distinct claim events
+    pub total_count: i64,
+}
+
 /// Round history response with pagination
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChesterHistoryResponse {

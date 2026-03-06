@@ -12,7 +12,7 @@ use crate::{
     types::{
         chester::{
             ChesterBoxRewardsQuery, ChesterBoxRewardsResponse, ChesterInfoResponse,
-            ChesterRewardsResponse, ChesterVolumeResponse,
+            ChesterRewardHistoryResponse, ChesterRewardsResponse, ChesterVolumeResponse,
         },
         common::pagination::PaginationParams,
         profile::SwapHistoryResponse,
@@ -130,6 +130,34 @@ pub async fn get_swap_history(
     let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
     let response = service
         .get_swap_history(&account_id, params.page, params.limit)
+        .await?;
+
+    Ok(Json(response))
+}
+
+/// Get reward claim history for the authenticated account
+#[utoipa::path(
+    get,
+    path = ChesterPath::RewardHistory.docs_str(),
+    params(
+        ("page" = Option<i64>, Query, description = "Page number (default: 1)"),
+        ("limit" = Option<i64>, Query, description = "Items per page (default: 10, max: 100)")
+    ),
+    responses(
+        (status = 200, description = "Reward claim history", body = ChesterRewardHistoryResponse),
+        (status = 401, description = "Unauthorized - session required")
+    ),
+    tag = "Chester"
+)]
+#[instrument(skip(state, session_address))]
+pub async fn get_reward_history(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Query(params): Query<PaginationParams>,
+) -> AppJsonResult<ChesterRewardHistoryResponse> {
+    let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
+        .get_reward_history(&session_address, params.page, params.limit)
         .await?;
 
     Ok(Json(response))

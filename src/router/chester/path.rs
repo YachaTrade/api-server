@@ -4,6 +4,7 @@ pub enum ChesterPath {
     Rewards,
     SwapHistory,
     BoxRewards,
+    RewardHistory,
 }
 
 impl ChesterPath {
@@ -14,6 +15,7 @@ impl ChesterPath {
             ChesterPath::Rewards => "/chester/rewards",
             ChesterPath::SwapHistory => "/chester/history/:account_id",
             ChesterPath::BoxRewards => "/chester/box/rewards",
+            ChesterPath::RewardHistory => "/chester/reward_history",
         }
     }
 
@@ -24,6 +26,7 @@ impl ChesterPath {
             ChesterPath::Rewards => "/chester/rewards",
             ChesterPath::SwapHistory => "/chester/history/{account_id}",
             ChesterPath::BoxRewards => "/chester/box/rewards",
+            ChesterPath::RewardHistory => "/chester/reward_history",
         }
     }
 }

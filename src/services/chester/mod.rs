@@ -6,8 +6,8 @@ use crate::{
     result::AppError,
     types::{
         chester::{
-            ChesterBoxRewardsResponse, ChesterInfoResponse, ChesterRewardsResponse,
-            ChesterVolumeResponse,
+            ChesterBoxRewardsResponse, ChesterInfoResponse, ChesterRewardHistoryResponse,
+            ChesterRewardsResponse, ChesterVolumeResponse,
         },
         profile::SwapHistoryResponse,
     },
@@ -117,6 +117,34 @@ impl ChesterService {
                 .set_chester_box_rewards(account_id, r, &response)
                 .await;
         }
+
+        Ok(response)
+    }
+
+    pub async fn get_reward_history(
+        &self,
+        account_id: &str,
+        page: i64,
+        limit: i64,
+    ) -> Result<ChesterRewardHistoryResponse, AppError> {
+        if let Ok(Some(cached)) = self
+            .redis
+            .get_chester_reward_history(account_id, page, limit)
+            .await
+        {
+            return Ok(cached);
+        }
+
+        let controller = ChesterController::new(self.postgres.clone());
+        let response = controller
+            .get_reward_history(account_id, page, limit)
+            .await
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
+
+        let _ = self
+            .redis
+            .set_chester_reward_history(account_id, page, limit, &response)
+            .await;
 
         Ok(response)
     }
