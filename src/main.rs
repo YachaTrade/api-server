@@ -104,6 +104,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::chester::handler::get_rewards,
         router::chester::handler::get_swap_history,
         router::chester::handler::get_box_rewards,
+        router::chester::handler::get_reward_history,
 
         // ----------------Raffle----------------
         router::raffle::handler::get_eligible,
@@ -271,6 +272,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::chester::ChesterBoxRewardItem,
             types::chester::ChesterBoxRewardsResponse,
             types::chester::ChesterBoxRewardsQuery,
+            types::chester::RewardHistoryRewardItem,
+            types::chester::RewardHistoryItem,
+            types::chester::ChesterRewardHistoryResponse,
 
             // Raffle
             types::raffle::RaffleRoundResponse,

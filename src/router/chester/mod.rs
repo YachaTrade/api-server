@@ -32,4 +32,11 @@ pub fn router(app_state: AppState) -> Router<AppState> {
             ChesterPath::SwapHistory.as_str(),
             get(handler::get_swap_history),
         )
+        .route(
+            ChesterPath::RewardHistory.as_str(),
+            get(handler::get_reward_history).layer(middleware::from_fn_with_state(
+                app_state.clone(),
+                authenticate_user,
+            )),
+        )
 }

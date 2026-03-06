@@ -12,7 +12,8 @@ use crate::{
     types::{
         chester::{
             ChesterBoxRewardItem, ChesterBoxRewardsResponse, ChesterInfoResponse,
-            ChesterRewardItem, ChesterRewardsResponse, ChesterVolumeResponse,
+            ChesterRewardHistoryResponse, ChesterRewardItem, ChesterRewardsResponse,
+            ChesterVolumeResponse, RewardHistoryItem, RewardHistoryRewardItem,
         },
         common::info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
         profile::SwapHistoryResponse,
@@ -412,6 +413,144 @@ impl ChesterController {
             .collect();
 
         Ok(SwapHistoryResponse { swaps, total_count })
+    }
+
+    pub async fn get_reward_history(
+        &self,
+        account_id: &str,
+        page: i64,
+        limit: i64,
+    ) -> Result<ChesterRewardHistoryResponse> {
+        let offset = (page - 1) * limit;
+
+        // 1. Get total count of distinct CHEST point distribution events
+        let count_fut = async {
+            measure_postgres!(
+                "chester.get_reward_history_count",
+                sqlx::query!(
+                    r#"
+                    SELECT COUNT(DISTINCT created_at) as "count!"
+                    FROM point_distribution
+                    WHERE account_id = $1
+                      AND activity_type = 'CHEST'
+                    "#,
+                    account_id
+                )
+                .fetch_one(self.db.get_read_pool())
+            )
+        };
+
+        // 2. Get paginated distinct created_at from point_distribution
+        let points_fut = async {
+            measure_postgres!(
+                "chester.get_reward_history_points",
+                sqlx::query!(
+                    r#"
+                    SELECT created_at, amount
+                    FROM point_distribution
+                    WHERE account_id = $1
+                      AND activity_type = 'CHEST'
+                    ORDER BY created_at DESC
+                    LIMIT $2
+                    OFFSET $3
+                    "#,
+                    account_id,
+                    limit,
+                    offset
+                )
+                .fetch_all(self.db.get_read_pool())
+            )
+        };
+
+        let (count_result, points_result) = tokio::join!(count_fut, points_fut);
+
+        let total_count = count_result
+            .map_err(|err| anyhow!("Failed to get reward history count: {}", err))?
+            .count;
+
+        let point_rows = points_result
+            .map_err(|err| anyhow!("Failed to get reward history points: {}", err))?;
+
+        if point_rows.is_empty() {
+            return Ok(ChesterRewardHistoryResponse {
+                histories: vec![],
+                total_count,
+            });
+        }
+
+        // 3. Collect created_at timestamps for matching box rewards
+        let created_at_list: Vec<i64> = point_rows.iter().map(|r| r.created_at).collect();
+
+        // 4. Get matching chester_box_reward rows (CLAIMED only)
+        let box_rows = measure_postgres!(
+            "chester.get_reward_history_box",
+            sqlx::query!(
+                r#"
+                SELECT round, token_id, amount, transaction_hash, created_at
+                FROM chester_box_reward
+                WHERE account_id = $1
+                  AND status = 'CLAIMED'
+                  AND created_at = ANY($2)
+                ORDER BY created_at DESC
+                "#,
+                account_id,
+                &created_at_list
+            )
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to get reward history box rewards: {}", err))?;
+
+        // 5. Merge: group by created_at
+        let mut histories: Vec<RewardHistoryItem> = Vec::new();
+
+        for point_row in &point_rows {
+            let level = Self::amount_to_level(&point_row.amount);
+
+            let mut rewards: Vec<RewardHistoryRewardItem> = Vec::new();
+
+            // Add token rewards from chester_box_reward
+            for box_row in &box_rows {
+                if box_row.created_at == point_row.created_at {
+                    rewards.push(RewardHistoryRewardItem {
+                        round: box_row.round,
+                        token_id: box_row.token_id.clone(),
+                        amount: box_row.amount.normalized().to_plain_string(),
+                        transaction_hash: box_row.transaction_hash.clone(),
+                    });
+                }
+            }
+
+            // Add hype point reward (round from matched box reward)
+            let round = rewards.first().map(|r| r.round).unwrap_or(0);
+            rewards.push(RewardHistoryRewardItem {
+                round,
+                token_id: "hype".to_string(),
+                amount: point_row.amount.normalized().to_plain_string(),
+                transaction_hash: None,
+            });
+
+            histories.push(RewardHistoryItem {
+                created_at: point_row.created_at,
+                level,
+                rewards,
+            });
+        }
+
+        Ok(ChesterRewardHistoryResponse {
+            histories,
+            total_count,
+        })
+    }
+
+    fn amount_to_level(amount: &BigDecimal) -> i32 {
+        let val = amount.normalized().to_plain_string().parse::<i64>().unwrap_or(0);
+        match val {
+            80 => 1,
+            400 => 2,
+            800 => 3,
+            8000 => 4,
+            _ => 0,
+        }
     }
 
     async fn fetch_apr_usd() -> BigDecimal {

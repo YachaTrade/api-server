@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT\n                    cbr.round,\n                    cbr.level,\n                    cbr.token_id,\n                    crt.name,\n                    crt.symbol,\n                    crt.image_uri,\n                    cbr.amount,\n                    cbr.status,\n                    cbr.proof,\n                    cbr.transaction_hash,\n                    cbr.claimed_at\n                FROM chester_box_reward cbr\n                JOIN chester_reward_token crt ON crt.token_id = cbr.token_id\n                WHERE cbr.account_id = $1\n                  AND cbr.round = $2\n                ORDER BY cbr.level ASC, cbr.amount DESC\n                ",
+  "query": "\n                SELECT\n                    cbr.round,\n                    cbr.level,\n                    cbr.token_id,\n                    crt.name,\n                    crt.symbol,\n                    crt.image_uri,\n                    cbr.amount,\n                    cbr.status,\n                    cbr.proof,\n                    cbr.transaction_hash,\n                    cbr.claimed_at\n                FROM chester_box_reward cbr\n                JOIN chester_reward_token crt ON LOWER(crt.token_id) = LOWER(cbr.token_id)\n                WHERE cbr.account_id = $1\n                  AND cbr.round = $2\n                ORDER BY cbr.level ASC, cbr.amount DESC\n                ",
   "describe": {
     "columns": [
       {
@@ -79,5 +79,5 @@
       true
     ]
   },
-  "hash": "515526123a8b9fd448a347cb7b8a609a88a1bab31cbc3bb2403399664fcdb17e"
+  "hash": "5dc908db153f3bf998a8396d713ab4e86cb0ad49ab8962c150b1e214d42dcaf6"
 }
