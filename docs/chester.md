@@ -39,11 +39,10 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
   "end_at": 1707350400,
   "status": "ACTIVE",
   "chest_level_threshold": {
-    "1": "100",
-    "2": "500",
-    "3": "1000",
-    "4": "5000",
-    "5": "10000"
+    "1": "1000",
+    "2": "6000",
+    "3": "16000",
+    "4": "116000"
   }
 }
 ```
@@ -69,25 +68,27 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
   "rewards": [
     {
       "token_id": "0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701",
+      "name": "MON",
+      "symbol": "MON",
+      "image_uri": "https://example.com/mon.jpg",
       "amount": "1000",
+      "price": "25.00",
       "usd_value": "25000.50"
-    },
-    {
-      "token_id": "0xabcdef1234567890abcdef1234567890abcdef12",
-      "amount": "5000",
-      "usd_value": "1200.00"
     }
   ]
 }
 ```
 
 - `token_id`: 토큰 컨트랙트 주소
+- `name` / `symbol` / `image_uri`: 토큰 메타정보 (chester_reward_token JOIN)
 - `amount`: 원시 토큰 수량
+- `price`: 토큰 USD 가격
 - `usd_value`: USD 환산 가치 (Rust에서 계산)
 
 **USD 가치 계산 로직:**
-- WMON: `amount * price.price` (MON/USD)
-- 기타 토큰: `amount * market.price * price.price` (token→MON→USD)
+- MON: `amount * price.price` (MON/USD, DB 조회)
+- APR: `amount * apr_usd` (CoinGecko API)
+- 기타: `0`
 
 ### GET /chester/box/rewards
 
@@ -108,7 +109,6 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
       "symbol": "MON",
       "image_uri": "https://example.com/mon.jpg",
       "amount": "1000000000000000000",
-      "usd_value": "25.50",
       "status": "AWAITING",
       "proof": ["0xabc...", "0xdef..."],
       "transaction_hash": null,
@@ -123,13 +123,69 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 - `token_id`: 보상 토큰 컨트랙트 주소
 - `name` / `symbol` / `image_uri`: 토큰 메타정보 (chester_reward_token JOIN)
 - `amount`: 토큰 수량
-- `usd_value`: USD 환산 가치
 - `status`: `AWAITING` (미클레임) | `CLAIMED` (클레임 완료)
-- `proof`: 머클 프루프 배열
+- `proof`: 머클 프루프 배열 (**KST 2026-03-08 23:59:59 이후 빈 배열 반환**)
 - `transaction_hash`: 클레임 트랜잭션 해시 (클레임 전 null)
 - `claimed_at`: 클레임 시간 epoch seconds (클레임 전 null)
 
 **캐싱**: `chester:box_rewards:{account_id}:{round}` (TTL 10s)
+
+---
+
+### GET /chester/swap-history/:account_id
+
+활성 라운드 기간 내 계정의 스왑 거래 내역을 조회합니다.
+
+- **인증**: 불필요
+- **Path Parameter**: `account_id` (String) - 계정 주소
+- **Query Parameters**:
+  - `page` (Optional, i64) - 페이지 번호 (기본값: 1)
+  - `limit` (Optional, i64) - 페이지당 항목 수 (기본값: 10, 최대: 100)
+
+**Response 200**: `SwapHistoryResponse` (토큰 정보 + 스왑 정보 목록)
+
+---
+
+### GET /chester/reward-history
+
+인증된 계정의 보상 클레임 내역을 조회합니다. `chest_point_distribution` 테이블 기반으로 하이프 포인트와 토큰 보상을 함께 반환합니다.
+
+- **인증**: 필수 (세션 쿠키)
+- **Query Parameters**:
+  - `page` (Optional, i64) - 페이지 번호 (기본값: 1)
+  - `limit` (Optional, i64) - 페이지당 항목 수 (기본값: 10, 최대: 100)
+
+**Response 200**
+```json
+{
+  "histories": [
+    {
+      "created_at": 1706745600,
+      "level": 1,
+      "rewards": [
+        {
+          "round": 1,
+          "token_id": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+          "amount": "1000000000000000000",
+          "transaction_hash": "0xabc..."
+        },
+        {
+          "round": 1,
+          "token_id": "hype",
+          "amount": "80",
+          "transaction_hash": null
+        }
+      ]
+    }
+  ],
+  "total_count": 5
+}
+```
+
+- `created_at`: 보상 시간 (epoch seconds)
+- `level`: 상자 레벨 (1~4)
+- `rewards`: 보상 목록 (CLAIMED 상태의 토큰 보상 + hype 포인트)
+- `total_count`: 전체 보상 이벤트 수
 
 ---
 
@@ -164,7 +220,6 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 | token_id | VARCHAR(42) | 보상 토큰 주소 |
 | account_id | VARCHAR(42) | 유저 주소 |
 | amount | NUMERIC | 토큰 수량 |
-| usd_value | NUMERIC | USD 환산 가치 |
 | status | VARCHAR | AWAITING / CLAIMED |
 | proof | TEXT[] | 머클 프루프 |
 | transaction_hash | VARCHAR | 클레임 트랜잭션 해시 |
