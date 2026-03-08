@@ -101,8 +101,20 @@ pub async fn get_box_rewards(
     Extension(session_address): Extension<String>,
     Query(query): Query<ChesterBoxRewardsQuery>,
 ) -> AppJsonResult<ChesterBoxRewardsResponse> {
+    tracing::info!(
+        account_id = %session_address,
+        round = ?query.round,
+        "get_box_rewards request"
+    );
+
     let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_box_rewards(&session_address, query.round).await?;
+
+    tracing::info!(
+        account_id = %session_address,
+        rewards_count = response.rewards.len(),
+        "get_box_rewards response"
+    );
 
     Ok(Json(response))
 }
