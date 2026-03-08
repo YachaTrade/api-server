@@ -229,7 +229,7 @@ impl ChesterController {
         .map_err(|err| anyhow!("Failed to get chester box rewards: {}", err))?;
 
         // KST 2026-03-08 23:59:59 = UTC 2026-03-08 14:59:59
-        let hide_proof = chrono::Utc::now().timestamp() > 1_741_445_999;
+        let hide_proof = chrono::Utc::now().timestamp() > 1_772_981_999;
 
         let rewards = rows
             .into_iter()
