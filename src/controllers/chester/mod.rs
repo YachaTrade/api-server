@@ -228,6 +228,9 @@ impl ChesterController {
         )
         .map_err(|err| anyhow!("Failed to get chester box rewards: {}", err))?;
 
+        // KST 2026-03-08 23:59:59 = UTC 2026-03-08 14:59:59
+        let hide_proof = chrono::Utc::now().timestamp() > 1_741_445_999;
+
         let rewards = rows
             .into_iter()
             .map(|r| ChesterBoxRewardItem {
@@ -239,7 +242,7 @@ impl ChesterController {
                 image_uri: r.image_uri,
                 amount: r.amount.normalized().to_plain_string(),
                 status: r.status,
-                proof: r.proof,
+                proof: if hide_proof { vec![] } else { r.proof },
                 transaction_hash: r.transaction_hash,
                 claimed_at: r.claimed_at,
             })
