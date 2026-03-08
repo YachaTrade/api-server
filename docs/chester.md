@@ -124,7 +124,7 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 - `name` / `symbol` / `image_uri`: 토큰 메타정보 (chester_reward_token JOIN)
 - `amount`: 토큰 수량
 - `status`: `AWAITING` (미클레임) | `CLAIMED` (클레임 완료)
-- `proof`: 머클 프루프 배열 (**KST 2026-03-08 23:59:59 이후 빈 배열 반환**)
+- `proof`: 머클 프루프 배열 (**KST 2026-03-09 23:59:59 이후 빈 배열 반환**)
 - `transaction_hash`: 클레임 트랜잭션 해시 (클레임 전 null)
 - `claimed_at`: 클레임 시간 epoch seconds (클레임 전 null)
 
