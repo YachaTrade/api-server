@@ -423,16 +423,15 @@ impl ChesterController {
     ) -> Result<ChesterRewardHistoryResponse> {
         let offset = (page - 1) * limit;
 
-        // 1. Get total count of distinct CHEST point distribution events
+        // 1. Get total count of chest point distributions
         let count_fut = async {
             measure_postgres!(
                 "chester.get_reward_history_count",
                 sqlx::query!(
                     r#"
-                    SELECT COUNT(DISTINCT created_at) as "count!"
-                    FROM point_distribution
+                    SELECT COUNT(*) as "count!"
+                    FROM chest_point_distribution
                     WHERE account_id = $1
-                      AND activity_type = 'CHEST'
                     "#,
                     account_id
                 )
@@ -440,16 +439,15 @@ impl ChesterController {
             )
         };
 
-        // 2. Get paginated distinct created_at from point_distribution
+        // 2. Get paginated chest point distributions
         let points_fut = async {
             measure_postgres!(
                 "chester.get_reward_history_points",
                 sqlx::query!(
                     r#"
-                    SELECT created_at, amount
-                    FROM point_distribution
+                    SELECT round, level, amount, created_at
+                    FROM chest_point_distribution
                     WHERE account_id = $1
-                      AND activity_type = 'CHEST'
                     ORDER BY created_at DESC
                     LIMIT $2
                     OFFSET $3
@@ -478,8 +476,8 @@ impl ChesterController {
             });
         }
 
-        // 3. Collect created_at timestamps for matching box rewards
-        let created_at_list: Vec<i64> = point_rows.iter().map(|r| r.created_at).collect();
+        // 3. Collect (round, level, account_id) for matching box rewards
+        let rounds: Vec<i64> = point_rows.iter().map(|r| r.round).collect();
 
         // 4. Get matching chester_box_reward rows (CLAIMED only)
         let box_rows = measure_postgres!(
@@ -490,27 +488,27 @@ impl ChesterController {
                 FROM chester_box_reward
                 WHERE account_id = $1
                   AND status = 'CLAIMED'
-                  AND created_at = ANY($2)
+                  AND round = ANY($2)
                 ORDER BY created_at DESC
                 "#,
                 account_id,
-                &created_at_list
+                &rounds
             )
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to get reward history box rewards: {}", err))?;
 
-        // 5. Merge: group by created_at
+        // 5. Build history items
         let mut histories: Vec<RewardHistoryItem> = Vec::new();
 
         for point_row in &point_rows {
-            let level = Self::amount_to_level(&point_row.amount);
+            let level = point_row.level as i32;
 
             let mut rewards: Vec<RewardHistoryRewardItem> = Vec::new();
 
-            // Add token rewards from chester_box_reward
+            // Add token rewards from chester_box_reward for same round
             for box_row in &box_rows {
-                if box_row.created_at == point_row.created_at {
+                if box_row.round == point_row.round {
                     rewards.push(RewardHistoryRewardItem {
                         round: box_row.round,
                         token_id: box_row.token_id.clone(),
@@ -520,12 +518,11 @@ impl ChesterController {
                 }
             }
 
-            // Add hype point reward (round from matched box reward)
-            let round = rewards.first().map(|r| r.round).unwrap_or(0);
+            // Add hype point reward
             rewards.push(RewardHistoryRewardItem {
-                round,
+                round: point_row.round,
                 token_id: "hype".to_string(),
-                amount: point_row.amount.normalized().to_plain_string(),
+                amount: point_row.amount.to_string(),
                 transaction_hash: None,
             });
 
@@ -540,17 +537,6 @@ impl ChesterController {
             histories,
             total_count,
         })
-    }
-
-    fn amount_to_level(amount: &BigDecimal) -> i32 {
-        let val = amount.normalized().to_plain_string().parse::<i64>().unwrap_or(0);
-        match val {
-            80 => 1,
-            400 => 2,
-            800 => 3,
-            8000 => 4,
-            _ => 0,
-        }
     }
 
     async fn fetch_apr_usd() -> BigDecimal {
