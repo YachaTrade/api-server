@@ -487,7 +487,7 @@ impl ChesterController {
             "chester.get_reward_history_box",
             sqlx::query!(
                 r#"
-                SELECT round, token_id, amount, transaction_hash, created_at
+                SELECT round, level, token_id, amount, transaction_hash, created_at
                 FROM chester_box_reward
                 WHERE account_id = $1
                   AND status = 'CLAIMED'
@@ -507,9 +507,9 @@ impl ChesterController {
         for point_row in &point_rows {
             let level = point_row.level as i32;
 
-            // Add token rewards from chester_box_reward for same round
+            // Add token rewards from chester_box_reward for same round + level
             for box_row in &box_rows {
-                if box_row.round == point_row.round {
+                if box_row.round == point_row.round && box_row.level as i64 == point_row.level {
                     histories.push(RewardHistoryItem {
                         round: box_row.round,
                         level,
