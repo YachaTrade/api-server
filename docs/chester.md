@@ -132,7 +132,7 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 
 ---
 
-### GET /chester/swap-history/:account_id
+### GET /chester/history/:account_id
 
 활성 라운드 기간 내 계정의 스왑 거래 내역을 조회합니다.
 
@@ -146,7 +146,7 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 
 ---
 
-### GET /chester/reward-history
+### GET /chester/reward_history
 
 인증된 계정의 보상 클레임 내역을 조회합니다. `chest_point_distribution` 테이블 기반으로 하이프 포인트와 토큰 보상을 함께 반환합니다.
 
