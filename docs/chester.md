@@ -160,31 +160,32 @@ Chester는 트레이딩 볼륨 기반 체스트 보상 이벤트 시스템입니
 {
   "histories": [
     {
-      "created_at": 1706745600,
+      "round": 1,
       "level": 1,
-      "rewards": [
-        {
-          "round": 1,
-          "token_id": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
-          "amount": "1000000000000000000",
-          "transaction_hash": "0xabc..."
-        },
-        {
-          "round": 1,
-          "token_id": "hype",
-          "amount": "80",
-          "transaction_hash": null
-        }
-      ]
+      "token_id": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+      "amount": "1000000000000000000",
+      "transaction_hash": "0xabc...",
+      "created_at": 1706745600
+    },
+    {
+      "round": 1,
+      "level": 1,
+      "token_id": "hype",
+      "amount": "80",
+      "transaction_hash": null,
+      "created_at": 1706745600
     }
   ],
   "total_count": 5
 }
 ```
 
-- `created_at`: 보상 시간 (epoch seconds)
+- `round`: 라운드 번호
 - `level`: 상자 레벨 (1~4)
-- `rewards`: 보상 목록 (CLAIMED 상태의 토큰 보상 + hype 포인트)
+- `token_id`: 토큰 컨트랙트 주소 또는 `"hype"` (CHEST 포인트)
+- `amount`: 토큰 raw amount 또는 포인트 수량
+- `transaction_hash`: 클레임 트랜잭션 해시 (hype 포인트는 null)
+- `created_at`: 보상 시간 (epoch seconds)
 - `total_count`: 전체 보상 이벤트 수
 
 ---

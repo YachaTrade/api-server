@@ -13,7 +13,7 @@ use crate::{
         chester::{
             ChesterBoxRewardItem, ChesterBoxRewardsResponse, ChesterInfoResponse,
             ChesterRewardHistoryResponse, ChesterRewardItem, ChesterRewardsResponse,
-            ChesterVolumeResponse, RewardHistoryItem, RewardHistoryRewardItem,
+            ChesterVolumeResponse, RewardHistoryItem,
         },
         common::info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
         profile::SwapHistoryResponse,
@@ -501,38 +501,34 @@ impl ChesterController {
         )
         .map_err(|err| anyhow!("Failed to get reward history box rewards: {}", err))?;
 
-        // 5. Build history items
+        // 5. Build flat history items
         let mut histories: Vec<RewardHistoryItem> = Vec::new();
 
         for point_row in &point_rows {
             let level = point_row.level as i32;
 
-            let mut rewards: Vec<RewardHistoryRewardItem> = Vec::new();
-
             // Add token rewards from chester_box_reward for same round
             for box_row in &box_rows {
                 if box_row.round == point_row.round {
-                    rewards.push(RewardHistoryRewardItem {
+                    histories.push(RewardHistoryItem {
                         round: box_row.round,
+                        level,
                         token_id: box_row.token_id.clone(),
                         amount: box_row.amount.normalized().to_plain_string(),
                         transaction_hash: box_row.transaction_hash.clone(),
+                        created_at: point_row.created_at,
                     });
                 }
             }
 
             // Add hype point reward
-            rewards.push(RewardHistoryRewardItem {
+            histories.push(RewardHistoryItem {
                 round: point_row.round,
+                level,
                 token_id: "hype".to_string(),
                 amount: point_row.amount.to_string(),
                 transaction_hash: None,
-            });
-
-            histories.push(RewardHistoryItem {
                 created_at: point_row.created_at,
-                level,
-                rewards,
             });
         }
 
