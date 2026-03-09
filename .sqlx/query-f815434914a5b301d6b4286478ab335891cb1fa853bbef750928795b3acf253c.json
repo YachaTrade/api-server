@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT round, token_id, amount, transaction_hash, created_at\n                FROM chester_box_reward\n                WHERE account_id = $1\n                  AND status = 'CLAIMED'\n                  AND round = ANY($2)\n                ORDER BY created_at DESC\n                ",
+  "query": "\n                SELECT round, level, token_id, amount, transaction_hash, created_at\n                FROM chester_box_reward\n                WHERE account_id = $1\n                  AND status = 'CLAIMED'\n                  AND round = ANY($2)\n                ORDER BY created_at DESC\n                ",
   "describe": {
     "columns": [
       {
@@ -10,21 +10,26 @@
       },
       {
         "ordinal": 1,
+        "name": "level",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
         "name": "token_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "amount",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "transaction_hash",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Int8"
       }
@@ -39,9 +44,10 @@
       false,
       false,
       false,
+      false,
       true,
       false
     ]
   },
-  "hash": "903c0070b76d30cb3268183f6edaeedd5801b473724c24d09c0056deecf1f89f"
+  "hash": "f815434914a5b301d6b4286478ab335891cb1fa853bbef750928795b3acf253c"
 }
