@@ -272,7 +272,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::chester::ChesterBoxRewardItem,
             types::chester::ChesterBoxRewardsResponse,
             types::chester::ChesterBoxRewardsQuery,
-            types::chester::RewardHistoryRewardItem,
             types::chester::RewardHistoryItem,
             types::chester::ChesterRewardHistoryResponse,
 

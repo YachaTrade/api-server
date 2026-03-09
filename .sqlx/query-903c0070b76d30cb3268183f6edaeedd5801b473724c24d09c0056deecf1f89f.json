@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT round, token_id, amount, transaction_hash, created_at\n                FROM chester_box_reward\n                WHERE account_id = $1\n                  AND status = 'CLAIMED'\n                  AND created_at = ANY($2)\n                ORDER BY created_at DESC\n                ",
+  "query": "\n                SELECT round, token_id, amount, transaction_hash, created_at\n                FROM chester_box_reward\n                WHERE account_id = $1\n                  AND status = 'CLAIMED'\n                  AND round = ANY($2)\n                ORDER BY created_at DESC\n                ",
   "describe": {
     "columns": [
       {
@@ -43,5 +43,5 @@
       false
     ]
   },
-  "hash": "44d22a1c1fc23c5b68b31eb74ba7cae3074a056fde5e9c7fc8e941d4f3c56d2f"
+  "hash": "903c0070b76d30cb3268183f6edaeedd5801b473724c24d09c0056deecf1f89f"
 }
