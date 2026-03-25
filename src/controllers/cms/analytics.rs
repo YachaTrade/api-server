@@ -37,6 +37,7 @@ struct TopHeldTokenRow {
 #[derive(Debug, sqlx::FromRow)]
 struct RoiStatsRow {
     avg_roi_percent: Option<BigDecimal>,
+    median_roi_percent: Option<BigDecimal>,
     positive_roi_count: i64,
     negative_roi_count: i64,
     total_users: i64,
@@ -66,14 +67,22 @@ impl AnalyticsController {
     ) -> Result<UserActivityResponse> {
         let cutoff_seconds = inactive_days * 86400;
 
-        // 1. 유저 수 + 평균 PnL + 평균 볼륨
-        let comparison = if is_churned { ">=" } else { "<" };
+        // cutoff을 절대값으로 변환 → last_swap_at 인덱스 활용 가능
+        // churned: last_swap_at < cutoff_timestamp (오래전에 마지막 활동)
+        // active: last_swap_at >= cutoff_timestamp (최근에 활동)
+        let comparison = if is_churned { "<" } else { ">=" };
+
+        // 단일 쿼리로 stats + top tokens를 각각 가져오되,
+        // cutoff을 절대 timestamp로 변환하여 인덱스 사용
         let stats_query = format!(
             r#"
-            WITH target_users AS (
+            WITH cutoff AS (
+                SELECT EXTRACT(EPOCH FROM NOW())::BIGINT - $1 AS ts
+            ),
+            target_users AS (
                 SELECT aa.account_id
-                FROM account_activity aa
-                WHERE (EXTRACT(EPOCH FROM NOW()) - aa.last_swap_at) {} $1
+                FROM account_activity aa, cutoff
+                WHERE aa.last_swap_at {} cutoff.ts
             )
             SELECT
                 COUNT(DISTINCT tu.account_id) as total_users,
@@ -84,12 +93,19 @@ impl AnalyticsController {
             FROM target_users tu
             LEFT JOIN pnl_aggregator pa ON tu.account_id = pa.account_id
             LEFT JOIN (
-                SELECT account_id, SUM(value) as volume_usd, SUM(native_amount) as volume_native
-                FROM swap
-                GROUP BY account_id
+                SELECT s.account_id,
+                       SUM(s.value) as volume_usd,
+                       SUM(s.native_amount) as volume_native
+                FROM swap s
+                INNER JOIN (
+                    SELECT aa.account_id
+                    FROM account_activity aa, (SELECT EXTRACT(EPOCH FROM NOW())::BIGINT - $1 AS ts) c
+                    WHERE aa.last_swap_at {} c.ts
+                ) tu ON s.account_id = tu.account_id
+                GROUP BY s.account_id
             ) vol ON tu.account_id = vol.account_id
             "#,
-            comparison
+            comparison, comparison
         );
 
         let stats = measure_postgres!(
@@ -100,13 +116,16 @@ impl AnalyticsController {
         )
         .map_err(|err| anyhow!("Failed to fetch user activity stats: {}", err))?;
 
-        // 2. Top 보유 토큰
+        // Top 보유 토큰 — target_users와 먼저 JOIN하여 balance 스캔 범위 축소
         let tokens_query = format!(
             r#"
-            WITH target_users AS (
+            WITH cutoff AS (
+                SELECT EXTRACT(EPOCH FROM NOW())::BIGINT - $1 AS ts
+            ),
+            target_users AS (
                 SELECT aa.account_id
-                FROM account_activity aa
-                WHERE (EXTRACT(EPOCH FROM NOW()) - aa.last_swap_at) {} $1
+                FROM account_activity aa, cutoff
+                WHERE aa.last_swap_at {} cutoff.ts
             )
             SELECT
                 b.token_id,
@@ -159,13 +178,14 @@ impl AnalyticsController {
     pub async fn get_new_users(&self, days: i64) -> Result<NewUsersResponse> {
         let cutoff_seconds = days * 86400;
 
+        // 절대 timestamp 비교로 idx_account_activity_first_swap 인덱스 활용
         let count = measure_postgres!(
             "analytics.new_users",
             sqlx::query_scalar::<_, i64>(
                 r#"
                 SELECT COUNT(*) as count
                 FROM account_activity
-                WHERE (EXTRACT(EPOCH FROM NOW()) - first_swap_at) <= $1
+                WHERE first_swap_at >= EXTRACT(EPOCH FROM NOW())::BIGINT - $1
                 "#
             )
             .bind(cutoff_seconds)
@@ -179,7 +199,7 @@ impl AnalyticsController {
         })
     }
 
-    /// 유저별 ROI 통계
+    /// 유저별 ROI 통계 — stats + median을 단일 쿼리로
     pub async fn get_user_roi(&self) -> Result<UserRoiResponse> {
         let stats = measure_postgres!(
             "analytics.user_roi_stats",
@@ -191,6 +211,11 @@ impl AnalyticsController {
                         THEN ((realized_usd + unrealized_usd) / total_invested_usd) * 100
                         ELSE 0 END
                     ) as avg_roi_percent,
+                    PERCENTILE_CONT(0.5) WITHIN GROUP (
+                        ORDER BY CASE WHEN total_invested_usd > 0
+                        THEN ((realized_usd + unrealized_usd) / total_invested_usd) * 100
+                        ELSE 0 END
+                    )::NUMERIC as median_roi_percent,
                     COUNT(CASE WHEN (realized_usd + unrealized_usd) > 0 THEN 1 END) as positive_roi_count,
                     COUNT(CASE WHEN (realized_usd + unrealized_usd) <= 0 THEN 1 END) as negative_roi_count,
                     COUNT(*) as total_users
@@ -202,25 +227,9 @@ impl AnalyticsController {
         )
         .map_err(|err| anyhow!("Failed to fetch ROI stats: {}", err))?;
 
-        // 중앙값 계산
-        let median = measure_postgres!(
-            "analytics.user_roi_median",
-            sqlx::query_scalar::<_, BigDecimal>(
-                r#"
-                SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
-                    ORDER BY ((realized_usd + unrealized_usd) / total_invested_usd) * 100
-                )::NUMERIC as median_roi
-                FROM pnl_aggregator
-                WHERE total_invested_usd > 0
-                "#
-            )
-            .fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|err| anyhow!("Failed to fetch ROI median: {}", err))?;
-
         Ok(UserRoiResponse {
             avg_roi_percent: stats.avg_roi_percent.unwrap_or_default().round(2).to_string(),
-            median_roi_percent: median.round(2).to_string(),
+            median_roi_percent: stats.median_roi_percent.unwrap_or_default().round(2).to_string(),
             positive_roi_count: stats.positive_roi_count,
             negative_roi_count: stats.negative_roi_count,
             total_users: stats.total_users,
