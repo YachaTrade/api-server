@@ -67,7 +67,7 @@ impl AnalyticsController {
         let cutoff_seconds = inactive_days * 86400;
 
         // 1. 유저 수 + 평균 PnL + 평균 볼륨
-        let comparison = if is_churned { "<" } else { ">=" };
+        let comparison = if is_churned { ">=" } else { "<" };
         let stats_query = format!(
             r#"
             WITH target_users AS (
