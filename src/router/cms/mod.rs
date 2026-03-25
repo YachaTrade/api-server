@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod handler;
 pub mod path;
 
@@ -26,4 +27,5 @@ pub fn router(state: AppState) -> Router<AppState> {
             post(handler::register_hackathon)
                 .layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
+        .merge(analytics::router(state.clone()))
 }

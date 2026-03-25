@@ -135,6 +135,13 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::update_metadata,
         router::cms::handler::register_hackathon,
 
+        // ----------------CMS Analytics----------------
+        router::cms::analytics::handler::get_churned_users,
+        router::cms::analytics::handler::get_active_users,
+        router::cms::analytics::handler::get_new_users,
+        router::cms::analytics::handler::get_user_roi,
+        router::cms::analytics::handler::get_chester_retention,
+
         // ----------------Agent----------------
         router::agent::handler::get_chart,
         router::agent::handler::get_swap_history,
@@ -305,6 +312,14 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::UpdateMetadataResponse,
             router::cms::handler::UpdateMetadataMultipart,
 
+            // CMS Analytics
+            types::cms::analytics::TopHeldToken,
+            types::cms::analytics::UserActivityResponse,
+            types::cms::analytics::NewUsersResponse,
+            types::cms::analytics::UserRoiResponse,
+            types::cms::analytics::ChesterRetentionRound,
+            types::cms::analytics::ChesterRetentionResponse,
+
             // Hackathon
             types::hackathon::HackathonInfo,
             types::hackathon::HackathonTeamInfo,
@@ -335,6 +350,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Trend",description="Trend token endpoints"),
         (name="Leaderboard",description="Leaderboard endpoints"),
         (name="CMS",description="CMS admin endpoints"),
+        (name="CMS Analytics",description="CMS analytics dashboard endpoints"),
         (name="Agent",description="Agent API endpoints for AI integrations"),
     ),
     security(
