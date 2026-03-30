@@ -3,14 +3,14 @@ use std::env;
 use axum::http::header::{HeaderValue, SET_COOKIE};
 use axum::{
     Extension, Json,
-    extract::State,
+    extract::{State, rejection::JsonRejection},
     http::{Response, StatusCode},
     response::IntoResponse,
 };
 use tower_cookies::Cookie;
 use tower_cookies::cookie::time::Duration;
 
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::middleware::SessionInfo;
 use crate::router::auth::path::AuthPath;
@@ -62,15 +62,28 @@ pub async fn auth_nonce(
 #[instrument(skip(state, payload))]
 pub async fn auth_session(
     State(state): State<AppState>,
-    Json(payload): Json<AuthSessionRequest>,
+    payload: Result<Json<AuthSessionRequest>, JsonRejection>,
 ) -> AppResult<impl IntoResponse> {
-    payload.validate().map_err(AppError::BadRequest)?;
+    let Json(payload) = payload.map_err(|err| {
+        error!("auth_session: JSON parsing failed: {}", err);
+        AppError::BadRequest(format!("Invalid request body: {}", err))
+    })?;
+
+    payload.validate().map_err(|err| {
+        error!("auth_session: validation failed: {}", err);
+        AppError::BadRequest(err)
+    })?;
 
     let service = AuthService::new(state.postgres.clone(), state.redis.clone());
-    let (response, session_id) = service.create_session(payload).await?;
+    let (response, session_id) = service.create_session(payload).await.map_err(|err| {
+        error!("auth_session: create_session failed: {:?}", err);
+        err
+    })?;
 
-    let cookie_name = env::var("COOKIE_NAME")
-        .map_err(|_| AppError::InternalError("COOKIE_NAME not configured".to_string()))?;
+    let cookie_name = env::var("COOKIE_NAME").map_err(|_| {
+        error!("auth_session: COOKIE_NAME env var not configured");
+        AppError::InternalError("COOKIE_NAME not configured".to_string())
+    })?;
     // 쿠키 설정
     let mut cookie = Cookie::new(cookie_name, session_id);
     cookie.set_http_only(true);
@@ -88,11 +101,16 @@ pub async fn auth_session(
     let response = Response::builder()
         .header(
             SET_COOKIE,
-            HeaderValue::from_str(&cookie.to_string())
-                .map_err(|e| AppError::InternalError(e.to_string()))?,
+            HeaderValue::from_str(&cookie.to_string()).map_err(|e| {
+                error!("auth_session: cookie header build failed: {}", e);
+                AppError::InternalError(e.to_string())
+            })?,
         )
         .body(body.into_response())
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        .map_err(|e| {
+            error!("auth_session: response build failed: {}", e);
+            AppError::InternalError(e.to_string())
+        })?;
     Ok(response)
 }
 
