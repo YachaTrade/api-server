@@ -196,6 +196,7 @@ impl PositionController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
+    version: String,
             created_at: i64,
             creator: String,
             creator_nickname: String,
@@ -240,6 +241,7 @@ impl PositionController {
                     t.is_graduated,
                     t.is_nsfw,
                     t.is_cto,
+                        t.version,
                     t.created_at,
                     t.creator,
                     COALESCE(ax.x_handle, a.nickname) as creator_nickname,
@@ -312,6 +314,7 @@ impl PositionController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
+                    version: row.version.clone(),
                         hackathon_info: None,
                     },
                     balance_info: BalanceInfo {
