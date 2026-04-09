@@ -113,7 +113,7 @@ impl TokenController {
                 image_uri: row.creator_image_uri,
             },
             is_cto: row.is_cto,
-                    version: row.version.clone(),
+            version: row.version.clone(),
             hackathon_info: None,
         };
 

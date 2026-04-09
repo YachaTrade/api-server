@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 use tracing::error;
 
 use crate::{
-    config::{V1_BONDING_CURVE, RPC_URL, WMON},
+    config::{RPC_URL, V1_BONDING_CURVE, V2_BONDING_CURVE, WMON},
     controllers::terminal::TerminalController,
     db::postgres::PostgresDatabase,
     result::AppError,
@@ -129,10 +129,11 @@ impl TerminalService {
 
         // Determine pair_id and dex_key based on market_type
         let (pair_id, dex_key) = match pair_row.market_type.as_str() {
-            "DEX" => (
+            "DEX" | "V2_DEX" => (
                 pair_row.pool_id.unwrap_or_else(|| token_id.to_string()),
                 "capricorn",
             ),
+            "V2_CURVE" => (V2_BONDING_CURVE.to_string(), "nadfun"),
             _ => (V1_BONDING_CURVE.to_string(), "nadfun"),
         };
 

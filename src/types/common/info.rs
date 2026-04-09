@@ -75,7 +75,11 @@ impl AccountInfo {
 pub enum MarketType {
     Curve,
     Dex,
+    #[serde(rename = "V2_CURVE")]
+    #[sqlx(rename = "V2_CURVE")]
     V2Curve,
+    #[serde(rename = "V2_DEX")]
+    #[sqlx(rename = "V2_DEX")]
     V2Dex,
 }
 
