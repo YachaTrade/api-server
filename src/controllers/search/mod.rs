@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::BONDING_CURVE,
+    config::V1_BONDING_CURVE,
     db::postgres::PostgresDatabase,
     types::{
         common::info::{AccountInfo, MarketInfo, MarketType, TokenInfo},
@@ -95,7 +95,7 @@ impl SearchController {
             .map(|row| {
                 let mut market_id = row.market_id.clone();
                 if row.market_type == "CURVE" && market_id.is_empty() {
-                    market_id = BONDING_CURVE.clone();
+                    market_id = V1_BONDING_CURVE.clone();
                 }
 
                 TokenSearchResult {

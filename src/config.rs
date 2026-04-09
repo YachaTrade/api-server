@@ -108,8 +108,8 @@ lazy_static! {
         .expect("GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION must be a valid u64");
 
     // Contract Addresses
-    pub static ref COMMUNITY_TREASURY: String = env::var("COMMUNITY_TREASURY")
-        .expect("COMMUNITY_TREASURY must be set");
+    pub static ref COMMUNITY_TREASURY: String = env::var("V1_COMMUNITY_TREASURY")
+        .expect("V1_COMMUNITY_TREASURY must be set");
     pub static ref WMON: String = env::var("WMON")
         .expect("WMON must be set");
     pub static ref RPC_URL: String = env::var("RPC_URL")
@@ -131,8 +131,14 @@ lazy_static! {
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(3600);
 
-    pub static ref BONDING_CURVE:String = env::var("BONDING_CURVE")
-        .expect("BONDING_CURVE must be set");
+    pub static ref V1_BONDING_CURVE: String = env::var("V1_BONDING_CURVE")
+        .expect("V1_BONDING_CURVE must be set");
+    pub static ref V1_TOKEN_IMPL: String = env::var("V1_TOKEN_IMPL")
+        .expect("V1_TOKEN_IMPL must be set");
+    pub static ref V2_BONDING_CURVE: String = env::var("V2_BONDING_CURVE")
+        .expect("V2_BONDING_CURVE must be set");
+    pub static ref V2_TOKEN_IMPL: String = env::var("V2_TOKEN_IMPL")
+        .expect("V2_TOKEN_IMPL must be set");
     pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")
         .expect("METRICS_REPORT_INTERVAL must be set")
         .parse::<u64>()
