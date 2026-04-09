@@ -27,6 +27,15 @@ pub struct MineSaltRequest {
         example = "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
     )]
     pub metadata_uri: String,
+
+    /// Bonding curve version (1 or 2, defaults to 1)
+    #[serde(default = "default_version")]
+    #[schema(example = 1)]
+    pub version: u8,
+}
+
+fn default_version() -> u8 {
+    1
 }
 
 impl MineSaltRequest {
@@ -63,6 +72,10 @@ impl MineSaltRequest {
                 "Invalid metadata URI domain, must start with {}",
                 allowed_domain
             ));
+        }
+        // version validation
+        if self.version != 1 && self.version != 2 {
+            return Err("Version must be 1 or 2".to_string());
         }
         Ok(())
     }

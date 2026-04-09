@@ -58,7 +58,7 @@ impl SaltService {
         self.validate_request(&request)?;
 
         // 2단계: 환경 변수에서 deployer, implementation, suffix 로드
-        let config = MiningConfig::load()?;
+        let config = MiningConfig::load(request.version)?;
 
         // 3단계: 이 마이닝 요청의 고유 식별자 생성 (256비트 랜덤)
         let random_bytes: [u8; 32] = rand::random();
@@ -422,9 +422,13 @@ impl MiningConfig {
     /// - BONDING_CURVE: 토큰을 배포할 팩토리 컨트랙트 주소
     /// - TOKEN_IMPLEMENT: 토큰 구현 컨트랙트 주소 (EIP-1167 proxy가 참조)
     /// - VANITY_ADDRESS_SUFFIX: 원하는 주소 suffix (hex 문자열, 예: "143")
-    fn load() -> Result<Self, AppError> {
-        let deployer = Self::load_address("BONDING_CURVE")?;
-        let implementation = Self::load_address("TOKEN_IMPLEMENT")?;
+    fn load(version: u8) -> Result<Self, AppError> {
+        let (deployer_key, impl_key) = match version {
+            2 => ("V2_BONDING_CURVE", "V2_TOKEN_IMPLEMENT"),
+            _ => ("BONDING_CURVE", "TOKEN_IMPLEMENT"),
+        };
+        let deployer = Self::load_address(deployer_key)?;
+        let implementation = Self::load_address(impl_key)?;
         let suffix = Self::load_suffix()?;
 
         Ok(Self {
