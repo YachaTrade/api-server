@@ -10,7 +10,7 @@ use crate::{
     measure_postgres,
     types::common::{
         CountRow,
-        info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
+        info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo, TokenVersion},
         pagination::PaginationParams,
     },
     types::{
@@ -101,7 +101,7 @@ impl SwapController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-    version: String,
+    version: TokenVersion,
             token_created_at: i64,
             creator: String,
             creator_nickname: String,

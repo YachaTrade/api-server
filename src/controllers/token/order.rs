@@ -5,13 +5,13 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::V1_BONDING_CURVE,
+    config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
         common::{
             CountRow,
-            info::{AccountInfo, MarketInfo, MarketType, TokenInfo},
+            info::{AccountInfo, MarketInfo, MarketType, TokenInfo, TokenVersion},
             pagination::PaginationParams,
         },
         token::order::{OrderToken, OrderTokenResponse, TokenOrderType},
@@ -35,7 +35,7 @@ struct OrderTokenRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: String,
+    version: TokenVersion,
     created_at: i64,
     creator: String,
     holder_count: i64,
@@ -44,6 +44,7 @@ struct OrderTokenRow {
     creator_image_uri: String,
     market_type: String,
     market_id: String,
+    quote_id: String,
     token_price: BigDecimal,
     native_price: BigDecimal,
     price: BigDecimal,
@@ -136,6 +137,7 @@ impl OrderController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
+                    m.quote_id,
                         (m.price * COALESCE(lp.price, 0)) as token_price,
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
@@ -226,6 +228,7 @@ impl OrderController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
+                    m.quote_id,
                         (m.price * COALESCE(lp.price, 0)) as token_price,
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
@@ -316,6 +319,7 @@ impl OrderController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
+                    m.quote_id,
                         (m.price * COALESCE(lp.price, 0)) as token_price,
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
@@ -411,6 +415,7 @@ impl OrderController {
                         COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
+                    m.quote_id,
                         (m.price * COALESCE(lp.price, 0)) as token_price,
                         COALESCE(lp.price, 0) as native_price,
                         m.price,
@@ -531,8 +536,8 @@ impl OrderController {
 impl From<OrderTokenRow> for OrderToken {
     fn from(row: OrderTokenRow) -> Self {
         let mut market_id = row.market_id.clone();
-        if row.market_type == "CURVE" && market_id.is_empty() {
-            market_id = V1_BONDING_CURVE.clone();
+        if market_id.is_empty() {
+            if row.market_type == "CURVE" { market_id = V1_BONDING_CURVE.clone(); } else if row.market_type == "V2_CURVE" { market_id = V2_BONDING_CURVE.clone(); }
         }
 
         let percent = calculate_price_change_percent(
@@ -568,9 +573,12 @@ impl From<OrderTokenRow> for OrderToken {
                 market_type: match row.market_type.as_str() {
                     "CURVE" => MarketType::Curve,
                     "DEX" => MarketType::Dex,
+                    "V2_CURVE" => MarketType::V2Curve,
+                    "V2_DEX" => MarketType::V2Dex,
                     _ => MarketType::Curve,
                 },
                 token_id: row.token_id,
+                    quote_id: row.quote_id.clone(),
                 market_id,
                 token_price: row.token_price.normalized().to_plain_string(),
                 native_price: row.native_price.normalized().to_plain_string(),

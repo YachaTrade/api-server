@@ -6,6 +6,14 @@ use crate::types::hackathon::HackathonInfo;
 
 // ==================== Core Info Structs ====================
 
+/// Token version enum matching DB CHECK constraint
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "VARCHAR")]
+pub enum TokenVersion {
+    V1,
+    V2,
+}
+
 /// Token information with metadata and creator
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TokenInfo {
@@ -26,7 +34,7 @@ pub struct TokenInfo {
     pub created_at: i64,
     pub creator: AccountInfo,
     pub is_cto: bool,
-    pub version: String,
+    pub version: TokenVersion,
     #[serde(default)]
     #[sqlx(skip)]
     pub hackathon_info: Option<HackathonInfo>,
@@ -60,13 +68,15 @@ impl AccountInfo {
 }
 
 /// Market type enum
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "VARCHAR")]
 #[sqlx(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum MarketType {
     Curve,
     Dex,
+    V2Curve,
+    V2Dex,
 }
 
 /// Market information with pricing data
@@ -74,6 +84,7 @@ pub enum MarketType {
 pub struct MarketInfo {
     pub market_type: MarketType,
     pub token_id: String,
+    pub quote_id: String,
     pub market_id: String,
     pub reserve_native: String,
     pub reserve_token: String,
