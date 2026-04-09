@@ -10,7 +10,10 @@ use crate::{
     measure_postgres,
     types::common::{
         CountRow,
-        info::{AccountInfo, BalanceInfo, MarketInfo, MarketType, TokenInfo, TokenVersion, TokenWithBalanceInfo},
+        info::{
+            AccountInfo, BalanceInfo, MarketInfo, MarketType, TokenInfo, TokenVersion,
+            TokenWithBalanceInfo,
+        },
         pagination::PaginationParams,
     },
     types::{
@@ -196,7 +199,7 @@ impl PositionController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-    version: TokenVersion,
+            version: TokenVersion,
             created_at: i64,
             creator: String,
             creator_nickname: String,
@@ -208,7 +211,7 @@ impl PositionController {
             native_price: BigDecimal,
             market_type: String,
             market_id: String,
-    quote_id: String,
+            quote_id: String,
             price: BigDecimal,
             price_usd: BigDecimal,
             total_supply: BigDecimal,
@@ -254,7 +257,7 @@ impl PositionController {
                     COALESCE(lp.price, 0) as native_price,
                     m.market_type,
                     COALESCE(m.pool_id, '') as market_id,
-                    m.quote_id,
+                    COALESCE(m.quote_id, '') as quote_id,
                     m.price,
                     (m.price * COALESCE(lp.price, 0)) as price_usd,
                     t.total_supply,
@@ -293,7 +296,11 @@ impl PositionController {
             .map(|row| {
                 let mut market_id = row.market_id.clone();
                 if market_id.is_empty() {
-                    if row.market_type == "CURVE" { market_id = V1_BONDING_CURVE.clone(); } else if row.market_type == "V2_CURVE" { market_id = V2_BONDING_CURVE.clone(); }
+                    if row.market_type == "CURVE" {
+                        market_id = V1_BONDING_CURVE.clone();
+                    } else if row.market_type == "V2_CURVE" {
+                        market_id = V2_BONDING_CURVE.clone();
+                    }
                 }
 
                 TokenWithBalanceInfo {
@@ -316,7 +323,7 @@ impl PositionController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
-                    version: row.version.clone(),
+                        version: row.version.clone(),
                         hackathon_info: None,
                     },
                     balance_info: BalanceInfo {
@@ -329,12 +336,12 @@ impl PositionController {
                         market_type: match row.market_type.as_str() {
                             "CURVE" => MarketType::Curve,
                             "DEX" => MarketType::Dex,
-                    "V2_CURVE" => MarketType::V2Curve,
-                    "V2_DEX" => MarketType::V2Dex,
+                            "V2_CURVE" => MarketType::V2Curve,
+                            "V2_DEX" => MarketType::V2Dex,
                             _ => MarketType::Curve,
                         },
                         token_id: row.token_id,
-                    quote_id: row.quote_id.clone(),
+                        quote_id: row.quote_id.clone(),
                         market_id,
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),

@@ -269,7 +269,7 @@ impl ChesterController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-    version: TokenVersion,
+            version: TokenVersion,
             token_created_at: i64,
             creator: String,
             creator_nickname: String,
@@ -469,8 +469,8 @@ impl ChesterController {
             .map_err(|err| anyhow!("Failed to get reward history count: {}", err))?
             .count;
 
-        let point_rows = points_result
-            .map_err(|err| anyhow!("Failed to get reward history points: {}", err))?;
+        let point_rows =
+            points_result.map_err(|err| anyhow!("Failed to get reward history points: {}", err))?;
 
         if point_rows.is_empty() {
             return Ok(ChesterRewardHistoryResponse {
@@ -540,7 +540,12 @@ impl ChesterController {
 
     async fn fetch_apr_usd() -> BigDecimal {
         let client = reqwest::Client::new();
-        let body = match client.get(COINGECKO_APR_URL).header("User-Agent", "nad.fun").send().await {
+        let body = match client
+            .get(COINGECKO_APR_URL)
+            .header("User-Agent", "nad.fun")
+            .send()
+            .await
+        {
             Ok(r) => match r.text().await {
                 Ok(b) => b,
                 Err(e) => {
