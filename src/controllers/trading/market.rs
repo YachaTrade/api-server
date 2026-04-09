@@ -69,7 +69,7 @@ impl MarketController {
                     m.market_type,
                     m.token_id,
                     COALESCE(m.pool_id, '') as market_id,
-                    m.quote_id,
+                    COALESCE(m.quote_id, '') as quote_id,
                     (m.price * COALESCE(lp.price, 0)) as token_price,
                     COALESCE(lp.price, 0) as native_price,
                     m.price,
@@ -94,7 +94,11 @@ impl MarketController {
 
         let mut market_id = row.market_id;
         if market_id.is_empty() {
-            if row.market_type == "CURVE" { market_id = V1_BONDING_CURVE.clone(); } else if row.market_type == "V2_CURVE" { market_id = V2_BONDING_CURVE.clone(); }
+            if row.market_type == "CURVE" {
+                market_id = V1_BONDING_CURVE.clone();
+            } else if row.market_type == "V2_CURVE" {
+                market_id = V2_BONDING_CURVE.clone();
+            }
         }
 
         Ok(MarketResponse {
@@ -107,7 +111,7 @@ impl MarketController {
                     _ => MarketType::Curve,
                 },
                 token_id: row.token_id,
-                    quote_id: row.quote_id.clone(),
+                quote_id: row.quote_id.clone(),
                 market_id,
                 token_price: row.token_price.normalized().to_plain_string(),
                 native_price: row.native_price.normalized().to_plain_string(),

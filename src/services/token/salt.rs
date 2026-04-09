@@ -7,7 +7,9 @@ use std::time::Instant;
 use tracing::{error, info};
 
 use crate::{
-    config::{V1_BONDING_CURVE, V1_TOKEN_IMPL, V2_BONDING_CURVE, V2_TOKEN_IMPL, VANITY_ADDRESS_SUFFIX},
+    config::{
+        V1_BONDING_CURVE, V1_TOKEN_IMPL, V2_BONDING_CURVE, V2_TOKEN_IMPL, VANITY_ADDRESS_SUFFIX,
+    },
     result::AppError,
     types::token::salt::{MineSaltRequest, MineSaltResponse},
     utils::valid_account_id,
@@ -429,10 +431,12 @@ impl MiningConfig {
             _ => (V1_BONDING_CURVE.as_str(), V1_TOKEN_IMPL.as_str()),
         };
 
-        let deployer = Address::from_str(deployer_str)
-            .map_err(|e| AppError::InternalError(format!("Failed to parse bonding curve address: {}", e)))?;
-        let implementation = Address::from_str(impl_str)
-            .map_err(|e| AppError::InternalError(format!("Failed to parse token implement address: {}", e)))?;
+        let deployer = Address::from_str(deployer_str).map_err(|e| {
+            AppError::InternalError(format!("Failed to parse bonding curve address: {}", e))
+        })?;
+        let implementation = Address::from_str(impl_str).map_err(|e| {
+            AppError::InternalError(format!("Failed to parse token implement address: {}", e))
+        })?;
         let suffix = VANITY_ADDRESS_SUFFIX.clone();
 
         Ok(Self {
