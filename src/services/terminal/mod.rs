@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 use tracing::error;
 
 use crate::{
-    config::{BONDING_CURVE, RPC_URL, WMON},
+    config::{V1_BONDING_CURVE, RPC_URL, WMON},
     controllers::terminal::TerminalController,
     db::postgres::PostgresDatabase,
     result::AppError,
@@ -133,7 +133,7 @@ impl TerminalService {
                 pair_row.pool_id.unwrap_or_else(|| token_id.to_string()),
                 "capricorn",
             ),
-            _ => (BONDING_CURVE.to_string(), "nadfun"),
+            _ => (V1_BONDING_CURVE.to_string(), "nadfun"),
         };
 
         let pair = Pair {
@@ -292,7 +292,7 @@ impl TerminalService {
             txn_index: row.tx_index.unwrap_or(0) as u32,
             event_index: row.log_index as u32,
             maker: row.account_id,
-            pair_id: row.pool_id.unwrap_or_else(|| BONDING_CURVE.to_string()),
+            pair_id: row.pool_id.unwrap_or_else(|| V1_BONDING_CURVE.to_string()),
             asset0_in,
             asset1_in,
             asset0_out,

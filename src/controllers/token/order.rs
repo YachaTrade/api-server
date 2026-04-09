@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::BONDING_CURVE,
+    config::V1_BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
@@ -527,7 +527,7 @@ impl From<OrderTokenRow> for OrderToken {
     fn from(row: OrderTokenRow) -> Self {
         let mut market_id = row.market_id.clone();
         if row.market_type == "CURVE" && market_id.is_empty() {
-            market_id = BONDING_CURVE.clone();
+            market_id = V1_BONDING_CURVE.clone();
         }
 
         let percent = calculate_price_change_percent(

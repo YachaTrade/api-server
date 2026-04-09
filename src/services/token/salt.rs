@@ -7,6 +7,7 @@ use std::time::Instant;
 use tracing::{error, info};
 
 use crate::{
+    config::{V1_BONDING_CURVE, V1_TOKEN_IMPL, V2_BONDING_CURVE, V2_TOKEN_IMPL, VANITY_ADDRESS_SUFFIX},
     result::AppError,
     types::token::salt::{MineSaltRequest, MineSaltResponse},
     utils::valid_account_id,
@@ -423,64 +424,22 @@ impl MiningConfig {
     /// - TOKEN_IMPLEMENT: 토큰 구현 컨트랙트 주소 (EIP-1167 proxy가 참조)
     /// - VANITY_ADDRESS_SUFFIX: 원하는 주소 suffix (hex 문자열, 예: "143")
     fn load(version: u8) -> Result<Self, AppError> {
-        let (deployer_key, impl_key) = match version {
-            2 => ("V2_BONDING_CURVE", "V2_TOKEN_IMPLEMENT"),
-            _ => ("BONDING_CURVE", "TOKEN_IMPLEMENT"),
+        let (deployer_str, impl_str) = match version {
+            2 => (V2_BONDING_CURVE.as_str(), V2_TOKEN_IMPL.as_str()),
+            _ => (V1_BONDING_CURVE.as_str(), V1_TOKEN_IMPL.as_str()),
         };
-        let deployer = Self::load_address(deployer_key)?;
-        let implementation = Self::load_address(impl_key)?;
-        let suffix = Self::load_suffix()?;
+
+        let deployer = Address::from_str(deployer_str)
+            .map_err(|e| AppError::InternalError(format!("Failed to parse bonding curve address: {}", e)))?;
+        let implementation = Address::from_str(impl_str)
+            .map_err(|e| AppError::InternalError(format!("Failed to parse token implement address: {}", e)))?;
+        let suffix = VANITY_ADDRESS_SUFFIX.clone();
 
         Ok(Self {
             deployer,
             implementation,
             suffix,
         })
-    }
-
-    /// 환경 변수에서 주소 로드 및 검증
-    ///
-    /// # 검증 항목
-    /// 1. 환경 변수가 설정되어 있는가?
-    /// 2. 올바른 EVM 주소 형식인가? (0x + 40자리 hex)
-    /// 3. Address 타입으로 파싱 가능한가?
-    fn load_address(env_var: &str) -> Result<Address, AppError> {
-        // 환경 변수 읽기
-        let addr_str = std::env::var(env_var)
-            .map_err(|_| AppError::InternalError(format!("{} not set", env_var)))?;
-
-        // EVM 주소 형식 검증
-        if valid_account_id(&addr_str).is_none() {
-            return Err(AppError::InternalError(format!(
-                "Invalid {} address: {}",
-                env_var, addr_str
-            )));
-        }
-
-        // Address 타입으로 파싱
-        Address::from_str(&addr_str)
-            .map_err(|e| AppError::InternalError(format!("Failed to parse {}: {}", env_var, e)))
-    }
-
-    /// 환경 변수에서 suffix 로드 및 검증
-    ///
-    /// # 검증 항목
-    /// 1. 환경 변수가 설정되어 있는가?
-    /// 2. 비어있지 않은가?
-    /// 3. 모두 16진수 문자인가? (0-9, a-f, A-F)
-    fn load_suffix() -> Result<String, AppError> {
-        let suffix = std::env::var("VANITY_ADDRESS_SUFFIX")
-            .map_err(|_| AppError::InternalError("VANITY_ADDRESS_SUFFIX not set".to_string()))?;
-
-        // suffix 검증: 비어있지 않고, 모두 16진수 문자여야 함
-        if suffix.is_empty() || !suffix.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Err(AppError::InternalError(format!(
-                "Invalid VANITY_ADDRESS_SUFFIX: must be non-empty hex string (got '{}')",
-                suffix
-            )));
-        }
-
-        Ok(suffix)
     }
 }
 
