@@ -11,7 +11,7 @@ use crate::{
     types::{
         common::{
             CountRow,
-            info::{AccountInfo, TokenInfo},
+            info::{AccountInfo, TokenInfo, TokenVersion},
             pagination::PaginationParams,
         },
         hype::{
@@ -42,7 +42,7 @@ struct HypeTokenRow {
     website: Option<String>,
     is_nsfw: bool,
     is_cto: bool,
-    version: String,
+    version: TokenVersion,
     #[allow(dead_code)]
     total_supply: BigDecimal,
     created_at: i64,
@@ -651,7 +651,7 @@ impl HypeController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-    version: String,
+    version: TokenVersion,
             vote_amount: BigDecimal,
             creator: String,
             creator_nickname: String,
@@ -1132,7 +1132,7 @@ impl HypeController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-    version: String,
+    version: TokenVersion,
             token_created_at: i64,
             amount: BigDecimal,
             total_amount: BigDecimal,

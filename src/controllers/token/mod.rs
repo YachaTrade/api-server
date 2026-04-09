@@ -11,7 +11,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{AccountInfo, TokenInfo},
+        common::info::{AccountInfo, TokenInfo, TokenVersion},
         token::TokenResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -30,7 +30,7 @@ struct TokenRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: String,
+    version: TokenVersion,
     created_at: i64,
     creator: String,
     creator_nickname: String,
