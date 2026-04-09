@@ -406,8 +406,10 @@ impl ChesterController {
                         SwapType::Sell
                     },
                     native_amount: row.native_amount.normalized().to_plain_string(),
+                    quote_amount: row.native_amount.normalized().to_plain_string(),
                     token_amount: row.token_amount.normalized().to_plain_string(),
                     native_price: row.native_price.normalized().to_plain_string(),
+                    quote_price: row.native_price.normalized().to_plain_string(),
                     value: row.value.normalized().to_plain_string(),
                     transaction_hash: row.transaction_hash,
                     created_at: row.created_at,

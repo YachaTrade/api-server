@@ -131,8 +131,10 @@ pub enum SwapType {
 pub struct SwapInfo {
     pub event_type: SwapType,
     pub native_amount: String,
+    pub quote_amount: String,
     pub token_amount: String,
     pub native_price: String,
+    pub quote_price: String,
     /// USD value at execution time
     pub value: String,
     pub transaction_hash: String,
