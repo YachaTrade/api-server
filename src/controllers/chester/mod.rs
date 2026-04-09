@@ -15,7 +15,7 @@ use crate::{
             ChesterRewardHistoryResponse, ChesterRewardItem, ChesterRewardsResponse,
             ChesterVolumeResponse, RewardHistoryItem,
         },
-        common::info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo},
+        common::info::{AccountInfo, SwapInfo, SwapType, TokenInfo, TokenSwapInfo, TokenVersion},
         profile::SwapHistoryResponse,
     },
 };
@@ -269,7 +269,7 @@ impl ChesterController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-    version: String,
+    version: TokenVersion,
             token_created_at: i64,
             creator: String,
             creator_nickname: String,
