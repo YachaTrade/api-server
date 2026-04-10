@@ -1,16 +1,13 @@
 use std::{env, str::FromStr, sync::Arc};
 
-use alloy::{
-    primitives::keccak256,
-    signers::Signature,
-};
+use alloy::{primitives::keccak256, signers::Signature};
 use chrono::Utc;
 use tokio::try_join;
 use uuid::Uuid;
 
 use crate::{
-    config::EXPIRATION_SESSION_KEY,
-    controllers::auth::session::SessionController,
+    config::{EXPIRATION_SESSION_KEY, MESSAGE_EXPIRATION},
+    controllers::auth::{nonce::NonceController, session::SessionController},
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::auth::{AuthNonceRequest, AuthNonceResponse, AuthSessionRequest, AuthSessionResponse},
@@ -47,10 +44,11 @@ impl AuthService {
             address, domain, chain_id, nonce, issued_at
         );
 
-        self.redis
-            .set_sign_message(&address, &message)
+        let nonce_controller = NonceController::new(self.postgres.clone());
+        nonce_controller
+            .set_nonce(&address, &message, *MESSAGE_EXPIRATION)
             .await
-            .map_err(|err| AppError::RedisError(err.to_string()))?;
+            .map_err(|err| AppError::InternalError(err.to_string()))?;
 
         Ok(AuthNonceResponse { nonce: message })
     }
@@ -76,12 +74,12 @@ impl AuthService {
             .await?;
         let redis = self.redis.clone();
 
-        // Use atomic GETDEL to prevent nonce reuse attacks
-        // This ensures the nonce can only be used once even with concurrent requests
-        let sign_message = redis
-            .get_and_delete_sign_message(&address)
+        // Use atomic DELETE ... RETURNING to prevent nonce reuse attacks
+        let nonce_controller = NonceController::new(self.postgres.clone());
+        let sign_message = nonce_controller
+            .get_and_delete_nonce(&address)
             .await
-            .map_err(|err| AppError::RedisError(err.to_string()))?;
+            .map_err(|_| AppError::Unauthorized("Invalid nonce".into()))?;
 
         if payload.nonce != sign_message {
             return Err(AppError::Unauthorized("Invalid nonce".into()));
