@@ -23,7 +23,10 @@ use crate::{
         common::pagination::PaginationParams,
         metadata::{UploadImageResponse, UploadMetadataRequest, UploadMetadataResponse},
         profile::{CreatedTokensResponse, HoldTokenResponse},
-        token::{TokenResponse, salt::{MineSaltRequest, MineSaltResponse}},
+        token::{
+            TokenResponse,
+            salt::{MineSaltRequest, MineSaltResponse},
+        },
         trading::{
             chart::{BarResponse, GetBarsRequest},
             market::MarketResponse,
@@ -131,19 +134,23 @@ pub async fn get_market(
 }
 
 fn deserialize_timeframes<'de, D>(deserializer: D) -> Result<Vec<TimeFrame>, D::Error>
-where D: serde::Deserializer<'de> {
+where
+    D: serde::Deserializer<'de>,
+{
     use serde::de::Error;
     let s = String::deserialize(deserializer)?;
-    s.split(',').map(|t| match t.trim() {
-        "1" => Ok(TimeFrame::OneMinute),
-        "5" => Ok(TimeFrame::FiveMinutes),
-        "15" => Ok(TimeFrame::FifteenMinutes),
-        "30" => Ok(TimeFrame::ThirtyMinutes),
-        "60" => Ok(TimeFrame::OneHour),
-        "240" => Ok(TimeFrame::FourHours),
-        "1D" => Ok(TimeFrame::OneDay),
-        _ => Err(D::Error::custom(format!("Invalid timeframe: {}", t)))
-    }).collect()
+    s.split(',')
+        .map(|t| match t.trim() {
+            "1" => Ok(TimeFrame::OneMinute),
+            "5" => Ok(TimeFrame::FiveMinutes),
+            "15" => Ok(TimeFrame::FifteenMinutes),
+            "30" => Ok(TimeFrame::ThirtyMinutes),
+            "60" => Ok(TimeFrame::OneHour),
+            "240" => Ok(TimeFrame::FourHours),
+            "1D" => Ok(TimeFrame::OneDay),
+            _ => Err(D::Error::custom(format!("Invalid timeframe: {}", t))),
+        })
+        .collect()
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -178,7 +185,9 @@ pub async fn get_metrics(
         AppError::BadRequest("Invalid token ID".to_string())
     })?;
     let service = MetricsService::new(state.postgres.clone());
-    Ok(Json(service.get_metrics(&token_id, params.timeframes).await?))
+    Ok(Json(
+        service.get_metrics(&token_id, params.timeframes).await?,
+    ))
 }
 
 // ============================================================================
@@ -242,7 +251,11 @@ pub async fn get_holdings(
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
     let service = PositionService::new(state.postgres.clone(), state.redis.clone());
-    Ok(Json(service.get_hold_token_by_account(&account_id, &query).await?))
+    Ok(Json(
+        service
+            .get_hold_token_by_account(&account_id, &query)
+            .await?,
+    ))
 }
 
 // ============================================================================
@@ -268,9 +281,20 @@ pub async fn upload_image(
     body: Bytes,
 ) -> AppJsonResult<UploadImageResponse> {
     info!("Agent: Image upload - {} bytes", body.len());
-    let content_type = headers.get("content-type").and_then(|v| v.to_str().ok()).map(String::from);
-    let service = MetadataService::new(state.postgres.clone(), state.redis.clone(), state.r2.clone());
-    Ok(Json(service.process_and_upload_image(&body, &content_type).await?))
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let service = MetadataService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.r2.clone(),
+    );
+    Ok(Json(
+        service
+            .process_and_upload_image(&body, &content_type)
+            .await?,
+    ))
 }
 
 #[utoipa::path(
@@ -290,7 +314,11 @@ pub async fn upload_metadata(
     Json(payload): Json<UploadMetadataRequest>,
 ) -> AppJsonResult<UploadMetadataResponse> {
     info!("Agent: Metadata upload for: {}", payload.name);
-    let service = MetadataService::new(state.postgres.clone(), state.redis.clone(), state.r2.clone());
+    let service = MetadataService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.r2.clone(),
+    );
     let metadata = service.validate_metadata_request(&payload).await?;
     Ok(Json(service.upload_metadata(metadata).await?))
 }
@@ -322,7 +350,9 @@ pub async fn get_tokens_created(
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
     let service = TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
-    Ok(Json(service.get_tokens_created(&account_id, &pagination).await?))
+    Ok(Json(
+        service.get_tokens_created(&account_id, &pagination).await?,
+    ))
 }
 
 // ============================================================================

@@ -151,4 +151,3 @@ pub struct ChesterHistoryItem {
     /// Round status (ACTIVE, COMPLETED, READY)
     pub status: String,
 }
-

@@ -114,7 +114,6 @@ impl TokenController {
             },
             is_cto: row.is_cto,
             version: row.version.clone(),
-            hackathon_info: None,
         };
 
         Ok(TokenResponse { token_info })

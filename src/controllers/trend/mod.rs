@@ -272,7 +272,6 @@ impl From<TrendTokenRow> for TrendToken {
                 },
                 is_cto: row.is_cto,
                 version: row.version.clone(),
-                hackathon_info: None,
             },
             market_info: MarketInfo {
                 market_type: match row.market_type.as_str() {

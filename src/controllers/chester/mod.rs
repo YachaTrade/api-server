@@ -397,7 +397,6 @@ impl ChesterController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
-                    hackathon_info: None,
                 },
                 swap_info: SwapInfo {
                     event_type: if row.is_buy {

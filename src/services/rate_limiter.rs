@@ -3,8 +3,8 @@ use crate::result::AppError;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Rate limit configuration
-pub const RATE_LIMIT_WITH_API_KEY: u64 = 100;    // With API key: 100 req/min
-pub const RATE_LIMIT_WITHOUT_API_KEY: u64 = 10;  // Without API key: 10 req/min
+pub const RATE_LIMIT_WITH_API_KEY: u64 = 100; // With API key: 100 req/min
+pub const RATE_LIMIT_WITHOUT_API_KEY: u64 = 10; // Without API key: 10 req/min
 
 /// Rate limit check result
 #[derive(Debug)]

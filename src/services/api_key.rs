@@ -35,13 +35,12 @@ pub async fn create_api_key(
 ) -> Result<CreateApiKeyResponse, AppError> {
     // Check API key limit per account
     if let Some(ref owner) = req.owner_address {
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM api_keys WHERE owner_address = $1",
-        )
-        .bind(owner)
-        .fetch_one(db.get_read_pool())
-        .await
-        .map_err(|e| AppError::InternalError(format!("Failed to count API keys: {}", e)))?;
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM api_keys WHERE owner_address = $1")
+                .bind(owner)
+                .fetch_one(db.get_read_pool())
+                .await
+                .map_err(|e| AppError::InternalError(format!("Failed to count API keys: {}", e)))?;
 
         if count >= MAX_API_KEYS_PER_ACCOUNT {
             return Err(AppError::BadRequest(format!(
@@ -93,7 +92,8 @@ pub async fn validate_api_key(
     api_key: &str,
 ) -> Result<CachedApiKey, AppError> {
     // Validate format (use generic error message to avoid information leakage)
-    if !api_key.starts_with(API_KEY_PREFIX) || api_key.len() != API_KEY_PREFIX.len() + API_KEY_LENGTH
+    if !api_key.starts_with(API_KEY_PREFIX)
+        || api_key.len() != API_KEY_PREFIX.len() + API_KEY_LENGTH
     {
         return Err(AppError::Unauthorized(INVALID_API_KEY_MSG.to_string()));
     }
@@ -257,13 +257,12 @@ pub async fn delete_api_key(
     redis: &RedisDatabase,
     id: i64,
 ) -> Result<(), AppError> {
-    let result: Option<(String,)> = sqlx::query_as(
-        "DELETE FROM api_keys WHERE id = $1 RETURNING key_hash",
-    )
-    .bind(id)
-    .fetch_optional(db.get_write_pool())
-    .await
-    .map_err(|e| AppError::InternalError(format!("Database error: {}", e)))?;
+    let result: Option<(String,)> =
+        sqlx::query_as("DELETE FROM api_keys WHERE id = $1 RETURNING key_hash")
+            .bind(id)
+            .fetch_optional(db.get_write_pool())
+            .await
+            .map_err(|e| AppError::InternalError(format!("Database error: {}", e)))?;
 
     if let Some((key_hash,)) = result {
         // Invalidate cache and cleanup usage data

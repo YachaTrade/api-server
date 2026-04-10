@@ -2,8 +2,7 @@ pub mod handler;
 pub mod path;
 
 use axum::{
-    Router,
-    middleware as axum_middleware,
+    Router, middleware as axum_middleware,
     routing::{delete, get},
 };
 use tower::ServiceBuilder;
