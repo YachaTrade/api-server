@@ -210,10 +210,10 @@ impl TerminalService {
         let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64);
 
         // Decimalize amounts (amount / 10^18)
-        let native_amount_decimalized = &row.native_amount / &decimals_divisor;
+        let quote_amount_decimalized = &row.quote_amount / &decimals_divisor;
         let token_amount_decimalized = &row.token_amount / &decimals_divisor;
-        let reserve_native_decimalized = row
-            .reserve_native
+        let reserve_quote_decimalized = row
+            .reserve_quote
             .as_ref()
             .map(|r| r / &decimals_divisor)
             .unwrap_or_default();
@@ -231,7 +231,7 @@ impl TerminalService {
         let (asset0_in, asset1_in, asset0_out, asset1_out) = match (is_native_token0, row.is_buy) {
             // token0 = WMON (native), token1 = token, Buy: native in, token out
             (true, true) => (
-                Some(to_truncated_string(&native_amount_decimalized)),
+                Some(to_truncated_string(&quote_amount_decimalized)),
                 None,
                 None,
                 Some(to_truncated_string(&token_amount_decimalized)),
@@ -240,13 +240,13 @@ impl TerminalService {
             (true, false) => (
                 None,
                 Some(to_truncated_string(&token_amount_decimalized)),
-                Some(to_truncated_string(&native_amount_decimalized)),
+                Some(to_truncated_string(&quote_amount_decimalized)),
                 None,
             ),
             // token0 = token, token1 = WMON (native), Buy: native in, token out
             (false, true) => (
                 None,
-                Some(to_truncated_string(&native_amount_decimalized)),
+                Some(to_truncated_string(&quote_amount_decimalized)),
                 Some(to_truncated_string(&token_amount_decimalized)),
                 None,
             ),
@@ -255,7 +255,7 @@ impl TerminalService {
                 Some(to_truncated_string(&token_amount_decimalized)),
                 None,
                 None,
-                Some(to_truncated_string(&native_amount_decimalized)),
+                Some(to_truncated_string(&quote_amount_decimalized)),
             ),
         };
 
@@ -263,13 +263,13 @@ impl TerminalService {
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_quote_decimalized),
                 to_truncated_string(&reserve_token_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
                 to_truncated_string(&reserve_token_decimalized),
-                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_quote_decimalized),
             ),
         };
 
@@ -277,11 +277,11 @@ impl TerminalService {
         // This is the price of asset0 quoted in asset1
         let price_native = match is_native_token0 {
             // token0 = native, token1 = token
-            // priceNative = amount(asset1) / amount(asset0) = token_amount / native_amount
-            true => to_truncated_string(&(&token_amount_decimalized / &native_amount_decimalized)),
+            // priceNative = amount(asset1) / amount(asset0) = token_amount / quote_amount
+            true => to_truncated_string(&(&token_amount_decimalized / &quote_amount_decimalized)),
             // token0 = token, token1 = native
-            // priceNative = amount(asset1) / amount(asset0) = native_amount / token_amount
-            false => to_truncated_string(&(&native_amount_decimalized / &token_amount_decimalized)),
+            // priceNative = amount(asset1) / amount(asset0) = quote_amount / token_amount
+            false => to_truncated_string(&(&quote_amount_decimalized / &token_amount_decimalized)),
         };
 
         Event::Swap {
@@ -311,9 +311,9 @@ impl TerminalService {
         let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64);
 
         // Decimalize amounts
-        let native_amount_decimalized = &row.native_amount / &decimals_divisor;
+        let quote_amount_decimalized = &row.quote_amount / &decimals_divisor;
         let token_amount_decimalized = &row.token_amount / &decimals_divisor;
-        let reserve_native_decimalized = &row.reserve_native / &decimals_divisor;
+        let reserve_quote_decimalized = &row.reserve_quote / &decimals_divisor;
         let reserve_token_decimalized = &row.reserve_token / &decimals_divisor;
 
         // Determine token0/token1 by comparing WMON (native) and token_id alphabetically
@@ -324,13 +324,13 @@ impl TerminalService {
         let (amount0, amount1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                to_truncated_string(&native_amount_decimalized),
+                to_truncated_string(&quote_amount_decimalized),
                 to_truncated_string(&token_amount_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
                 to_truncated_string(&token_amount_decimalized),
-                to_truncated_string(&native_amount_decimalized),
+                to_truncated_string(&quote_amount_decimalized),
             ),
         };
 
@@ -338,13 +338,13 @@ impl TerminalService {
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_quote_decimalized),
                 to_truncated_string(&reserve_token_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
                 to_truncated_string(&reserve_token_decimalized),
-                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_quote_decimalized),
             ),
         };
 
@@ -372,9 +372,9 @@ impl TerminalService {
         let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64);
 
         // Decimalize amounts
-        let native_amount_decimalized = &row.native_amount / &decimals_divisor;
+        let quote_amount_decimalized = &row.quote_amount / &decimals_divisor;
         let token_amount_decimalized = &row.token_amount / &decimals_divisor;
-        let reserve_native_decimalized = &row.reserve_native / &decimals_divisor;
+        let reserve_quote_decimalized = &row.reserve_quote / &decimals_divisor;
         let reserve_token_decimalized = &row.reserve_token / &decimals_divisor;
 
         // Determine token0/token1 by comparing WMON (native) and token_id alphabetically
@@ -385,13 +385,13 @@ impl TerminalService {
         let (amount0, amount1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                to_truncated_string(&native_amount_decimalized),
+                to_truncated_string(&quote_amount_decimalized),
                 to_truncated_string(&token_amount_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
                 to_truncated_string(&token_amount_decimalized),
-                to_truncated_string(&native_amount_decimalized),
+                to_truncated_string(&quote_amount_decimalized),
             ),
         };
 
@@ -399,13 +399,13 @@ impl TerminalService {
         let (reserve_asset0, reserve_asset1) = match is_native_token0 {
             // token0 = native, token1 = token
             true => (
-                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_quote_decimalized),
                 to_truncated_string(&reserve_token_decimalized),
             ),
             // token0 = token, token1 = native
             false => (
                 to_truncated_string(&reserve_token_decimalized),
-                to_truncated_string(&reserve_native_decimalized),
+                to_truncated_string(&reserve_quote_decimalized),
             ),
         };
 
