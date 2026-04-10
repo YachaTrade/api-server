@@ -16,7 +16,7 @@ use crate::{
 #[derive(sqlx::FromRow)]
 struct SwapEventRow {
     swap_created_at: i64,
-    native_amount: BigDecimal,
+    quote_amount: BigDecimal,
     token_id: String,
     name: String,
     symbol: String,
@@ -114,7 +114,7 @@ impl NewEventController {
         let query = r#"
             SELECT
                 s.created_at as swap_created_at,
-                s.native_amount,
+                s.quote_amount,
                 t.token_id,
                 t.name,
                 t.symbol,
@@ -142,7 +142,7 @@ impl NewEventController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN account a2 ON s.account_id = a2.account_id
             LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
-            WHERE s.is_buy = true AND s.native_amount >= 1000000000000000000
+            WHERE s.is_buy = true AND s.quote_amount >= 1000000000000000000
             ORDER BY s.created_at DESC
             LIMIT $1
         "#;
@@ -159,7 +159,7 @@ impl NewEventController {
             .into_iter()
             .map(|row| NewEvent {
                 event_type: EventType::Buy,
-                amount: row.native_amount.normalized().to_plain_string(),
+                amount: row.quote_amount.normalized().to_plain_string(),
                 token_info: TokenInfo {
                     token_id: row.token_id.clone(),
                     name: row.name,
@@ -196,7 +196,7 @@ impl NewEventController {
         let query = r#"
             SELECT
                 s.created_at as swap_created_at,
-                s.native_amount,
+                s.quote_amount,
                 t.token_id,
                 t.name,
                 t.symbol,
@@ -224,7 +224,7 @@ impl NewEventController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN account a2 ON s.account_id = a2.account_id
             LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
-            WHERE s.is_buy = false AND s.native_amount >= 1000000000000000000
+            WHERE s.is_buy = false AND s.quote_amount >= 1000000000000000000
             ORDER BY s.created_at DESC
             LIMIT $1
         "#;
@@ -241,7 +241,7 @@ impl NewEventController {
             .into_iter()
             .map(|row| NewEvent {
                 event_type: EventType::Sell,
-                amount: row.native_amount.normalized().to_plain_string(),
+                amount: row.quote_amount.normalized().to_plain_string(),
                 token_info: TokenInfo {
                     token_id: row.token_id.clone(),
                     name: row.name,

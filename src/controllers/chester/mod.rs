@@ -276,7 +276,7 @@ impl ChesterController {
             creator_image_uri: String,
             creator_bio: String,
             is_buy: bool,
-            native_amount: BigDecimal,
+            quote_amount: BigDecimal,
             token_amount: BigDecimal,
             native_price: BigDecimal,
             value: BigDecimal,
@@ -298,7 +298,7 @@ impl ChesterController {
                     SELECT
                         s.token_id,
                         s.is_buy,
-                        s.native_amount,
+                        s.quote_amount,
                         s.token_amount,
                         s.value,
                         s.created_at,
@@ -331,7 +331,7 @@ impl ChesterController {
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                     a.bio as creator_bio,
                     rs.is_buy,
-                    rs.native_amount,
+                    rs.quote_amount,
                     rs.token_amount,
                     rs.value,
                     COALESCE(lp.price, 0) as native_price,
@@ -404,8 +404,8 @@ impl ChesterController {
                     } else {
                         SwapType::Sell
                     },
-                    native_amount: row.native_amount.normalized().to_plain_string(),
-                    quote_amount: row.native_amount.normalized().to_plain_string(),
+                    native_amount: row.quote_amount.normalized().to_plain_string(),
+                    quote_amount: row.quote_amount.normalized().to_plain_string(),
                     token_amount: row.token_amount.normalized().to_plain_string(),
                     native_price: row.native_price.normalized().to_plain_string(),
                     quote_price: row.native_price.normalized().to_plain_string(),
