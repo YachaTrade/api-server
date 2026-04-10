@@ -76,10 +76,9 @@ impl IntoResponse for AppError {
                     "retry_after": retry_after
                 }));
                 let mut response = (StatusCode::TOO_MANY_REQUESTS, body).into_response();
-                response.headers_mut().insert(
-                    "Retry-After",
-                    retry_after.to_string().parse().unwrap(),
-                );
+                response
+                    .headers_mut()
+                    .insert("Retry-After", retry_after.to_string().parse().unwrap());
                 return response;
             }
         };

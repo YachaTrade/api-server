@@ -3,7 +3,6 @@ pub enum CmsPath {
     SetNsfw,
     InsertTrend,
     UpdateMetadata,
-    RegisterHackathon,
 }
 
 impl CmsPath {
@@ -12,7 +11,6 @@ impl CmsPath {
             CmsPath::SetNsfw => "/cms/token/nsfw",
             CmsPath::InsertTrend => "/cms/trend/insert",
             CmsPath::UpdateMetadata => "/cms/token/metadata",
-            CmsPath::RegisterHackathon => "/cms/hackathon/register",
         }
     }
 
@@ -21,7 +19,6 @@ impl CmsPath {
             CmsPath::SetNsfw => "/cms/token/nsfw",
             CmsPath::InsertTrend => "/cms/trend/insert",
             CmsPath::UpdateMetadata => "/cms/token/metadata",
-            CmsPath::RegisterHackathon => "/cms/hackathon/register",
         }
     }
 }

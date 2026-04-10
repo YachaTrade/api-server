@@ -1,7 +1,7 @@
 use crate::controllers::auth::session::SessionController;
 use crate::services::api_key::{update_last_used, validate_api_key};
 use crate::services::rate_limiter::{
-    check_and_increment, RateLimitResult, RATE_LIMIT_WITHOUT_API_KEY, RATE_LIMIT_WITH_API_KEY,
+    RATE_LIMIT_WITH_API_KEY, RATE_LIMIT_WITHOUT_API_KEY, RateLimitResult, check_and_increment,
 };
 
 use super::{config::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
@@ -9,7 +9,7 @@ use super::{config::EXPIRATION_SESSION_KEY, result::AppError, state::AppState};
 use axum::{
     body::Body,
     extract::{ConnectInfo, State},
-    http::{header::ORIGIN, Request, Response},
+    http::{Request, Response, header::ORIGIN},
     middleware::Next,
 };
 use std::env;
@@ -38,7 +38,10 @@ pub async fn authenticate_user(
     mut req: Request<Body>, // 구체적인 Body 타입 사용
     next: Next,             // Body 타입 명시
 ) -> Result<Response<Body>, AppError> {
-    info!("[AUTH] authenticate_user called, path: {}", req.uri().path());
+    info!(
+        "[AUTH] authenticate_user called, path: {}",
+        req.uri().path()
+    );
 
     // Origin 헤더 검증 (CSRF 방어)
     if let Some(origin) = req.headers().get(ORIGIN) {
@@ -121,10 +124,7 @@ pub async fn api_key_gate(
     }
 
     // 1. Origin 헤더 확인
-    let origin = req
-        .headers()
-        .get(ORIGIN)
-        .and_then(|v| v.to_str().ok());
+    let origin = req.headers().get(ORIGIN).and_then(|v| v.to_str().ok());
 
     // 2. CORS 허용 Origin이면 API Key 검사 건너뛰기
     if let Some(origin_str) = origin {
@@ -135,10 +135,7 @@ pub async fn api_key_gate(
     }
 
     // 3. 외부 Origin 또는 Origin 없음 → API Key 선택적 (Rate Limit 차등 적용)
-    let api_key = req
-        .headers()
-        .get("X-API-Key")
-        .and_then(|v| v.to_str().ok());
+    let api_key = req.headers().get("X-API-Key").and_then(|v| v.to_str().ok());
 
     // 4. IP 주소 추출 (API Key 없을 때 rate limit용)
     // Cloudflare -> HAProxy -> API Server 구조에서 원본 IP 추출
@@ -193,15 +190,26 @@ pub async fn api_key_gate(
             update_last_used(&redis, &hash).await;
         });
 
-        (format!("key:{}", key_info.key_hash), RATE_LIMIT_WITH_API_KEY, true)
+        (
+            format!("key:{}", key_info.key_hash),
+            RATE_LIMIT_WITH_API_KEY,
+            true,
+        )
     } else {
         // 5b. API Key 없음 → IP 기반 10 req/min
-        (format!("ip:{}", client_ip), RATE_LIMIT_WITHOUT_API_KEY, false)
+        (
+            format!("ip:{}", client_ip),
+            RATE_LIMIT_WITHOUT_API_KEY,
+            false,
+        )
     };
 
     // 6. Rate Limit 확인
     match check_and_increment(&state.redis, &rate_limit_id, rate_limit).await? {
-        RateLimitResult::Exceeded { retry_after, limit: _ } => {
+        RateLimitResult::Exceeded {
+            retry_after,
+            limit: _,
+        } => {
             return Err(AppError::TooManyRequests { retry_after });
         }
         RateLimitResult::Allowed { remaining, limit } => {
@@ -212,17 +220,19 @@ pub async fn api_key_gate(
             response
                 .headers_mut()
                 .insert("X-RateLimit-Limit", limit.to_string().parse().unwrap());
-            response
-                .headers_mut()
-                .insert("X-RateLimit-Remaining", remaining.to_string().parse().unwrap());
+            response.headers_mut().insert(
+                "X-RateLimit-Remaining",
+                remaining.to_string().parse().unwrap(),
+            );
             response
                 .headers_mut()
                 .insert("X-RateLimit-Window", "1m".parse().unwrap());
 
             if !has_api_key {
-                response
-                    .headers_mut()
-                    .insert("X-RateLimit-Upgrade", "Get API key for 100 req/min".parse().unwrap());
+                response.headers_mut().insert(
+                    "X-RateLimit-Upgrade",
+                    "Get API key for 100 req/min".parse().unwrap(),
+                );
             }
 
             return Ok(response);

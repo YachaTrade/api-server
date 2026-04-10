@@ -92,7 +92,6 @@ use utoipa_swagger_ui::SwaggerUi;
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
-        router::order::handler::get_hackathon_order,
 
 
         // ----------------New Event----------------
@@ -133,7 +132,6 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::set_nsfw,
         router::cms::handler::insert_trend,
         router::cms::handler::update_metadata,
-        router::cms::handler::register_hackathon,
 
         // ----------------CMS Analytics----------------
         router::cms::analytics::handler::get_churned_users,
@@ -320,17 +318,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::analytics::ChesterRetentionRound,
             types::cms::analytics::ChesterRetentionResponse,
 
-            // Hackathon
-            types::hackathon::HackathonInfo,
-            types::hackathon::HackathonTeamInfo,
-            types::hackathon::HackathonTeamMemberInfo,
-            types::hackathon::HackathonMemberGitHubInfo,
-            types::hackathon::HackathonProjectInfo,
-            types::hackathon::TeamMemberInput,
-            types::hackathon::RegisterHackathonRequest,
-            types::hackathon::RegisterHackathonBatchResponse,
-            types::hackathon::HackathonTokenListResponse,
-
         )
     ),
     tags(
@@ -444,7 +431,10 @@ async fn main() -> Result<()> {
         .merge(SwaggerUi::new("/dev-sw").url("/dev-sw/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
-        .layer(axum_middleware::from_fn_with_state(app_state.clone(), api_server::middleware::api_key_gate))
+        .layer(axum_middleware::from_fn_with_state(
+            app_state.clone(),
+            api_server::middleware::api_key_gate,
+        ))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
         .layer(cookie_manager_layer)
         // .layer(GovernorLayer {
@@ -481,8 +471,9 @@ async fn method_based_timeout(
 ) -> Result<axum::response::Response, StatusCode> {
     // Exempt upload endpoints from timeout restrictions
     let path = req.uri().path();
-    let is_upload_endpoint =
-        path.starts_with("/metadata/image") || path.starts_with("/metadata/metadata") || path.starts_with("/agent/token/image");
+    let is_upload_endpoint = path.starts_with("/metadata/image")
+        || path.starts_with("/metadata/metadata")
+        || path.starts_with("/agent/token/image");
 
     if is_upload_endpoint {
         // No timeout for upload endpoints

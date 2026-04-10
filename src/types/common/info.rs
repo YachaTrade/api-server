@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
-use crate::types::hackathon::HackathonInfo;
-
 // ==================== Core Info Structs ====================
 
 /// Token version enum matching DB CHECK constraint
@@ -35,9 +33,6 @@ pub struct TokenInfo {
     pub creator: AccountInfo,
     pub is_cto: bool,
     pub version: TokenVersion,
-    #[serde(default)]
-    #[sqlx(skip)]
-    pub hackathon_info: Option<HackathonInfo>,
 }
 
 /// Account information

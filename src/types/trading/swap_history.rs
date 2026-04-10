@@ -105,7 +105,9 @@ pub struct SwapQuery {
 impl SwapQuery {
     /// Validate the query parameters
     pub fn validate(&self) -> Result<(), String> {
-        if self.account_id.is_some() && valid_account_id(self.account_id.as_ref().unwrap()).is_none() {
+        if self.account_id.is_some()
+            && valid_account_id(self.account_id.as_ref().unwrap()).is_none()
+        {
             return Err("Invalid account ID format".to_string());
         }
 

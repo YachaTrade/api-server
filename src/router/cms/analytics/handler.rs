@@ -10,8 +10,8 @@ use crate::{
     result::{AppError, AppJsonResult},
     state::AppState,
     types::cms::analytics::{
-        ChesterRetentionResponse, NewUsersQuery, NewUsersResponse,
-        UserActivityQuery, UserActivityResponse, UserRoiResponse,
+        ChesterRetentionResponse, NewUsersQuery, NewUsersResponse, UserActivityQuery,
+        UserActivityResponse, UserRoiResponse,
     },
 };
 
@@ -40,7 +40,9 @@ pub async fn get_churned_users(
     verify_admin(&state, &session_address).await?;
 
     if query.inactive_days <= 0 {
-        return Err(AppError::BadRequest("inactive_days must be positive".to_string()));
+        return Err(AppError::BadRequest(
+            "inactive_days must be positive".to_string(),
+        ));
     }
 
     let limit = query.limit.unwrap_or(10).min(100);
@@ -48,7 +50,9 @@ pub async fn get_churned_users(
     let response = controller
         .get_user_activity(query.inactive_days, limit, true)
         .await
-        .map_err(|err| AppError::InternalError(format!("Failed to fetch churned users: {}", err)))?;
+        .map_err(|err| {
+            AppError::InternalError(format!("Failed to fetch churned users: {}", err))
+        })?;
 
     Ok(Json(response))
 }
@@ -78,7 +82,9 @@ pub async fn get_active_users(
     verify_admin(&state, &session_address).await?;
 
     if query.inactive_days <= 0 {
-        return Err(AppError::BadRequest("inactive_days must be positive".to_string()));
+        return Err(AppError::BadRequest(
+            "inactive_days must be positive".to_string(),
+        ));
     }
 
     let limit = query.limit.unwrap_or(10).min(100);
@@ -180,10 +186,9 @@ pub async fn get_chester_retention(
     verify_admin(&state, &session_address).await?;
 
     let controller = AnalyticsController::new(state.postgres.clone());
-    let response = controller
-        .get_chester_retention()
-        .await
-        .map_err(|err| AppError::InternalError(format!("Failed to fetch chester retention: {}", err)))?;
+    let response = controller.get_chester_retention().await.map_err(|err| {
+        AppError::InternalError(format!("Failed to fetch chester retention: {}", err))
+    })?;
 
     Ok(Json(response))
 }
