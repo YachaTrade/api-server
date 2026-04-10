@@ -110,12 +110,6 @@ impl OrderController {
 
                 let query = format!(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -175,7 +169,13 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     WHERE {}
                     ORDER BY t.created_at {}
                     LIMIT $1 OFFSET $2
@@ -201,12 +201,6 @@ impl OrderController {
 
                 let query = format!(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -266,7 +260,13 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     WHERE {}
                     ORDER BY m.latest_trade_at {}
                     LIMIT $1 OFFSET $2
@@ -292,12 +292,6 @@ impl OrderController {
 
                 let query = format!(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -364,7 +358,13 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     ORDER BY m.price {}
                     "#,
                     nsfw_filter, order_direction, order_direction
