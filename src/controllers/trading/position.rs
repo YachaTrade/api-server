@@ -99,12 +99,6 @@ impl PositionController {
             "position.fetch_holders_by_token",
             sqlx::query_as::<_, TokenHolderRow>(
                 r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                )
                 SELECT
                     b.balance,
                     (m.price * COALESCE(lp.price, 0)) as token_price,
@@ -118,7 +112,13 @@ impl PositionController {
                 JOIN account a ON b.account_id = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 JOIN market m ON b.token_id = m.token_id
-                CROSS JOIN latest_price lp
+                LEFT JOIN LATERAL (
+                    SELECT p.price
+                    FROM price p
+                    WHERE p.quote_id = m.quote_id
+                    ORDER BY p.block_number DESC
+                    LIMIT 1
+                ) lp ON true
                 WHERE b.token_id = $1 AND b.balance > 0
                 ORDER BY b.balance DESC
                 OFFSET $2 LIMIT $3
@@ -227,12 +227,6 @@ impl PositionController {
             "position.get_hold_token_by_account",
             sqlx::query_as::<_, HoldTokenRow>(
                 r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                )
                 SELECT
                     t.token_id,
                     t.name,
@@ -272,7 +266,13 @@ impl PositionController {
                 JOIN market m ON t.token_id = m.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                CROSS JOIN latest_price lp
+                LEFT JOIN LATERAL (
+                    SELECT p.price
+                    FROM price p
+                    WHERE p.quote_id = m.quote_id
+                    ORDER BY p.block_number DESC
+                    LIMIT 1
+                ) lp ON true
                 WHERE b.account_id = $1 AND b.balance > 0
                 ORDER BY (b.balance * m.price * COALESCE(lp.price, 0)) DESC
                 LIMIT $2 OFFSET $3
