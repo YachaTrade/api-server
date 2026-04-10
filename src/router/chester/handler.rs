@@ -73,9 +73,7 @@ pub async fn get_round(
     tag = "Chester"
 )]
 #[instrument(skip(state))]
-pub async fn get_rewards(
-    State(state): State<AppState>,
-) -> AppJsonResult<ChesterRewardsResponse> {
+pub async fn get_rewards(State(state): State<AppState>) -> AppJsonResult<ChesterRewardsResponse> {
     let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_rewards().await?;
 
@@ -108,7 +106,9 @@ pub async fn get_box_rewards(
     );
 
     let service = ChesterService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.get_box_rewards(&session_address, query.round).await?;
+    let response = service
+        .get_box_rewards(&session_address, query.round)
+        .await?;
 
     tracing::info!(
         account_id = %session_address,

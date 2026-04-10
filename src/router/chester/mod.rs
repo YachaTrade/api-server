@@ -9,18 +9,9 @@ use path::ChesterPath;
 
 pub fn router(app_state: AppState) -> Router<AppState> {
     Router::new()
-        .route(
-            ChesterPath::Volume.as_str(),
-            get(handler::get_volume),
-        )
-        .route(
-            ChesterPath::Round.as_str(),
-            get(handler::get_round),
-        )
-        .route(
-            ChesterPath::Rewards.as_str(),
-            get(handler::get_rewards),
-        )
+        .route(ChesterPath::Volume.as_str(), get(handler::get_volume))
+        .route(ChesterPath::Round.as_str(), get(handler::get_round))
+        .route(ChesterPath::Rewards.as_str(), get(handler::get_rewards))
         .route(
             ChesterPath::BoxRewards.as_str(),
             get(handler::get_box_rewards).layer(middleware::from_fn_with_state(

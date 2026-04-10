@@ -151,7 +151,6 @@ impl TokenMetadataController {
             },
             is_cto: row.is_cto,
             version: row.version.clone(),
-            hackathon_info: None,
         };
 
         let mut market_id = row.market_id;

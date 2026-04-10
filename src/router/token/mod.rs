@@ -18,8 +18,4 @@ pub fn router() -> Router<AppState> {
             get(handler::get_token_metadata),
         )
         .route(TokenPath::Salt.as_str(), post(handler::salt))
-        .route(
-            TokenPath::Hackathon.as_str(),
-            get(handler::get_hackathon_tokens),
-        )
 }

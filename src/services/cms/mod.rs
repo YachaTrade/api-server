@@ -11,13 +11,11 @@ use crate::{
     controllers::cms::CmsController,
     db::{postgres::PostgresDatabase, r2::R2Client},
     result::AppError,
-    services::hackathon::HackathonService,
     types::{
         cms::{
             CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
             UpdateMetadataResponse,
         },
-        hackathon::{RegisterHackathonBatchResponse, RegisterHackathonRequest},
         metadata::TokenMetadata,
     },
     utils::single_flight::GLOBAL_CACHE,
@@ -310,51 +308,5 @@ impl CmsService {
 
         info!("Uploaded metadata to: {}", metadata_uri);
         Ok(())
-    }
-
-    /// Register hackathon projects (accepts array)
-    /// 1. Verify admin status
-    /// 2. Delegate to HackathonService (handles GitHub fetch + DB insert for each)
-    /// Skips items that already exist
-    pub async fn register_hackathon(
-        &self,
-        session_address: &str,
-        requests: Vec<RegisterHackathonRequest>,
-    ) -> Result<RegisterHackathonBatchResponse, AppError> {
-        // Verify admin status
-        let cms_controller = CmsController::new(self.postgres.clone());
-        let is_admin = cms_controller
-            .verify_admin(session_address)
-            .await
-            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
-
-        if !is_admin {
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-
-        // Delegate to HackathonService
-        let hackathon_service = Arc::new(HackathonService::new(self.postgres.clone()));
-        let response = hackathon_service.register_hackathon_batch(requests).await;
-
-        info!(
-            "Hackathon registration complete: {} registered, {} skipped, {} failed",
-            response.registered, response.skipped, response.failed
-        );
-
-        // Return error if any registration failed
-        if response.failed > 0 {
-            let failed_tokens: Vec<&str> = response
-                .results
-                .iter()
-                .filter(|r| r.status == "error")
-                .map(|r| r.token_id.as_str())
-                .collect();
-            return Err(AppError::BadRequest(format!(
-                "Invalid token addresses: {}",
-                failed_tokens.join(", ")
-            )));
-        }
-
-        Ok(response)
     }
 }

@@ -22,10 +22,5 @@ pub fn router(state: AppState) -> Router<AppState> {
                 .layer(DefaultBodyLimit::max(5_000_000)) // 5MB for image upload
                 .layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
-        .route(
-            CmsPath::RegisterHackathon.as_str(),
-            post(handler::register_hackathon)
-                .layer(from_fn_with_state(state.clone(), authenticate_user)),
-        )
         .merge(analytics::router(state.clone()))
 }

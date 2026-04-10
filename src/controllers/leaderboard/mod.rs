@@ -10,8 +10,8 @@ use crate::{
     types::{
         common::info::AccountInfo,
         leaderboard::{
-            HypePointLeaderboardEntry, HypePointLeaderboardResponse, LeaderboardQuery,
-            Pnl, PnlLeaderboardEntry, PnlLeaderboardResponse,
+            HypePointLeaderboardEntry, HypePointLeaderboardResponse, LeaderboardQuery, Pnl,
+            PnlLeaderboardEntry, PnlLeaderboardResponse,
         },
     },
 };

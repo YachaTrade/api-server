@@ -6,7 +6,6 @@ use crate::{
     controllers::token::TokenController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    services::hackathon::HackathonService,
     types::token::TokenResponse,
 };
 
@@ -26,24 +25,13 @@ impl TokenService {
         }
 
         let controller = TokenController::new(self.postgres.clone());
-        let hackathon_service = HackathonService::new(self.postgres.clone());
-
-        // Fetch token and hackathon_info in parallel
-        let (token_result, hackathon_info) = tokio::join!(
-            controller.get_token(token_id),
-            hackathon_service.get_hackathon_info(token_id)
-        );
-
-        let mut response = token_result.map_err(|err| {
+        let response = controller.get_token(token_id).await.map_err(|err| {
             error!(
                 "Failed to get token: token_id: {}, error: {}",
                 token_id, err
             );
             AppError::NotFound(err.to_string())
         })?;
-
-        // Inject hackathon_info
-        response.token_info.hackathon_info = hackathon_info;
 
         if let Err(err) = self.redis.set_token_response(token_id, &response).await {
             error!("Failed to set token response: {}", err);

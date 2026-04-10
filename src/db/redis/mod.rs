@@ -71,9 +71,7 @@ impl RedisDatabase {
     /// Flush all Redis data
     pub async fn flush_all(&self) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        redis::cmd("FLUSHALL")
-            .query_async::<()>(&mut conn)
-            .await?;
+        redis::cmd("FLUSHALL").query_async::<()>(&mut conn).await?;
         info!("Redis FLUSHALL completed");
         Ok(())
     }
@@ -1533,8 +1531,10 @@ impl RedisDatabase {
     ) -> Result<Option<crate::types::chester::ChesterInfoResponse>> {
         let mut conn = self.conn.as_ref().clone();
         let key = "chester:round";
-        let json: Option<String> =
-            measure_redis!("redis.get_chester_round", conn.get::<_, Option<String>>(key))?;
+        let json: Option<String> = measure_redis!(
+            "redis.get_chester_round",
+            conn.get::<_, Option<String>>(key)
+        )?;
         match json {
             Some(j) => Ok(Some(serde_json::from_str(&j)?)),
             None => Ok(None),
@@ -1562,8 +1562,10 @@ impl RedisDatabase {
     ) -> Result<Option<crate::types::chester::ChesterVolumeResponse>> {
         let mut conn = self.conn.as_ref().clone();
         let key = format!("chester:volume:{}", account_id);
-        let json: Option<String> =
-            measure_redis!("redis.get_chester_volume", conn.get::<_, Option<String>>(key))?;
+        let json: Option<String> = measure_redis!(
+            "redis.get_chester_volume",
+            conn.get::<_, Option<String>>(key)
+        )?;
         match json {
             Some(j) => Ok(Some(serde_json::from_str(&j)?)),
             None => Ok(None),
@@ -1579,7 +1581,11 @@ impl RedisDatabase {
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_rewards",
-            conn.pset_ex::<String, String, ()>(key.to_string(), json, CHESTER_REWARDS_CACHE_EXPIRATION)
+            conn.pset_ex::<String, String, ()>(
+                key.to_string(),
+                json,
+                CHESTER_REWARDS_CACHE_EXPIRATION
+            )
         )?;
         Ok(())
     }
@@ -1692,8 +1698,10 @@ impl RedisDatabase {
     ) -> Result<Option<crate::types::chester::ChesterRewardsResponse>> {
         let mut conn = self.conn.as_ref().clone();
         let key = "chester:rewards";
-        let json: Option<String> =
-            measure_redis!("redis.get_chester_rewards", conn.get::<_, Option<String>>(key))?;
+        let json: Option<String> = measure_redis!(
+            "redis.get_chester_rewards",
+            conn.get::<_, Option<String>>(key)
+        )?;
         match json {
             Some(j) => Ok(Some(serde_json::from_str(&j)?)),
             None => Ok(None),
@@ -1709,10 +1717,7 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
 
         // Use INCR command
-        let count: u64 = redis::cmd("INCR")
-            .arg(key)
-            .query_async(&mut conn)
-            .await?;
+        let count: u64 = redis::cmd("INCR").arg(key).query_async(&mut conn).await?;
 
         // Set TTL only on first increment (when count == 1)
         if count == 1 {

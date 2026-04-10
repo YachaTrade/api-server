@@ -19,13 +19,11 @@ pub fn router(state: AppState) -> Router<AppState> {
         )
         .route(
             AnalyticsPath::NewUsers.as_str(),
-            get(handler::get_new_users)
-                .layer(from_fn_with_state(state.clone(), authenticate_user)),
+            get(handler::get_new_users).layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
         .route(
             AnalyticsPath::UserRoi.as_str(),
-            get(handler::get_user_roi)
-                .layer(from_fn_with_state(state.clone(), authenticate_user)),
+            get(handler::get_user_roi).layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
         .route(
             AnalyticsPath::ChesterRetention.as_str(),

@@ -13,12 +13,7 @@ impl NonceController {
         NonceController { db }
     }
 
-    pub async fn set_nonce(
-        &self,
-        address: &str,
-        message: &str,
-        expiration_ms: u64,
-    ) -> Result<()> {
+    pub async fn set_nonce(&self, address: &str, message: &str, expiration_ms: u64) -> Result<()> {
         measure_postgres!(
             "auth.set_nonce",
             sqlx::query(

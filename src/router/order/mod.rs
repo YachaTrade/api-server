@@ -20,8 +20,4 @@ pub fn router() -> Router<AppState> {
             OrderPath::LatestTrade.as_str(),
             get(handler::get_latest_trade_order),
         )
-        .route(
-            OrderPath::Hackathon.as_str(),
-            get(handler::get_hackathon_order),
-        )
 }
