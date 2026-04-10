@@ -155,102 +155,67 @@ impl TokenCreatedController {
                     ORDER BY created_at DESC
                     LIMIT 1
                 ),
-                created_tokens AS (
-                    SELECT
-                        t.token_id,
-                        t.name as token_name,
-                        t.symbol as token_symbol,
-                        t.image_uri as token_image_uri,
-                        t.description as token_description,
-                        t.twitter as token_twitter,
-                        t.telegram as token_telegram,
-                        t.website as token_website,
-                        t.is_graduated,
-                        t.is_nsfw,
-                        t.is_cto,
-                        t.version,
-                        t.created_at as token_created_at,
-                        t.creator,
-                        t.token_holder_count as holder_count,
-                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
-                        a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
-                        m.market_type,
-                        COALESCE(m.pool_id, '') as market_id,
-                    COALESCE(m.quote_id, '') as quote_id,
-                        (m.price * COALESCE(lp.price, 0)) as token_price,
-                        COALESCE(lp.price, 0) as native_price,
-                        m.price,
-                        (m.price * COALESCE(lp.price, 0)) as price_usd,
-                        t.total_supply,
-                        COALESCE(m.reserve_quote, 0) as reserve_quote,
-                        COALESCE(m.reserve_token, 0) as reserve_token,
-                        m.volume,
-                        m.ath_price,
-                        m.ath_price_native,
-                        COALESCE(b.balance, 0) as balance,
-                        COALESCE(b.created_at, 0) as balance_created_at,
-                        COALESCE(cr.amount, 0) as reward_amount,
-                        COALESCE(ctch.claimed_amount, 0) as reward_claimed_amount,
-                        COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
-                        cr.status as reward_status
+                paged_tokens AS (
+                    SELECT t.*
                     FROM token t
-                    JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
-                    LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
-                    LEFT JOIN (
-                        SELECT token_id, account_id, SUM(amount) as claimed_amount
-                        FROM creator_treasury_claim_history
-                        GROUP BY token_id, account_id
-                    ) ctch ON t.token_id = ctch.token_id AND ctch.account_id = $1
-                    CROSS JOIN latest_price lp
                     WHERE t.creator = $1
+                    ORDER BY t.created_at DESC
+                    LIMIT $2 OFFSET $3
+                ),
+                claimed_totals AS (
+                    SELECT token_id, SUM(amount) as claimed_amount
+                    FROM creator_treasury_claim_history
+                    WHERE account_id = $1
+                    GROUP BY token_id
                 )
                 SELECT
-                    token_id,
-                    token_name,
-                    token_symbol,
-                    token_image_uri,
-                    token_description,
-                    token_twitter,
-                    token_telegram,
-                    token_website,
-                    is_graduated,
-                    is_nsfw,
-                    is_cto,
-                    version,
-                    token_created_at,
-                    creator,
-                    holder_count,
-                    creator_nickname,
-                    creator_bio,
-                    creator_image_uri,
-                    market_type,
-                    market_id,
-                    quote_id,
-                    token_price,
-                    native_price,
-                    price,
-                    price_usd,
-                    total_supply,
-                    reserve_quote,
-                    reserve_token,
-                    volume,
-                    ath_price,
-                    ath_price_native,
-                    balance,
-                    balance_created_at,
-                    reward_amount,
-                    reward_claimed_amount,
-                    reward_proof,
-                    reward_status
-                FROM created_tokens
-                ORDER BY token_created_at DESC
-                LIMIT $2
-                OFFSET $3
-                "#,
+                    t.token_id,
+                    t.name as token_name,
+                    t.symbol as token_symbol,
+                    t.image_uri as token_image_uri,
+                    t.description as token_description,
+                    t.twitter as token_twitter,
+                    t.telegram as token_telegram,
+                    t.website as token_website,
+                    t.is_graduated,
+                    t.is_nsfw,
+                    t.is_cto,
+                    t.version,
+                    t.created_at as token_created_at,
+                    t.creator,
+                    t.token_holder_count as holder_count,
+                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                    a.bio as creator_bio,
+                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    m.market_type,
+                    COALESCE(m.pool_id, '') as market_id,
+                    COALESCE(m.quote_id, '') as quote_id,
+                    (m.price * COALESCE(lp.price, 0)) as token_price,
+                    COALESCE(lp.price, 0) as native_price,
+                    m.price,
+                    (m.price * COALESCE(lp.price, 0)) as price_usd,
+                    t.total_supply,
+                    COALESCE(m.reserve_quote, 0) as reserve_quote,
+                    COALESCE(m.reserve_token, 0) as reserve_token,
+                    m.volume,
+                    m.ath_price,
+                    m.ath_price_native,
+                    COALESCE(b.balance, 0) as balance,
+                    COALESCE(b.created_at, 0) as balance_created_at,
+                    COALESCE(cr.amount, 0) as reward_amount,
+                    COALESCE(ctch.claimed_amount, 0) as reward_claimed_amount,
+                    COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
+                    cr.status as reward_status
+                FROM paged_tokens t
+                JOIN account a ON t.creator = a.account_id
+                LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                JOIN market m ON t.token_id = m.token_id
+                LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
+                LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
+                LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
+                CROSS JOIN latest_price lp
+                ORDER BY t.created_at DESC
+"#,
             )
             .bind(account_id)
             .bind(pagination.limit)
