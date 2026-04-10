@@ -277,10 +277,10 @@ impl TerminalService {
         // This is the price of asset0 quoted in asset1
         let price_native = match is_native_token0 {
             // token0 = native, token1 = token
-            // priceNative = amount(asset1) / amount(asset0) = token_amount / native_amount
+            // priceNative = amount(asset1) / amount(asset0) = token_amount / quote_amount
             true => to_truncated_string(&(&token_amount_decimalized / &quote_amount_decimalized)),
             // token0 = token, token1 = native
-            // priceNative = amount(asset1) / amount(asset0) = native_amount / token_amount
+            // priceNative = amount(asset1) / amount(asset0) = quote_amount / token_amount
             false => to_truncated_string(&(&quote_amount_decimalized / &token_amount_decimalized)),
         };
 
