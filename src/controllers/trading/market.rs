@@ -59,12 +59,6 @@ impl MarketController {
             "market.fetch_market_by_token",
             sqlx::query_as::<_, MarketRow>(
                 r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                )
                 SELECT
                     m.market_type,
                     m.token_id,
@@ -83,7 +77,13 @@ impl MarketController {
                     m.ath_price_native
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
-                CROSS JOIN latest_price lp
+                LEFT JOIN LATERAL (
+                    SELECT p.price
+                    FROM price p
+                    WHERE p.quote_id = m.quote_id
+                    ORDER BY p.block_number DESC
+                    LIMIT 1
+                ) lp ON true
                 WHERE m.token_id = $1
                 "#,
             )
