@@ -95,7 +95,7 @@ impl AnalyticsController {
             LEFT JOIN (
                 SELECT s.account_id,
                        SUM(s.value) as volume_usd,
-                       SUM(s.native_amount) as volume_native
+                       SUM(s.quote_amount) as volume_native
                 FROM swap s
                 INNER JOIN (
                     SELECT aa.account_id
