@@ -15,7 +15,10 @@ pub fn valid_account_id(address: &str) -> Option<String> {
 
 /// Token ID 검증: EVM 주소 형식 + VANITY_ADDRESS_SUFFIX 확인 후 체크섬 주소 반환
 pub fn valid_token_id(token_id: &str) -> Option<String> {
-    if !token_id.to_lowercase().ends_with(&VANITY_ADDRESS_SUFFIX.to_lowercase()) {
+    if !token_id
+        .to_lowercase()
+        .ends_with(&VANITY_ADDRESS_SUFFIX.to_lowercase())
+    {
         return None;
     }
     valid_account_id(token_id)

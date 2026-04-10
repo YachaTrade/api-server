@@ -7,8 +7,8 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::cms::analytics::{
-        ChesterRetentionResponse, ChesterRetentionRound, NewUsersResponse,
-        TopHeldToken, UserActivityResponse, UserRoiResponse,
+        ChesterRetentionResponse, ChesterRetentionRound, NewUsersResponse, TopHeldToken,
+        UserActivityResponse, UserRoiResponse,
     },
 };
 
@@ -167,9 +167,21 @@ impl AnalyticsController {
         Ok(UserActivityResponse {
             total_users: stats.total_users,
             avg_pnl_usd: stats.avg_pnl_usd.unwrap_or_default().round(2).to_string(),
-            avg_pnl_native: stats.avg_pnl_native.unwrap_or_default().round(2).to_string(),
-            avg_volume_usd: stats.avg_volume_usd.unwrap_or_default().round(2).to_string(),
-            avg_volume_native: stats.avg_volume_native.unwrap_or_default().round(2).to_string(),
+            avg_pnl_native: stats
+                .avg_pnl_native
+                .unwrap_or_default()
+                .round(2)
+                .to_string(),
+            avg_volume_usd: stats
+                .avg_volume_usd
+                .unwrap_or_default()
+                .round(2)
+                .to_string(),
+            avg_volume_native: stats
+                .avg_volume_native
+                .unwrap_or_default()
+                .round(2)
+                .to_string(),
             top_held_tokens,
         })
     }
@@ -228,8 +240,16 @@ impl AnalyticsController {
         .map_err(|err| anyhow!("Failed to fetch ROI stats: {}", err))?;
 
         Ok(UserRoiResponse {
-            avg_roi_percent: stats.avg_roi_percent.unwrap_or_default().round(2).to_string(),
-            median_roi_percent: stats.median_roi_percent.unwrap_or_default().round(2).to_string(),
+            avg_roi_percent: stats
+                .avg_roi_percent
+                .unwrap_or_default()
+                .round(2)
+                .to_string(),
+            median_roi_percent: stats
+                .median_roi_percent
+                .unwrap_or_default()
+                .round(2)
+                .to_string(),
             positive_roi_count: stats.positive_roi_count,
             negative_roi_count: stats.negative_roi_count,
             total_users: stats.total_users,
