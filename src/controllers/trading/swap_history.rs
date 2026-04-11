@@ -120,13 +120,7 @@ impl SwapController {
             "swap.fetch_swaps_by_account",
             sqlx::query_as::<_, SwapRow>(
                 r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ),
-                recent_swaps AS (
+                WITH recent_swaps AS (
                     SELECT
                         s.token_id,
                         s.is_buy,
@@ -171,7 +165,14 @@ impl SwapController {
                 JOIN token t ON rs.token_id = t.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                CROSS JOIN latest_price lp
+                JOIN market m ON rs.token_id = m.token_id
+                LEFT JOIN LATERAL (
+                    SELECT p.price
+                    FROM price p
+                    WHERE p.quote_id = m.quote_id
+                    ORDER BY p.block_number DESC
+                    LIMIT 1
+                ) lp ON true
                 ORDER BY rs.created_at DESC
                 "#,
             )
@@ -259,12 +260,6 @@ impl SwapController {
 
         let mut next_param = 2;
         let mut query_sql = r#"
-        WITH latest_price AS (
-            SELECT price
-            FROM price
-            ORDER BY created_at DESC
-            LIMIT 1
-        )
         SELECT
             a.account_id,
             a.nickname as account_nickname,
@@ -289,7 +284,14 @@ impl SwapController {
             WHERE ax.account_id = a.account_id
             LIMIT 1
         ) ax ON true
-        CROSS JOIN latest_price lp
+        JOIN market m ON s.token_id = m.token_id
+        LEFT JOIN LATERAL (
+            SELECT p.price
+            FROM price p
+            WHERE p.quote_id = m.quote_id
+            ORDER BY p.block_number DESC
+            LIMIT 1
+        ) lp ON true
         WHERE s.token_id = $1"#
             .to_string();
 

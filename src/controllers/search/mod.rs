@@ -210,12 +210,6 @@ impl SearchController {
                 let checksummed = valid_account_id(query).unwrap_or_else(|| query.to_string());
                 sqlx::query_as::<_, SearchTokenRow>(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price
-                        FROM price
-                        ORDER BY created_at DESC
-                        LIMIT 1
-                    )
                     SELECT
                         t.token_id,
                         t.name,
@@ -252,7 +246,13 @@ impl SearchController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     WHERE t.token_id = $1
                     LIMIT 1
                     "#,
@@ -268,12 +268,6 @@ impl SearchController {
                 let (symbol_future, name_future) = (
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
-                        WITH latest_price AS (
-                            SELECT price
-                            FROM price
-                            ORDER BY created_at DESC
-                            LIMIT 1
-                        )
                         SELECT
                             t.token_id,
                             t.name,
@@ -310,7 +304,13 @@ impl SearchController {
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
-                        CROSS JOIN latest_price lp
+                        LEFT JOIN LATERAL (
+                            SELECT p.price
+                            FROM price p
+                            WHERE p.quote_id = m.quote_id
+                            ORDER BY p.block_number DESC
+                            LIMIT 1
+                        ) lp ON true
                         WHERE t.symbol ILIKE '%' || $1 || '%'
                         ORDER BY (m.price * t.total_supply * COALESCE(lp.price, 0)) DESC, t.symbol DESC
                         LIMIT 25
@@ -320,12 +320,6 @@ impl SearchController {
                     .fetch_all(pool),
                     sqlx::query_as::<_, SearchTokenRow>(
                         r#"
-                        WITH latest_price AS (
-                            SELECT price
-                            FROM price
-                            ORDER BY created_at DESC
-                            LIMIT 1
-                        )
                         SELECT
                             t.token_id,
                             t.name,
@@ -362,7 +356,13 @@ impl SearchController {
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
-                        CROSS JOIN latest_price lp
+                        LEFT JOIN LATERAL (
+                            SELECT p.price
+                            FROM price p
+                            WHERE p.quote_id = m.quote_id
+                            ORDER BY p.block_number DESC
+                            LIMIT 1
+                        ) lp ON true
                         WHERE t.name ILIKE '%' || $1 || '%'
                         ORDER BY (m.price * t.total_supply * COALESCE(lp.price, 0)) DESC, t.name DESC
                         LIMIT 25
