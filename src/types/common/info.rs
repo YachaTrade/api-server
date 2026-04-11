@@ -86,11 +86,14 @@ pub struct MarketInfo {
     pub quote_id: String,
     pub market_id: String,
     pub reserve_native: String,
+    pub reserve_quote: String,
     pub reserve_token: String,
     /// Token/USD price
     pub token_price: String,
-    /// MON/USD price
+    /// MON/USD price (legacy; for V2 non-WMON quote tokens, mirrors quote_price)
     pub native_price: String,
+    /// Quote/USD price (equals native_price for V1/WMON tokens)
+    pub quote_price: String,
     /// MON/Token price
     pub price: String,
     /// USD/Token price
