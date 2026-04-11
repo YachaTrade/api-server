@@ -288,13 +288,7 @@ impl ChesterController {
             "chester.get_swap_history",
             sqlx::query_as::<_, SwapRow>(
                 r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ),
-                recent_swaps AS (
+                WITH recent_swaps AS (
                     SELECT
                         s.token_id,
                         s.is_buy,
@@ -341,7 +335,14 @@ impl ChesterController {
                 JOIN token t ON rs.token_id = t.token_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                CROSS JOIN latest_price lp
+                JOIN market m ON rs.token_id = m.token_id
+                LEFT JOIN LATERAL (
+                    SELECT p.price
+                    FROM price p
+                    WHERE p.quote_id = m.quote_id
+                    ORDER BY p.block_number DESC
+                    LIMIT 1
+                ) lp ON true
                 ORDER BY rs.created_at DESC
                 "#,
             )

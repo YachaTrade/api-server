@@ -133,9 +133,6 @@ impl HypeController {
                 "hype.fetch_hype_token_latest.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price FROM price ORDER BY created_at DESC LIMIT 1
-                    )
                     SELECT
                         h.vote,
                         t.token_id,
@@ -166,7 +163,13 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
                         (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
@@ -253,9 +256,6 @@ impl HypeController {
                 "hype.fetch_hype_token.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price FROM price ORDER BY created_at DESC LIMIT 1
-                    )
                     SELECT
                         h.vote,
                         t.token_id,
@@ -286,7 +286,13 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     WHERE h.epoch = COALESCE(
                         (SELECT epoch FROM epoch WHERE status = 'ACTIVE' LIMIT 1),
                         (SELECT epoch FROM epoch WHERE status = 'COMPLETED' ORDER BY epoch DESC LIMIT 1)
@@ -404,9 +410,6 @@ impl HypeController {
                 "hype.fetch_hype_token_epoch.rows",
                 sqlx::query_as::<_, HypeTokenRow>(
                     r#"
-                    WITH latest_price AS (
-                        SELECT price FROM price ORDER BY created_at DESC LIMIT 1
-                    )
                     SELECT
                         h.vote,
                         t.token_id,
@@ -437,7 +440,13 @@ impl HypeController {
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON h.token_id = m.token_id
                     LEFT JOIN reward_pool r ON h.epoch = r.epoch AND h.token_id = r.token_id
-                    CROSS JOIN latest_price lp
+                    LEFT JOIN LATERAL (
+                        SELECT p.price
+                        FROM price p
+                        WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC
+                        LIMIT 1
+                    ) lp ON true
                     WHERE h.epoch = $1
                     ORDER BY h.vote DESC, market_cap DESC
                     "#,

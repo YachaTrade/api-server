@@ -149,13 +149,7 @@ impl TokenCreatedController {
             "token_created.fetch_tokens_created",
             sqlx::query_as::<_, TokenCreatedRow>(
                 r#"
-                WITH latest_price AS (
-                    SELECT price
-                    FROM price
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ),
-                paged_tokens AS (
+                WITH paged_tokens AS (
                     SELECT t.*
                     FROM token t
                     WHERE t.creator = $1
@@ -213,7 +207,13 @@ impl TokenCreatedController {
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                 LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
                 LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
-                CROSS JOIN latest_price lp
+                LEFT JOIN LATERAL (
+                    SELECT p.price
+                    FROM price p
+                    WHERE p.quote_id = m.quote_id
+                    ORDER BY p.block_number DESC
+                    LIMIT 1
+                ) lp ON true
                 ORDER BY t.created_at DESC
 "#,
             )
