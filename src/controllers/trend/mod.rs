@@ -49,7 +49,7 @@ struct TrendTokenRow {
     reserve_token: BigDecimal,
     volume: BigDecimal,
     ath_price: BigDecimal,
-    ath_price_native: BigDecimal,
+    ath_price_quote: BigDecimal,
     price_24h_ago: BigDecimal,
 }
 
@@ -119,7 +119,7 @@ impl TrendController {
                 COALESCE(m.reserve_token, 0) as reserve_token,
                 m.volume,
                 m.ath_price,
-                m.ath_price_native,
+                m.ath_price_quote,
                 COALESCE(
                     (
                         SELECT ph.price
@@ -297,7 +297,8 @@ impl From<TrendTokenRow> for TrendToken {
                 volume: row.volume.normalized().to_plain_string(),
                 ath_price: row.ath_price.normalized().to_plain_string(),
                 ath_price_usd: row.ath_price.normalized().to_plain_string(),
-                ath_price_native: row.ath_price_native.normalized().to_plain_string(),
+                ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
+                ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                 holder_count: row.holder_count,
             },
             percent,
