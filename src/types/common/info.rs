@@ -108,8 +108,10 @@ pub struct MarketInfo {
     pub ath_price: String,
     /// Ath price(USD)
     pub ath_price_usd: String,
-    //Ath price(Native)
+    /// Ath price(Native) — legacy alias, equals ath_price_quote for V1/WMON tokens
     pub ath_price_native: String,
+    /// Ath price(Quote) — quote asset denominated ATH
+    pub ath_price_quote: String,
     /// Holder count (used for tokne total holder count)
     pub holder_count: i64,
 }

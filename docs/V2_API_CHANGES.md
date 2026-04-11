@@ -9,7 +9,7 @@ This document lists every API response schema change between the current mainnet
 | Type | Change |
 |---|---|
 | `TokenInfo` | `hackathon_info` removed, `version` added |
-| `MarketInfo` | `quote_id`, `reserve_quote`, `quote_price` added |
+| `MarketInfo` | `quote_id`, `reserve_quote`, `quote_price`, `ath_price_quote` added |
 | `SwapInfo` | `quote_amount`, `quote_price` added |
 | `MarketType` enum | `V2_CURVE`, `V2_DEX` added |
 | `TokenVersion` enum | new type (`V1` \| `V2`) |
@@ -116,6 +116,7 @@ interface MarketInfo {
     ath_price: string;
     ath_price_usd: string;
     ath_price_native: string;
+    ath_price_quote: string;      // ← NEW
     holder_count: number;
 }
 ```
@@ -125,6 +126,7 @@ interface MarketInfo {
 - **Added**: `quote_id` — quote asset address. WMON for V1 tokens; may be another address (USDC, etc.) for V2 tokens.
 - **Added**: `reserve_quote` — quote asset reserve. Identical to `reserve_native` for V1/WMON tokens.
 - **Added**: `quote_price` — quote asset / USD price. Identical to `native_price` for V1/WMON tokens.
+- **Added**: `ath_price_quote` — all-time-high price in quote asset. Identical to `ath_price_native` for V1/WMON tokens.
 
 ---
 

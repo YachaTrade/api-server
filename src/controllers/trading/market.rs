@@ -31,7 +31,7 @@ struct MarketRow {
     volume: BigDecimal,
     holder_count: i64,
     ath_price: BigDecimal,
-    ath_price_native: BigDecimal,
+    ath_price_quote: BigDecimal,
 }
 
 pub struct MarketController {
@@ -74,7 +74,7 @@ impl MarketController {
                     m.volume,
                     t.token_holder_count as holder_count,
                     m.ath_price,
-                    m.ath_price_native
+                    m.ath_price_quote
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 LEFT JOIN LATERAL (
@@ -127,7 +127,8 @@ impl MarketController {
                 holder_count: row.holder_count,
                 ath_price: row.ath_price.normalized().to_plain_string(),
                 ath_price_usd: row.ath_price.normalized().to_plain_string(),
-                ath_price_native: row.ath_price_native.normalized().to_plain_string(),
+                ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
+                ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
             },
         })
     }
