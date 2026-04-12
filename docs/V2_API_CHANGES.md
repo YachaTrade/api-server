@@ -111,6 +111,7 @@ interface MarketInfo {
     price: string;
     price_usd: string;
     price_native: string;
+    price_quote: string;          // ← NEW
     total_supply: string;
     volume: string;
     ath_price: string;
