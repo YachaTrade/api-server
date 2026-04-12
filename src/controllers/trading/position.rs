@@ -348,6 +348,7 @@ impl PositionController {
                         price: row.price.normalized().to_plain_string(),
                         price_usd: row.price_usd.normalized().to_plain_string(),
                         price_native: row.price.normalized().to_plain_string(),
+                        price_quote: row.price.normalized().to_plain_string(),
                         total_supply: row.total_supply.normalized().to_plain_string(),
                         reserve_native: row.reserve_quote.normalized().to_plain_string(),
                         reserve_quote: row.reserve_quote.normalized().to_plain_string(),
