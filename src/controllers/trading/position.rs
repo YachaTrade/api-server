@@ -219,7 +219,7 @@ impl PositionController {
             reserve_token: BigDecimal,
             volume: BigDecimal,
             ath_price: BigDecimal,
-            ath_price_native: BigDecimal,
+            ath_price_quote: BigDecimal,
             holder_count: i64,
         }
 
@@ -259,7 +259,7 @@ impl PositionController {
                     COALESCE(m.reserve_token, 0) as reserve_token,
                     m.volume,
                     m.ath_price,
-                    m.ath_price_native,
+                    m.ath_price_quote,
                     t.token_holder_count as holder_count
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
@@ -355,7 +355,8 @@ impl PositionController {
                         volume: row.volume.normalized().to_plain_string(),
                         ath_price: row.ath_price.normalized().to_plain_string(),
                         ath_price_usd: row.ath_price.normalized().to_plain_string(),
-                        ath_price_native: row.ath_price_native.normalized().to_plain_string(),
+                        ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
+                        ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                         holder_count: row.holder_count,
                     },
                 }

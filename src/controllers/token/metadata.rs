@@ -72,7 +72,7 @@ impl TokenMetadataController {
             reserve_quote: BigDecimal,
             reserve_token: BigDecimal,
             ath_price: BigDecimal,
-            ath_price_native: BigDecimal,
+            ath_price_quote: BigDecimal,
             volume: BigDecimal,
         }
 
@@ -111,7 +111,7 @@ impl TokenMetadataController {
                     COALESCE(m.reserve_token, 0) as reserve_token,
                     m.volume,
                     m.ath_price,
-                    m.ath_price_native
+                    m.ath_price_quote
                 FROM token t
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -186,7 +186,8 @@ impl TokenMetadataController {
             volume: row.volume.normalized().to_plain_string(),
             ath_price: row.ath_price.normalized().to_plain_string(),
             ath_price_usd: row.ath_price.normalized().to_plain_string(),
-            ath_price_native: row.ath_price_native.normalized().to_plain_string(),
+            ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
+            ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
             holder_count: row.holder_count,
         };
 
