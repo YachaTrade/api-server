@@ -93,7 +93,6 @@ pub struct QuoteInfo {
 pub struct MarketInfo {
     pub market_type: MarketType,
     pub token_id: String,
-    pub quote_id: String,
     pub quote_info: QuoteInfo,
     pub market_id: String,
     pub reserve_native: String,
