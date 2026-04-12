@@ -133,7 +133,6 @@ impl SearchController {
                             _ => MarketType::Curve,
                         },
                         token_id: row.token_id,
-                        quote_id: row.quote_id.clone(),
                         quote_info: QuoteInfo {
                             quote_id: row.quote_id.clone(),
                             name: row.quote_name.clone(),
