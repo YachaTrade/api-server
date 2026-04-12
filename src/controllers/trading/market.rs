@@ -85,7 +85,7 @@ impl MarketController {
                     COALESCE(qt.image_uri, '') as quote_image_uri
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
-                LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
+                JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
