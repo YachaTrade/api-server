@@ -146,10 +146,10 @@ impl OrderController {
                         m.volume,
                         m.ath_price,
                         m.ath_price_quote,
-                        COALESCE(dt.name, '') as quote_name,
-                        COALESCE(dt.symbol, '') as quote_symbol,
-                        COALESCE(dt.decimals, 18) as quote_decimals,
-                        COALESCE(dt.image_uri, '') as quote_image_uri,
+                        COALESCE(qt.name, '') as quote_name,
+                        COALESCE(qt.symbol, '') as quote_symbol,
+                        COALESCE(qt.decimals, 18) as quote_decimals,
+                        COALESCE(qt.image_uri, '') as quote_image_uri,
                         COALESCE(
                             (
                                 SELECT ph.price
@@ -177,7 +177,7 @@ impl OrderController {
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
+                    LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -242,10 +242,10 @@ impl OrderController {
                         m.volume,
                         m.ath_price,
                         m.ath_price_quote,
-                        COALESCE(dt.name, '') as quote_name,
-                        COALESCE(dt.symbol, '') as quote_symbol,
-                        COALESCE(dt.decimals, 18) as quote_decimals,
-                        COALESCE(dt.image_uri, '') as quote_image_uri,
+                        COALESCE(qt.name, '') as quote_name,
+                        COALESCE(qt.symbol, '') as quote_symbol,
+                        COALESCE(qt.decimals, 18) as quote_decimals,
+                        COALESCE(qt.image_uri, '') as quote_image_uri,
                         COALESCE(
                             (
                                 SELECT ph.price
@@ -273,7 +273,7 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
+                    LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -338,10 +338,10 @@ impl OrderController {
                         m.volume,
                         m.ath_price,
                         m.ath_price_quote,
-                        COALESCE(dt.name, '') as quote_name,
-                        COALESCE(dt.symbol, '') as quote_symbol,
-                        COALESCE(dt.decimals, 18) as quote_decimals,
-                        COALESCE(dt.image_uri, '') as quote_image_uri,
+                        COALESCE(qt.name, '') as quote_name,
+                        COALESCE(qt.symbol, '') as quote_symbol,
+                        COALESCE(qt.decimals, 18) as quote_decimals,
+                        COALESCE(qt.image_uri, '') as quote_image_uri,
                         COALESCE(
                             (
                                 SELECT ph.price
@@ -376,7 +376,7 @@ impl OrderController {
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                    LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
+                    LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p

@@ -79,13 +79,13 @@ impl MarketController {
                     t.token_holder_count as holder_count,
                     m.ath_price,
                     m.ath_price_quote,
-                    COALESCE(dt.name, '') as quote_name,
-                    COALESCE(dt.symbol, '') as quote_symbol,
-                    COALESCE(dt.decimals, 18) as quote_decimals,
-                    COALESCE(dt.image_uri, '') as quote_image_uri
+                    COALESCE(qt.name, '') as quote_name,
+                    COALESCE(qt.symbol, '') as quote_symbol,
+                    COALESCE(qt.decimals, 18) as quote_decimals,
+                    COALESCE(qt.image_uri, '') as quote_image_uri
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
-                LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
+                LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
