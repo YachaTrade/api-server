@@ -98,8 +98,10 @@ pub struct MarketInfo {
     pub price: String,
     /// USD/Token price
     pub price_usd: String,
-    /// MON/Token price
+    /// MON/Token price (legacy alias)
     pub price_native: String,
+    /// Quote/Token price (canonical for V2)
+    pub price_quote: String,
     /// Total supply (used for market cap calculation in bonding curve)
     pub total_supply: String,
     /// Volume (used for tokne total volume)
