@@ -9,7 +9,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{AccountInfo, MarketInfo, MarketType, TokenInfo, TokenVersion},
+        common::info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
         token::metadata::TokenMetadataResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -74,6 +74,10 @@ impl TokenMetadataController {
             ath_price: BigDecimal,
             ath_price_quote: BigDecimal,
             volume: BigDecimal,
+            quote_name: String,
+            quote_symbol: String,
+            quote_decimals: i32,
+            quote_image_uri: String,
         }
 
         let row = measure_postgres!(
@@ -111,11 +115,16 @@ impl TokenMetadataController {
                     COALESCE(m.reserve_token, 0) as reserve_token,
                     m.volume,
                     m.ath_price,
-                    m.ath_price_quote
+                    m.ath_price_quote,
+                    COALESCE(qt.name, '') as quote_name,
+                    COALESCE(qt.symbol, '') as quote_symbol,
+                    COALESCE(qt.decimals, 18) as quote_decimals,
+                    COALESCE(qt.image_uri, '') as quote_image_uri
                 FROM token t
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 JOIN market m ON t.token_id = m.token_id
+                JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
@@ -172,6 +181,13 @@ impl TokenMetadataController {
             },
             token_id: row.token_id,
             quote_id: row.quote_id.clone(),
+            quote_info: QuoteInfo {
+                quote_id: row.quote_id.clone(),
+                name: row.quote_name.clone(),
+                symbol: row.quote_symbol.clone(),
+                decimals: row.quote_decimals as u32,
+                image_uri: row.quote_image_uri.clone(),
+            },
             market_id,
             token_price: row.token_price.normalized().to_plain_string(),
             native_price: row.native_price.normalized().to_plain_string(),

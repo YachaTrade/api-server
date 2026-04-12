@@ -78,12 +78,23 @@ pub enum MarketType {
     V2Dex,
 }
 
+/// Quote token metadata
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct QuoteInfo {
+    pub quote_id: String,
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u32,
+    pub image_uri: String,
+}
+
 /// Market information with pricing data
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MarketInfo {
     pub market_type: MarketType,
     pub token_id: String,
     pub quote_id: String,
+    pub quote_info: QuoteInfo,
     pub market_id: String,
     pub reserve_native: String,
     pub reserve_quote: String,
