@@ -11,7 +11,7 @@ use crate::{
     types::common::{
         CountRow,
         info::{
-            AccountInfo, BalanceInfo, MarketInfo, MarketType, TokenInfo, TokenVersion,
+            AccountInfo, BalanceInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
             TokenWithBalanceInfo,
         },
         pagination::PaginationParams,
@@ -220,6 +220,10 @@ impl PositionController {
             volume: BigDecimal,
             ath_price: BigDecimal,
             ath_price_quote: BigDecimal,
+            quote_name: String,
+            quote_symbol: String,
+            quote_decimals: i32,
+            quote_image_uri: String,
             holder_count: i64,
         }
 
@@ -260,10 +264,15 @@ impl PositionController {
                     m.volume,
                     m.ath_price,
                     m.ath_price_quote,
+                    COALESCE(qt.name, '') as quote_name,
+                    COALESCE(qt.symbol, '') as quote_symbol,
+                    COALESCE(qt.decimals, 18) as quote_decimals,
+                    COALESCE(qt.image_uri, '') as quote_image_uri,
                     t.token_holder_count as holder_count
                 FROM token t
                 JOIN balance b ON t.token_id = b.token_id
                 JOIN market m ON t.token_id = m.token_id
+                JOIN quote_token qt ON m.quote_id = qt.quote_id
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 LEFT JOIN LATERAL (
@@ -341,6 +350,13 @@ impl PositionController {
                         },
                         token_id: row.token_id,
                         quote_id: row.quote_id.clone(),
+                        quote_info: QuoteInfo {
+                            quote_id: row.quote_id.clone(),
+                            name: row.quote_name.clone(),
+                            symbol: row.quote_symbol.clone(),
+                            decimals: row.quote_decimals as u32,
+                            image_uri: row.quote_image_uri.clone(),
+                        },
                         market_id,
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),

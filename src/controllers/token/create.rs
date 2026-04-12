@@ -12,8 +12,8 @@ use crate::{
         common::{
             CountRow,
             info::{
-                AccountInfo, BalanceInfo, MarketInfo, MarketType, RewardInfo, TokenCreatedInfo,
-                TokenInfo, TokenVersion,
+                AccountInfo, BalanceInfo, MarketInfo, MarketType, QuoteInfo, RewardInfo,
+                TokenCreatedInfo, TokenInfo, TokenVersion,
             },
             pagination::PaginationParams,
         },
@@ -137,6 +137,10 @@ impl TokenCreatedController {
             volume: BigDecimal,
             ath_price: BigDecimal,
             ath_price_quote: BigDecimal,
+            quote_name: String,
+            quote_symbol: String,
+            quote_decimals: i32,
+            quote_image_uri: String,
             balance: BigDecimal,
             balance_created_at: i64,
             reward_amount: BigDecimal,
@@ -194,6 +198,10 @@ impl TokenCreatedController {
                     m.volume,
                     m.ath_price,
                     m.ath_price_quote,
+                    COALESCE(qt.name, '') as quote_name,
+                    COALESCE(qt.symbol, '') as quote_symbol,
+                    COALESCE(qt.decimals, 18) as quote_decimals,
+                    COALESCE(qt.image_uri, '') as quote_image_uri,
                     COALESCE(b.balance, 0) as balance,
                     COALESCE(b.created_at, 0) as balance_created_at,
                     COALESCE(cr.amount, 0) as reward_amount,
@@ -204,6 +212,7 @@ impl TokenCreatedController {
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 JOIN market m ON t.token_id = m.token_id
+                JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                 LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
                 LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
@@ -268,6 +277,13 @@ impl TokenCreatedController {
                         },
                         token_id: row.token_id,
                         quote_id: row.quote_id.clone(),
+                        quote_info: QuoteInfo {
+                            quote_id: row.quote_id.clone(),
+                            name: row.quote_name.clone(),
+                            symbol: row.quote_symbol.clone(),
+                            decimals: row.quote_decimals as u32,
+                            image_uri: row.quote_image_uri.clone(),
+                        },
                         market_id,
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),

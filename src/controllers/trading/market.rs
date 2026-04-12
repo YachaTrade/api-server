@@ -9,7 +9,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{MarketInfo, MarketType},
+        common::info::{MarketInfo, MarketType, QuoteInfo},
         trading::market::MarketResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -32,6 +32,10 @@ struct MarketRow {
     holder_count: i64,
     ath_price: BigDecimal,
     ath_price_quote: BigDecimal,
+    quote_name: String,
+    quote_symbol: String,
+    quote_decimals: i32,
+    quote_image_uri: String,
 }
 
 pub struct MarketController {
@@ -74,9 +78,14 @@ impl MarketController {
                     m.volume,
                     t.token_holder_count as holder_count,
                     m.ath_price,
-                    m.ath_price_quote
+                    m.ath_price_quote,
+                    COALESCE(qt.name, '') as quote_name,
+                    COALESCE(qt.symbol, '') as quote_symbol,
+                    COALESCE(qt.decimals, 18) as quote_decimals,
+                    COALESCE(qt.image_uri, '') as quote_image_uri
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
+                JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
@@ -112,6 +121,13 @@ impl MarketController {
                 },
                 token_id: row.token_id,
                 quote_id: row.quote_id.clone(),
+                quote_info: QuoteInfo {
+                    quote_id: row.quote_id.clone(),
+                    name: row.quote_name.clone(),
+                    symbol: row.quote_symbol.clone(),
+                    decimals: row.quote_decimals as u32,
+                    image_uri: row.quote_image_uri.clone(),
+                },
                 market_id,
                 token_price: row.token_price.normalized().to_plain_string(),
                 native_price: row.native_price.normalized().to_plain_string(),
