@@ -124,7 +124,7 @@ impl TokenMetadataController {
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 JOIN market m ON t.token_id = m.token_id
-                LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
+                JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
