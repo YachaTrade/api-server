@@ -1,26 +1,26 @@
-# nad.fun API V2 — Interface Changes
+# nad.fun API V2 — 인터페이스 변경사항
 
-This document lists every API response schema change between the current mainnet (V1) API and the upcoming V2 release. Only type/field changes are described — no migration guides, no infrastructure notes.
+현재 mainnet(V1) API와 V2 릴리즈 간의 모든 API 응답 스키마 변경사항을 정리한 문서입니다. 타입/필드 변경만 기술합니다.
 
 ---
 
-## Summary
+## 요약
 
-| Type | Change |
+| 타입 | 변경 |
 |---|---|
-| `TokenInfo` | `hackathon_info` removed, `version` added |
-| `MarketInfo` | `quote_id`, `reserve_quote`, `quote_price`, `price_quote`, `ath_price_quote` added |
-| `SwapInfo` | `quote_amount`, `quote_price` added |
-| `MarketType` enum | `V2_CURVE`, `V2_DEX` added |
-| `TokenVersion` enum | new type (`V1` \| `V2`) |
-| `HackathonInfo` + sub-types | removed entirely |
-| Endpoints | `/token/hackathon`, `/order/hackathon`, `/cms/hackathon/register` removed |
+| `TokenInfo` | `hackathon_info` 제거, `version` 추가 |
+| `MarketInfo` | `quote_id`, `reserve_quote`, `quote_price`, `price_quote`, `ath_price_quote` 추가 |
+| `SwapInfo` | `quote_amount`, `quote_price` 추가 |
+| `MarketType` enum | `V2_CURVE`, `V2_DEX` 추가 |
+| `TokenVersion` enum | 신규 타입 (`V1` \| `V2`) |
+| `HackathonInfo` + 하위 타입 | 전체 제거 |
+| 엔드포인트 | `/token/hackathon`, `/order/hackathon`, `/cms/hackathon/register` 제거 |
 
 ---
 
 ## TokenInfo
 
-### Before (V1)
+### 이전 (V1)
 
 ```typescript
 interface TokenInfo {
@@ -37,11 +37,11 @@ interface TokenInfo {
     created_at: number;
     creator: AccountInfo;
     is_cto: boolean;
-    hackathon_info: HackathonInfo | null;   // ← REMOVED in V2
+    hackathon_info: HackathonInfo | null;   // ← V2에서 제거됨
 }
 ```
 
-### After (V2)
+### 이후 (V2)
 
 ```typescript
 interface TokenInfo {
@@ -58,20 +58,20 @@ interface TokenInfo {
     created_at: number;
     creator: AccountInfo;
     is_cto: boolean;
-    version: TokenVersion;                   // ← NEW: "V1" | "V2"
+    version: TokenVersion;                   // ← 신규: "V1" | "V2"
 }
 ```
 
-### Changes
+### 변경사항
 
-- **Removed**: `hackathon_info` — field and all nested `HackathonInfo` sub-types no longer exist in any response
-- **Added**: `version` — token version (`"V1"` or `"V2"`)
+- **제거**: `hackathon_info` — 모든 응답에서 해당 필드와 하위 `HackathonInfo` 타입이 제거됨
+- **추가**: `version` — 토큰 버전 (`"V1"` 또는 `"V2"`)
 
 ---
 
 ## MarketInfo
 
-### Before (V1)
+### 이전 (V1)
 
 ```typescript
 interface MarketInfo {
@@ -94,47 +94,47 @@ interface MarketInfo {
 }
 ```
 
-### After (V2)
+### 이후 (V2)
 
 ```typescript
 interface MarketInfo {
     market_type: MarketType;
     token_id: string;
-    quote_id: string;             // ← NEW
+    quote_id: string;             // ← 신규
     market_id: string;
     reserve_native: string;
-    reserve_quote: string;        // ← NEW
+    reserve_quote: string;        // ← 신규
     reserve_token: string;
     token_price: string;
     native_price: string;
-    quote_price: string;          // ← NEW
+    quote_price: string;          // ← 신규
     price: string;
     price_usd: string;
     price_native: string;
-    price_quote: string;          // ← NEW
+    price_quote: string;          // ← 신규
     total_supply: string;
     volume: string;
     ath_price: string;
     ath_price_usd: string;
     ath_price_native: string;
-    ath_price_quote: string;      // ← NEW
+    ath_price_quote: string;      // ← 신규
     holder_count: number;
 }
 ```
 
-### Changes
+### 변경사항
 
-- **Added**: `quote_id` — quote asset address. WMON for V1 tokens; may be another address (USDC, etc.) for V2 tokens.
-- **Added**: `reserve_quote` — quote asset reserve. Identical to `reserve_native` for V1/WMON tokens.
-- **Added**: `quote_price` — quote asset / USD price. Identical to `native_price` for V1/WMON tokens.
-- **Added**: `price_quote` — token price in quote asset. Identical to `price_native` for V1/WMON tokens.
-- **Added**: `ath_price_quote` — all-time-high price in quote asset. Identical to `ath_price_native` for V1/WMON tokens.
+- **추가**: `quote_id` — quote 자산 주소. V1 토큰은 WMON, V2 토큰은 다른 주소(USDC 등) 가능.
+- **추가**: `reserve_quote` — quote 자산 리저브. V1/WMON 토큰에서는 `reserve_native`와 동일값.
+- **추가**: `quote_price` — quote 자산 / USD 환율. V1/WMON 토큰에서는 `native_price`와 동일값.
+- **추가**: `price_quote` — quote 자산 기준 토큰 가격. V1/WMON 토큰에서는 `price_native`와 동일값.
+- **추가**: `ath_price_quote` — quote 자산 기준 최고가(ATH). V1/WMON 토큰에서는 `ath_price_native`와 동일값.
 
 ---
 
 ## SwapInfo
 
-### Before (V1)
+### 이전 (V1)
 
 ```typescript
 interface SwapInfo {
@@ -148,92 +148,92 @@ interface SwapInfo {
 }
 ```
 
-### After (V2)
+### 이후 (V2)
 
 ```typescript
 interface SwapInfo {
     event_type: SwapType;
     native_amount: string;
-    quote_amount: string;         // ← NEW
+    quote_amount: string;         // ← 신규
     token_amount: string;
     native_price: string;
-    quote_price: string;          // ← NEW
+    quote_price: string;          // ← 신규
     value: string;
     transaction_hash: string;
     created_at: number;
 }
 ```
 
-### Changes
+### 변경사항
 
-- **Added**: `quote_amount` — quote asset amount swapped. Identical to `native_amount` for V1/WMON tokens.
-- **Added**: `quote_price` — quote asset / USD price at swap time. Identical to `native_price` for V1/WMON tokens.
+- **추가**: `quote_amount` — 스왑에 사용된 quote 자산 수량. V1/WMON 토큰에서는 `native_amount`와 동일값.
+- **추가**: `quote_price` — 스왑 시점 quote 자산 / USD 환율. V1/WMON 토큰에서는 `native_price`와 동일값.
 
 ---
 
 ## MarketType (enum)
 
-### Before (V1)
+### 이전 (V1)
 
 ```typescript
 type MarketType = "CURVE" | "DEX";
 ```
 
-### After (V2)
+### 이후 (V2)
 
 ```typescript
 type MarketType = "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
 ```
 
-### Changes
+### 변경사항
 
-- **Added**: `"V2_CURVE"` — V2 bonding curve market
-- **Added**: `"V2_DEX"` — V2 graduated DEX market
+- **추가**: `"V2_CURVE"` — V2 본딩 커브 마켓
+- **추가**: `"V2_DEX"` — V2 졸업 DEX 마켓
 
-Note: `V2_CURVE` / `V2_DEX` values will only appear in responses once V2 tokens exist in the database. Current mainnet data is all V1.
+참고: `V2_CURVE` / `V2_DEX` 값은 DB에 V2 토큰이 생성된 이후에만 응답에 나타남. 현재 mainnet 데이터는 전부 V1.
 
 ---
 
-## TokenVersion (new enum)
+## TokenVersion (신규 enum)
 
-### New in V2
+### V2에서 신규 추가
 
 ```typescript
 type TokenVersion = "V1" | "V2";
 ```
 
-Used as the value of `TokenInfo.version`. All existing mainnet tokens have `version: "V1"`.
+`TokenInfo.version`의 값으로 사용됨. 현재 mainnet의 모든 토큰은 `version: "V1"`.
 
 ---
 
-## HackathonInfo (removed)
+## HackathonInfo (제거)
 
-### Before (V1)
+### 이전 (V1)
 
-`TokenInfo.hackathon_info` was an optional nested object containing team, project, and registration metadata for hackathon-registered tokens. The full type tree (`HackathonInfo`, `HackathonTeamInfo`, `HackathonProjectInfo`, etc.) is defined in `src/types/hackathon/` in V1.
+`TokenInfo.hackathon_info`는 해커톤 등록 토큰의 팀, 프로젝트, 등록 메타데이터를 담은 optional 중첩 객체였음. 전체 타입 트리(`HackathonInfo`, `HackathonTeamInfo`, `HackathonProjectInfo` 등)가 V1의 `src/types/hackathon/`에 정의되어 있었음.
 
-### After (V2)
+### 이후 (V2)
 
-All `hackathon_*` types are removed. `TokenInfo.hackathon_info` no longer exists. Clients that read `token.hackathon_info` will see `undefined`.
+모든 `hackathon_*` 타입이 제거됨. `TokenInfo.hackathon_info`는 더 이상 존재하지 않음. 이 필드를 읽는 클라이언트는 `undefined`를 받게 됨.
 
 ---
 
-## Removed endpoints
+## 제거된 엔드포인트
 
-The following endpoints are removed in V2 and will return `404`:
+다음 엔드포인트는 V2에서 제거되며 `404`를 반환:
 
-| Method | Path | Purpose |
+| 메서드 | 경로 | 용도 |
 |---|---|---|
-| GET | `/token/hackathon` | List hackathon tokens |
-| GET | `/order/hackathon` | Ordered hackathon tokens |
-| POST | `/cms/hackathon/register` | Register a token for hackathon |
+| GET | `/token/hackathon` | 해커톤 토큰 목록 |
+| GET | `/order/hackathon` | 해커톤 토큰 정렬 |
+| POST | `/cms/hackathon/register` | 해커톤 토큰 등록 |
 
-Clients calling these endpoints must remove the call. No replacement is provided.
+이 엔드포인트를 호출하는 클라이언트는 해당 호출을 제거해야 함. 대체 엔드포인트는 제공되지 않음.
 
 ---
 
-## Field name vs. semantics
+## 필드명 vs. 의미
 
-The `native_*` field names (`native_price`, `native_amount`, `reserve_native`) are retained for backward compatibility. For V1/WMON tokens they carry the same meaning as before. For V2 non-WMON quote tokens (when they exist), these fields hold the quote-asset value rather than MON value — the `quote_*` fields are the canonical source going forward.
+`native_*` 필드명(`native_price`, `native_amount`, `reserve_native`)은 하위 호환을 위해 유지됨. V1/WMON 토큰에서는 기존과 동일한 의미. V2 non-WMON quote 토큰(향후 등장 시)에서는 이 필드들이 MON 값이 아닌 quote 자산 값을 담게 됨 — `quote_*` 필드가 앞으로의 canonical source.
 
-Since current mainnet data is all V1/WMON, this semantic drift is not observable today.
+현재 mainnet 데이터가 전부 V1/WMON이므로 이 의미 변화는 아직 관측되지 않음.
