@@ -9,7 +9,8 @@
 | 타입 | 변경 |
 |---|---|
 | `TokenInfo` | `hackathon_info` 제거, `version` 추가 |
-| `MarketInfo` | `quote_id`, `reserve_quote`, `quote_price`, `price_quote`, `ath_price_quote` 추가 |
+| `MarketInfo` | `quote_info` (nested), `quote_id`, `reserve_quote`, `quote_price`, `price_quote`, `ath_price_quote` 추가 |
+| `QuoteInfo` | 신규 타입 (`quote_id`, `name`, `symbol`, `decimals`, `image_uri`) |
 | `SwapInfo` | `quote_amount`, `quote_price` 추가 |
 | `MarketType` enum | `V2_CURVE`, `V2_DEX` 추가 |
 | `TokenVersion` enum | 신규 타입 (`V1` \| `V2`) |
@@ -97,10 +98,19 @@ interface MarketInfo {
 ### 이후 (V2)
 
 ```typescript
+interface QuoteInfo {                       // ← 신규 타입
+    quote_id: string;
+    name: string;
+    symbol: string;
+    decimals: number;
+    image_uri: string;
+}
+
 interface MarketInfo {
     market_type: MarketType;
     token_id: string;
     quote_id: string;             // ← 신규
+    quote_info: QuoteInfo;        // ← 신규 (nested object)
     market_id: string;
     reserve_native: string;
     reserve_quote: string;        // ← 신규
@@ -125,6 +135,7 @@ interface MarketInfo {
 ### 변경사항
 
 - **추가**: `quote_id` — quote 자산 주소. V1 토큰은 WMON, V2 토큰은 다른 주소(USDC 등) 가능.
+- **추가**: `quote_info` — quote 토큰 메타데이터 (nested object). `quote_id`, `name`, `symbol`, `decimals`, `image_uri` 포함. `quote_token` 테이블에서 JOIN으로 가져옴.
 - **추가**: `reserve_quote` — quote 자산 리저브. V1/WMON 토큰에서는 `reserve_native`와 동일값.
 - **추가**: `quote_price` — quote 자산 / USD 환율. V1/WMON 토큰에서는 `native_price`와 동일값.
 - **추가**: `price_quote` — quote 자산 기준 토큰 가격. V1/WMON 토큰에서는 `price_native`와 동일값.
