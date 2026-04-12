@@ -8,7 +8,7 @@ use crate::{
     config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
     db::postgres::PostgresDatabase,
     types::{
-        common::info::{AccountInfo, MarketInfo, MarketType, TokenInfo, TokenVersion},
+        common::info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
         search::{
             AccountSearchResponse, AccountSearchResult, SearchResponse, TokenSearchResponse,
             TokenSearchResult,
@@ -134,6 +134,13 @@ impl SearchController {
                         },
                         token_id: row.token_id,
                         quote_id: row.quote_id.clone(),
+                        quote_info: QuoteInfo {
+                            quote_id: row.quote_id.clone(),
+                            name: row.quote_name.clone(),
+                            symbol: row.quote_symbol.clone(),
+                            decimals: row.quote_decimals as u32,
+                            image_uri: row.quote_image_uri.clone(),
+                        },
                         market_id,
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),
@@ -245,11 +252,16 @@ impl SearchController {
                         COALESCE(m.reserve_token, 0) as reserve_token,
                         m.volume,
                         m.ath_price,
-                        m.ath_price_quote
+                        m.ath_price_quote,
+                        COALESCE(dt.name, '') as quote_name,
+                        COALESCE(dt.symbol, '') as quote_symbol,
+                        COALESCE(dt.decimals, 18) as quote_decimals,
+                        COALESCE(dt.image_uri, '') as quote_image_uri
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
+                    LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -303,11 +315,16 @@ impl SearchController {
                             COALESCE(m.reserve_token, 0) as reserve_token,
                             m.volume,
                             m.ath_price,
-                            m.ath_price_quote
+                            m.ath_price_quote,
+                            COALESCE(dt.name, '') as quote_name,
+                            COALESCE(dt.symbol, '') as quote_symbol,
+                            COALESCE(dt.decimals, 18) as quote_decimals,
+                            COALESCE(dt.image_uri, '') as quote_image_uri
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
+                        LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
                         LEFT JOIN LATERAL (
                             SELECT p.price
                             FROM price p
@@ -355,11 +372,16 @@ impl SearchController {
                             COALESCE(m.reserve_token, 0) as reserve_token,
                             m.volume,
                             m.ath_price,
-                            m.ath_price_quote
+                            m.ath_price_quote,
+                            COALESCE(dt.name, '') as quote_name,
+                            COALESCE(dt.symbol, '') as quote_symbol,
+                            COALESCE(dt.decimals, 18) as quote_decimals,
+                            COALESCE(dt.image_uri, '') as quote_image_uri
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
+                        LEFT JOIN dex_token dt ON m.quote_id = dt.token_id
                         LEFT JOIN LATERAL (
                             SELECT p.price
                             FROM price p
@@ -588,6 +610,10 @@ struct SearchTokenRow {
     volume: BigDecimal,
     ath_price: BigDecimal,
     ath_price_quote: BigDecimal,
+    quote_name: String,
+    quote_symbol: String,
+    quote_decimals: i32,
+    quote_image_uri: String,
 }
 
 #[derive(sqlx::FromRow)]
