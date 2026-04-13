@@ -568,7 +568,7 @@ interface MarketInfo {
   ath_price_native: string;
   ath_price_quote: string;
   holder_count: number;
-  fee_info?: FeeInfo;  // V2 토큰만
+  fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
 interface SwapInfo {
