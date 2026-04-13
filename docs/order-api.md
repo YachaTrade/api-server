@@ -347,7 +347,7 @@ interface MarketInfo {
   ath_price_native: string;     // ATH 가격 (Native)
   ath_price_quote: string;      // ATH 가격 (Quote)
   holder_count: number;         // 홀더 수
-  fee_info?: FeeInfo;           // 수수료 설정 (V2 토큰만)
+  fee_info: FeeInfo | null;     // 수수료 설정 (V2 토큰만, V1은 null)
 }
 
 interface HackathonInfo {

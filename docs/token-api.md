@@ -335,7 +335,7 @@ interface MarketInfo {
   /** 홀더 수 */
   holder_count: number;
   /** 수수료 설정 (V2 토큰만, V1은 없음) */
-  fee_info?: FeeInfo;
+  fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
 interface HackathonInfo {

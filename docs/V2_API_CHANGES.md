@@ -135,7 +135,7 @@ interface MarketInfo {
     ath_price_native: string;
     ath_price_quote: string;      // ← 신규
     holder_count: number;
-    fee_info?: FeeInfo;           // ← 신규 (V2 토큰만, V1은 필드 없음)
+    fee_info: FeeInfo | null;     // ← 신규 (V2 토큰만, V1은 null)
 }
 ```
 
@@ -147,7 +147,7 @@ interface MarketInfo {
 - **추가**: `quote_price` — quote 자산 / USD 환율. V1/WMON 토큰에서는 `native_price`와 동일값.
 - **추가**: `price_quote` — quote 자산 기준 토큰 가격. V1/WMON 토큰에서는 `price_native`와 동일값.
 - **추가**: `ath_price_quote` — quote 자산 기준 최고가(ATH). V1/WMON 토큰에서는 `ath_price_native`와 동일값.
-- **추가**: `fee_info` — 수수료 설정 (optional, V2 토큰만). `fee_config` 테이블에서 JOIN. V1 토큰에서는 필드 자체가 생략됨 (`skip_serializing_if`). `creator_protocol_fee_rate`, `curve_protocol_fee_rate`, `dex_protocol_fee_rate` 포함 (SMALLINT, basis points).
+- **추가**: `fee_info` — 수수료 설정. `fee_config` 테이블에서 JOIN. V2 토큰은 `FeeInfo` 객체, V1 토큰은 `null` 반환. `creator_protocol_fee_rate`, `curve_protocol_fee_rate`, `dex_protocol_fee_rate` 포함 (SMALLINT, basis points).
 
 ---
 
