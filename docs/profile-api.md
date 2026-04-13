@@ -384,23 +384,43 @@ interface TokenInfo {
 type MarketType = "CURVE" | "DEX";
 
 // 마켓 정보
+interface QuoteInfo {
+  quote_id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  image_uri: string;
+}
+
+interface FeeInfo {
+  creator_protocol_fee_rate: number;
+  curve_protocol_fee_rate: number;
+  dex_protocol_fee_rate: number;
+}
+
 interface MarketInfo {
   market_type: MarketType;
   token_id: string;
+  quote_info: QuoteInfo;
   market_id: string;
   reserve_native: string;
+  reserve_quote: string;
   reserve_token: string;
   token_price: string;      // Token/USD price
   native_price: string;     // MON/USD price
+  quote_price: string;      // Quote/USD price
   price: string;            // MON/Token price
   price_usd: string;        // USD/Token price
   price_native: string;     // MON/Token price
+  price_quote: string;      // Quote/Token price
   total_supply: string;
   volume: string;
   ath_price: string;
   ath_price_usd: string;
   ath_price_native: string;
+  ath_price_quote: string;
   holder_count: number;
+  fee_info?: FeeInfo;       // V2 토큰만, V1은 없음
 }
 
 // 잔액 정보

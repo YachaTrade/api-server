@@ -9,8 +9,9 @@
 | 타입 | 변경 |
 |---|---|
 | `TokenInfo` | `hackathon_info` 제거, `version` 추가 |
-| `MarketInfo` | `quote_info` (nested), `reserve_quote`, `quote_price`, `price_quote`, `ath_price_quote` 추가 |
+| `MarketInfo` | `quote_info` (nested), `reserve_quote`, `quote_price`, `price_quote`, `ath_price_quote`, `fee_info` (optional) 추가 |
 | `QuoteInfo` | 신규 타입 (`quote_id`, `name`, `symbol`, `decimals`, `image_uri`) |
+| `FeeInfo` | 신규 타입 (`creator_protocol_fee_rate`, `curve_protocol_fee_rate`, `dex_protocol_fee_rate`) — V2 토큰만 |
 | `SwapInfo` | `quote_amount`, `quote_price` 추가 |
 | `MarketType` enum | `V2_CURVE`, `V2_DEX` 추가 |
 | `TokenVersion` enum | 신규 타입 (`V1` \| `V2`) |
@@ -106,6 +107,12 @@ interface QuoteInfo {                       // ← 신규 타입
     image_uri: string;
 }
 
+interface FeeInfo {                        // ← 신규 타입 (V2 토큰만)
+    creator_protocol_fee_rate: number;
+    curve_protocol_fee_rate: number;
+    dex_protocol_fee_rate: number;
+}
+
 interface MarketInfo {
     market_type: MarketType;
     token_id: string;
@@ -128,6 +135,7 @@ interface MarketInfo {
     ath_price_native: string;
     ath_price_quote: string;      // ← 신규
     holder_count: number;
+    fee_info?: FeeInfo;           // ← 신규 (V2 토큰만, V1은 필드 없음)
 }
 ```
 
@@ -139,6 +147,7 @@ interface MarketInfo {
 - **추가**: `quote_price` — quote 자산 / USD 환율. V1/WMON 토큰에서는 `native_price`와 동일값.
 - **추가**: `price_quote` — quote 자산 기준 토큰 가격. V1/WMON 토큰에서는 `price_native`와 동일값.
 - **추가**: `ath_price_quote` — quote 자산 기준 최고가(ATH). V1/WMON 토큰에서는 `ath_price_native`와 동일값.
+- **추가**: `fee_info` — 수수료 설정 (optional, V2 토큰만). `fee_config` 테이블에서 JOIN. V1 토큰에서는 필드 자체가 생략됨 (`skip_serializing_if`). `creator_protocol_fee_rate`, `curve_protocol_fee_rate`, `dex_protocol_fee_rate` 포함 (SMALLINT, basis points).
 
 ---
 

@@ -187,23 +187,43 @@ interface AccountInfo {
   image_uri: string;
 }
 
+interface QuoteInfo {
+  quote_id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  image_uri: string;
+}
+
+interface FeeInfo {
+  creator_protocol_fee_rate: number;
+  curve_protocol_fee_rate: number;
+  dex_protocol_fee_rate: number;
+}
+
 interface MarketInfo {
-  market_type: "CURVE" | "DEX";
+  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
   token_id: string;
+  quote_info: QuoteInfo;
   market_id: string;
   reserve_native: string;
+  reserve_quote: string;
   reserve_token: string;
   token_price: string;      // Token/USD price
   native_price: string;     // MON/USD price
+  quote_price: string;      // Quote/USD price
   price: string;            // MON/Token price
   price_usd: string;        // USD/Token price
   price_native: string;     // MON/Token price
+  price_quote: string;      // Quote/Token price
   total_supply: string;     // 총 공급량 (본딩 커브 마켓캡 계산용)
   volume: string;           // 총 거래량
   ath_price: string;        // ATH 가격 (USD)
   ath_price_usd: string;    // ATH 가격 (USD)
   ath_price_native: string; // ATH 가격 (Native)
+  ath_price_quote: string;  // ATH 가격 (Quote)
   holder_count: number;     // 홀더 수
+  fee_info?: FeeInfo;       // 수수료 설정 (V2 토큰만)
 }
 
 interface HackathonInfo {

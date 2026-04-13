@@ -19,3 +19,4 @@ stress-test/
 
 
 haproxy/
+.claude/commands/

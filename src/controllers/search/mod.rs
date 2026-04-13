@@ -8,7 +8,7 @@ use crate::{
     config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
     db::postgres::PostgresDatabase,
     types::{
-        common::info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
+        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
         search::{
             AccountSearchResponse, AccountSearchResult, SearchResponse, TokenSearchResponse,
             TokenSearchResult,
@@ -158,6 +158,14 @@ impl SearchController {
                         ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                         ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                         holder_count: row.holder_count,
+                        fee_info: match row.market_type.as_str() {
+                            "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
+                                creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
+                                curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
+                                dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
+                            }),
+                            _ => None,
+                        },
                     },
                 }
             })
@@ -255,12 +263,16 @@ impl SearchController {
                         COALESCE(qt.name, '') as quote_name,
                         COALESCE(qt.symbol, '') as quote_symbol,
                         COALESCE(qt.decimals, 18) as quote_decimals,
-                        COALESCE(qt.image_uri, '') as quote_image_uri
+                        COALESCE(qt.image_uri, '') as quote_image_uri,
+                        fc.creator_fee_rate,
+                        fc.curve_protocol_fee_rate,
+                        fc.dex_protocol_fee_rate
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
                     LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
                     JOIN quote_token qt ON m.quote_id = qt.quote_id
+                    LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -318,12 +330,16 @@ impl SearchController {
                             COALESCE(qt.name, '') as quote_name,
                             COALESCE(qt.symbol, '') as quote_symbol,
                             COALESCE(qt.decimals, 18) as quote_decimals,
-                            COALESCE(qt.image_uri, '') as quote_image_uri
+                            COALESCE(qt.image_uri, '') as quote_image_uri,
+                            fc.creator_fee_rate,
+                            fc.curve_protocol_fee_rate,
+                            fc.dex_protocol_fee_rate
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
                         JOIN quote_token qt ON m.quote_id = qt.quote_id
+                        LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                         LEFT JOIN LATERAL (
                             SELECT p.price
                             FROM price p
@@ -375,12 +391,16 @@ impl SearchController {
                             COALESCE(qt.name, '') as quote_name,
                             COALESCE(qt.symbol, '') as quote_symbol,
                             COALESCE(qt.decimals, 18) as quote_decimals,
-                            COALESCE(qt.image_uri, '') as quote_image_uri
+                            COALESCE(qt.image_uri, '') as quote_image_uri,
+                            fc.creator_fee_rate,
+                            fc.curve_protocol_fee_rate,
+                            fc.dex_protocol_fee_rate
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
                         LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
                         JOIN quote_token qt ON m.quote_id = qt.quote_id
+                        LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                         LEFT JOIN LATERAL (
                             SELECT p.price
                             FROM price p
@@ -613,6 +633,9 @@ struct SearchTokenRow {
     quote_symbol: String,
     quote_decimals: i32,
     quote_image_uri: String,
+    creator_fee_rate: Option<i16>,
+    curve_protocol_fee_rate: Option<i16>,
+    dex_protocol_fee_rate: Option<i16>,
 }
 
 #[derive(sqlx::FromRow)]
