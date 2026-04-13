@@ -9,7 +9,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{MarketInfo, MarketType, QuoteInfo},
+        common::info::{FeeInfo, MarketInfo, MarketType, QuoteInfo},
         trading::market::MarketResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -36,6 +36,9 @@ struct MarketRow {
     quote_symbol: String,
     quote_decimals: i32,
     quote_image_uri: String,
+    creator_fee_rate: Option<i16>,
+    curve_protocol_fee_rate: Option<i16>,
+    dex_protocol_fee_rate: Option<i16>,
 }
 
 pub struct MarketController {
@@ -82,10 +85,14 @@ impl MarketController {
                     COALESCE(qt.name, '') as quote_name,
                     COALESCE(qt.symbol, '') as quote_symbol,
                     COALESCE(qt.decimals, 18) as quote_decimals,
-                    COALESCE(qt.image_uri, '') as quote_image_uri
+                    COALESCE(qt.image_uri, '') as quote_image_uri,
+                    fc.creator_fee_rate,
+                    fc.curve_protocol_fee_rate,
+                    fc.dex_protocol_fee_rate
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 JOIN quote_token qt ON m.quote_id = qt.quote_id
+                LEFT JOIN fee_config fc ON m.token_id = fc.token_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
@@ -145,6 +152,14 @@ impl MarketController {
                 ath_price_usd: row.ath_price.normalized().to_plain_string(),
                 ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                 ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
+                fee_info: match row.market_type.as_str() {
+                    "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
+                        creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
+                        curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
+                        dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
+                    }),
+                    _ => None,
+                },
             },
         })
     }

@@ -8,7 +8,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
+        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
         trend::{TrendActionResponse, TrendRequest, TrendResponse, TrendToken},
     },
     utils::{
@@ -55,6 +55,9 @@ struct TrendTokenRow {
     quote_decimals: i32,
     quote_image_uri: String,
     price_24h_ago: BigDecimal,
+    creator_fee_rate: Option<i16>,
+    curve_protocol_fee_rate: Option<i16>,
+    dex_protocol_fee_rate: Option<i16>,
 }
 
 pub struct TrendController {
@@ -128,6 +131,9 @@ impl TrendController {
                 COALESCE(qt.symbol, '') as quote_symbol,
                 COALESCE(qt.decimals, 18) as quote_decimals,
                 COALESCE(qt.image_uri, '') as quote_image_uri,
+                fc.creator_fee_rate,
+                fc.curve_protocol_fee_rate,
+                fc.dex_protocol_fee_rate,
                 COALESCE(
                     (
                         SELECT ph.price
@@ -157,6 +163,7 @@ impl TrendController {
             LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN market m ON t.token_id = m.token_id
             JOIN quote_token qt ON m.quote_id = qt.quote_id
+            LEFT JOIN fee_config fc ON t.token_id = fc.token_id
             LEFT JOIN LATERAL (
                 SELECT p.price
                 FROM price p
@@ -316,6 +323,14 @@ impl From<TrendTokenRow> for TrendToken {
                 ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                 ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                 holder_count: row.holder_count,
+                fee_info: match row.market_type.as_str() {
+                    "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
+                        creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
+                        curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
+                        dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
+                    }),
+                    _ => None,
+                },
             },
             percent,
         }

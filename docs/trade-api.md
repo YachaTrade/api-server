@@ -141,20 +141,36 @@ Trade API는 토큰 거래 관련 정보를 조회하기 위한 API입니다.
   "market_info": {
     "market_type": "CURVE",
     "token_id": "0x...",
+    "quote_info": {
+      "quote_id": "0x...",
+      "name": "Wrapped MON",
+      "symbol": "WMON",
+      "decimals": 18,
+      "image_uri": "https://..."
+    },
     "market_id": "0x...",
     "reserve_native": "100000000000000000000",
+    "reserve_quote": "100000000000000000000",
     "reserve_token": "500000000000000000000000",
     "token_price": "0.001",
     "native_price": "3000",
+    "quote_price": "3000",
     "price": "0.000001",
     "price_usd": "0.003",
     "price_native": "0.000001",
+    "price_quote": "0.000001",
     "total_supply": "1000000000000000000000000000",
     "volume": "50000000000000000000000",
     "ath_price": "0.000002",
     "ath_price_usd": "0.006",
     "ath_price_native": "0.000002",
-    "holder_count": 150
+    "ath_price_quote": "0.000002",
+    "holder_count": 150,
+    "fee_info": {
+      "creator_protocol_fee_rate": 100,
+      "curve_protocol_fee_rate": 100,
+      "dex_protocol_fee_rate": 100
+    }
   }
 }
 ```
@@ -163,22 +179,28 @@ Trade API는 토큰 거래 관련 정보를 조회하기 위한 API입니다.
 
 | 필드 | 설명 |
 |------|------|
-| `market_type` | 마켓 타입 (`CURVE`: 본딩 커브, `DEX`: DEX) |
+| `market_type` | 마켓 타입 (`CURVE`, `DEX`, `V2_CURVE`, `V2_DEX`) |
 | `token_id` | 토큰 컨트랙트 주소 |
+| `quote_info` | Quote 토큰 메타데이터 (nested object) |
 | `market_id` | 마켓 컨트랙트 주소 |
 | `reserve_native` | 네이티브 토큰(MON) 리저브 |
+| `reserve_quote` | Quote 자산 리저브 |
 | `reserve_token` | 토큰 리저브 |
 | `token_price` | Token/USD 가격 |
 | `native_price` | MON/USD 가격 |
+| `quote_price` | Quote/USD 가격 |
 | `price` | MON/Token 가격 |
 | `price_usd` | USD/Token 가격 |
 | `price_native` | MON/Token 가격 |
+| `price_quote` | Quote/Token 가격 |
 | `total_supply` | 총 공급량 |
 | `volume` | 총 거래량 |
 | `ath_price` | ATH 가격 |
 | `ath_price_usd` | ATH 가격 (USD) |
 | `ath_price_native` | ATH 가격 (MON) |
+| `ath_price_quote` | ATH 가격 (Quote) |
 | `holder_count` | 보유자 수 |
+| `fee_info` | 수수료 설정 (V2 토큰만, V1은 없음) |
 
 #### 에러 응답
 - `400`: 잘못된 token_id
@@ -421,23 +443,43 @@ interface MarketResponse {
   market_info: MarketInfo;
 }
 
+interface QuoteInfo {
+  quote_id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  image_uri: string;
+}
+
+interface FeeInfo {
+  creator_protocol_fee_rate: number;
+  curve_protocol_fee_rate: number;
+  dex_protocol_fee_rate: number;
+}
+
 interface MarketInfo {
-  market_type: "CURVE" | "DEX";
+  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
   token_id: string;
+  quote_info: QuoteInfo;
   market_id: string;
   reserve_native: string;
+  reserve_quote: string;
   reserve_token: string;
   token_price: string;
   native_price: string;
+  quote_price: string;
   price: string;
   price_usd: string;
   price_native: string;
+  price_quote: string;
   total_supply: string;
   volume: string;
   ath_price: string;
   ath_price_usd: string;
   ath_price_native: string;
+  ath_price_quote: string;
   holder_count: number;
+  fee_info?: FeeInfo;  // V2 토큰만, V1은 없음
 }
 
 // GET /trade/chart/{token_id}
@@ -513,7 +555,7 @@ type ChartType = "price" | "price_usd" | "market_cap" | "market_cap_usd";
 type TimeFrame = "1" | "5" | "15" | "30" | "60" | "240" | "1D";
 
 // Market Type
-type MarketType = "CURVE" | "DEX";
+type MarketType = "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
 
 // Swap Type
 type SwapType = "BUY" | "SELL";

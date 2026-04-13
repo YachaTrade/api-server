@@ -532,23 +532,43 @@ interface TokenInfo {
   is_cto: boolean;
 }
 
+interface QuoteInfo {
+  quote_id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  image_uri: string;
+}
+
+interface FeeInfo {
+  creator_protocol_fee_rate: number;
+  curve_protocol_fee_rate: number;
+  dex_protocol_fee_rate: number;
+}
+
 interface MarketInfo {
-  market_type: "CURVE" | "DEX";
+  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
   token_id: string;
+  quote_info: QuoteInfo;
   market_id: string;
   reserve_native: string;
+  reserve_quote: string;
   reserve_token: string;
   token_price: string;
   native_price: string;
+  quote_price: string;
   price: string;
   price_usd: string;
   price_native: string;
+  price_quote: string;
   total_supply: string;
   volume: string;
   ath_price: string;
   ath_price_usd: string;
   ath_price_native: string;
+  ath_price_quote: string;
   holder_count: number;
+  fee_info?: FeeInfo;  // V2 토큰만
 }
 
 interface SwapInfo {

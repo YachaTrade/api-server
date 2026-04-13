@@ -88,6 +88,14 @@ pub struct QuoteInfo {
     pub image_uri: String,
 }
 
+/// Fee configuration info (V2 tokens only)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct FeeInfo {
+    pub creator_protocol_fee_rate: i16,
+    pub curve_protocol_fee_rate: i16,
+    pub dex_protocol_fee_rate: i16,
+}
+
 /// Market information with pricing data
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MarketInfo {
@@ -126,6 +134,9 @@ pub struct MarketInfo {
     pub ath_price_quote: String,
     /// Holder count (used for tokne total holder count)
     pub holder_count: i64,
+    /// Fee configuration (V2 tokens only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_info: Option<FeeInfo>,
 }
 
 /// Swap event type enum
