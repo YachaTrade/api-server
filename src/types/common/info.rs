@@ -134,8 +134,7 @@ pub struct MarketInfo {
     pub ath_price_quote: String,
     /// Holder count (used for tokne total holder count)
     pub holder_count: i64,
-    /// Fee configuration (V2 tokens only)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Fee configuration (V2 tokens only, null for V1)
     pub fee_info: Option<FeeInfo>,
 }
 
