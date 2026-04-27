@@ -11,7 +11,10 @@ use crate::{
         V1_BONDING_CURVE, V1_TOKEN_IMPL, V2_BONDING_CURVE, V2_TOKEN_IMPL, VANITY_ADDRESS_SUFFIX,
     },
     result::AppError,
-    types::token::salt::{MineSaltRequest, MineSaltResponse},
+    types::{
+        common::info::TokenVersion,
+        token::salt::{MineSaltRequest, MineSaltResponse},
+    },
     utils::valid_account_id,
 };
 
@@ -61,7 +64,7 @@ impl SaltService {
         self.validate_request(&request)?;
 
         // 2단계: 환경 변수에서 deployer, implementation, suffix 로드
-        let config = MiningConfig::load(request.version)?;
+        let config = MiningConfig::load(request.version.clone())?;
 
         // 3단계: 이 마이닝 요청의 고유 식별자 생성 (256비트 랜덤)
         let random_bytes: [u8; 32] = rand::random();
@@ -425,10 +428,10 @@ impl MiningConfig {
     /// - BONDING_CURVE: 토큰을 배포할 팩토리 컨트랙트 주소
     /// - TOKEN_IMPLEMENT: 토큰 구현 컨트랙트 주소 (EIP-1167 proxy가 참조)
     /// - VANITY_ADDRESS_SUFFIX: 원하는 주소 suffix (hex 문자열, 예: "143")
-    fn load(version: u8) -> Result<Self, AppError> {
+    fn load(version: TokenVersion) -> Result<Self, AppError> {
         let (deployer_str, impl_str) = match version {
-            2 => (V2_BONDING_CURVE.as_str(), V2_TOKEN_IMPL.as_str()),
-            _ => (V1_BONDING_CURVE.as_str(), V1_TOKEN_IMPL.as_str()),
+            TokenVersion::V2 => (V2_BONDING_CURVE.as_str(), V2_TOKEN_IMPL.as_str()),
+            TokenVersion::V1 => (V1_BONDING_CURVE.as_str(), V1_TOKEN_IMPL.as_str()),
         };
 
         let deployer = Address::from_str(deployer_str).map_err(|e| {

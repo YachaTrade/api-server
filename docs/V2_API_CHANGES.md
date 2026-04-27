@@ -15,6 +15,7 @@
 | `SwapInfo` | `quote_amount`, `quote_price` 추가 |
 | `MarketType` enum | `V2_CURVE`, `V2_DEX` 추가 |
 | `TokenVersion` enum | 신규 타입 (`V1` \| `V2`) |
+| `MineSaltRequest` | `version` 필드 타입 변경 (`number` → `TokenVersion`) |
 | `HackathonInfo` + 하위 타입 | 전체 제거 |
 | 엔드포인트 | `/token/hackathon`, `/order/hackathon`, `/cms/hackathon/register` 제거 |
 
@@ -222,6 +223,40 @@ type TokenVersion = "V1" | "V2";
 ```
 
 `TokenInfo.version`의 값으로 사용됨. 현재 mainnet의 모든 토큰은 `version: "V1"`.
+
+---
+
+## MineSaltRequest (`POST /token/salt`)
+
+### 이전 (V1)
+
+```typescript
+interface MineSaltRequest {
+    creator: string;
+    name: string;
+    symbol: string;
+    metadata_uri: string;
+    version?: number;        // 1 | 2, default: 1
+}
+```
+
+### 이후 (V2)
+
+```typescript
+interface MineSaltRequest {
+    creator: string;
+    name: string;
+    symbol: string;
+    metadata_uri: string;
+    version?: TokenVersion;  // "V1" | "V2", default: "V1"
+}
+```
+
+### 변경사항
+
+- `version` 필드 타입이 숫자(`1`/`2`)에서 `TokenVersion` 문자열(`"V1"`/`"V2"`)로 변경됨
+- 내부 상수(`V1_BONDING_CURVE`, `V2_BONDING_CURVE`)와 `TokenInfo.version`의 표기와 일관됨
+- 생략 시 기본값은 `"V1"`
 
 ---
 
