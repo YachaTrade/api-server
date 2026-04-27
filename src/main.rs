@@ -339,6 +339,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Account",description="Account management endpoints"),
         (name="Follow",description="Follow management endpoints"),
         (name="Token",description="Token management endpoints"),
+        (name="Vault",description="V2 token fee vault endpoints (Buyback & Burn / LP / Creator / Gift)"),
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
         (name="Order",description="Order endpoints"),
