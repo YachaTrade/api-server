@@ -22,7 +22,7 @@ pub enum VaultType {
     Custom,
 }
 
-/// Top-level response for `GET /vault/{token_address}`.
+/// Top-level response for `GET /vault/{token_id}`.
 ///
 /// Each entry represents a vault that the token routes a portion of its
 /// trading fees to. The list is derived from `v2_creator_fee_allocation`

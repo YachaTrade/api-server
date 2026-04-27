@@ -6,12 +6,12 @@ pub enum VaultPath {
 impl VaultPath {
     pub fn as_str(&self) -> &'static str {
         match self {
-            VaultPath::GetTokenVaults => "/vault/:token_address",
+            VaultPath::GetTokenVaults => "/vault/:token_id",
         }
     }
     pub fn docs_str(&self) -> &'static str {
         match self {
-            VaultPath::GetTokenVaults => "/vault/{token_address}",
+            VaultPath::GetTokenVaults => "/vault/{token_id}",
         }
     }
 }
