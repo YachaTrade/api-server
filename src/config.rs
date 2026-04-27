@@ -113,6 +113,12 @@ lazy_static! {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(30000);
 
+    // Quote tokens response cache (default: 5 minutes = 300000ms — quote tokens are essentially static)
+    pub static ref GET_QUOTE_TOKENS_RESPONSE_EXPIRATION: u64 = env::var("GET_QUOTE_TOKENS_RESPONSE_EXPIRATION")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(300000);
+
     // Contract Addresses
     pub static ref COMMUNITY_TREASURY: String = env::var("V1_COMMUNITY_TREASURY")
         .expect("V1_COMMUNITY_TREASURY must be set");

@@ -12,6 +12,7 @@ pub mod hype;
 pub mod leaderboard;
 pub mod metadata;
 pub mod profile;
+pub mod quote_token;
 pub mod raffle;
 pub mod search;
 pub mod terminal;

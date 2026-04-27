@@ -11,13 +11,13 @@ use anyhow::Result;
 use crate::{
     config::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
-        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_REWARD_ADD_HISTORY_EXPIRATION,
-        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
-        GET_TOKEN_VAULTS_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION,
-        GET_TREND_TOKEN_RESPONSE_EXPIRATION, HYPE_LEADERBOARD_RESPONSE_EXPIRATION,
-        MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION,
-        PNL_LEADERBOARD_RESPONSE_EXPIRATION, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION,
-        TOKEN_TRADE_EXPIRATION,
+        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_QUOTE_TOKENS_RESPONSE_EXPIRATION,
+        GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
+        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_VAULTS_RESPONSE_EXPIRATION,
+        GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
+        HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
+        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, PNL_LEADERBOARD_RESPONSE_EXPIRATION,
+        SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -31,6 +31,7 @@ use crate::{
         new_event::NewEventResponse,
         profile::PointHistoryResponse,
         profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
+        quote_token::QuoteTokensResponse,
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
         token::{
             TokenResponse,
@@ -570,6 +571,38 @@ impl RedisDatabase {
             "get_token_vaults_response(token_id: {}) completed in {:?}",
             token_id, elapsed
         );
+        Ok(response)
+    }
+
+    pub async fn set_quote_tokens_response(&self, response: &QuoteTokensResponse) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = "quote_tokens".to_string();
+
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_quote_tokens_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_QUOTE_TOKENS_RESPONSE_EXPIRATION)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!("set_quote_tokens_response completed in {:?}", elapsed);
+        Ok(())
+    }
+
+    pub async fn get_quote_tokens_response(&self) -> Result<QuoteTokensResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = "quote_tokens".to_string();
+
+        let json: String = measure_redis!(
+            "redis.get_quote_tokens_response",
+            conn.get::<_, String>(key)
+        )?;
+        let response: QuoteTokensResponse = serde_json::from_str(&json)?;
+
+        let elapsed = start_time.elapsed();
+        debug!("get_quote_tokens_response completed in {:?}", elapsed);
         Ok(response)
     }
 
