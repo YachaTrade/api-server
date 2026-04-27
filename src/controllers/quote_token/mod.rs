@@ -36,7 +36,7 @@ impl QuoteTokenController {
                 r#"
                 SELECT quote_id, name, symbol, decimals, image_uri
                 FROM quote_token
-                ORDER BY symbol ASC
+                ORDER BY created_at ASC
                 "#,
             )
             .fetch_all(self.db.get_read_pool())
