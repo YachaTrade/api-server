@@ -18,3 +18,4 @@ pub mod terminal;
 pub mod token;
 pub mod trading;
 pub mod trend;
+pub mod vault;

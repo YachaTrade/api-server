@@ -24,3 +24,4 @@ pub mod metrics;
 pub mod new_event;
 pub mod raffle;
 pub mod trend;
+pub mod vault;
