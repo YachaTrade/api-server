@@ -18,7 +18,7 @@
 | `MineSaltRequest` | `version` 필드 타입 변경 (`number` → `TokenVersion`) |
 | `HackathonInfo` + 하위 타입 | 전체 제거 |
 | 엔드포인트 | `/token/hackathon`, `/order/hackathon`, `/cms/hackathon/register` 제거 |
-| 엔드포인트 | `GET /vault/{token_address}` 신규 — 토큰별 vault 분배 + stats |
+| 엔드포인트 | `GET /vault/{token_id}` 신규 — 토큰별 vault 분배 + stats |
 | `TokenVaultsResponse`, `VaultEntry`, `VaultStats` (tagged union), `BurnStats` / `LpStats` / `CreatorFeeStats` / `GiftStats` / `EmptyStats`, `VaultType` enum | 신규 타입 — vault 응답 |
 
 ---
@@ -267,7 +267,7 @@ interface MineSaltRequest {
 V2에서 도입된 vault 분배 시스템(Buyback & Burn / LP Support / Creator / Gift)을
 조회하기 위한 신규 엔드포인트. 상세 스펙은 [`vault-api.md`](./vault-api.md) 참고.
 
-### `GET /vault/{token_address}`
+### `GET /vault/{token_id}`
 
 토큰이 거래 수수료를 라우팅하는 모든 vault 목록과 비율(bps), vault 별 누적 stats를 반환.
 

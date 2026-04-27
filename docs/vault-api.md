@@ -23,7 +23,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 
 ## API 엔드포인트
 
-### 1. Token Vault 목록 조회 (`GET /vault/{token_address}`)
+### 1. Token Vault 목록 조회 (`GET /vault/{token_id}`)
 
 특정 토큰이 거래 수수료를 라우팅하는 모든 vault의 목록과 비율, 누적 통계를 반환합니다.
 
@@ -36,7 +36,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |----------|------|------|------|
-| `token_address` | string | O | 토큰 컨트랙트 주소 (EVM 형식, EIP-55 checksum) |
+| `token_id` | string | O | 토큰 컨트랙트 주소 (EVM 형식, EIP-55 checksum) |
 
 #### 응답 구조
 

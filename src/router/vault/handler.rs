@@ -18,7 +18,7 @@ use crate::{
     get,
     path = VaultPath::GetTokenVaults.docs_str(),
     params(
-        ("token_address" = String, Path, description = "Token address")
+        ("token_id" = String, Path, description = "Token address")
     ),
     responses(
         (status = 200, description = "Token vault list fetched successfully", body = TokenVaultsResponse),
@@ -30,10 +30,10 @@ use crate::{
 #[instrument(skip(state))]
 pub async fn get_token_vaults(
     State(state): State<AppState>,
-    Path(token_address): Path<String>,
+    Path(token_id): Path<String>,
 ) -> AppJsonResult<TokenVaultsResponse> {
-    let token_id = valid_token_id(&token_address)
-        .ok_or_else(|| AppError::BadRequest("Invalid token address".to_string()))?;
+    let token_id = valid_token_id(&token_id)
+        .ok_or_else(|| AppError::BadRequest("Invalid token id".to_string()))?;
 
     let service = VaultService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_token_vaults(&token_id).await?;
