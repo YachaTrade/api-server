@@ -1,5 +1,6 @@
 /target
 .env*
+!.env.example
 script/
 logs/
 .omc/
