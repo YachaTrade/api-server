@@ -48,7 +48,7 @@ quote token은 거의 변경되지 않는 정적 데이터이므로 기본 TTL�
 }
 ```
 
-`quote_tokens` 배열은 `symbol` 오름차순 정렬됩니다.
+`quote_tokens` 배열은 `created_at ASC` 정렬됩니다 (등록된 순서대로 반환).
 
 #### 필드
 

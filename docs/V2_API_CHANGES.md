@@ -336,7 +336,7 @@ interface QuoteInfo {
 }
 
 interface QuoteTokensResponse {
-    quote_tokens: QuoteInfo[];   // symbol ASC 정렬
+    quote_tokens: QuoteInfo[];   // created_at ASC (등록 순)
 }
 ```
 
