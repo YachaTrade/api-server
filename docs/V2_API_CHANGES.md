@@ -20,6 +20,8 @@
 | 엔드포인트 | `/token/hackathon`, `/order/hackathon`, `/cms/hackathon/register` 제거 |
 | 엔드포인트 | `GET /vault/{token_id}` 신규 — 토큰별 vault 분배 + stats |
 | `TokenVaultsResponse`, `VaultEntry`, `VaultStats` (tagged union), `BurnStats` / `LpStats` / `CreatorFeeStats` / `GiftStats` / `EmptyStats`, `VaultType` enum | 신규 타입 — vault 응답 |
+| 엔드포인트 | `GET /quote_token` 신규 — 등록된 quote token 카탈로그 |
+| `QuoteTokensResponse` | 신규 타입 — quote token 목록 응답 |
 
 ---
 
@@ -309,6 +311,36 @@ vault_type 별 `stats` 필드 정의는 [`vault-api.md`](./vault-api.md#vault_ty
 - LP `pool_pair`: `token.symbol` + `quote_token.symbol` (via `market.quote_id`)
 
 V1 토큰에는 vault allocation이 없으므로 `vaults: []` 빈 배열을 반환.
+
+---
+
+## Quote Token 엔드포인트 (신규)
+
+V2부터 토큰별로 다양한 quote 자산을 지원하므로, quote 카탈로그를 클라이언트가
+조회할 수 있도록 신규 엔드포인트 도입. 상세 스펙은 [`quote-token-api.md`](./quote-token-api.md) 참고.
+
+### `GET /quote_token`
+
+등록된 모든 quote token의 메타데이터(`quote_id`, `name`, `symbol`, `decimals`, `image_uri`)
+배열을 반환. `pyth_feed_id`는 응답에서 제외 (서버 내부용).
+
+**캐시**: 5분 (env `GET_QUOTE_TOKENS_RESPONSE_EXPIRATION` 으로 조정, ms 단위)
+
+```typescript
+interface QuoteInfo {
+    quote_id: string;
+    name: string;
+    symbol: string;
+    decimals: number;
+    image_uri: string;
+}
+
+interface QuoteTokensResponse {
+    quote_tokens: QuoteInfo[];   // symbol ASC 정렬
+}
+```
+
+`QuoteInfo`는 `MarketInfo.quote_info` (V2)에서 사용되는 nested 타입과 동일.
 
 ---
 
