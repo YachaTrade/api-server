@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::types::common::info::TokenVersion;
 use crate::types::metadata::{
     MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH,
 };
@@ -28,14 +29,14 @@ pub struct MineSaltRequest {
     )]
     pub metadata_uri: String,
 
-    /// Bonding curve version (1 or 2, defaults to 1)
+    /// Bonding curve version ("V1" or "V2", defaults to "V1")
     #[serde(default = "default_version")]
-    #[schema(example = 1)]
-    pub version: u8,
+    #[schema(example = "V1")]
+    pub version: TokenVersion,
 }
 
-fn default_version() -> u8 {
-    1
+fn default_version() -> TokenVersion {
+    TokenVersion::V1
 }
 
 impl MineSaltRequest {
@@ -72,10 +73,6 @@ impl MineSaltRequest {
                 "Invalid metadata URI domain, must start with {}",
                 allowed_domain
             ));
-        }
-        // version validation
-        if self.version != 1 && self.version != 2 {
-            return Err("Version must be 1 or 2".to_string());
         }
         Ok(())
     }
