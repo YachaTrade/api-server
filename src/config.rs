@@ -107,6 +107,12 @@ lazy_static! {
         .parse::<u64>()
         .expect("GET_TOKEN_MANAGEMENT_HISTORY_EXPIRATION must be a valid u64");
 
+    // Vault response cache (default: 30 seconds = 30000ms)
+    pub static ref GET_TOKEN_VAULTS_RESPONSE_EXPIRATION: u64 = env::var("GET_TOKEN_VAULTS_RESPONSE_EXPIRATION")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(30000);
+
     // Contract Addresses
     pub static ref COMMUNITY_TREASURY: String = env::var("V1_COMMUNITY_TREASURY")
         .expect("V1_COMMUNITY_TREASURY must be set");

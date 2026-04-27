@@ -13,10 +13,11 @@ use crate::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
         GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_REWARD_ADD_HISTORY_EXPIRATION,
         GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
-        GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
-        HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
-        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, PNL_LEADERBOARD_RESPONSE_EXPIRATION,
-        SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
+        GET_TOKEN_VAULTS_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION,
+        GET_TREND_TOKEN_RESPONSE_EXPIRATION, HYPE_LEADERBOARD_RESPONSE_EXPIRATION,
+        MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION,
+        PNL_LEADERBOARD_RESPONSE_EXPIRATION, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION,
+        TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -42,6 +43,7 @@ use crate::{
             position::TokenHolderResponse,
             swap_history::{SwapQuery, TokenSwapResponse},
         },
+        vault::TokenVaultsResponse,
     },
 };
 
@@ -527,6 +529,48 @@ impl RedisDatabase {
             token_id, elapsed
         );
         Ok(response_json)
+    }
+
+    pub async fn set_token_vaults_response(
+        &self,
+        token_id: &str,
+        response: &TokenVaultsResponse,
+    ) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("token_vaults:{}", token_id);
+
+        let json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_token_vaults_response",
+            conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_VAULTS_RESPONSE_EXPIRATION)
+        )?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_token_vaults_response(token_id: {}) completed in {:?}",
+            token_id, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_token_vaults_response(&self, token_id: &str) -> Result<TokenVaultsResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!("token_vaults:{}", token_id);
+
+        let json: String = measure_redis!(
+            "redis.get_token_vaults_response",
+            conn.get::<_, String>(key)
+        )?;
+        let response: TokenVaultsResponse = serde_json::from_str(&json)?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_token_vaults_response(token_id: {}) completed in {:?}",
+            token_id, elapsed
+        );
+        Ok(response)
     }
 
     pub async fn set_token_metadata(

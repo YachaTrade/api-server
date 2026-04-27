@@ -3,7 +3,7 @@ use api_server::{
     cors::get_cors,
     router::{
         self, account, agent, api_key, auth, chester, cms, health, hype, leaderboard, metadata,
-        metrics, new_event, order, profile, raffle, search, terminal, token, trade, trend,
+        metrics, new_event, order, profile, raffle, search, terminal, token, trade, trend, vault,
     },
     state::AppState,
     types,
@@ -66,6 +66,9 @@ use utoipa_swagger_ui::SwaggerUi;
         router::token::handler::get_token,
         router::token::handler::get_token_metadata,
         router::token::handler::salt,
+
+        // ----------------Vault----------------
+        router::vault::handler::get_token_vaults,
 
         // ----------------Hype----------------
         router::hype::handler::get_hype_token,
@@ -194,6 +197,17 @@ use utoipa_swagger_ui::SwaggerUi;
             types::token::salt::MineSaltRequest,
             types::token::salt::MineSaltResponse,
             types::token::salt::MineSaltError,
+
+            // Vault
+            types::vault::VaultType,
+            types::vault::TokenVaultsResponse,
+            types::vault::VaultEntry,
+            types::vault::VaultStats,
+            types::vault::BurnStats,
+            types::vault::LpStats,
+            types::vault::CreatorFeeStats,
+            types::vault::GiftStats,
+            types::vault::EmptyStats,
 
             // Metadata
             types::metadata::UploadImageMultipart,
@@ -412,6 +426,7 @@ async fn main() -> Result<()> {
         .merge(account::router(app_state.clone()))
         .merge(raffle::router(app_state.clone()))
         .merge(token::router())
+        .merge(vault::router())
         .merge(search::router())
         .merge(trade::router())
         .merge(profile::router(app_state.clone()))

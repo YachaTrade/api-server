@@ -18,6 +18,8 @@
 | `MineSaltRequest` | `version` 필드 타입 변경 (`number` → `TokenVersion`) |
 | `HackathonInfo` + 하위 타입 | 전체 제거 |
 | 엔드포인트 | `/token/hackathon`, `/order/hackathon`, `/cms/hackathon/register` 제거 |
+| 엔드포인트 | `GET /vault/{token_address}` 신규 — 토큰별 vault 분배 + stats |
+| `TokenVaultsResponse`, `VaultEntry`, `VaultStats` (tagged union), `BurnStats` / `LpStats` / `CreatorFeeStats` / `GiftStats` / `EmptyStats`, `VaultType` enum | 신규 타입 — vault 응답 |
 
 ---
 
@@ -257,6 +259,56 @@ interface MineSaltRequest {
 - `version` 필드 타입이 숫자(`1`/`2`)에서 `TokenVersion` 문자열(`"V1"`/`"V2"`)로 변경됨
 - 내부 상수(`V1_BONDING_CURVE`, `V2_BONDING_CURVE`)와 `TokenInfo.version`의 표기와 일관됨
 - 생략 시 기본값은 `"V1"`
+
+---
+
+## Vault 엔드포인트 (신규)
+
+V2에서 도입된 vault 분배 시스템(Buyback & Burn / LP Support / Creator / Gift)을
+조회하기 위한 신규 엔드포인트. 상세 스펙은 [`vault-api.md`](./vault-api.md) 참고.
+
+### `GET /vault/{token_address}`
+
+토큰이 거래 수수료를 라우팅하는 모든 vault 목록과 비율(bps), vault 별 누적 stats를 반환.
+
+**캐시**: 30초 (env `GET_TOKEN_VAULTS_RESPONSE_EXPIRATION` 으로 조정, ms 단위)
+
+**응답 모양** — 공통 필드 + `vault_type` 디스크리미네이터 + `stats` payload:
+
+```typescript
+type VaultType = "BURN" | "LP" | "CREATOR_FEE" | "GIFT" | "CUSTOM";
+
+interface VaultEntryBase {
+    vault_id: string;
+    bps: number;            // 0..10000
+    name: string;
+    active: boolean;
+    last_executed_at: number;
+}
+
+type VaultEntry = VaultEntryBase & (
+    | { vault_type: "BURN";        stats: BurnStats }
+    | { vault_type: "LP";          stats: LpStats }
+    | { vault_type: "CREATOR_FEE"; stats: CreatorFeeStats }
+    | { vault_type: "GIFT";        stats: GiftStats }
+    | { vault_type: "CUSTOM";      stats: Record<string, never> }
+);
+
+interface TokenVaultsResponse {
+    token_id: string;
+    vaults: VaultEntry[];   // bps DESC 정렬
+}
+```
+
+vault_type 별 `stats` 필드 정의는 [`vault-api.md`](./vault-api.md#vault_type-별-stats) 참고.
+
+### 데이터 출처
+
+- 멤버십 + bps: `v2_creator_fee_allocation` JOIN `v2_vault_metadata`
+- 통계: `v2_burn_vault_stats` / `v2_lp_vault_stats` / `v2_creator_fee_vault_stats` / `v2_gift_vault_stats`
+- LP `pool_pair`: `token.symbol` + `quote_token.symbol` (via `market.quote_id`)
+
+V1 토큰에는 vault allocation이 없으므로 `vaults: []` 빈 배열을 반환.
 
 ---
 
