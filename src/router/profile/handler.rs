@@ -3,15 +3,15 @@ use crate::{
     result::{AppError, AppJsonResult},
     services::{
         hype::HypeService,
-        token::create::TokenCreatedService,
+        token::{create::TokenCreatedService, gift_fee::GiftFeeService},
         trading::{position::PositionService, swap_history::SwapService},
     },
     state::AppState,
     types::{
         common::pagination::PaginationParams,
         profile::{
-            CreatedTokensResponse, HoldTokenResponse, PointHistoryResponse, ProfileResponse,
-            SwapHistoryResponse,
+            CreatedTokensResponse, GiftFeeTokensResponse, HoldTokenResponse, PointHistoryResponse,
+            ProfileResponse, SwapHistoryResponse,
         },
     },
     utils::valid_account_id,
@@ -122,6 +122,38 @@ pub async fn get_token_created(
         TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
     let response = token_created_service
         .get_tokens_created(&account_id, &pagination)
+        .await?;
+    Ok(Json(response))
+}
+
+/// Get tokens where the account is bound as the gift vault receiver
+#[utoipa::path(
+    get,
+    path = ProfilePath::GetGiftFee.docs_str(),
+    params(
+        ("account_id" = String, Path, description = "Account ID to get gift fee tokens for"),
+        ("page" = i32, Query, description = "Page number (starts from 1)"),
+        ("limit" = i32, Query, description = "Number of items per page")
+    ),
+    responses(
+        (status = 200, description = "Successfully retrieved gift fee tokens", body = GiftFeeTokensResponse),
+        (status = 400, description = "Invalid account ID"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Profile"
+)]
+#[instrument(skip(state))]
+pub async fn get_gift_fee(
+    Path(account_id): Path<String>,
+    Query(pagination): Query<PaginationParams>,
+    State(state): State<AppState>,
+) -> AppJsonResult<GiftFeeTokensResponse> {
+    let account_id = valid_account_id(&account_id)
+        .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
+
+    let service = GiftFeeService::new(state.postgres.clone(), state.redis.clone());
+    let response = service
+        .get_gift_fee_tokens(&account_id, &pagination)
         .await?;
     Ok(Json(response))
 }

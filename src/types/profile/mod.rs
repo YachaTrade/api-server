@@ -28,6 +28,15 @@ pub struct CreatedTokensResponse {
     pub total_count: i64,
 }
 
+/// Tokens where the account is bound as the gift vault receiver
+/// (`v2_gift_vault_stats.receiver`). Each token is rendered as a
+/// `TokenCreatedInfo` so the UI can reuse the same card layout.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct GiftFeeTokensResponse {
+    pub tokens: Vec<TokenCreatedInfo>,
+    pub total_count: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PointRecord {
     pub epoch: i64,

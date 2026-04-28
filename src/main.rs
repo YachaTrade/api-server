@@ -57,6 +57,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::profile::handler::get_profile,
         router::profile::handler::get_hold_token,
         router::profile::handler::get_token_created,
+        router::profile::handler::get_gift_fee,
         router::profile::handler::get_swap_history,
         router::profile::handler::get_point_history,
 
@@ -276,6 +277,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::profile::HoldTokenResponse,
             types::profile::SwapHistoryResponse,
             types::profile::CreatedTokensResponse,
+            types::profile::GiftFeeTokensResponse,
             types::profile::PointRecord,
             types::profile::PointRecordTotal,
             types::profile::PointHistoryResponse,

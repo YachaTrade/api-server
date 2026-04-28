@@ -11,7 +11,8 @@ use anyhow::Result;
 use crate::{
     config::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
-        GET_HYPE_TOKEN_RESPONSE_EXPIRATION, GET_QUOTE_TOKENS_RESPONSE_EXPIRATION,
+        GET_GIFT_FEE_RESPONSE_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
+        GET_QUOTE_TOKENS_RESPONSE_EXPIRATION,
         GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
         GET_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_VAULTS_RESPONSE_EXPIRATION,
         GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
@@ -30,7 +31,7 @@ use crate::{
         metadata::TerminalMetadataResponse,
         new_event::NewEventResponse,
         profile::PointHistoryResponse,
-        profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
+        profile::{CreatedTokensResponse, GiftFeeTokensResponse, HoldTokenResponse, SwapHistoryResponse},
         quote_token::QuoteTokensResponse,
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
         token::{
@@ -489,6 +490,56 @@ impl RedisDatabase {
         let elapsed = start_time.elapsed();
         debug!(
             "get_account_token_created(address: {}, page: {}, limit: {}) completed in {:?}",
+            address, pagination.page, pagination.limit, elapsed
+        );
+        Ok(response)
+    }
+
+    pub async fn set_account_gift_fee(
+        &self,
+        address: &str,
+        pagination: &PaginationParams,
+        response: &GiftFeeTokensResponse,
+    ) -> Result<()> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!(
+            "gift_fee:{}:page:{}:limit:{}",
+            address, pagination.page, pagination.limit
+        );
+        let response_json = serde_json::to_string(response)?;
+        measure_redis!(
+            "redis.set_account_gift_fee",
+            conn.pset_ex::<_, _, ()>(key, response_json, *GET_GIFT_FEE_RESPONSE_EXPIRATION)
+        )?;
+        let elapsed = start_time.elapsed();
+        debug!(
+            "set_account_gift_fee(address: {}, page: {}, limit: {}) completed in {:?}",
+            address, pagination.page, pagination.limit, elapsed
+        );
+        Ok(())
+    }
+
+    pub async fn get_account_gift_fee(
+        &self,
+        address: &str,
+        pagination: &PaginationParams,
+    ) -> Result<GiftFeeTokensResponse> {
+        let start_time = Instant::now();
+        let mut conn = self.conn.as_ref().clone();
+        let key = format!(
+            "gift_fee:{}:page:{}:limit:{}",
+            address, pagination.page, pagination.limit
+        );
+        let response_json: String = measure_redis!(
+            "redis.get_account_gift_fee",
+            conn.get::<_, String>(key)
+        )?;
+        let response: GiftFeeTokensResponse = serde_json::from_str(&response_json)?;
+
+        let elapsed = start_time.elapsed();
+        debug!(
+            "get_account_gift_fee(address: {}, page: {}, limit: {}) completed in {:?}",
             address, pagination.page, pagination.limit, elapsed
         );
         Ok(response)
