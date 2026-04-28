@@ -223,7 +223,50 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 
 ---
 
-### 4. 스왑 히스토리 조회 (`GET /profile/swap-history/{account_id}`)
+### 4. Gift Fee 토큰 조회 (`GET /profile/gift-fee/{account_id}`)
+
+특정 계정이 V2 gift vault의 receiver로 등록된 토큰 목록을 페이지네이션으로 조회합니다.
+응답 항목은 `tokens/created` 와 동일한 `TokenCreatedInfo` 형식이라 UI에서 동일 카드 레이아웃 재사용 가능.
+
+데이터 소스: `v2_gift_vault_stats` (`receiver = $account_id`).
+
+#### 요청
+- **Method**: `GET`
+- **인증**: 불필요
+- **캐시**: 30초 (env `GET_GIFT_FEE_RESPONSE_EXPIRATION` 으로 조정, ms 단위)
+
+#### Path Parameters
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| `account_id` | string | O | 사용자 Ethereum 주소 (EVM 형식, EIP-55) |
+
+#### Query Parameters
+
+| 파라미터 | 타입 | 기본값 | 설명 |
+|----------|------|--------|------|
+| `page` | integer | 1 | 페이지 번호 (1부터 시작) |
+| `limit` | integer | 10 | 페이지당 항목 수 (최대 100) |
+| `direction` | string | DESC | 정렬 방향 (현재 무시 — gift `updated_at` DESC 고정) |
+
+#### 응답
+
+```json
+{
+  "tokens": [ /* TokenCreatedInfo[] — `/profile/tokens/created` 와 동일 스키마 */ ],
+  "total_count": 3
+}
+```
+
+`tokens` 배열은 gift vault `updated_at` 내림차순 정렬 (가장 최근 활동 우선).
+
+#### 에러 응답
+- `400`: 잘못된 account_id
+- `500`: 내부 서버 에러
+
+---
+
+### 5. 스왑 히스토리 조회 (`GET /profile/swap-history/{account_id}`)
 
 사용자의 거래(스왑) 내역을 페이지네이션으로 조회합니다.
 
@@ -292,7 +335,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 
 ---
 
-### 5. 포인트 히스토리 조회 (`GET /profile/point-history`)
+### 6. 포인트 히스토리 조회 (`GET /profile/point-history`)
 
 사용자의 포인트 적립 내역을 조회합니다. **인증 필요**
 

@@ -22,6 +22,8 @@
 | `TokenVaultsResponse`, `VaultEntry`, `VaultStats` (tagged union), `BurnStats` / `LpStats` / `CreatorFeeStats` / `GiftStats` / `EmptyStats`, `VaultType` enum | 신규 타입 — vault 응답 |
 | 엔드포인트 | `GET /quote_token` 신규 — 등록된 quote token 카탈로그 |
 | `QuoteTokensResponse` | 신규 타입 — quote token 목록 응답 |
+| 엔드포인트 | `GET /profile/gift-fee/{account_id}` 신규 — gift vault receiver로 등록된 토큰 목록 |
+| `GiftFeeTokensResponse` | 신규 타입 — `TokenCreatedInfo[]` + `total_count` |
 
 ---
 
@@ -341,6 +343,30 @@ interface QuoteTokensResponse {
 ```
 
 `QuoteInfo`는 `MarketInfo.quote_info` (V2)에서 사용되는 nested 타입과 동일.
+
+---
+
+## Profile Gift Fee 엔드포인트 (신규)
+
+V2 gift vault의 receiver로 바인딩된 사용자가 자기가 받기로 된 토큰 목록을
+profile 화면에서 조회할 수 있도록 신규 엔드포인트 추가. 상세 스펙은
+[`profile-api.md`](./profile-api.md#4-gift-fee-토큰-조회-get-profilegift-feeaccount_id) 참고.
+
+### `GET /profile/gift-fee/{account_id}`
+
+`v2_gift_vault_stats.receiver = account_id` 인 토큰 목록을 페이지네이션으로 반환.
+응답 항목은 기존 `tokens/created` 와 동일한 `TokenCreatedInfo` 형식이라 UI 카드 레이아웃 재사용 가능.
+
+**캐시**: 30초 (env `GET_GIFT_FEE_RESPONSE_EXPIRATION` 으로 조정, ms 단위)
+
+```typescript
+interface GiftFeeTokensResponse {
+    tokens: TokenCreatedInfo[];   // gift updated_at DESC 정렬
+    total_count: number;
+}
+```
+
+정렬 기준은 gift vault `updated_at` DESC — 가장 최근 활동(deposit/claim/receiver_set)이 위로 옴.
 
 ---
 

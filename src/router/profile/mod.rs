@@ -18,6 +18,10 @@ pub fn router(app_state: AppState) -> Router<AppState> {
             get(handler::get_token_created),
         )
         .route(
+            ProfilePath::GetGiftFee.as_str(),
+            get(handler::get_gift_fee),
+        )
+        .route(
             ProfilePath::GetSwapHistory.as_str(),
             get(handler::get_swap_history),
         )
