@@ -80,25 +80,37 @@ Search API는 토큰과 계정을 동시에 검색하는 통합 검색 API입니
             "image_uri": "https://..."
           },
           "is_cto": false,
-          "hackathon_info": null
+          "version": "V1"
         },
         "market_info": {
           "market_type": "CURVE",
           "token_id": "0xabcdef1234567890...",
+          "quote_info": {
+            "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",
+            "name": "MONAD",
+            "symbol": "MON",
+            "decimals": 18,
+            "image_uri": "https://storage.nadapp.net/quote/mon.webp"
+          },
           "market_id": "0x...",
           "reserve_native": "100",
+          "reserve_quote": "100",
           "reserve_token": "500000000",
           "token_price": "0.001",
           "native_price": "3000",
+          "quote_price": "3000",
           "price": "0.000001",
           "price_usd": "0.003",
           "price_native": "0.000001",
+          "price_quote": "0.000001",
           "total_supply": "1000000000",
           "volume": "50000",
           "ath_price": "0.000002",
           "ath_price_usd": "0.006",
           "ath_price_native": "0.000002",
-          "holder_count": 150
+          "ath_price_quote": "0.000002",
+          "holder_count": 150,
+          "fee_info": null
         }
       }
     ],
@@ -178,7 +190,7 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  hackathon_info?: HackathonInfo;
+  version: TokenVersion;
 }
 
 interface QuoteInfo {
@@ -220,51 +232,7 @@ interface MarketInfo {
   fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
-interface HackathonInfo {
-  team: HackathonTeamInfo;
-  project: HackathonProjectInfo;
-}
-
-interface HackathonTeamInfo {
-  id: string;
-  name: string;
-  members: HackathonTeamMemberInfo[];
-}
-
-interface HackathonTeamMemberInfo {
-  email: string;
-  discord?: string;
-  twitter?: string;
-  linkedin?: string;
-  github?: HackathonMemberGitHubInfo;
-}
-
-interface HackathonMemberGitHubInfo {
-  username: string;
-  image_uri: string;
-  name: string;
-  url: string;
-  follower_count: number;
-  following_count: number;
-  repo_count: number;
-  star_count: number;
-  bio?: string;
-  fetch_pending: boolean;
-}
-
-interface HackathonProjectInfo {
-  name: string;
-  description: string;
-  monad_integration: string;
-  github_url: string;
-  demo_video_url: string;
-  agent_moltbook_url?: string;
-  github_star_count: number;
-  github_fork_count: number;
-  github_description?: string;
-  github_topics?: string[];
-  github_language?: string;
-}
+type TokenVersion = "V1" | "V2";
 ```
 
 ---

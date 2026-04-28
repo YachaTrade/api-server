@@ -142,20 +142,32 @@ curl "https://api.nadapp.net/agent/market/0x1234..." \
   "market_info": {
     "market_type": "CURVE",
     "token_id": "0x1234...",
+    "quote_info": {
+      "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",
+      "name": "MONAD",
+      "symbol": "MON",
+      "decimals": 18,
+      "image_uri": "https://storage.nadapp.net/quote/mon.webp"
+    },
     "market_id": "0x5678...",
     "reserve_native": "10000000000000000000000",
+    "reserve_quote": "10000000000000000000000",
     "reserve_token": "500000000000000000000000000",
     "token_price": "0.00002",
     "native_price": "3.0",
+    "quote_price": "3.0",
     "price": "0.00002",
     "price_usd": "0.00006",
     "price_native": "0.00002",
+    "price_quote": "0.00002",
     "total_supply": "1000000000000000000000000000",
     "volume": "50000000000000000000000",
     "ath_price": "0.00005",
     "ath_price_usd": "0.00015",
     "ath_price_native": "0.00005",
-    "holder_count": 1234
+    "ath_price_quote": "0.00005",
+    "holder_count": 1234,
+    "fee_info": null
   }
 }
 ```
@@ -530,7 +542,10 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
+  version: TokenVersion;
 }
+
+type TokenVersion = "V1" | "V2";
 
 interface QuoteInfo {
   quote_id: string;

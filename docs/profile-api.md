@@ -93,7 +93,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
           "image_uri": "https://..."
         },
         "is_cto": false,
-        "hackathon_info": null
+        "version": "V1"
       },
       "balance_info": {
         "balance": "1000000000000000000",
@@ -104,20 +104,32 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
       "market_info": {
         "market_type": "CURVE",
         "token_id": "0x...",
+        "quote_info": {
+          "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",
+          "name": "MONAD",
+          "symbol": "MON",
+          "decimals": 18,
+          "image_uri": "https://storage.nadapp.net/quote/mon.webp"
+        },
         "market_id": "0x...",
         "reserve_native": "100",
+        "reserve_quote": "100",
         "reserve_token": "500000000",
         "token_price": "0.001",
         "native_price": "3000",
+        "quote_price": "3000",
         "price": "0.000001",
         "price_usd": "0.003",
         "price_native": "0.000001",
+        "price_quote": "0.000001",
         "total_supply": "1000000000",
         "volume": "50000",
         "ath_price": "0.000002",
         "ath_price_usd": "0.006",
         "ath_price_native": "0.000002",
-        "holder_count": 150
+        "ath_price_quote": "0.000002",
+        "holder_count": 150,
+        "fee_info": null
       }
     }
   ],
@@ -178,7 +190,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
           "image_uri": "https://..."
         },
         "is_cto": false,
-        "hackathon_info": null
+        "version": "V1"
       },
       "market_info": {
         "market_type": "DEX",
@@ -312,7 +324,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
           "image_uri": "https://..."
         },
         "is_cto": false,
-        "hackathon_info": null
+        "version": "V1"
       },
       "swap_info": {
         "event_type": "BUY",
@@ -420,11 +432,14 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  hackathon_info?: HackathonInfo;
+  version: TokenVersion;
 }
 
+// 토큰 버전
+type TokenVersion = "V1" | "V2";
+
 // 마켓 타입
-type MarketType = "CURVE" | "DEX";
+type MarketType = "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
 
 // 마켓 정보
 interface QuoteInfo {
