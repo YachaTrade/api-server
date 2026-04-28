@@ -158,10 +158,12 @@ impl GiftFeeController {
             sqlx::query_as::<_, Row>(
                 r#"
                 WITH paged_tokens AS (
-                    SELECT g.token_id, g.updated_at AS gift_updated_at
+                    SELECT g.token_id,
+                           g.current_balance AS gift_current_balance,
+                           g.updated_at AS gift_updated_at
                     FROM v2_gift_vault_stats g
                     WHERE g.receiver = $1
-                    ORDER BY g.updated_at DESC
+                    ORDER BY g.current_balance DESC, g.updated_at DESC
                     LIMIT $2 OFFSET $3
                 ),
                 claimed_totals AS (
@@ -232,7 +234,7 @@ impl GiftFeeController {
                     ORDER BY p.block_number DESC
                     LIMIT 1
                 ) lp ON true
-                ORDER BY pg.gift_updated_at DESC
+                ORDER BY pg.gift_current_balance DESC, pg.gift_updated_at DESC
                 "#,
             )
             .bind(account_id)
