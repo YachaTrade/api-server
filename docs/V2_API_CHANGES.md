@@ -361,12 +361,12 @@ profile 화면에서 조회할 수 있도록 신규 엔드포인트 추가. 상�
 
 ```typescript
 interface GiftFeeTokensResponse {
-    tokens: TokenCreatedInfo[];   // gift updated_at DESC 정렬
+    tokens: TokenCreatedInfo[];   // current_balance DESC, updated_at DESC 정렬
     total_count: number;
 }
 ```
 
-정렬 기준은 gift vault `updated_at` DESC — 가장 최근 활동(deposit/claim/receiver_set)이 위로 옴.
+정렬 기준은 `current_balance` DESC (받을 수 있는 잔액 많은 순) → `updated_at` DESC (최근 활동 우선) 보조 정렬. `(receiver, current_balance DESC)` 부분 인덱스(`vault.sql`)가 WHERE + ORDER BY 모두 cover.
 
 ---
 

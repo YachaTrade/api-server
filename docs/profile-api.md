@@ -258,7 +258,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 }
 ```
 
-`tokens` 배열은 gift vault `updated_at` 내림차순 정렬 (가장 최근 활동 우선).
+`tokens` 배열은 gift vault `current_balance` (받을 수 있는 잔액) 내림차순 정렬 — 받을 게 많은 토큰이 위로. 잔액이 같은 경우 `updated_at` 내림차순(최신 활동 우선)으로 보조 정렬.
 
 #### 에러 응답
 - `400`: 잘못된 account_id
