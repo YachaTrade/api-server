@@ -573,12 +573,19 @@ interface SwapInfo {
   created_at: number;
 }
 
-// 리워드 정보
+// 리워드 정보 (V1 토큰: creator_reward Merkle, V2 토큰: v2_creator_fee_vault_stats)
+//
+// V1: amount = creator_reward.amount, claimed_amount = sum(claim_history),
+//     proof = Merkle proof, claimable = status === 'AWAITING'
+// V2: amount = v2_creator_fee_vault_stats.current_balance (지금 받을 수 있는 잔액),
+//     claimed_amount = v2_creator_fee_vault_stats.total_claimed,
+//     proof = [] (V2는 Merkle 미사용 — vault에서 직접 claim),
+//     claimable = current_balance > 0
 interface RewardInfo {
-  amount: string;           // 총 리워드 수량
-  claimed_amount: string;   // 청구한 리워드 수량
-  proof: string[];          // Merkle proof
-  claimable: boolean;       // 청구 가능 여부
+  amount: string;
+  claimed_amount: string;
+  proof: string[];
+  claimable: boolean;
 }
 ```
 

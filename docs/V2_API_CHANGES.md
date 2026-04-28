@@ -24,6 +24,7 @@
 | `QuoteTokensResponse` | 신규 타입 — quote token 목록 응답 |
 | 엔드포인트 | `GET /profile/gift-fee/{account_id}` 신규 — gift vault receiver로 등록된 토큰 목록 |
 | `GiftFeeTokensResponse` | 신규 타입 — `TokenCreatedInfo[]` + `total_count` |
+| `RewardInfo` (소스 분기) | V2 토큰의 경우 `v2_creator_fee_vault_stats` 에서 산출 (V1은 기존 `creator_reward` Merkle) — 타입 형태는 그대로 |
 
 ---
 

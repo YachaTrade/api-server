@@ -150,6 +150,8 @@ impl TokenCreatedController {
             reward_claimed_amount: BigDecimal,
             reward_proof: Vec<String>,
             reward_status: Option<String>,
+            v2_current_balance: Option<BigDecimal>,
+            v2_total_claimed: Option<BigDecimal>,
         }
 
         let tokens = measure_postgres!(
@@ -213,7 +215,9 @@ impl TokenCreatedController {
                     COALESCE(cr.amount, 0) as reward_amount,
                     COALESCE(ctch.claimed_amount, 0) as reward_claimed_amount,
                     COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
-                    cr.status as reward_status
+                    cr.status as reward_status,
+                    v2cfv.current_balance as v2_current_balance,
+                    v2cfv.total_claimed as v2_total_claimed
                 FROM paged_tokens t
                 JOIN account a ON t.creator = a.account_id
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
@@ -223,6 +227,7 @@ impl TokenCreatedController {
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                 LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
                 LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
+                LEFT JOIN v2_creator_fee_vault_stats v2cfv ON t.token_id = v2cfv.token_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
@@ -323,11 +328,31 @@ impl TokenCreatedController {
                         native_price: row.native_price.normalized().to_plain_string(),
                         created_at: row.balance_created_at,
                     },
-                    reward_info: RewardInfo {
-                        amount: row.reward_amount.normalized().to_plain_string(),
-                        claimed_amount: row.reward_claimed_amount.normalized().to_plain_string(),
-                        proof: row.reward_proof,
-                        claimable: row.reward_status.as_deref() == Some("AWAITING"),
+                    reward_info: match row.version {
+                        TokenVersion::V2 => {
+                            let current_balance = row
+                                .v2_current_balance
+                                .clone()
+                                .unwrap_or_else(|| BigDecimal::from(0));
+                            let claimable = current_balance > BigDecimal::from(0);
+                            RewardInfo {
+                                amount: current_balance.normalized().to_plain_string(),
+                                claimed_amount: row
+                                    .v2_total_claimed
+                                    .clone()
+                                    .unwrap_or_else(|| BigDecimal::from(0))
+                                    .normalized()
+                                    .to_plain_string(),
+                                proof: vec![],
+                                claimable,
+                            }
+                        }
+                        TokenVersion::V1 => RewardInfo {
+                            amount: row.reward_amount.normalized().to_plain_string(),
+                            claimed_amount: row.reward_claimed_amount.normalized().to_plain_string(),
+                            proof: row.reward_proof,
+                            claimable: row.reward_status.as_deref() == Some("AWAITING"),
+                        },
                     },
                 }
             })
