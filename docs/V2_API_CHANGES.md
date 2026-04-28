@@ -371,6 +371,35 @@ interface GiftFeeTokensResponse {
 
 ---
 
+## RewardInfo (소스 분기, 타입 동일)
+
+`TokenCreatedInfo.reward_info` 가 채워지는 방식이 토큰 버전에 따라 달라짐.
+**타입(`RewardInfo`) 형태는 V1/V2 동일** — 클라이언트가 별도 분기 로직을
+넣을 필요 없음. 단, `proof` 의 의미는 토큰 버전에 따라 다름 (아래 표 참고).
+
+### 적용 엔드포인트
+- `GET /profile/tokens/created/{account_id}`
+- `GET /profile/gift-fee/{account_id}`
+
+### 필드 매핑
+
+| `RewardInfo` 필드 | V1 (Merkle 보상) | V2 (CreatorFeeVault) |
+|---|---|---|
+| `amount` | `creator_reward.amount` (전체 누적 보상) | `v2_creator_fee_vault_stats.current_balance` (지금 받을 수 있는 잔액) |
+| `claimed_amount` | `SUM(creator_treasury_claim_history.amount)` | `v2_creator_fee_vault_stats.total_claimed` |
+| `proof` | Merkle proof 배열 | `[]` — V2 는 Merkle 미사용, vault 에서 직접 claim |
+| `claimable` | `creator_reward.status === 'AWAITING'` | `current_balance > 0` |
+
+### 분기 기준
+
+내부적으로 `token.version` 으로 분기:
+- `version = 'V1'` → 기존 V1 소스 그대로
+- `version = 'V2'` → V2 vault stats 로 매핑
+
+V1/V2 토큰이 한 응답에 섞여 있어도 각 토큰의 version 에 따라 올바른 source 가 적용됨.
+
+---
+
 ## HackathonInfo (제거)
 
 ### 이전 (V1)
