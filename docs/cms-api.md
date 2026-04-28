@@ -7,7 +7,6 @@ CMS(Content Management System) API는 관리자 전용 토큰 관리 기능을 �
 - **NSFW 설정**: 토큰의 NSFW(Not Safe For Work) 상태 설정
 - **트렌드 관리**: 트렌드 토큰 목록 관리
 - **메타데이터 수정**: 토큰 메타데이터 업데이트 (설명, 링크, 이미지)
-- **해커톤 등록**: 해커톤 프로젝트 등록 (별도 문서 참조: [hackathon-api.md](./hackathon-api.md))
 
 > **참고**: API Key 관리는 일반 사용자용 API로 이동되었습니다. [api-key.md](./api-key.md) 참조
 
@@ -157,12 +156,6 @@ curl -X POST "https://api.example.com/cms/token/metadata" \
 - `400`: 잘못된 요청 (유효하지 않은 token_id, URL 형식 오류, 설명 길이 초과)
 - `401`: 인증 실패 (Admin 권한 없음)
 - `500`: 내부 서버 에러
-
----
-
-### 4. 해커톤 프로젝트 등록 (`POST /cms/hackathon/register`)
-
-해커톤 프로젝트를 등록합니다. 자세한 내용은 [hackathon-api.md](./hackathon-api.md) 문서를 참조하세요.
 
 ---
 

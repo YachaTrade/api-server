@@ -7,7 +7,6 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
 - **토큰 정보 조회**: 토큰의 기본 정보 및 크리에이터 정보 반환
 - **토큰 메타데이터 조회**: 토큰 정보와 마켓 정보를 함께 반환
 - **Salt 마이닝**: 특정 접미사를 가진 토큰 주소 생성을 위한 salt 값 계산
-- **해커톤 토큰 목록**: 해커톤에 등록된 토큰 ID 목록 반환
 
 ---
 
@@ -49,7 +48,7 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
       "image_uri": "https://storage.nadapp.net/profiles/uuid.png"
     },
     "is_cto": false,
-    "hackathon_info": null
+    "version": "V1"
   }
 }
 ```
@@ -96,25 +95,37 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
       "image_uri": "https://storage.nadapp.net/profiles/uuid.png"
     },
     "is_cto": false,
-    "hackathon_info": null
+    "version": "V1"
   },
   "market_info": {
     "market_type": "CURVE",
     "token_id": "0x1234567890abcdef...",
+    "quote_info": {
+      "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",
+      "name": "MONAD",
+      "symbol": "MON",
+      "decimals": 18,
+      "image_uri": "https://storage.nadapp.net/quote/mon.webp"
+    },
     "market_id": "0xmarketaddress...",
     "reserve_native": "100000000000000000000",
+    "reserve_quote": "100000000000000000000",
     "reserve_token": "500000000000000000000000000",
     "token_price": "0.001",
     "native_price": "3000",
+    "quote_price": "3000",
     "price": "0.000001",
     "price_usd": "0.003",
     "price_native": "0.000001",
+    "price_quote": "0.000001",
     "total_supply": "1000000000000000000000000000",
     "volume": "50000000000000000000000",
     "ath_price": "0.000002",
     "ath_price_usd": "0.006",
     "ath_price_native": "0.000002",
-    "holder_count": 150
+    "ath_price_quote": "0.000002",
+    "holder_count": 150,
+    "fee_info": null
   }
 }
 ```
@@ -174,32 +185,6 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
 
 ---
 
-### 4. 해커톤 토큰 목록 조회 (`GET /token/hackathon`)
-
-해커톤에 등록된 모든 토큰 ID 목록을 조회합니다.
-
-#### 요청
-- **Method**: `GET`
-- **인증**: 불필요
-
-#### 응답
-```json
-{
-  "token_ids": [
-    "0x1234567890abcdef...",
-    "0x5678901234abcdef...",
-    "0xabcdef1234567890..."
-  ]
-}
-```
-
-- `created_at` 내림차순 정렬 (최신순)
-
-#### 에러 응답
-- `500`: 내부 서버 에러
-
----
-
 ## TypeScript Interfaces
 
 ### 요청 타입
@@ -248,10 +233,6 @@ interface MineSaltError {
   iterations_attempted?: number;
 }
 
-// GET /token/hackathon
-interface HackathonTokenListResponse {
-  token_ids: string[];
-}
 ```
 
 ### 공통 타입
@@ -271,7 +252,7 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  hackathon_info?: HackathonInfo;
+  version: TokenVersion;
 }
 
 interface AccountInfo {
@@ -338,51 +319,7 @@ interface MarketInfo {
   fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
-interface HackathonInfo {
-  team: HackathonTeamInfo;
-  project: HackathonProjectInfo;
-}
-
-interface HackathonTeamInfo {
-  id: string;
-  name: string;
-  members: HackathonTeamMemberInfo[];
-}
-
-interface HackathonTeamMemberInfo {
-  email: string;
-  discord?: string;
-  twitter?: string;
-  linkedin?: string;
-  github?: HackathonMemberGitHubInfo;
-}
-
-interface HackathonMemberGitHubInfo {
-  username: string;
-  image_uri: string;
-  name: string;
-  url: string;
-  follower_count: number;
-  following_count: number;
-  repo_count: number;
-  star_count: number;
-  bio?: string;
-  fetch_pending: boolean;
-}
-
-interface HackathonProjectInfo {
-  name: string;
-  description: string;
-  monad_integration: string;
-  github_url: string;
-  demo_video_url: string;
-  agent_moltbook_url?: string;
-  github_star_count: number;
-  github_fork_count: number;
-  github_description?: string;
-  github_topics?: string[];
-  github_language?: string;
-}
+type TokenVersion = "V1" | "V2";
 ```
 
 ---
@@ -394,4 +331,3 @@ interface HackathonProjectInfo {
 | GET | `/token/:token` | 토큰 정보 조회 |
 | GET | `/token/metadata/:token_id` | 토큰 메타데이터 조회 |
 | POST | `/token/salt` | Salt 마이닝 |
-| GET | `/token/hackathon` | 해커톤 토큰 목록 조회 |

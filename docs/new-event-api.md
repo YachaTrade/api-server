@@ -46,7 +46,7 @@ New Event API는 실시간으로 발생하는 최신 이벤트(매수/매도/토
           "image_uri": "https://storage.nadapp.net/profiles/..."
         },
         "is_cto": false,
-        "hackathon_info": null
+        "version": "V1"
       },
       "account_info": {
         "account_id": "0xabcdef1234567890...",
@@ -131,60 +131,16 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  hackathon_info?: HackathonInfo | null;
+  version: TokenVersion;
 }
+
+type TokenVersion = "V1" | "V2";
 
 interface AccountInfo {
   account_id: string;
   nickname: string;
   bio: string;
   image_uri: string;
-}
-
-interface HackathonInfo {
-  team: HackathonTeamInfo;
-  project: HackathonProjectInfo;
-}
-
-interface HackathonTeamInfo {
-  id: string;
-  name: string;
-  members: HackathonTeamMemberInfo[];
-}
-
-interface HackathonTeamMemberInfo {
-  email: string;
-  discord?: string;
-  twitter?: string;
-  linkedin?: string;
-  github?: HackathonMemberGitHubInfo;
-}
-
-interface HackathonMemberGitHubInfo {
-  username: string;
-  image_uri: string;
-  name: string;
-  url: string;
-  follower_count: number;
-  following_count: number;
-  repo_count: number;
-  star_count: number;
-  bio?: string;
-  fetch_pending: boolean;
-}
-
-interface HackathonProjectInfo {
-  name: string;
-  description: string;
-  monad_integration: string;
-  github_url: string;
-  demo_video_url: string;
-  agent_moltbook_url?: string;
-  github_star_count: number;
-  github_fork_count: number;
-  github_description?: string;
-  github_topics?: string[];
-  github_language?: string;
 }
 ```
 

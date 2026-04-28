@@ -485,8 +485,10 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  hackathon_info?: HackathonInfo;
+  version: TokenVersion;
 }
+
+type TokenVersion = "V1" | "V2";
 
 interface AccountInfo {
   account_id: string;
