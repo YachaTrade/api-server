@@ -191,7 +191,22 @@ Hype API는 토큰 투표 및 리워드 시스템을 위한 API입니다.
         "token_id": "0x...",
         "name": "Token Name",
         "symbol": "TKN",
-        ...
+        "image_uri": "https://storage.nadapp.net/...",
+        "description": "...",
+        "is_graduated": false,
+        "is_nsfw": false,
+        "twitter": null,
+        "telegram": null,
+        "website": null,
+        "created_at": 1704067200,
+        "creator": {
+          "account_id": "0x...",
+          "nickname": "Creator",
+          "bio": "",
+          "image_uri": "https://..."
+        },
+        "is_cto": false,
+        "version": "V1"
       },
       "vote_amount": "100",
       "reward_amount": "50000000000000000",
@@ -245,7 +260,22 @@ Hype API는 토큰 투표 및 리워드 시스템을 위한 API입니다.
         "token_id": "0x...",
         "name": "Token Name",
         "symbol": "TKN",
-        ...
+        "image_uri": "https://storage.nadapp.net/...",
+        "description": "...",
+        "is_graduated": false,
+        "is_nsfw": false,
+        "twitter": null,
+        "telegram": null,
+        "website": null,
+        "created_at": 1704067200,
+        "creator": {
+          "account_id": "0x...",
+          "nickname": "Creator",
+          "bio": "",
+          "image_uri": "https://..."
+        },
+        "is_cto": false,
+        "version": "V1"
       },
       "amount": "100000000000000000",
       "total_amount": "500000000000000000",

@@ -259,13 +259,83 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 |----------|------|--------|------|
 | `page` | integer | 1 | 페이지 번호 (1부터 시작) |
 | `limit` | integer | 10 | 페이지당 항목 수 (최대 100) |
-| `direction` | string | DESC | 정렬 방향 (현재 무시 — gift `updated_at` DESC 고정) |
+| `direction` | string | DESC | 정렬 방향 (현재 무시 — `current_balance DESC, updated_at DESC` 고정) |
 
 #### 응답
 
 ```json
 {
-  "tokens": [ /* TokenCreatedInfo[] — `/profile/tokens/created` 와 동일 스키마 */ ],
+  "tokens": [
+    {
+      "token_info": {
+        "token_id": "0x350035555E10d9AfAF1566AaebfCeD5BA6C27777",
+        "name": "Cosmos",
+        "symbol": "ATOM",
+        "image_uri": "https://storage.nadapp.net/...",
+        "description": "...",
+        "is_graduated": false,
+        "is_nsfw": false,
+        "twitter": "https://x.com/...",
+        "telegram": null,
+        "website": null,
+        "created_at": 1714560000,
+        "creator": {
+          "account_id": "0x...",
+          "nickname": "Creator",
+          "bio": "...",
+          "image_uri": "https://..."
+        },
+        "is_cto": false,
+        "version": "V2"
+      },
+      "market_info": {
+        "market_type": "V2_CURVE",
+        "token_id": "0x350035555E10d9AfAF1566AaebfCeD5BA6C27777",
+        "quote_info": {
+          "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",
+          "name": "MONAD",
+          "symbol": "MON",
+          "decimals": 18,
+          "image_uri": "https://storage.nadapp.net/quote/mon.webp"
+        },
+        "market_id": "0x...",
+        "reserve_native": "100000000000000000000000",
+        "reserve_quote": "100000000000000000000000",
+        "reserve_token": "500000000000000000000000000",
+        "token_price": "0.001",
+        "native_price": "3000",
+        "quote_price": "3000",
+        "price": "0.000001",
+        "price_usd": "0.003",
+        "price_native": "0.000001",
+        "price_quote": "0.000001",
+        "total_supply": "1000000000000000000000000000",
+        "volume": "50000000000000000000000",
+        "ath_price": "0.000002",
+        "ath_price_usd": "0.006",
+        "ath_price_native": "0.000002",
+        "ath_price_quote": "0.000002",
+        "holder_count": 150,
+        "fee_info": {
+          "creator_protocol_fee_rate": 100,
+          "curve_protocol_fee_rate": 100,
+          "dex_protocol_fee_rate": 50
+        }
+      },
+      "balance_info": {
+        "balance": "0",
+        "token_price": "0.001",
+        "native_price": "3000",
+        "created_at": 0
+      },
+      "reward_info": {
+        "amount": "0",
+        "claimed_amount": "0",
+        "proof": [],
+        "claimable": false
+      }
+    }
+  ],
   "total_count": 3
 }
 ```
