@@ -45,15 +45,15 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 ```jsonc
 {
   "token_id": "0x350035555E10d9AfAF1566AaebfCeD5BA6C27777",
-  "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",      // distributed_quote 단위
-  "total_distributed_quote": "4125821524927906943762",            // 모든 vault distributed_quote 합
+  "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",      // quote_amount 단위
+  "total_quote_amount": "4125821524927906943762",            // 모든 vault quote_amount 합
   "vaults": [
     {
       "vault_id": "0x...",            // vault 컨트랙트 주소
       "bps": 4500,                    // 0~10000 (45.00%)
       "name": "Buyback & Burn",       // v2_vault_metadata.name
       "active": true,                 // v2_vault_metadata.active
-      "distributed_quote": "1444037533724767430315", // 이 vault에 누적 분배된 fee (quote 단위)
+      "quote_amount": "1444037533724767430315", // 이 vault에 누적 분배된 fee (quote 단위)
       "last_executed_at": 1714560000, // 해당 vault stat 테이블의 updated_at
       "vault_type": "BURN",           // 디스크리미네이터 (아래 5종)
       "stats": { /* vault_type 별 고유 필드 */ }
@@ -62,7 +62,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 }
 ```
 
-`distributed_quote` / `total_distributed_quote`는 모두 `quote_id`로 명시된 quote 토큰 단위(wei)이며, 출처는 `v2_creator_fee_distribution_stats` (트리거가 `v2_creator_fee_distribution.event_type='DISTRIBUTE'` 행을 누적). 토큰이 vault에 분배한 적이 없으면 `"0"`.
+`quote_amount` / `total_quote_amount`는 모두 `quote_id`로 명시된 quote 토큰 단위(wei)이며, 출처는 `v2_creator_fee_distribution_stats` (트리거가 `v2_creator_fee_distribution.event_type='DISTRIBUTE'` 행을 누적). 토큰이 vault에 분배한 적이 없으면 `"0"`.
 
 `vaults` 배열은 `bps` 내림차순 정렬됩니다.
 
@@ -188,7 +188,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 404가 아닙니다.
 
 ```json
-{ "token_id": "0x...", "quote_id": "0x...", "total_distributed_quote": "0", "vaults": [] }
+{ "token_id": "0x...", "quote_id": "0x...", "total_quote_amount": "0", "vaults": [] }
 ```
 
 ---
@@ -203,7 +203,7 @@ interface VaultEntryBase {
   bps: number;                  // 0..10000
   name: string;
   active: boolean;
-  distributed_quote: string;    // 이 vault에 누적 분배된 fee (quote 단위, wei)
+  quote_amount: string;    // 이 vault에 누적 분배된 fee (quote 단위, wei)
   last_executed_at: number;
 }
 
@@ -252,8 +252,8 @@ interface GiftStats {
 
 interface TokenVaultsResponse {
   token_id: string;
-  quote_id: string;                 // distributed_quote 단위 (market.quote_id)
-  total_distributed_quote: string;  // SUM of vaults[].distributed_quote
+  quote_id: string;                 // quote_amount 단위 (market.quote_id)
+  total_quote_amount: string;  // SUM of vaults[].quote_amount
   vaults: VaultEntry[];
 }
 ```
