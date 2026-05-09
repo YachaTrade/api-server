@@ -30,6 +30,13 @@ pub enum VaultType {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenVaultsResponse {
     pub token_id: String,
+    /// Quote token denomination for `total_distributed_quote` and each
+    /// vault's `distributed_quote`. Sourced from `market.quote_id`.
+    pub quote_id: String,
+    /// Sum of `distributed_quote` across all vaults for this token.
+    /// Equal to `SUM(v2_creator_fee_distribution_stats.distributed_quote)`
+    /// over rows where `token_id = $1`.
+    pub total_distributed_quote: String,
     pub vaults: Vec<VaultEntry>,
 }
 
@@ -43,6 +50,10 @@ pub struct VaultEntry {
     pub bps: u32,
     pub name: String,
     pub active: bool,
+    /// Cumulative quote-denominated fee distributed to this vault for the
+    /// token. Sourced from `v2_creator_fee_distribution_stats.distributed_quote`.
+    /// Denomination given by the parent response's `quote_id`.
+    pub distributed_quote: String,
     /// Latest stat-table `updated_at` for this vault (unix seconds).
     /// `0` when the vault has no recorded activity yet.
     pub last_executed_at: i64,
