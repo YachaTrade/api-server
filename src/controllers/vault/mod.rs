@@ -57,6 +57,11 @@ struct VaultRow {
     // Pool pair composition (LP only) — token + quote symbol via market.
     token_symbol: Option<String>,
     quote_symbol: Option<String>,
+
+    // Per-(token, vault) distributed fee total — `v2_creator_fee_distribution_stats`.
+    dist_distributed_quote: Option<BigDecimal>,
+    // Token's market.quote_id — used to denote `total_distributed_quote`.
+    market_quote_id: Option<String>,
 }
 
 pub struct VaultController {
@@ -111,7 +116,10 @@ impl VaultController {
                     g.updated_at          AS gift_updated_at,
 
                     tk.symbol             AS token_symbol,
-                    qt.symbol             AS quote_symbol
+                    qt.symbol             AS quote_symbol,
+
+                    COALESCE(dist.distributed_quote, 0) AS dist_distributed_quote,
+                    mk.quote_id           AS market_quote_id
                 FROM v2_creator_fee_allocation a
                 JOIN v2_vault_metadata m
                     ON m.vault_id = a.vault_id
@@ -129,6 +137,8 @@ impl VaultController {
                     ON mk.token_id = a.token_id
                 LEFT JOIN quote_token qt
                     ON qt.quote_id = mk.quote_id
+                LEFT JOIN v2_creator_fee_distribution_stats dist
+                    ON dist.token_id = a.token_id AND dist.vault_id = a.vault_id
                 WHERE a.token_id = $1
                 ORDER BY a.bps DESC
                 "#,
@@ -138,10 +148,22 @@ impl VaultController {
         )
         .map_err(|err| anyhow!("Failed to fetch token vaults: {}", err))?;
 
-        let vaults = rows.into_iter().map(map_row).collect();
+        let total_distributed_quote: BigDecimal = rows
+            .iter()
+            .filter_map(|r| r.dist_distributed_quote.clone())
+            .fold(BigDecimal::from(0), |acc, x| acc + x);
+
+        let quote_id = rows
+            .iter()
+            .find_map(|r| r.market_quote_id.clone())
+            .unwrap_or_default();
+
+        let vaults: Vec<VaultEntry> = rows.into_iter().map(map_row).collect();
 
         Ok(TokenVaultsResponse {
             token_id: token_id.to_string(),
+            quote_id,
+            total_distributed_quote: total_distributed_quote.to_string(),
             vaults,
         })
     }
@@ -205,6 +227,7 @@ fn map_row(row: VaultRow) -> VaultEntry {
         bps: row.bps.max(0) as u32,
         name: row.name,
         active: row.active,
+        distributed_quote: bd_to_string(row.dist_distributed_quote),
         last_executed_at,
         stats,
     }
