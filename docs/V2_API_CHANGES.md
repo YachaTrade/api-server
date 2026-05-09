@@ -288,7 +288,7 @@ interface VaultEntryBase {
     bps: number;            // 0..10000
     name: string;
     active: boolean;
-    distributed_quote: string;  // 누적 분배 fee (quote 단위)
+    quote_amount: string;  // 누적 분배 fee (quote 단위)
     last_executed_at: number;
 }
 
@@ -302,8 +302,8 @@ type VaultEntry = VaultEntryBase & (
 
 interface TokenVaultsResponse {
     token_id: string;
-    quote_id: string;                 // distributed_quote 단위 (market.quote_id)
-    total_distributed_quote: string;  // SUM of vaults[].distributed_quote
+    quote_id: string;                 // quote_amount 단위 (market.quote_id)
+    total_quote_amount: string;  // SUM of vaults[].quote_amount
     vaults: VaultEntry[];             // bps DESC 정렬
 }
 ```
@@ -317,7 +317,7 @@ vault_type 별 `stats` 필드 정의는 [`vault-api.md`](./vault-api.md#vault_ty
 - LP `pool_pair`: `token.symbol` + `quote_token.symbol` (via `market.quote_id`)
 - 분배 fee 누적: `v2_creator_fee_distribution_stats` (per `(token_id, vault_id)`)
   - 트리거가 `v2_creator_fee_distribution`의 `event_type='DISTRIBUTE'` 행을 누적
-  - `total_distributed_quote` = 토큰 행의 `distributed_quote` 합 (응답 루트)
+  - `total_quote_amount` = 토큰 행의 `quote_amount` 합 (응답 루트)
   - `quote_id`는 `market.quote_id` 기준 (vault 0개 토큰도 단위 명시)
 
 V1 토큰에는 vault allocation이 없으므로 `vaults: []` 빈 배열을 반환.

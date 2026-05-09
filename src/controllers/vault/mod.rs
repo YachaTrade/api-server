@@ -60,7 +60,7 @@ struct VaultRow {
 
     // Per-(token, vault) distributed fee total — `v2_creator_fee_distribution_stats`.
     dist_distributed_quote: Option<BigDecimal>,
-    // Token's market.quote_id — used to denote `total_distributed_quote`.
+    // Token's market.quote_id — used to denote `total_quote_amount`.
     market_quote_id: Option<String>,
 }
 
@@ -148,7 +148,7 @@ impl VaultController {
         )
         .map_err(|err| anyhow!("Failed to fetch token vaults: {}", err))?;
 
-        let total_distributed_quote: BigDecimal = rows
+        let total_quote_amount: BigDecimal = rows
             .iter()
             .filter_map(|r| r.dist_distributed_quote.clone())
             .fold(BigDecimal::from(0), |acc, x| acc + x);
@@ -163,7 +163,7 @@ impl VaultController {
         Ok(TokenVaultsResponse {
             token_id: token_id.to_string(),
             quote_id,
-            total_distributed_quote: total_distributed_quote.to_string(),
+            total_quote_amount: total_quote_amount.to_string(),
             vaults,
         })
     }
@@ -227,7 +227,7 @@ fn map_row(row: VaultRow) -> VaultEntry {
         bps: row.bps.max(0) as u32,
         name: row.name,
         active: row.active,
-        distributed_quote: bd_to_string(row.dist_distributed_quote),
+        quote_amount: bd_to_string(row.dist_distributed_quote),
         last_executed_at,
         stats,
     }
