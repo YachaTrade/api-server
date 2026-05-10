@@ -34,7 +34,7 @@ use crate::{
             swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
-    utils::{valid_account_id, valid_token_id},
+    utils::{valid_account_id, valid_existing_token_id},
 };
 
 // ============================================================================
@@ -66,10 +66,7 @@ pub async fn get_chart(
     Path(token_id): Path<String>,
     Query(query): Query<GetBarsRequest>,
 ) -> AppJsonResult<BarResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     query.validate().map_err(AppError::BadRequest)?;
     let service = ChartService::new(state.postgres.clone(), state.redis.clone());
     Ok(Json(service.get_prices(&token_id, &query).await?))
@@ -99,10 +96,7 @@ pub async fn get_swap_history(
     Query(query): Query<SwapQuery>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     query.validate().map_err(AppError::BadRequest)?;
     let service = SwapService::new(state.postgres.clone(), state.redis.clone());
     Ok(Json(service.get_swaps_by_token(&token_id, &query).await?))
@@ -125,10 +119,7 @@ pub async fn get_market(
     Path(token_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<MarketResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     let service = MarketService::new(state.postgres.clone(), state.redis.clone());
     Ok(Json(service.get_market(&token_id).await?))
 }
@@ -180,10 +171,7 @@ pub async fn get_metrics(
     Path(token_id): Path<String>,
     Query(params): Query<MetricsQuery>,
 ) -> AppJsonResult<MetricsBatchResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     let service = MetricsService::new(state.postgres.clone());
     Ok(Json(
         service.get_metrics(&token_id, params.timeframes).await?,
@@ -212,10 +200,7 @@ pub async fn get_token(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
 ) -> AppJsonResult<TokenResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     let service = TokenService::new(state.postgres.clone(), state.redis.clone());
     Ok(Json(service.get_token(&token_id).await?))
 }

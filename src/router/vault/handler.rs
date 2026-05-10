@@ -6,11 +6,11 @@ use tracing::instrument;
 
 use super::path::VaultPath;
 use crate::{
-    result::{AppError, AppJsonResult},
+    result::AppJsonResult,
     services::vault::VaultService,
     state::AppState,
     types::vault::TokenVaultsResponse,
-    utils::valid_token_id,
+    utils::valid_existing_token_id,
 };
 
 /// List vaults that a token routes a portion of its trading fees to.
@@ -32,8 +32,7 @@ pub async fn get_token_vaults(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
 ) -> AppJsonResult<TokenVaultsResponse> {
-    let token_id = valid_token_id(&token_id)
-        .ok_or_else(|| AppError::BadRequest("Invalid token id".to_string()))?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
 
     let service = VaultService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_token_vaults(&token_id).await?;
