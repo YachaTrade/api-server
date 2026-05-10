@@ -1,5 +1,5 @@
 use api_server::{
-    config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_FLUSH_ON_STARTUP, REDIS_KEY_PREFIX},
+    config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
         self, account, agent, api_key, auth, chester, cms, health, hype, leaderboard, metadata,
@@ -404,22 +404,16 @@ async fn main() -> Result<()> {
     let app_state = AppState::new().await;
     info!("AppState initialized");
 
-    // Redis 초기화. REDIS_FLUSH_ON_STARTUP=false 로 끌 수 있음.
-    // REDIS_KEY_PREFIX 가 설정돼 있으면 prefix 매칭 키만 SCAN+DEL 로 지움 (FLUSHALL 사용 X).
-    if *REDIS_FLUSH_ON_STARTUP {
-        if REDIS_KEY_PREFIX.is_empty() {
-            info!("Flushing Redis (FLUSHALL — no prefix set)...");
-        } else {
-            info!(
-                "Flushing Redis keys matching prefix {}* ...",
-                REDIS_KEY_PREFIX.as_str()
-            );
-        }
-        if let Err(e) = app_state.redis.flush_all().await {
-            warn!("Failed to flush Redis: {}", e);
-        }
-    } else {
-        info!("Skipping Redis flush at startup (REDIS_FLUSH_ON_STARTUP=false)");
+    // Redis startup flush — prefix-scoped SCAN + DEL only.
+    // No-op when REDIS_KEY_PREFIX is empty (we never run FLUSHALL).
+    if !REDIS_KEY_PREFIX.is_empty() {
+        info!(
+            "Flushing Redis keys matching prefix {}* ...",
+            REDIS_KEY_PREFIX.as_str()
+        );
+    }
+    if let Err(e) = app_state.redis.flush_all().await {
+        warn!("Failed to flush Redis: {}", e);
     }
 
     // Background task: API Key 사용량 주기적 DB 동기화 (5분마다)

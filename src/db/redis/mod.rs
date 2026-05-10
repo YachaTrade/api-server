@@ -86,22 +86,23 @@ impl RedisDatabase {
         }
     }
 
-    /// Wipe Redis state owned by this service.
+    /// Wipe Redis state owned by this service via prefix-scoped SCAN + DEL.
     ///
-    /// - When `REDIS_KEY_PREFIX` is empty: runs `FLUSHALL` (legacy behavior,
-    ///   wipes the entire instance).
+    /// - When `REDIS_KEY_PREFIX` is empty: **no-op**. We never run FLUSHALL
+    ///   here — too dangerous on a shared Redis. If a full wipe is really
+    ///   needed, do it manually with `redis-cli FLUSHALL` outside the service.
     /// - When `REDIS_KEY_PREFIX` is set: runs `SCAN MATCH <prefix>* COUNT 500`
-    ///   in a loop and `DEL`s the matching keys, leaving keys owned by other
-    ///   services (e.g. v1 sharing the same Redis) untouched.
+    ///   in a loop and `DEL`s only the matching keys, leaving everything
+    ///   else (including v1 keys on a shared Redis) untouched.
     pub async fn flush_all(&self) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-
         if REDIS_KEY_PREFIX.is_empty() {
-            redis::cmd("FLUSHALL").query_async::<()>(&mut conn).await?;
-            info!("Redis FLUSHALL completed (no prefix)");
+            info!(
+                "Redis flush skipped: REDIS_KEY_PREFIX is empty (no FLUSHALL — too risky on shared Redis)"
+            );
             return Ok(());
         }
 
+        let mut conn = self.conn.as_ref().clone();
         let pattern = format!("{}*", REDIS_KEY_PREFIX.as_str());
         let mut cursor: u64 = 0;
         let mut deleted: u64 = 0;
