@@ -182,6 +182,10 @@ lazy_static! {
     // behavior). Set when sharing one Redis instance between v1 and v2.
     // The trailing colon is appended automatically: REDIS_KEY_PREFIX="API_V2"
     // → all keys become "API_V2:<original-key>".
+    //
+    // NOTE: startup flush is keyed off this value. Empty prefix → startup
+    // flush is a no-op (we never run FLUSHALL — too dangerous on shared
+    // Redis). Non-empty prefix → SCAN+DEL only the keys we own.
     pub static ref REDIS_KEY_PREFIX: String = {
         let raw = env::var("REDIS_KEY_PREFIX").unwrap_or_default();
         let trimmed = raw.trim().trim_end_matches(':');
@@ -191,16 +195,4 @@ lazy_static! {
             format!("{}:", trimmed)
         }
     };
-
-    // Whether main() runs `flush_all()` at startup. Default: true (legacy
-    // behavior). Set REDIS_FLUSH_ON_STARTUP=false on long-running v2 nodes
-    // where you don't want a cold cache on every restart.
-    pub static ref REDIS_FLUSH_ON_STARTUP: bool = env::var("REDIS_FLUSH_ON_STARTUP")
-        .ok()
-        .and_then(|v| match v.trim().to_lowercase().as_str() {
-            "true" | "1" | "yes" => Some(true),
-            "false" | "0" | "no" => Some(false),
-            _ => None,
-        })
-        .unwrap_or(true);
 }
