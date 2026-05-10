@@ -15,7 +15,7 @@ use axum::{
 use std::env;
 use std::net::SocketAddr;
 use tower_cookies::Cookies;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// 허용된 Origin인지 검증
 fn is_allowed_origin(origin: &str) -> bool {
@@ -208,8 +208,12 @@ pub async fn api_key_gate(
     match check_and_increment(&state.redis, &rate_limit_id, rate_limit).await? {
         RateLimitResult::Exceeded {
             retry_after,
-            limit: _,
+            limit,
         } => {
+            warn!(
+                "[RATE_LIMIT_BLOCKED] path={}, client_ip={}, identifier={}, limit={}, retry_after={}s, has_api_key={}",
+                path, client_ip, rate_limit_id, limit, retry_after, has_api_key
+            );
             return Err(AppError::TooManyRequests { retry_after });
         }
         RateLimitResult::Allowed { remaining, limit } => {
