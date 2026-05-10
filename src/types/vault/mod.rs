@@ -37,6 +37,10 @@ pub struct TokenVaultsResponse {
     /// Equal to `SUM(v2_creator_fee_distribution_stats.distributed_quote)`
     /// over rows where `token_id = $1`.
     pub total_quote_amount: String,
+    /// USD-denominated sum, evaluated at fee-distribution time (not at
+    /// request time). Equal to
+    /// `SUM(v2_creator_fee_distribution_stats.distributed_quote_usd)`.
+    pub total_quote_amount_usd: String,
     pub vaults: Vec<VaultEntry>,
 }
 
@@ -54,6 +58,10 @@ pub struct VaultEntry {
     /// token. Sourced from `v2_creator_fee_distribution_stats.distributed_quote`.
     /// Denomination given by the parent response's `quote_id`.
     pub quote_amount: String,
+    /// USD-denominated cumulative fee distributed to this vault, evaluated at
+    /// each distribution time. Sourced from
+    /// `v2_creator_fee_distribution_stats.distributed_quote_usd`.
+    pub quote_amount_usd: String,
     /// Latest stat-table `updated_at` for this vault (unix seconds).
     /// `0` when the vault has no recorded activity yet.
     pub last_executed_at: i64,
@@ -87,6 +95,8 @@ pub enum VaultStats {
 pub struct BurnStats {
     /// MON spent on buyback (`quote_spent`).
     pub quote_spent: String,
+    /// USD value of `quote_spent`, evaluated at execution time.
+    pub quote_spent_usd: String,
     /// Tokens permanently burned (`tokens_burned`).
     pub tokens_burned: String,
     /// Number of buyback+burn executions (`burn_count`).
@@ -98,6 +108,8 @@ pub struct BurnStats {
 pub struct LpStats {
     /// MON injected into the LP pool (`quote_injected`).
     pub quote_injected: String,
+    /// USD value of `quote_injected`, evaluated at execution time.
+    pub quote_injected_usd: String,
     /// Tokens injected alongside the quote (`token_injected`).
     pub token_injected: String,
     /// LP tokens locked/burned (`lp_burned`).
@@ -114,10 +126,17 @@ pub struct LpStats {
 pub struct CreatorFeeStats {
     /// Unclaimed balance currently sitting in the vault.
     pub current_balance: String,
+    /// USD value of `current_balance`, evaluated at request time using the
+    /// latest `price.price` for the token's `quote_id`.
+    pub current_balance_usd: String,
     /// Lifetime MON deposited into the vault.
     pub total_deposited: String,
+    /// USD value of `total_deposited`, evaluated at each deposit time.
+    pub total_deposited_usd: String,
     /// Lifetime MON claimed by the creator.
     pub total_claimed: String,
+    /// USD value of `total_claimed`, evaluated at each claim time.
+    pub total_claimed_usd: String,
     pub deposit_count: i32,
     pub claim_count: i32,
 }
@@ -128,11 +147,20 @@ pub struct GiftStats {
     /// Lifecycle state: `"Accumulating" | "Active" | "Burned"`.
     pub current_state: String,
     pub current_balance: String,
+    /// USD value of `current_balance`, evaluated at request time using the
+    /// latest `price.price` for the token's `quote_id`.
+    pub current_balance_usd: String,
     pub total_deposited: String,
+    /// USD value of `total_deposited`, evaluated at each deposit time.
+    pub total_deposited_usd: String,
     /// MON sent to the receiver across all CLAIM events.
     pub total_claimed: String,
+    /// USD value of `total_claimed`, evaluated at each claim time.
+    pub total_claimed_usd: String,
     /// MON burned via expiry sweep (terminal state).
     pub total_expired: String,
+    /// USD value of `total_expired`, evaluated at expiry time.
+    pub total_expired_usd: String,
     /// Recipient platform: `"X"` or `"GITHUB"`.
     pub platform: Option<String>,
     /// Recipient handle on the platform (e.g. `"@Beakdoong"`).
@@ -141,6 +169,8 @@ pub struct GiftStats {
     pub receiver: Option<String>,
     /// MON spent on buyback when the gift was burned.
     pub buyback_quote_spent: String,
+    /// USD value of `buyback_quote_spent`, evaluated at buyback time.
+    pub buyback_quote_spent_usd: String,
     /// Tokens burned during the buyback sweep.
     pub buyback_tokens: String,
 }

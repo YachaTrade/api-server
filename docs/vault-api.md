@@ -45,24 +45,31 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 ```jsonc
 {
   "token_id": "0x350035555E10d9AfAF1566AaebfCeD5BA6C27777",
-  "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",      // quote_amount 단위
-  "total_quote_amount": "4125821524927906943762",            // 모든 vault quote_amount 합
+  "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",   // quote_amount 단위
+  "total_quote_amount": "4125821524927906943762",              // 모든 vault quote_amount 합
+  "total_quote_amount_usd": "134.92",                          // 모든 vault quote_amount_usd 합
   "vaults": [
     {
-      "vault_id": "0x...",            // vault 컨트랙트 주소
-      "bps": 4500,                    // 0~10000 (45.00%)
-      "name": "Buyback & Burn",       // v2_vault_metadata.name
-      "active": true,                 // v2_vault_metadata.active
-      "quote_amount": "1444037533724767430315", // 이 vault에 누적 분배된 fee (quote 단위)
-      "last_executed_at": 1714560000, // 해당 vault stat 테이블의 updated_at
-      "vault_type": "BURN",           // 디스크리미네이터 (아래 5종)
-      "stats": { /* vault_type 별 고유 필드 */ }
+      "vault_id": "0x...",
+      "bps": 4500,
+      "name": "Buyback & Burn",
+      "active": true,
+      "quote_amount": "1444037533724767430315",                // raw wei
+      "quote_amount_usd": "47.30",                             // 분배 시점 USD (trigger 누적)
+      "last_executed_at": 1714560000,
+      "vault_type": "BURN",
+      "stats": { /* vault_type 별 고유 필드 (USD 포함) */ }
     }
   ]
 }
 ```
 
-`quote_amount` / `total_quote_amount`는 모두 `quote_id`로 명시된 quote 토큰 단위(wei)이며, 출처는 `v2_creator_fee_distribution_stats` (트리거가 `v2_creator_fee_distribution.event_type='DISTRIBUTE'` 행을 누적). 토큰이 vault에 분배한 적이 없으면 `"0"`.
+`quote_amount` / `total_quote_amount`는 `quote_id`로 명시된 quote 토큰 단위(wei). 출처는 `v2_creator_fee_distribution_stats` (트리거가 `v2_creator_fee_distribution.event_type='DISTRIBUTE'` 행을 누적). 토큰이 vault에 분배한 적이 없으면 `"0"`.
+
+`*_usd` 필드는 모두 USD decimal 문자열입니다.
+
+- 누적 USD 값(`*_deposited_usd`, `*_claimed_usd`, `*_expired_usd`, `quote_spent_usd`, `quote_injected_usd`, `buyback_quote_spent_usd`, `quote_amount_usd`, `total_quote_amount_usd`)은 **각 이벤트 시점**의 환산을 트리거가 누적.
+- `current_balance_usd` (CREATOR_FEE / GIFT)는 **요청 시점**에 `current_balance × price.price / 10^decimals`로 동적 계산. price 테이블에 row가 없으면 `"0"`.
 
 `vaults` 배열은 `bps` 내림차순 정렬됩니다.
 
@@ -75,6 +82,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
   "vault_type": "BURN",
   "stats": {
     "quote_spent": "100000000000000000000000",
+    "quote_spent_usd": "3270.91",
     "tokens_burned": "12345678900000000000000",
     "execution_count": 3
   }
@@ -83,7 +91,8 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `quote_spent` | string | 토큰 매수에 사용한 누적 MON (wei) |
+| `quote_spent` | string | 토큰 매수에 사용한 누적 quote (wei) |
+| `quote_spent_usd` | string | `quote_spent`의 USD 환산 누적 (이벤트 시점 가격) |
 | `tokens_burned` | string | 영구 소각된 누적 토큰 (wei) |
 | `execution_count` | number | 누적 buyback+burn 실행 횟수 |
 
@@ -94,6 +103,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
   "vault_type": "LP",
   "stats": {
     "quote_injected": "100000000000000000000000",
+    "quote_injected_usd": "3270.91",
     "token_injected": "...",
     "lp_burned": "...",
     "pool_pair": "ATOM/WMON",
@@ -105,6 +115,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `quote_injected` | string | LP에 주입한 누적 quote 자산 (wei) |
+| `quote_injected_usd` | string | `quote_injected`의 USD 환산 누적 (이벤트 시점) |
 | `token_injected` | string | LP에 주입한 누적 토큰 (wei) |
 | `lp_burned` | string | 잠금/소각된 누적 LP 토큰 (wei) |
 | `pool_pair` | string | `"{token.symbol}/{quote_token.symbol}"` 라벨 (UI 표시용) |
@@ -117,8 +128,11 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
   "vault_type": "CREATOR_FEE",
   "stats": {
     "current_balance": "0",
+    "current_balance_usd": "0",
     "total_deposited": "100000000000000000000000",
+    "total_deposited_usd": "3270.91",
     "total_claimed": "100000000000000000000000",
+    "total_claimed_usd": "3270.91",
     "deposit_count": 5,
     "claim_count": 1
   }
@@ -128,8 +142,11 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `current_balance` | string | 미수령 잔액 (wei). claim 후 0 |
-| `total_deposited` | string | vault에 들어온 누적 MON |
-| `total_claimed` | string | 크리에이터가 가져간 누적 MON |
+| `current_balance_usd` | string | `current_balance × latest price`. **요청 시점** 가격으로 환산 |
+| `total_deposited` | string | vault에 들어온 누적 quote (wei) |
+| `total_deposited_usd` | string | 각 DEPOSIT 시점 USD 환산 누적 |
+| `total_claimed` | string | 크리에이터가 가져간 누적 quote (wei) |
+| `total_claimed_usd` | string | 각 CLAIM 시점 USD 환산 누적 |
 | `deposit_count` | number | DEPOSIT 이벤트 누적 횟수 |
 | `claim_count` | number | CLAIM 이벤트 누적 횟수 |
 
@@ -141,13 +158,18 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
   "stats": {
     "current_state": "Active",
     "current_balance": "0",
+    "current_balance_usd": "0",
     "total_deposited": "100000000000000000000000",
+    "total_deposited_usd": "3270.91",
     "total_claimed": "100000000000000000000000",
+    "total_claimed_usd": "3270.91",
     "total_expired": "0",
+    "total_expired_usd": "0",
     "platform": "X",
     "platform_id": "@Beakdoong",
     "receiver": "0x...",
     "buyback_quote_spent": "0",
+    "buyback_quote_spent_usd": "0",
     "buyback_tokens": "0"
   }
 }
@@ -157,13 +179,18 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 |---|---|---|
 | `current_state` | string | `"Accumulating"` \| `"Active"` \| `"Burned"` |
 | `current_balance` | string | 미수령 잔액 (wei) |
-| `total_deposited` | string | vault에 들어온 누적 MON |
-| `total_claimed` | string | receiver가 받은 누적 MON |
-| `total_expired` | string | 만료 sweep으로 소각된 누적 MON |
+| `current_balance_usd` | string | `current_balance × latest price`. **요청 시점** 가격으로 환산 |
+| `total_deposited` | string | vault에 들어온 누적 quote (wei) |
+| `total_deposited_usd` | string | 각 DEPOSIT 시점 USD 환산 누적 |
+| `total_claimed` | string | receiver가 받은 누적 quote (wei) |
+| `total_claimed_usd` | string | 각 CLAIM 시점 USD 환산 누적 |
+| `total_expired` | string | 만료 sweep으로 소각된 누적 quote (wei) |
+| `total_expired_usd` | string | 각 EXPIRE 시점 USD 환산 누적 |
 | `platform` | string \| null | `"X"` \| `"GITHUB"` (SETUP 시 결정) |
 | `platform_id` | string \| null | 플랫폼별 핸들 (예: `"@Beakdoong"`) |
 | `receiver` | string \| null | 온체인 wallet 주소 (`RECEIVER_SET` 후 채워짐) |
-| `buyback_quote_spent` | string | 만료 시 buyback에 쓴 MON |
+| `buyback_quote_spent` | string | 만료 시 buyback에 쓴 quote (wei) |
+| `buyback_quote_spent_usd` | string | `buyback_quote_spent`의 USD 환산 (만료 시점) |
 | `buyback_tokens` | string | 만료 시 소각한 토큰 |
 
 ##### `"CUSTOM"`
@@ -188,7 +215,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 404가 아닙니다.
 
 ```json
-{ "token_id": "0x...", "quote_id": "0x...", "total_quote_amount": "0", "vaults": [] }
+{ "token_id": "0x...", "quote_id": "0x...", "total_quote_amount": "0", "total_quote_amount_usd": "0", "vaults": [] }
 ```
 
 ---
@@ -203,7 +230,8 @@ interface VaultEntryBase {
   bps: number;                  // 0..10000
   name: string;
   active: boolean;
-  quote_amount: string;    // 이 vault에 누적 분배된 fee (quote 단위, wei)
+  quote_amount: string;         // 이 vault에 누적 분배된 fee (quote 단위, wei)
+  quote_amount_usd: string;     // 위의 USD 환산 누적 (분배 시점 가격)
   last_executed_at: number;
 }
 
@@ -217,12 +245,14 @@ type VaultEntry = VaultEntryBase & (
 
 interface BurnStats {
   quote_spent: string;
+  quote_spent_usd: string;
   tokens_burned: string;
   execution_count: number;
 }
 
 interface LpStats {
   quote_injected: string;
+  quote_injected_usd: string;
   token_injected: string;
   lp_burned: string;
   pool_pair: string;
@@ -231,8 +261,11 @@ interface LpStats {
 
 interface CreatorFeeStats {
   current_balance: string;
+  current_balance_usd: string;     // 요청 시점 가격 × current_balance / 10^decimals
   total_deposited: string;
+  total_deposited_usd: string;
   total_claimed: string;
+  total_claimed_usd: string;
   deposit_count: number;
   claim_count: number;
 }
@@ -240,20 +273,26 @@ interface CreatorFeeStats {
 interface GiftStats {
   current_state: "Accumulating" | "Active" | "Burned";
   current_balance: string;
+  current_balance_usd: string;     // 요청 시점 가격 × current_balance / 10^decimals
   total_deposited: string;
+  total_deposited_usd: string;
   total_claimed: string;
+  total_claimed_usd: string;
   total_expired: string;
+  total_expired_usd: string;
   platform: "X" | "GITHUB" | null;
   platform_id: string | null;
   receiver: string | null;
   buyback_quote_spent: string;
+  buyback_quote_spent_usd: string;
   buyback_tokens: string;
 }
 
 interface TokenVaultsResponse {
   token_id: string;
-  quote_id: string;                 // quote_amount 단위 (market.quote_id)
-  total_quote_amount: string;  // SUM of vaults[].quote_amount
+  quote_id: string;                  // quote_amount 단위 (market.quote_id)
+  total_quote_amount: string;        // SUM of vaults[].quote_amount
+  total_quote_amount_usd: string;    // SUM of vaults[].quote_amount_usd
   vaults: VaultEntry[];
 }
 ```
