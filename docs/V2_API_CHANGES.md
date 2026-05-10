@@ -288,7 +288,8 @@ interface VaultEntryBase {
     bps: number;            // 0..10000
     name: string;
     active: boolean;
-    quote_amount: string;  // 누적 분배 fee (quote 단위)
+    quote_amount: string;     // 누적 분배 fee (quote 단위, raw wei)
+    quote_amount_usd: string; // 누적 분배 fee (USD, 분배 시점 가격으로 누적)
     last_executed_at: number;
 }
 
@@ -302,11 +303,16 @@ type VaultEntry = VaultEntryBase & (
 
 interface TokenVaultsResponse {
     token_id: string;
-    quote_id: string;                 // quote_amount 단위 (market.quote_id)
-    total_quote_amount: string;  // SUM of vaults[].quote_amount
-    vaults: VaultEntry[];             // bps DESC 정렬
+    quote_id: string;                  // quote_amount 단위 (market.quote_id)
+    total_quote_amount: string;        // SUM of vaults[].quote_amount
+    total_quote_amount_usd: string;    // SUM of vaults[].quote_amount_usd
+    vaults: VaultEntry[];              // bps DESC 정렬
 }
 ```
+
+**USD 필드 시점 의미**:
+- 누적값(`*_deposited_usd`, `*_claimed_usd`, `*_expired_usd`, `quote_spent_usd`, `quote_injected_usd`, `buyback_quote_spent_usd`, `quote_amount_usd`, `total_quote_amount_usd`)은 **각 이벤트 시점**의 USD 환산을 누적. 인덱서가 `usd_value`를 이벤트 row에 박고 트리거가 합산.
+- `current_balance_usd` (CREATOR_FEE/GIFT)는 **요청 시점**에 `current_balance × price.price / 10^decimals`로 동적 계산. price 테이블에 가격 row가 없으면 `0`.
 
 vault_type 별 `stats` 필드 정의는 [`vault-api.md`](./vault-api.md#vault_type-별-stats) 참고.
 
