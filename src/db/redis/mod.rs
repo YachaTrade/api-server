@@ -18,7 +18,8 @@ use crate::{
         GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
         HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
         NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, PNL_LEADERBOARD_RESPONSE_EXPIRATION,
-        SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
+        REDIS_KEY_PREFIX, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION,
+        TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -49,6 +50,19 @@ use crate::{
     },
 };
 
+/// Prepend the global `REDIS_KEY_PREFIX` to a Redis key.
+///
+/// Returns the key unchanged when the prefix is empty (legacy mode), so the
+/// behavior matches a deploy that hasn't set the env var. The trailing colon
+/// is part of `REDIS_KEY_PREFIX` itself (see `config.rs`).
+fn with_prefix(key: String) -> String {
+    if REDIS_KEY_PREFIX.is_empty() {
+        key
+    } else {
+        format!("{}{}", REDIS_KEY_PREFIX.as_str(), key)
+    }
+}
+
 pub struct RedisDatabase {
     conn: Arc<ConnectionManager>,
 }
@@ -72,11 +86,50 @@ impl RedisDatabase {
         }
     }
 
-    /// Flush all Redis data
+    /// Wipe Redis state owned by this service.
+    ///
+    /// - When `REDIS_KEY_PREFIX` is empty: runs `FLUSHALL` (legacy behavior,
+    ///   wipes the entire instance).
+    /// - When `REDIS_KEY_PREFIX` is set: runs `SCAN MATCH <prefix>* COUNT 500`
+    ///   in a loop and `DEL`s the matching keys, leaving keys owned by other
+    ///   services (e.g. v1 sharing the same Redis) untouched.
     pub async fn flush_all(&self) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        redis::cmd("FLUSHALL").query_async::<()>(&mut conn).await?;
-        info!("Redis FLUSHALL completed");
+
+        if REDIS_KEY_PREFIX.is_empty() {
+            redis::cmd("FLUSHALL").query_async::<()>(&mut conn).await?;
+            info!("Redis FLUSHALL completed (no prefix)");
+            return Ok(());
+        }
+
+        let pattern = format!("{}*", REDIS_KEY_PREFIX.as_str());
+        let mut cursor: u64 = 0;
+        let mut deleted: u64 = 0;
+        loop {
+            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(500)
+                .query_async(&mut conn)
+                .await?;
+            if !keys.is_empty() {
+                let n: u64 = redis::cmd("DEL")
+                    .arg(&keys)
+                    .query_async(&mut conn)
+                    .await?;
+                deleted += n;
+            }
+            if next == 0 {
+                break;
+            }
+            cursor = next;
+        }
+        info!(
+            "Redis prefix flush completed (pattern={}, deleted={})",
+            pattern, deleted
+        );
         Ok(())
     }
 
@@ -87,7 +140,7 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
-        let key = format!("session:{}:message", address);
+        let key = with_prefix(format!("session:{}:message", address));
 
         measure_redis!(
             "redis.set_sign_message",
@@ -106,7 +159,7 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
-        let key = format!("session:{}:message", address);
+        let key = with_prefix(format!("session:{}:message", address));
         let message: Option<String> =
             measure_redis!("redis.get_sign_message", conn.get::<_, Option<String>>(key))?;
 
@@ -127,7 +180,7 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
-        let key = format!("session:{}:message", address);
+        let key = with_prefix(format!("session:{}:message", address));
 
         // Use GETDEL for atomic get-and-delete operation
         let message: Option<String> = measure_redis!(
@@ -151,7 +204,7 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
-        let key = format!("session:{}:message", address);
+        let key = with_prefix(format!("session:{}:message", address));
         measure_redis!("redis.delete_sign_message", conn.del::<_, ()>(key))?;
 
         let elapsed = start_time.elapsed();
@@ -172,7 +225,7 @@ impl RedisDatabase {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
 
-        let key = format!("session:{}:id", session_id);
+        let key = with_prefix(format!("session:{}:id", session_id));
         measure_redis!(
             "redis.set_session",
             conn.pset_ex::<_, _, ()>(key, address, expiration)
@@ -189,7 +242,7 @@ impl RedisDatabase {
     pub async fn get_address_by_session(&self, session_id: &str) -> Result<String> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("session:{}:id", session_id);
+        let key = with_prefix(format!("session:{}:id", session_id));
         let address: String =
             measure_redis!("redis.get_address_by_session", conn.get::<_, String>(key))?;
 
@@ -204,7 +257,7 @@ impl RedisDatabase {
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("session:{}:id", session_id);
+        let key = with_prefix(format!("session:{}:id", session_id));
         measure_redis!("redis.delete_session", conn.del::<_, ()>(key))?;
 
         let elapsed = start_time.elapsed();
@@ -221,8 +274,8 @@ impl RedisDatabase {
     pub async fn set_search_response(&self, query: &str, response: &SearchResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let token_key = format!("search:{}:tokens", query);
-        let account_key = format!("search:{}:accounts", query);
+        let token_key = with_prefix(format!("search:{}:tokens", query));
+        let account_key = with_prefix(format!("search:{}:accounts", query));
 
         // Serialize token and account responses separately
         let token_json = serde_json::to_string(&response.token_result)?;
@@ -250,8 +303,8 @@ impl RedisDatabase {
     ) -> Result<Option<SearchResponse>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let token_key = format!("search:{}:tokens", query);
-        let account_key = format!("search:{}:accounts", query);
+        let token_key = with_prefix(format!("search:{}:tokens", query));
+        let account_key = with_prefix(format!("search:{}:accounts", query));
 
         // Get both token and account responses
         let (token_json, account_json): (Option<String>, Option<String>) = measure_redis!(
@@ -335,15 +388,15 @@ impl RedisDatabase {
 
         // 페이지네이션 파라미터가 있는 경우 키에 포함
         let key = match pagination {
-            Some(params) => format!(
+            Some(params) => with_prefix(format!(
                 "order:{}:response:page:{}_limit:{}_direction:{}_nsfw:{}",
                 order_type.as_str(),
                 params.page,
                 params.limit,
                 params.direction,
                 is_nsfw
-            ),
-            None => format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw),
+            )),
+            None => with_prefix(format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw)),
         };
 
         let response_json = serde_json::to_string(response)?;
@@ -372,15 +425,15 @@ impl RedisDatabase {
 
         // 페이지네이션 파라미터가 있는 경우 키에 포함
         let key = match pagination {
-            Some(params) => format!(
+            Some(params) => with_prefix(format!(
                 "order:{}:response:page:{}_limit:{}_direction:{}_nsfw:{}",
                 order_type.as_str(),
                 params.page,
                 params.limit,
                 params.direction,
                 is_nsfw
-            ),
-            None => format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw),
+            )),
+            None => with_prefix(format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw)),
         };
 
         let response_json: String =
@@ -404,10 +457,10 @@ impl RedisDatabase {
     ) -> Result<HoldTokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hold_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
-        );
+        ));
         let value: String =
             measure_redis!("redis.get_account_hold_token", conn.get::<_, String>(key))?;
         let response: HoldTokenResponse = serde_json::from_str(&value)?;
@@ -427,10 +480,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hold_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
-        );
+        ));
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
         measure_redis!(
@@ -453,10 +506,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "create_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
-        );
+        ));
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
         measure_redis!(
@@ -477,10 +530,10 @@ impl RedisDatabase {
     ) -> Result<CreatedTokensResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "create_token:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
-        );
+        ));
         let response_json: String = measure_redis!(
             "redis.get_account_token_created",
             conn.get::<_, String>(key)
@@ -503,10 +556,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "gift_fee:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
-        );
+        ));
         let response_json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_account_gift_fee",
@@ -527,10 +580,10 @@ impl RedisDatabase {
     ) -> Result<GiftFeeTokensResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "gift_fee:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
-        );
+        ));
         let response_json: String = measure_redis!(
             "redis.get_account_gift_fee",
             conn.get::<_, String>(key)
@@ -550,7 +603,7 @@ impl RedisDatabase {
     pub async fn set_token_response(&self, token_id: &str, response: &TokenResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token:{}", token_id);
+        let key = with_prefix(format!("token:{}", token_id));
 
         let json = serde_json::to_string(response)?;
         measure_redis!(
@@ -569,7 +622,7 @@ impl RedisDatabase {
     pub async fn get_token_response(&self, token_id: &str) -> Result<TokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token:{}", token_id);
+        let key = with_prefix(format!("token:{}", token_id));
 
         let token_json: String =
             measure_redis!("redis.get_token_response", conn.get::<_, String>(key))?;
@@ -590,7 +643,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token_vaults:{}", token_id);
+        let key = with_prefix(format!("token_vaults:{}", token_id));
 
         let json = serde_json::to_string(response)?;
         measure_redis!(
@@ -609,7 +662,7 @@ impl RedisDatabase {
     pub async fn get_token_vaults_response(&self, token_id: &str) -> Result<TokenVaultsResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token_vaults:{}", token_id);
+        let key = with_prefix(format!("token_vaults:{}", token_id));
 
         let json: String = measure_redis!(
             "redis.get_token_vaults_response",
@@ -664,7 +717,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token_metadata:{}", token_address);
+        let key = with_prefix(format!("token_metadata:{}", token_address));
         let response_json = serde_json::to_string(response)?;
         //pset is miliseconds
         measure_redis!(
@@ -682,7 +735,7 @@ impl RedisDatabase {
     pub async fn get_token_metadata(&self, token_address: &str) -> Result<TokenMetadataResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token_metadata:{}", token_address);
+        let key = with_prefix(format!("token_metadata:{}", token_address));
         let response_json: String =
             measure_redis!("redis.get_token_metadata", conn.get::<_, String>(key))?;
         let response: TokenMetadataResponse = serde_json::from_str(&response_json)?;
@@ -767,7 +820,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_token_epoch:{}", epoch);
+        let key = with_prefix(format!("hype_token_epoch:{}", epoch));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_token_epoch_response",
@@ -785,7 +838,7 @@ impl RedisDatabase {
     pub async fn get_hype_token_epoch_response(&self, epoch: i64) -> Result<HypeTokenResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_token_epoch:{}", epoch);
+        let key = with_prefix(format!("hype_token_epoch:{}", epoch));
         let response_json: String = measure_redis!(
             "redis.get_hype_token_epoch_response",
             conn.get::<_, String>(key)
@@ -917,10 +970,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hype_vote_history:{}:{}:{}",
             account_id, params.page, params.limit
-        );
+        ));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_vote_history_response",
@@ -942,10 +995,10 @@ impl RedisDatabase {
     ) -> Result<HypeVoteHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hype_vote_history:{}:{}:{}",
             account_id, params.page, params.limit
-        );
+        ));
         let response_json: String = measure_redis!(
             "redis.get_hype_vote_history_response",
             conn.get::<_, String>(key)
@@ -967,10 +1020,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hype_point_history:{}:{}:{}",
             account_id, params.page, params.limit
-        );
+        ));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_point_history_response",
@@ -992,10 +1045,10 @@ impl RedisDatabase {
     ) -> Result<PointHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hype_point_history:{}:{}:{}",
             account_id, params.page, params.limit
-        );
+        ));
         let response_json: String = measure_redis!(
             "redis.get_hype_point_history_response",
             conn.get::<_, String>(key)
@@ -1016,7 +1069,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_point:{}", account_id);
+        let key = with_prefix(format!("hype_point:{}", account_id));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_point_response",
@@ -1034,7 +1087,7 @@ impl RedisDatabase {
     pub async fn get_hype_point_response(&self, account_id: &str) -> Result<HypePointResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("hype_point:{}", account_id);
+        let key = with_prefix(format!("hype_point:{}", account_id));
         let response_json: String =
             measure_redis!("redis.get_hype_point_response", conn.get::<_, String>(key))?;
         let elapsed = start_time.elapsed();
@@ -1054,10 +1107,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hype_reward_add_history:{}:{}:{}",
             account_id, params.page, params.limit
-        );
+        ));
         let serialized = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_reward_add_history_response",
@@ -1078,10 +1131,10 @@ impl RedisDatabase {
     ) -> Result<HypeRewardAddHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "hype_reward_add_history:{}:{}:{}",
             account_id, params.page, params.limit
-        );
+        ));
         let response_json: String = measure_redis!(
             "redis.get_hype_reward_add_history_response",
             conn.get::<_, String>(key)
@@ -1106,7 +1159,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
+        let key = with_prefix(format!("token:{}:swap_history:query:{:?}", token_id, swap_query));
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
         measure_redis!(
@@ -1128,7 +1181,7 @@ impl RedisDatabase {
     ) -> Result<TokenSwapResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("token:{}:swap_history:query:{:?}", token_id, swap_query);
+        let key = with_prefix(format!("token:{}:swap_history:query:{:?}", token_id, swap_query));
         let history_json: String =
             measure_redis!("redis.get_token_swap_history", conn.get::<_, String>(key))?;
         let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
@@ -1148,10 +1201,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
-        );
+        ));
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
         measure_redis!(
@@ -1172,10 +1225,10 @@ impl RedisDatabase {
     ) -> Result<TokenHolderResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "token:{}:holder:{}:{}",
             token_id, pagination.limit, pagination.page
-        );
+        ));
         let history_json: String = measure_redis!(
             "redis.get_token_holder_response",
             conn.get::<_, String>(key)
@@ -1195,10 +1248,10 @@ impl RedisDatabase {
     ) -> Result<Option<BarResponse>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "token:{}:chart:resolution:{}:from:{}_to:{}",
             token_id, request.resolution, request.from, request.to
-        );
+        ));
         let data: Option<String> =
             measure_redis!("redis.get_prices", conn.get::<_, Option<String>>(&key))?;
 
@@ -1226,10 +1279,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "token:{}:chart:resolution:{}:from:{}_to:{}",
             token_id, request.resolution, request.from, request.to
-        );
+        ));
         let json = serde_json::to_string(bar_data)?;
         measure_redis!(
             "redis.set_prices",
@@ -1247,7 +1300,7 @@ impl RedisDatabase {
     pub async fn set_market(&self, token_id: &str, response: &MarketResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("market:{}", token_id);
+        let key = with_prefix(format!("market:{}", token_id));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_market",
@@ -1265,7 +1318,7 @@ impl RedisDatabase {
     pub async fn get_market(&self, token_id: &str) -> Result<MarketResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("market:{}", token_id);
+        let key = with_prefix(format!("market:{}", token_id));
         let response_json: String = measure_redis!("redis.get_market", conn.get::<_, String>(key))?;
         let response: MarketResponse = serde_json::from_str(&response_json)?;
 
@@ -1314,7 +1367,7 @@ impl RedisDatabase {
     pub async fn get_nsfw_status(&self, image_url: &str) -> Result<Option<bool>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("nsfw:{}", image_url);
+        let key = with_prefix(format!("nsfw:{}", image_url));
         let is_nsfw: Option<bool> =
             measure_redis!("redis.get_nsfw_status", conn.get::<_, Option<bool>>(key))?;
 
@@ -1329,7 +1382,7 @@ impl RedisDatabase {
     pub async fn set_nsfw_status(&self, image_url: &str, is_nsfw: bool) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("nsfw:{}", image_url);
+        let key = with_prefix(format!("nsfw:{}", image_url));
 
         // Cache using NSFW_STATUS_EXPIRATION (3 minutes = 180000 ms)
         measure_redis!(
@@ -1353,10 +1406,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "account:{}:swap_history:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
-        );
+        ));
         let history_json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_account_swap_history",
@@ -1377,10 +1430,10 @@ impl RedisDatabase {
     ) -> Result<SwapHistoryResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!(
+        let key = with_prefix(format!(
             "account:{}:swap_history:page:{}:limit:{}",
             account_id, pagination.page, pagination.limit
-        );
+        ));
         let history_json: String =
             measure_redis!("redis.get_account_swap_history", conn.get::<_, String>(key))?;
         let history: SwapHistoryResponse = serde_json::from_str(&history_json)?;
@@ -1395,7 +1448,7 @@ impl RedisDatabase {
     pub async fn delete_nsfw_status(&self, image_url: &str) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("nsfw:{}", image_url);
+        let key = with_prefix(format!("nsfw:{}", image_url));
 
         measure_redis!("redis.delete_nsfw_status", conn.del::<String, ()>(key))?;
 
@@ -1417,7 +1470,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("terminal_metadata:{}", token_address);
+        let key = with_prefix(format!("terminal_metadata:{}", token_address));
         let response_json = serde_json::to_string(response)?;
 
         measure_redis!(
@@ -1439,7 +1492,7 @@ impl RedisDatabase {
     ) -> Result<Option<TerminalMetadataResponse>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("terminal_metadata:{}", token_address);
+        let key = with_prefix(format!("terminal_metadata:{}", token_address));
 
         let response_json: Option<String> = measure_redis!(
             "redis.get_terminal_metadata",
@@ -1504,7 +1557,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("account:info:{}", account_id);
+        let key = with_prefix(format!("account:info:{}", account_id));
         let account_json = serde_json::to_string(account_info)?;
 
         measure_redis!(
@@ -1523,7 +1576,7 @@ impl RedisDatabase {
     pub async fn get_account_info(&self, account_id: &str) -> Result<Option<AccountInfo>> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("account:info:{}", account_id);
+        let key = with_prefix(format!("account:info:{}", account_id));
 
         let account_json: Option<String> =
             measure_redis!("redis.get_account_info", conn.get::<_, Option<String>>(key))?;
@@ -1554,7 +1607,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("leaderboard:hype_point:page:{}:limit:{}", page, limit);
+        let key = with_prefix(format!("leaderboard:hype_point:page:{}:limit:{}", page, limit));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_point_leaderboard_response",
@@ -1576,7 +1629,7 @@ impl RedisDatabase {
     ) -> Result<HypePointLeaderboardResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("leaderboard:hype_point:page:{}:limit:{}", page, limit);
+        let key = with_prefix(format!("leaderboard:hype_point:page:{}:limit:{}", page, limit));
         let response_json: String = measure_redis!(
             "redis.get_hype_point_leaderboard_response",
             conn.get::<_, String>(key)
@@ -1598,7 +1651,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("leaderboard:pnl:page:{}:limit:{}", page, limit);
+        let key = with_prefix(format!("leaderboard:pnl:page:{}:limit:{}", page, limit));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_pnl_leaderboard_response",
@@ -1620,7 +1673,7 @@ impl RedisDatabase {
     ) -> Result<PnlLeaderboardResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("leaderboard:pnl:page:{}:limit:{}", page, limit);
+        let key = with_prefix(format!("leaderboard:pnl:page:{}:limit:{}", page, limit));
         let response_json: String = measure_redis!(
             "redis.get_pnl_leaderboard_response",
             conn.get::<_, String>(key)
@@ -1675,7 +1728,7 @@ impl RedisDatabase {
         response: &crate::types::chester::ChesterVolumeResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:volume:{}", account_id);
+        let key = with_prefix(format!("chester:volume:{}", account_id));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_volume",
@@ -1689,7 +1742,7 @@ impl RedisDatabase {
         account_id: &str,
     ) -> Result<Option<crate::types::chester::ChesterVolumeResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:volume:{}", account_id);
+        let key = with_prefix(format!("chester:volume:{}", account_id));
         let json: Option<String> = measure_redis!(
             "redis.get_chester_volume",
             conn.get::<_, Option<String>>(key)
@@ -1726,7 +1779,7 @@ impl RedisDatabase {
         response: &crate::types::profile::SwapHistoryResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:swap_history:{}:{}:{}", account_id, page, limit);
+        let key = with_prefix(format!("chester:swap_history:{}:{}:{}", account_id, page, limit));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_swap_history",
@@ -1742,7 +1795,7 @@ impl RedisDatabase {
         limit: i64,
     ) -> Result<Option<crate::types::profile::SwapHistoryResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:swap_history:{}:{}:{}", account_id, page, limit);
+        let key = with_prefix(format!("chester:swap_history:{}:{}:{}", account_id, page, limit));
         let json: Option<String> = measure_redis!(
             "redis.get_chester_swap_history",
             conn.get::<_, Option<String>>(key)
@@ -1760,7 +1813,7 @@ impl RedisDatabase {
         response: &crate::types::chester::ChesterBoxRewardsResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:box_rewards:{}:{}", account_id, round);
+        let key = with_prefix(format!("chester:box_rewards:{}:{}", account_id, round));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_box_rewards",
@@ -1775,7 +1828,7 @@ impl RedisDatabase {
         round: i64,
     ) -> Result<Option<crate::types::chester::ChesterBoxRewardsResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:box_rewards:{}:{}", account_id, round);
+        let key = with_prefix(format!("chester:box_rewards:{}:{}", account_id, round));
         let json: Option<String> = measure_redis!(
             "redis.get_chester_box_rewards",
             conn.get::<_, Option<String>>(key)
@@ -1794,7 +1847,7 @@ impl RedisDatabase {
         response: &crate::types::chester::ChesterRewardHistoryResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:reward_history:{}:{}:{}", account_id, page, limit);
+        let key = with_prefix(format!("chester:reward_history:{}:{}:{}", account_id, page, limit));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_reward_history",
@@ -1810,7 +1863,7 @@ impl RedisDatabase {
         limit: i64,
     ) -> Result<Option<crate::types::chester::ChesterRewardHistoryResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = format!("chester:reward_history:{}:{}:{}", account_id, page, limit);
+        let key = with_prefix(format!("chester:reward_history:{}:{}:{}", account_id, page, limit));
         let json: Option<String> = measure_redis!(
             "redis.get_chester_reward_history",
             conn.get::<_, Option<String>>(key)
@@ -1862,7 +1915,7 @@ impl RedisDatabase {
     /// Cache API key info (JSON string)
     pub async fn cache_api_key(&self, key_hash: &str, info: &str, ttl_secs: u64) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("api_key:{}", key_hash);
+        let redis_key = with_prefix(format!("api_key:{}", key_hash));
 
         let _: () = redis::cmd("SETEX")
             .arg(&redis_key)
@@ -1877,7 +1930,7 @@ impl RedisDatabase {
     /// Get cached API key info
     pub async fn get_cached_api_key(&self, key_hash: &str) -> Result<Option<String>> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("api_key:{}", key_hash);
+        let redis_key = with_prefix(format!("api_key:{}", key_hash));
 
         let result: Option<String> = redis::cmd("GET")
             .arg(&redis_key)
@@ -1890,7 +1943,7 @@ impl RedisDatabase {
     /// Delete cached API key (on revocation)
     pub async fn delete_cached_api_key(&self, key_hash: &str) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("api_key:{}", key_hash);
+        let redis_key = with_prefix(format!("api_key:{}", key_hash));
 
         let _: () = redis::cmd("DEL")
             .arg(&redis_key)
@@ -1904,7 +1957,7 @@ impl RedisDatabase {
     /// Returns the current count after increment
     pub async fn incr_api_key_usage(&self, key_hash: &str) -> Result<i64> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("apikey:usage:{}", key_hash);
+        let redis_key = with_prefix(format!("apikey:usage:{}", key_hash));
 
         let count: i64 = redis::cmd("INCR")
             .arg(&redis_key)
@@ -1917,7 +1970,7 @@ impl RedisDatabase {
     /// Get API key usage count from Redis
     pub async fn get_api_key_usage(&self, key_hash: &str) -> Result<i64> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("apikey:usage:{}", key_hash);
+        let redis_key = with_prefix(format!("apikey:usage:{}", key_hash));
 
         let count: Option<i64> = redis::cmd("GET")
             .arg(&redis_key)
@@ -1931,7 +1984,7 @@ impl RedisDatabase {
     /// Used for periodic DB sync
     pub async fn get_and_reset_api_key_usage(&self, key_hash: &str) -> Result<i64> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("apikey:usage:{}", key_hash);
+        let redis_key = with_prefix(format!("apikey:usage:{}", key_hash));
 
         // GETSET returns old value and sets new value atomically
         let count: Option<i64> = redis::cmd("GETSET")
@@ -1974,8 +2027,8 @@ impl RedisDatabase {
     /// Delete API key usage data (called on key deletion)
     pub async fn delete_api_key_usage_data(&self, key_hash: &str) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let usage_key = format!("apikey:usage:{}", key_hash);
-        let last_used_key = format!("apikey:last_used:{}", key_hash);
+        let usage_key = with_prefix(format!("apikey:usage:{}", key_hash));
+        let last_used_key = with_prefix(format!("apikey:last_used:{}", key_hash));
 
         let _: () = redis::cmd("DEL")
             .arg(&usage_key)
@@ -1989,7 +2042,7 @@ impl RedisDatabase {
     /// Update last_used timestamp in Redis (lightweight)
     pub async fn set_api_key_last_used(&self, key_hash: &str) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("apikey:last_used:{}", key_hash);
+        let redis_key = with_prefix(format!("apikey:last_used:{}", key_hash));
         let now = chrono::Utc::now().timestamp();
 
         // Store with 24h TTL (will be synced to DB periodically)
@@ -2006,7 +2059,7 @@ impl RedisDatabase {
     /// Get last_used timestamp from Redis
     pub async fn get_api_key_last_used(&self, key_hash: &str) -> Result<Option<i64>> {
         let mut conn = self.conn.as_ref().clone();
-        let redis_key = format!("apikey:last_used:{}", key_hash);
+        let redis_key = with_prefix(format!("apikey:last_used:{}", key_hash));
 
         let timestamp: Option<i64> = redis::cmd("GET")
             .arg(&redis_key)

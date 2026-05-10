@@ -177,4 +177,30 @@ lazy_static! {
     // Token address suffix for vanity addresses
     pub static ref VANITY_ADDRESS_SUFFIX: String = env::var("VANITY_ADDRESS_SUFFIX")
         .unwrap_or_else(|_| "7777".to_string());
+
+    // Global prefix for every Redis key. Empty string = no prefix (legacy
+    // behavior). Set when sharing one Redis instance between v1 and v2.
+    // The trailing colon is appended automatically: REDIS_KEY_PREFIX="API_V2"
+    // → all keys become "API_V2:<original-key>".
+    pub static ref REDIS_KEY_PREFIX: String = {
+        let raw = env::var("REDIS_KEY_PREFIX").unwrap_or_default();
+        let trimmed = raw.trim().trim_end_matches(':');
+        if trimmed.is_empty() {
+            String::new()
+        } else {
+            format!("{}:", trimmed)
+        }
+    };
+
+    // Whether main() runs `flush_all()` at startup. Default: true (legacy
+    // behavior). Set REDIS_FLUSH_ON_STARTUP=false on long-running v2 nodes
+    // where you don't want a cold cache on every restart.
+    pub static ref REDIS_FLUSH_ON_STARTUP: bool = env::var("REDIS_FLUSH_ON_STARTUP")
+        .ok()
+        .and_then(|v| match v.trim().to_lowercase().as_str() {
+            "true" | "1" | "yes" => Some(true),
+            "false" | "0" | "no" => Some(false),
+            _ => None,
+        })
+        .unwrap_or(true);
 }
