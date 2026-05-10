@@ -2069,4 +2069,37 @@ impl RedisDatabase {
 
         Ok(timestamp)
     }
+
+    /// Cache "this token_id exists in DB" for 1 week.
+    ///
+    /// Only the positive answer is cached — a missing key means "unknown,
+    /// fall through to DB". Non-existence is intentionally NOT cached so a
+    /// freshly-indexed token becomes visible without waiting for a TTL.
+    pub async fn set_token_exists(&self, token_id: &str) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("token_exists:{}", token_id));
+        // 1 week TTL (in seconds)
+        let _: () = redis::cmd("SETEX")
+            .arg(&key)
+            .arg(7 * 24 * 60 * 60)
+            .arg("1")
+            .query_async(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    /// Read the cached "token exists" flag.
+    ///
+    /// Returns `Ok(true)` only when the positive flag is present. Anything
+    /// else (missing key, Redis error, malformed value) returns `Ok(false)`
+    /// so the caller falls through to a DB lookup — fail-open by design.
+    pub async fn get_token_exists(&self, token_id: &str) -> Result<bool> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("token_exists:{}", token_id));
+        let value: Option<String> = redis::cmd("GET")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await?;
+        Ok(value.as_deref() == Some("1"))
+    }
 }

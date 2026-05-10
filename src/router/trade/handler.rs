@@ -26,7 +26,7 @@ use crate::{
             swap_history::{SwapQuery, TokenSwapResponse},
         },
     },
-    utils::valid_token_id,
+    utils::valid_existing_token_id,
 };
 
 ///Get swap history for a token
@@ -55,10 +55,7 @@ pub async fn get_swap_history(
     Query(query): Query<SwapQuery>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenSwapResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {:?}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     query.validate().map_err(|e| {
         error!("Invalid filter parameters: {}", e);
         AppError::BadRequest(e)
@@ -92,10 +89,7 @@ pub async fn get_holder(
     Query(params): Query<PaginationParams>,
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenHolderResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
     let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
     let response = position_service
         .get_holders_by_token(&token_id, &params)
@@ -122,10 +116,7 @@ pub async fn get_market(
     Path(token_id): Path<String>,
     State(state): State<AppState>,
 ) -> AppJsonResult<MarketResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
 
     let market_service = MarketService::new(state.postgres.clone(), state.redis.clone());
     let response = market_service.get_market(&token_id).await?;
@@ -158,10 +149,7 @@ pub async fn get_prices(
     Path(token_id): Path<String>,
     Query(query): Query<GetBarsRequest>,
 ) -> AppJsonResult<BarResponse> {
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
 
     query.validate().map_err(AppError::BadRequest)?;
 
@@ -250,10 +238,7 @@ pub async fn get_metrics(
             .collect::<Vec<_>>()
     );
 
-    let token_id = valid_token_id(&token_id).ok_or_else(|| {
-        error!("Invalid token ID format: {}", token_id);
-        AppError::BadRequest("Invalid token ID".to_string())
-    })?;
+    let token_id = valid_existing_token_id(&state, &token_id).await?;
 
     if params.timeframes.is_empty() {
         return Err(AppError::BadRequest(
