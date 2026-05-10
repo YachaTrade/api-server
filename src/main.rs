@@ -376,8 +376,10 @@ pub struct ApiDoc;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Port number for the server (default: 3000, can be overridden by HTTP_PORT env var)
-    #[arg(short, long, default_value = "8000")]
+    /// Port number for the server. If unset, falls back to PORT env, then
+    /// HTTP_PORT env. If none of the three are set, the server panics on
+    /// startup — no silent default. Set PORT explicitly per environment.
+    #[arg(short, long)]
     port: Option<u16>,
 }
 
@@ -392,12 +394,17 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     let ip = env::var("IP").unwrap_or_else(|_| "127.0.0.1".to_string());
-    // 우선순위: 1. 커맨드 라인 인자 2. 환경변수 3. 기본값(8000)
+    // 우선순위: 1) --port CLI 2) PORT env 3) HTTP_PORT env (legacy 호환).
+    // 셋 다 없으면 panic — 무음 fallback 없음.
     let port = args
         .port
         .map(|p| p.to_string())
-        .or_else(|| std::env::var("HTTP_PORT").ok())
-        .unwrap_or_else(|| "8000".to_string());
+        .or_else(|| env::var("PORT").ok())
+        .or_else(|| env::var("HTTP_PORT").ok())
+        .expect(
+            "PORT must be set: pass --port, or set the PORT (or HTTP_PORT) env var \
+             — likely missing from .env",
+        );
 
     info!("Server will start on {}:{} - v2 deployment test", ip, port);
 
