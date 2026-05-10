@@ -204,8 +204,8 @@ impl VaultController {
         Ok(TokenVaultsResponse {
             token_id: token_id.to_string(),
             quote_id,
-            total_quote_amount: total_quote_amount.to_string(),
-            total_quote_amount_usd: total_quote_amount_usd.to_string(),
+            total_quote_amount: total_quote_amount.normalized().to_plain_string(),
+            total_quote_amount_usd: total_quote_amount_usd.normalized().to_plain_string(),
             vaults,
         })
     }
@@ -217,7 +217,7 @@ fn map_row(row: VaultRow) -> VaultEntry {
             row.burn_updated_at.unwrap_or(0),
             VaultStats::Burn(BurnStats {
                 quote_spent: bd_to_string(row.burn_quote_spent),
-                quote_spent_usd: row.burn_quote_spent_usd.to_string(),
+                quote_spent_usd: row.burn_quote_spent_usd.normalized().to_plain_string(),
                 tokens_burned: bd_to_string(row.burn_tokens_burned),
                 execution_count: row.burn_count.unwrap_or(0),
             }),
@@ -226,7 +226,7 @@ fn map_row(row: VaultRow) -> VaultEntry {
             row.lp_updated_at.unwrap_or(0),
             VaultStats::Lp(LpStats {
                 quote_injected: bd_to_string(row.lp_quote_injected),
-                quote_injected_usd: row.lp_quote_injected_usd.to_string(),
+                quote_injected_usd: row.lp_quote_injected_usd.normalized().to_plain_string(),
                 token_injected: bd_to_string(row.lp_token_injected),
                 lp_burned: bd_to_string(row.lp_lp_burned),
                 pool_pair: format_pool_pair(
@@ -240,11 +240,11 @@ fn map_row(row: VaultRow) -> VaultEntry {
             row.cf_updated_at.unwrap_or(0),
             VaultStats::CreatorFee(CreatorFeeStats {
                 current_balance: bd_to_string(row.cf_current_balance),
-                current_balance_usd: row.cf_current_balance_usd.to_string(),
+                current_balance_usd: row.cf_current_balance_usd.normalized().to_plain_string(),
                 total_deposited: bd_to_string(row.cf_total_deposited),
-                total_deposited_usd: row.cf_total_deposited_usd.to_string(),
+                total_deposited_usd: row.cf_total_deposited_usd.normalized().to_plain_string(),
                 total_claimed: bd_to_string(row.cf_total_claimed),
-                total_claimed_usd: row.cf_total_claimed_usd.to_string(),
+                total_claimed_usd: row.cf_total_claimed_usd.normalized().to_plain_string(),
                 deposit_count: row.cf_deposit_count.unwrap_or(0),
                 claim_count: row.cf_claim_count.unwrap_or(0),
             }),
@@ -256,18 +256,18 @@ fn map_row(row: VaultRow) -> VaultEntry {
                     .gift_current_state
                     .unwrap_or_else(|| "Accumulating".to_string()),
                 current_balance: bd_to_string(row.gift_current_balance),
-                current_balance_usd: row.gift_current_balance_usd.to_string(),
+                current_balance_usd: row.gift_current_balance_usd.normalized().to_plain_string(),
                 total_deposited: bd_to_string(row.gift_total_deposited),
-                total_deposited_usd: row.gift_total_deposited_usd.to_string(),
+                total_deposited_usd: row.gift_total_deposited_usd.normalized().to_plain_string(),
                 total_claimed: bd_to_string(row.gift_total_claimed),
-                total_claimed_usd: row.gift_total_claimed_usd.to_string(),
+                total_claimed_usd: row.gift_total_claimed_usd.normalized().to_plain_string(),
                 total_expired: bd_to_string(row.gift_total_expired),
-                total_expired_usd: row.gift_total_expired_usd.to_string(),
+                total_expired_usd: row.gift_total_expired_usd.normalized().to_plain_string(),
                 platform: row.gift_platform,
                 platform_id: row.gift_platform_id,
                 receiver: row.gift_receiver,
                 buyback_quote_spent: bd_to_string(row.gift_buyback_quote_spent),
-                buyback_quote_spent_usd: row.gift_buyback_quote_spent_usd.to_string(),
+                buyback_quote_spent_usd: row.gift_buyback_quote_spent_usd.normalized().to_plain_string(),
                 buyback_tokens: bd_to_string(row.gift_buyback_tokens),
             }),
         ),
@@ -280,14 +280,16 @@ fn map_row(row: VaultRow) -> VaultEntry {
         name: row.name,
         active: row.active,
         quote_amount: bd_to_string(row.dist_distributed_quote),
-        quote_amount_usd: row.dist_distributed_quote_usd.to_string(),
+        quote_amount_usd: row.dist_distributed_quote_usd.normalized().to_plain_string(),
         last_executed_at,
         stats,
     }
 }
 
 fn bd_to_string(value: Option<BigDecimal>) -> String {
-    value.map(|v| v.to_string()).unwrap_or_else(|| "0".to_string())
+    value
+        .map(|v| v.normalized().to_plain_string())
+        .unwrap_or_else(|| "0".to_string())
 }
 
 fn format_pool_pair(token_symbol: Option<&str>, quote_symbol: Option<&str>) -> String {
