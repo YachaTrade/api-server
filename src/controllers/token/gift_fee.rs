@@ -162,7 +162,8 @@ impl GiftFeeController {
                 WITH paged_tokens AS (
                     SELECT g.token_id,
                            g.current_balance AS gift_current_balance,
-                           g.updated_at AS gift_updated_at
+                           g.total_claimed   AS gift_total_claimed,
+                           g.updated_at      AS gift_updated_at
                     FROM v2_gift_vault_stats g
                     WHERE g.receiver = $1
                     ORDER BY g.current_balance DESC, g.updated_at DESC
@@ -219,8 +220,8 @@ impl GiftFeeController {
                     COALESCE(ctch.claimed_amount, 0) as reward_claimed_amount,
                     COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
                     cr.status as reward_status,
-                    v2cfv.current_balance as v2_current_balance,
-                    v2cfv.total_claimed as v2_total_claimed
+                    pg.gift_current_balance as v2_current_balance,
+                    pg.gift_total_claimed   as v2_total_claimed
                 FROM paged_tokens pg
                 JOIN token t ON t.token_id = pg.token_id
                 JOIN account a ON t.creator = a.account_id
@@ -231,7 +232,6 @@ impl GiftFeeController {
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                 LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
                 LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
-                LEFT JOIN v2_creator_fee_vault_stats v2cfv ON t.token_id = v2cfv.token_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p

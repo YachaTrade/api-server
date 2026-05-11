@@ -22,7 +22,7 @@
 | `TokenVaultsResponse`, `VaultEntry`, `VaultStats` (tagged union), `BurnStats` / `LpStats` / `CreatorFeeStats` / `GiftStats` / `EmptyStats`, `VaultType` enum | 신규 타입 — vault 응답 |
 | 엔드포인트 | `GET /quote_token` 신규 — 등록된 quote token 카탈로그 |
 | `QuoteTokensResponse` | 신규 타입 — quote token 목록 응답 |
-| 엔드포인트 | `GET /profile/gift-fee/{account_id}` 신규 — gift vault receiver로 등록된 토큰 목록 |
+| 엔드포인트 | `GET /profile/gift-fee/{account_id}` 신규 — gift vault receiver로 등록된 토큰 목록. V2 reward 출처는 `v2_gift_vault_stats` (gift 수령용 잔액) |
 | `GiftFeeTokensResponse` | 신규 타입 — `TokenCreatedInfo[]` + `total_count` |
 | `RewardInfo` (소스 분기) | V2 토큰의 경우 `v2_creator_fee_vault_stats` 에서 산출 (V1은 기존 `creator_reward` Merkle) — 타입 형태는 그대로 |
 
@@ -391,23 +391,24 @@ interface GiftFeeTokensResponse {
 넣을 필요 없음. 단, `proof` 의 의미는 토큰 버전에 따라 다름 (아래 표 참고).
 
 ### 적용 엔드포인트
-- `GET /profile/tokens/created/{account_id}`
-- `GET /profile/gift-fee/{account_id}`
+- `GET /profile/tokens/created/{account_id}` — **창작자(creator) 보상**
+- `GET /profile/gift-fee/{account_id}` — **gift 수령자(receiver) 보상**
 
 ### 필드 매핑
 
-| `RewardInfo` 필드 | V1 (Merkle 보상) | V2 (CreatorFeeVault) |
-|---|---|---|
-| `amount` | `creator_reward.amount` (전체 누적 보상) | `v2_creator_fee_vault_stats.current_balance` (지금 받을 수 있는 잔액) |
-| `claimed_amount` | `SUM(creator_treasury_claim_history.amount)` | `v2_creator_fee_vault_stats.total_claimed` |
-| `proof` | Merkle proof 배열 | `[]` — V2 는 Merkle 미사용, vault 에서 직접 claim |
-| `claimable` | `creator_reward.status === 'AWAITING'` | `current_balance > 0` |
+V1은 두 엔드포인트 모두 동일하지만, V2는 엔드포인트별로 출처 테이블이 다릅니다 — "이 사용자가 받아야 할 돈"이 토큰 컨텍스트에 따라 다른 vault에 들어있기 때문.
+
+| `RewardInfo` 필드 | V1 (Merkle 보상) | V2 — `/tokens/created` (CreatorFeeVault) | V2 — `/gift-fee` (GiftVault) |
+|---|---|---|---|
+| `amount` | `creator_reward.amount` | `v2_creator_fee_vault_stats.current_balance` | `v2_gift_vault_stats.current_balance` |
+| `claimed_amount` | `SUM(creator_treasury_claim_history.amount)` | `v2_creator_fee_vault_stats.total_claimed` | `v2_gift_vault_stats.total_claimed` |
+| `proof` | Merkle proof 배열 | `[]` | `[]` |
+| `claimable` | `creator_reward.status === 'AWAITING'` | `current_balance > 0` | `current_balance > 0` |
 
 ### 분기 기준
 
-내부적으로 `token.version` 으로 분기:
-- `version = 'V1'` → 기존 V1 소스 그대로
-- `version = 'V2'` → V2 vault stats 로 매핑
+1. **엔드포인트 단계**: URL 자체가 출처 vault를 결정 (`/tokens/created` ↔ CreatorFeeVault, `/gift-fee` ↔ GiftVault).
+2. **토큰 version 단계**: 동일 엔드포인트 안에서 각 row의 `token.version`이 V1이면 Merkle 소스, V2면 위 vault stats로 매핑.
 
 V1/V2 토큰이 한 응답에 섞여 있어도 각 토큰의 version 에 따라 올바른 source 가 적용됨.
 
