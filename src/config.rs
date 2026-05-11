@@ -119,11 +119,11 @@ lazy_static! {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(300000);
 
-    // Gift fee tokens response cache (default: 30 seconds = 30000ms)
+    // Gift fee tokens response cache (default: 10 seconds = 10000ms)
     pub static ref GET_GIFT_FEE_RESPONSE_EXPIRATION: u64 = env::var("GET_GIFT_FEE_RESPONSE_EXPIRATION")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(30000);
+        .unwrap_or(10000);
 
     // Contract Addresses
     pub static ref COMMUNITY_TREASURY: String = env::var("V1_COMMUNITY_TREASURY")
