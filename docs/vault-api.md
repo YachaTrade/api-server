@@ -127,6 +127,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 {
   "vault_type": "CREATOR_FEE",
   "stats": {
+    "creator_id": "0xAbC...",
     "current_balance": "0",
     "current_balance_usd": "0",
     "total_deposited": "100000000000000000000000",
@@ -141,6 +142,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
+| `creator_id` | string | 현재 크리에이터 wallet (EIP-55). `v2_creator_updates` 의 최신 `new_creator`가 `token.creator`로 미러링됨 |
 | `current_balance` | string | 미수령 잔액 (wei). claim 후 0 |
 | `current_balance_usd` | string | `current_balance × latest price`. **요청 시점** 가격으로 환산 |
 | `total_deposited` | string | vault에 들어온 누적 quote (wei) |
@@ -264,6 +266,7 @@ interface LpStats {
 }
 
 interface CreatorFeeStats {
+  creator_id: string;              // 현재 크리에이터 wallet (EIP-55)
   current_balance: string;
   current_balance_usd: string;     // 요청 시점 가격 × current_balance / 10^decimals
   total_deposited: string;
@@ -323,5 +326,6 @@ interface TokenVaultsResponse {
 | Gift → "Verified (N days ago)" | `current_state === "Active"` && `receiver !== null`. 경과 = `now - receiver_set_at`. |
 | LP Support → Total Added | `LpStats.quote_injected` |
 | LP Support → Pool | `LpStats.pool_pair` |
+| Creator → Wallet Address | `CreatorFeeStats.creator_id` |
 | Creator → Total Distributed | `CreatorFeeStats.total_deposited` (또는 `total_claimed`) |
 | Last Executed (모든 섹션) | `vaults[].last_executed_at` (unix seconds) |

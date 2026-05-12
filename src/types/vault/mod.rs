@@ -124,6 +124,11 @@ pub struct LpStats {
 /// Creator share vault — `v2_creator_fee_vault_stats`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatorFeeStats {
+    /// Current creator wallet bound to the token (EIP-55 checksum).
+    /// Sourced from `token.creator`, which V2's trigger keeps in sync with
+    /// the latest `v2_creator_updates.new_creator` (SETUP or UPDATE event).
+    #[serde(default)]
+    pub creator_id: String,
     /// Unclaimed balance currently sitting in the vault.
     pub current_balance: String,
     /// USD value of `current_balance`, evaluated at request time using the
