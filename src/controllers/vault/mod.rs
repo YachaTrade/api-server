@@ -66,6 +66,11 @@ struct VaultRow {
     gift_buyback_quote_spent_usd: BigDecimal,
     gift_buyback_tokens: Option<BigDecimal>,
     gift_updated_at: Option<i64>,
+    // GIFT verification window — both columns are NOT NULL with default 0
+    // on v2_gift_vault_stats; they're Option<i64> here only because the
+    // outer LEFT JOIN can produce NULL rows for non-GIFT vaults.
+    gift_expires_at: Option<i64>,
+    gift_receiver_set_at: Option<i64>,
 
     // Pool pair composition (LP only) — token + quote symbol via market.
     token_symbol: Option<String>,
@@ -142,6 +147,8 @@ impl VaultController {
                     COALESCE(g.buyback_quote_spent_usd, 0)   AS gift_buyback_quote_spent_usd,
                     g.buyback_tokens                         AS gift_buyback_tokens,
                     g.updated_at                             AS gift_updated_at,
+                    g.expires_at                             AS gift_expires_at,
+                    g.receiver_set_at                        AS gift_receiver_set_at,
 
                     tk.symbol AS token_symbol,
                     qt.symbol AS quote_symbol,
@@ -269,6 +276,9 @@ fn map_row(row: VaultRow) -> VaultEntry {
                 buyback_quote_spent: bd_to_string(row.gift_buyback_quote_spent),
                 buyback_quote_spent_usd: row.gift_buyback_quote_spent_usd.normalized().to_plain_string(),
                 buyback_tokens: bd_to_string(row.gift_buyback_tokens),
+                expires_at: row.gift_expires_at.unwrap_or(0),
+                // DB stores 0 as the not-yet-set sentinel.
+                receiver_set_at: row.gift_receiver_set_at.filter(|&v| v > 0),
             }),
         ),
         VaultType::Custom => (0, VaultStats::Custom(EmptyStats {})),

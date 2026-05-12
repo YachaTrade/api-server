@@ -170,7 +170,9 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
     "receiver": "0x...",
     "buyback_quote_spent": "0",
     "buyback_quote_spent_usd": "0",
-    "buyback_tokens": "0"
+    "buyback_tokens": "0",
+    "expires_at": 0,
+    "receiver_set_at": 1731412800
   }
 }
 ```
@@ -192,6 +194,8 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 | `buyback_quote_spent` | string | 만료 시 buyback에 쓴 quote (wei) |
 | `buyback_quote_spent_usd` | string | `buyback_quote_spent`의 USD 환산 (만료 시점) |
 | `buyback_tokens` | string | 만료 시 소각한 토큰 |
+| `expires_at` | number | 미바인딩 gift의 만료 deadline (unix sec). SETUP `block_timestamp + GIFT_EXPIRY_DURATION`. `RECEIVER_SET` 발화 시 `0`으로 clear. SETUP 전엔 `0`. |
+| `receiver_set_at` | number \| null | 최신 `RECEIVER_SET` 이벤트의 block_timestamp (unix sec). 검증 전엔 `null`. |
 
 ##### `"CUSTOM"`
 
@@ -286,6 +290,8 @@ interface GiftStats {
   buyback_quote_spent: string;
   buyback_quote_spent_usd: string;
   buyback_tokens: string;
+  expires_at: number;              // RECEIVER_SET 시 0으로 clear, SETUP 전 0
+  receiver_set_at: number | null;  // 최신 RECEIVER_SET 이벤트 block_timestamp
 }
 
 interface TokenVaultsResponse {
@@ -312,6 +318,9 @@ interface TokenVaultsResponse {
 | Gift → Total Sent | `GiftStats.total_claimed` |
 | Gift → Owner's X Handle | `GiftStats.platform_id` (단, `platform === "X"`) |
 | Gift → Wallet Address | `GiftStats.receiver` |
+| Gift → "Not verified yet" + 카운트다운 | `current_state === "Accumulating"` && `receiver === null`. 남은 시간 = `expires_at - now`. |
+| Gift → "Verification Expired" | `current_state === "Burned"` && `receiver === null` (= EXPIRE로 burn된 케이스). |
+| Gift → "Verified (N days ago)" | `current_state === "Active"` && `receiver !== null`. 경과 = `now - receiver_set_at`. |
 | LP Support → Total Added | `LpStats.quote_injected` |
 | LP Support → Pool | `LpStats.pool_pair` |
 | Creator → Total Distributed | `CreatorFeeStats.total_deposited` (또는 `total_claimed`) |

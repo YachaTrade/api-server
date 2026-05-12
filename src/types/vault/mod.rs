@@ -173,6 +173,19 @@ pub struct GiftStats {
     pub buyback_quote_spent_usd: String,
     /// Tokens burned during the buyback sweep.
     pub buyback_tokens: String,
+    /// Verification deadline for an unbound gift (unix seconds). Equals the
+    /// SETUP event's `block_timestamp + GIFT_EXPIRY_DURATION`. Cleared to
+    /// `0` once RECEIVER_SET fires (gift bound, no longer expires). Stays
+    /// `0` for tokens that never had a SETUP event. Sourced from
+    /// `v2_gift_vault_stats.expires_at`.
+    #[serde(default)]
+    pub expires_at: i64,
+    /// Block timestamp of the RECEIVER_SET event that bound this gift
+    /// (unix seconds). `None` until verification fires. Sourced from
+    /// `v2_gift_vault_stats.receiver_set_at` (DB stores `0` as the
+    /// not-yet-set sentinel; mapped to `None` here).
+    #[serde(default)]
+    pub receiver_set_at: Option<i64>,
 }
 
 /// Empty stats payload for `CUSTOM` vaults — intentionally a struct (not a
