@@ -48,6 +48,7 @@ struct VaultRow {
     cf_deposit_count: Option<i32>,
     cf_claim_count: Option<i32>,
     cf_updated_at: Option<i64>,
+    cf_creator_id: Option<String>,
 
     // GIFT — `v2_gift_vault_stats`
     gift_current_state: Option<String>,
@@ -128,6 +129,7 @@ impl VaultController {
                     cf.deposit_count                    AS cf_deposit_count,
                     cf.claim_count                      AS cf_claim_count,
                     cf.updated_at                       AS cf_updated_at,
+                    tk.creator                          AS cf_creator_id,
 
                     g.current_state                          AS gift_current_state,
                     g.current_balance                        AS gift_current_balance,
@@ -246,6 +248,7 @@ fn map_row(row: VaultRow) -> VaultEntry {
         VaultType::CreatorFee => (
             row.cf_updated_at.unwrap_or(0),
             VaultStats::CreatorFee(CreatorFeeStats {
+                creator_id: row.cf_creator_id.unwrap_or_default(),
                 current_balance: bd_to_string(row.cf_current_balance),
                 current_balance_usd: row.cf_current_balance_usd.normalized().to_plain_string(),
                 total_deposited: bd_to_string(row.cf_total_deposited),
