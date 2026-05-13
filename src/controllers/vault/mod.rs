@@ -12,6 +12,13 @@ use crate::{
     },
 };
 
+/// Display-only buffer subtracted from the chain-side gift expiry. The UI
+/// countdown should hit 0 three days before on-chain EXPIRE becomes
+/// claimable, giving users a window to act before fees redirect to
+/// Buyback & Burn. Applied only to non-zero values — the `0` sentinel
+/// (no SETUP yet or RECEIVER_SET cleared) passes through unchanged.
+const GIFT_EXPIRY_DISPLAY_BUFFER_SECS: i64 = 3 * 24 * 60 * 60;
+
 #[derive(Debug, sqlx::FromRow)]
 struct VaultRow {
     vault_id: String,
@@ -279,7 +286,10 @@ fn map_row(row: VaultRow) -> VaultEntry {
                 buyback_quote_spent: bd_to_string(row.gift_buyback_quote_spent),
                 buyback_quote_spent_usd: row.gift_buyback_quote_spent_usd.normalized().to_plain_string(),
                 buyback_tokens: bd_to_string(row.gift_buyback_tokens),
-                expires_at: row.gift_expires_at.unwrap_or(0),
+                expires_at: match row.gift_expires_at.unwrap_or(0) {
+                    0 => 0,
+                    raw => raw.saturating_sub(GIFT_EXPIRY_DISPLAY_BUFFER_SECS),
+                },
                 // DB stores 0 as the not-yet-set sentinel.
                 receiver_set_at: row.gift_receiver_set_at.filter(|&v| v > 0),
             }),
