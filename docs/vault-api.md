@@ -196,7 +196,7 @@ Vault API는 V2 토큰이 거래 수수료를 어떤 vault에 어떤 비율로 �
 | `buyback_quote_spent` | string | 만료 시 buyback에 쓴 quote (wei) |
 | `buyback_quote_spent_usd` | string | `buyback_quote_spent`의 USD 환산 (만료 시점) |
 | `buyback_tokens` | string | 만료 시 소각한 토큰 |
-| `expires_at` | number | 미바인딩 gift의 만료 deadline (unix sec). SETUP `block_timestamp + GIFT_EXPIRY_DURATION`. `RECEIVER_SET` 발화 시 `0`으로 clear. SETUP 전엔 `0`. |
+| `expires_at` | number | UI 표시용 만료 deadline (unix sec). 체인의 `v2_gift_vault_stats.expires_at`에서 **3일을 뺀 값** — 온체인 EXPIRE sweep 전에 UI 카운트다운이 0이 되도록 버퍼. `RECEIVER_SET` 후 / SETUP 전에는 `0` (sentinel은 그대로 통과, 빼지 않음). |
 | `receiver_set_at` | number \| null | 최신 `RECEIVER_SET` 이벤트의 block_timestamp (unix sec). 검증 전엔 `null`. |
 
 ##### `"CUSTOM"`
@@ -293,7 +293,7 @@ interface GiftStats {
   buyback_quote_spent: string;
   buyback_quote_spent_usd: string;
   buyback_tokens: string;
-  expires_at: number;              // RECEIVER_SET 시 0으로 clear, SETUP 전 0
+  expires_at: number;              // 체인 expires_at - 3일 (UI 버퍼). RECEIVER_SET 시 0, SETUP 전 0
   receiver_set_at: number | null;  // 최신 RECEIVER_SET 이벤트 block_timestamp
 }
 

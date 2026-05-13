@@ -178,11 +178,12 @@ pub struct GiftStats {
     pub buyback_quote_spent_usd: String,
     /// Tokens burned during the buyback sweep.
     pub buyback_tokens: String,
-    /// Verification deadline for an unbound gift (unix seconds). Equals the
-    /// SETUP event's `block_timestamp + GIFT_EXPIRY_DURATION`. Cleared to
-    /// `0` once RECEIVER_SET fires (gift bound, no longer expires). Stays
-    /// `0` for tokens that never had a SETUP event. Sourced from
-    /// `v2_gift_vault_stats.expires_at`.
+    /// UI-facing verification deadline for an unbound gift (unix seconds).
+    /// Equals `v2_gift_vault_stats.expires_at - 3 days` while a deadline
+    /// is active — the 3-day buffer lets the UI surface "expired" to users
+    /// before the on-chain EXPIRE sweep redirects fees to Buyback & Burn.
+    /// `0` when RECEIVER_SET has fired (gift bound) or no SETUP yet; the
+    /// sentinel is preserved without subtraction.
     #[serde(default)]
     pub expires_at: i64,
     /// Block timestamp of the RECEIVER_SET event that bound this gift
