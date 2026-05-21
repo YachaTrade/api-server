@@ -2,6 +2,7 @@
 pub enum DexPath {
     GetPositions,
     GetPool,
+    GetTokens,
 }
 
 impl DexPath {
@@ -9,12 +10,14 @@ impl DexPath {
         match self {
             DexPath::GetPositions => "/dex/positions/:account_id",
             DexPath::GetPool => "/dex/pools/:pool_id",
+            DexPath::GetTokens => "/dex/tokens",
         }
     }
     pub fn docs_str(&self) -> &'static str {
         match self {
             DexPath::GetPositions => "/dex/positions/{account_id}",
             DexPath::GetPool => "/dex/pools/{pool_id}",
+            DexPath::GetTokens => "/dex/tokens",
         }
     }
 }
