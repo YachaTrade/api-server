@@ -3,8 +3,10 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::{
-    controllers::dex::position::PositionController, db::postgres::PostgresDatabase,
-    result::AppError, types::dex::position::LpPositionsResponse,
+    controllers::dex::{pool::PoolController, position::PositionController},
+    db::postgres::PostgresDatabase,
+    result::AppError,
+    types::dex::{pool::PoolDetailResponse, position::LpPositionsResponse},
 };
 
 pub struct DexService {
@@ -22,6 +24,20 @@ impl DexService {
             error!(
                 "Failed to get LP positions: account_id={}, error={}",
                 account_id, err
+            );
+            AppError::InternalError(err.to_string())
+        })
+    }
+
+    pub async fn get_pool_detail(
+        &self,
+        pool_id: &str,
+    ) -> Result<Option<PoolDetailResponse>, AppError> {
+        let controller = PoolController::new(self.postgres.clone());
+        controller.get_pool_detail(pool_id).await.map_err(|err| {
+            error!(
+                "Failed to get pool detail: pool_id={}, error={}",
+                pool_id, err
             );
             AppError::InternalError(err.to_string())
         })

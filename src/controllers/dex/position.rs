@@ -15,6 +15,7 @@ const APR_7D_PCT_MULTIPLIER: f64 = (365.0 / 7.0) * 100.0;
 
 /// 7-day APR in percent. `None` when undefined (tvl ≤ 0 OR fee is None).
 /// Inputs are LP-NET (post-0.8 carve-out) USD values from `pool_apr` view.
+/// Also used by `controllers::dex::pool::row_to_response`.
 pub(crate) fn apr_pct_7d(lp_fee_7d_usd: Option<f64>, tvl_7d_usd_avg: Option<f64>) -> Option<f64> {
     let fee = lp_fee_7d_usd?;
     let tvl = tvl_7d_usd_avg?;
