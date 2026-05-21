@@ -2,9 +2,9 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, chester, cms, health, hype, leaderboard, metadata,
-        metrics, new_event, order, profile, quote_token, raffle, search, terminal, token, trade,
-        trend, vault,
+        self, account, agent, api_key, auth, chester, cms, dex, health, hype, leaderboard,
+        metadata, metrics, new_event, order, profile, quote_token, raffle, search, terminal, token,
+        trade, trend, vault,
     },
     state::AppState,
     types,
@@ -71,6 +71,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------Vault----------------
         router::vault::handler::get_token_vaults,
+
+        // ----------------Dex----------------
+        router::dex::handler::get_positions,
 
         // ----------------QuoteToken----------------
         router::quote_token::handler::list_quote_tokens,
@@ -216,6 +219,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::vault::GiftStats,
             types::vault::EmptyStats,
 
+            // Dex
+            types::dex::position::LpPositionsResponse,
+            types::dex::position::LpPositionEntry,
+            types::dex::position::LpPositionTokenSide,
+
             // QuoteToken
             types::quote_token::QuoteTokensResponse,
 
@@ -351,6 +359,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Follow",description="Follow management endpoints"),
         (name="Token",description="Token management endpoints"),
         (name="Vault",description="V2 token fee vault endpoints (Buyback & Burn / LP / Creator / Gift)"),
+        (name="Dex", description="V2 DEX LP positions, pools, and token list"),
         (name="QuoteToken",description="Quote token endpoints"),
         (name="Profile",description="Profile management endpoints"),
         (name="Search",description="Search endpoints"),
@@ -453,6 +462,7 @@ async fn main() -> Result<()> {
         .merge(raffle::router(app_state.clone()))
         .merge(token::router())
         .merge(vault::router())
+        .merge(dex::router())
         .merge(quote_token::router())
         .merge(search::router())
         .merge(trade::router())
