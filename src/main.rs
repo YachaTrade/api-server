@@ -75,6 +75,7 @@ use utoipa_swagger_ui::SwaggerUi;
         // ----------------Dex----------------
         router::dex::positions::get_positions,
         router::dex::pool::get_pool,
+        router::dex::tokens::get_tokens,
 
         // ----------------QuoteToken----------------
         router::quote_token::handler::list_quote_tokens,
@@ -227,6 +228,8 @@ use utoipa_swagger_ui::SwaggerUi;
             types::dex::pool::PoolDetailResponse,
             types::dex::pool::PoolTokenSide,
             types::dex::pool::FeeConfigInfo,
+            types::dex::tokens::DexTokenListResponse,
+            types::dex::tokens::DexTokenEntry,
 
             // QuoteToken
             types::quote_token::QuoteTokensResponse,

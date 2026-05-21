@@ -3,10 +3,16 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::{
-    controllers::dex::{pool::PoolController, position::PositionController},
+    controllers::dex::{
+        pool::PoolController, position::PositionController, tokens::TokensController,
+    },
     db::postgres::PostgresDatabase,
     result::AppError,
-    types::dex::{pool::PoolDetailResponse, position::LpPositionsResponse},
+    types::dex::{
+        pool::PoolDetailResponse,
+        position::LpPositionsResponse,
+        tokens::{DexTokenListQuery, DexTokenListResponse},
+    },
 };
 
 pub struct DexService {
@@ -39,6 +45,17 @@ impl DexService {
                 "Failed to get pool detail: pool_id={}, error={}",
                 pool_id, err
             );
+            AppError::InternalError(err.to_string())
+        })
+    }
+
+    pub async fn get_tokens(
+        &self,
+        query: &DexTokenListQuery,
+    ) -> Result<DexTokenListResponse, AppError> {
+        let controller = TokensController::new(self.postgres.clone());
+        controller.list_tokens(query).await.map_err(|err| {
+            error!("Failed to list dex tokens: error={}", err);
             AppError::InternalError(err.to_string())
         })
     }
