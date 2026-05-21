@@ -17,6 +17,7 @@ pub mod terminal;
 
 pub mod chester;
 pub mod cms;
+pub mod dex;
 pub mod health;
 pub mod leaderboard;
 pub mod metadata;

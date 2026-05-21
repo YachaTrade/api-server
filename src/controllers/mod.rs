@@ -2,6 +2,7 @@ pub mod account;
 pub mod auth;
 pub mod chester;
 pub mod cms;
+pub mod dex;
 pub mod hype;
 pub mod leaderboard;
 pub mod metadata;

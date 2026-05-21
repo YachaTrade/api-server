@@ -16,6 +16,8 @@ sqlx = { version = "0.8.1", features = [
     "chrono",
     "json",
     "uuid",
+    "macros",
+    "migrate",
 ] }
 
 # Redis cache and session store
