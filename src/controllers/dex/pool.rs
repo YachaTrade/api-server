@@ -8,6 +8,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::dex::pool::{FeeConfigInfo, PoolDetailResponse, PoolTokenSide},
+    types::dex::pool_info::PoolInfo,
 };
 
 #[derive(Debug, sqlx::FromRow)]
@@ -115,8 +116,15 @@ fn row_to_response(r: PoolRow) -> PoolDetailResponse {
     };
 
     PoolDetailResponse {
-        pool_id: r.pool_id,
-        pair_label,
+        pool: PoolInfo {
+            pool_id: r.pool_id,
+            pair_label,
+            reserve0: r.reserve0.normalized().to_plain_string(),
+            reserve1: r.reserve1.normalized().to_plain_string(),
+            tvl_usd: r.pool_value_usd.normalized().to_plain_string(),
+            total_supply: r.pool_total_supply.normalized().to_plain_string(),
+            apr: apr.map(|v| format!("{:.4}", v)),
+        },
         token0: PoolTokenSide {
             token_id: r.token0,
             symbol: token0_symbol,
@@ -129,11 +137,6 @@ fn row_to_response(r: PoolRow) -> PoolDetailResponse {
             decimals: r.token1_decimals.unwrap_or(18),
             image_uri: r.token1_image.unwrap_or_default(),
         },
-        reserve0: r.reserve0.normalized().to_plain_string(),
-        reserve1: r.reserve1.normalized().to_plain_string(),
-        tvl_usd: r.pool_value_usd.normalized().to_plain_string(),
-        total_supply: r.pool_total_supply.normalized().to_plain_string(),
-        apr: apr.map(|v| format!("{:.4}", v)),
         fee_config,
     }
 }
@@ -215,20 +218,20 @@ mod tests {
             .unwrap()
             .expect("pool exists");
 
-        assert_eq!(resp.pool_id, POOL);
-        assert_eq!(resp.pair_label, "MON-CHOG");
+        assert_eq!(resp.pool.pool_id, POOL);
+        assert_eq!(resp.pool.pair_label, "MON-CHOG");
         assert_eq!(resp.token0.symbol, "MON");
         assert_eq!(resp.token0.decimals, 18);
         assert_eq!(resp.token1.symbol, "CHOG");
-        assert_eq!(resp.reserve0, "100000");
-        assert_eq!(resp.reserve1, "1500000");
+        assert_eq!(resp.pool.reserve0, "100000");
+        assert_eq!(resp.pool.reserve1, "1500000");
         // tvl_usd from Postgres returns trailing zeros (e.g. "1000.6100" vs "1000.61").
         // Use BigDecimal comparison for robustness.
-        let tvl = bigdecimal::BigDecimal::from_str(&resp.tvl_usd).unwrap();
+        let tvl = bigdecimal::BigDecimal::from_str(&resp.pool.tvl_usd).unwrap();
         let expected_tvl = bigdecimal::BigDecimal::from_str("1000.61").unwrap();
         assert_eq!(tvl, expected_tvl);
-        assert_eq!(resp.total_supply, "5000");
-        assert!(resp.apr.is_none(), "no pool_apr row → APR is None");
+        assert_eq!(resp.pool.total_supply, "5000");
+        assert!(resp.pool.apr.is_none(), "no pool_apr row → APR is None");
         assert!(
             resp.fee_config.is_none(),
             "no fee_config row → fee_config is None"

@@ -1,27 +1,19 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::types::dex::pool_info::PoolInfo;
+
 /// Response for `GET /dex/pools/:pool_id`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PoolDetailResponse {
-    pub pool_id: String,
-    /// `"MON-CHOG"` — composed from `token0.symbol` + `"-"` + `token1.symbol`.
-    pub pair_label: String,
+    /// Pool-level info (reserves, TVL, APR, etc.) shared with `/dex/positions`.
+    pub pool: PoolInfo,
+    /// Token at index 0 of the pool.
     pub token0: PoolTokenSide,
+    /// Token at index 1 of the pool.
     pub token1: PoolTokenSide,
-    /// Raw `pool.reserve0` (wei) as a string to preserve precision.
-    pub reserve0: String,
-    /// Raw `pool.reserve1` (wei) as a string to preserve precision.
-    pub reserve1: String,
-    /// `pool.value` — current TVL snapshot in USD as maintained by the indexer.
-    pub tvl_usd: String,
-    /// `pool.total_supply` — current LP token supply (wei).
-    pub total_supply: String,
-    /// 7d LP-net APR as a percentage (e.g. `"130.0000"` = 130%). NULL when undefined
-    /// (no `pool_apr` row for this pool, or `tvl_7d_usd_avg = 0`). Same formula
-    /// as the `/dex/positions/:account_id` endpoint.
-    pub apr: Option<String>,
-    /// Per-pair fee rates from `fee_config`. NULL when no `fee_config` row exists.
+    /// Per-pair fee rates from `fee_config`. NULL when no fee_config
+    /// row exists for this pool.
     pub fee_config: Option<FeeConfigInfo>,
 }
 

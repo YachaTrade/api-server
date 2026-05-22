@@ -229,6 +229,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::dex::pool::PoolDetailResponse,
             types::dex::pool::PoolTokenSide,
             types::dex::pool::FeeConfigInfo,
+            types::dex::pool_info::PoolInfo,
             types::dex::tokens::DexTokenListResponse,
             types::dex::tokens::DexTokenEntry,
 
