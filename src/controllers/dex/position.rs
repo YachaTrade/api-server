@@ -9,20 +9,32 @@ use crate::{
     types::dex::position::{LpPositionEntry, LpPositionTokenSide, LpPositionsResponse},
 };
 
-/// Multiplier to convert a 7-day return ratio to an annualized percentage.
-/// `× 365/7 × 100`.
-const APR_7D_PCT_MULTIPLIER: f64 = (365.0 / 7.0) * 100.0;
-
-/// 7-day APR in percent. `None` when undefined (tvl ≤ 0 OR fee is None).
+/// APR percent for one window. None when fee/tvl missing or tvl <= 0.
 /// Inputs are LP-NET (post-0.8 carve-out) USD values from `pool_apr` view.
-/// Also used by `controllers::dex::pool::row_to_response`.
-pub(crate) fn apr_pct_7d(lp_fee_7d_usd: Option<f64>, tvl_7d_usd_avg: Option<f64>) -> Option<f64> {
-    let fee = lp_fee_7d_usd?;
-    let tvl = tvl_7d_usd_avg?;
+pub(crate) fn window_apr_pct(fee_usd: Option<f64>, tvl_usd_avg: Option<f64>, window_days: f64) -> Option<f64> {
+    let fee = fee_usd?;
+    let tvl = tvl_usd_avg?;
     if tvl <= 0.0 {
         return None;
     }
-    Some((fee / tvl) * APR_7D_PCT_MULTIPLIER)
+    Some((fee / tvl) * (365.0 / window_days) * 100.0)
+}
+
+/// Max APR across 24h, 7d, 30d windows. None when ALL three are undefined.
+/// Also used by `controllers::dex::pool::row_to_response`.
+pub(crate) fn apr_max_pct(
+    fee_24h: Option<f64>, tvl_24h: Option<f64>,
+    fee_7d: Option<f64>,  tvl_7d: Option<f64>,
+    fee_30d: Option<f64>, tvl_30d: Option<f64>,
+) -> Option<f64> {
+    [
+        window_apr_pct(fee_24h, tvl_24h, 1.0),
+        window_apr_pct(fee_7d,  tvl_7d,  7.0),
+        window_apr_pct(fee_30d, tvl_30d, 30.0),
+    ]
+    .into_iter()
+    .flatten()
+    .reduce(f64::max)
 }
 
 /// `my_liquidity_usd = balance × pool.value / pool.total_supply`.
@@ -50,6 +62,8 @@ struct PositionRow {
     deposited_token1: BigDecimal,
     deposited_token0_usd: BigDecimal,
     deposited_token1_usd: BigDecimal,
+    pool_reserve0: BigDecimal,
+    pool_reserve1: BigDecimal,
     pool_value_usd: BigDecimal,
     pool_total_supply: BigDecimal,
     token0_symbol: Option<String>,
@@ -58,8 +72,12 @@ struct PositionRow {
     token1_symbol: Option<String>,
     token1_decimals: Option<i32>,
     token1_image: Option<String>,
+    lp_fee_24h_usd: Option<f64>,
+    tvl_24h_usd_avg: Option<f64>,
     lp_fee_7d_usd: Option<f64>,
     tvl_7d_usd_avg: Option<f64>,
+    lp_fee_30d_usd: Option<f64>,
+    tvl_30d_usd_avg: Option<f64>,
 }
 
 pub struct PositionController {
@@ -85,6 +103,8 @@ impl PositionController {
                     (lp.token1_in     - lp.token1_out)     AS deposited_token1,
                     (lp.token0_in_usd - lp.token0_out_usd) AS deposited_token0_usd,
                     (lp.token1_in_usd - lp.token1_out_usd) AS deposited_token1_usd,
+                    p.reserve0     AS pool_reserve0,
+                    p.reserve1     AS pool_reserve1,
                     p.value        AS pool_value_usd,
                     p.total_supply AS pool_total_supply,
                     COALESCE(t0.symbol,    dt0.symbol,    qt0.symbol)    AS token0_symbol,
@@ -93,8 +113,12 @@ impl PositionController {
                     COALESCE(t1.symbol,    dt1.symbol,    qt1.symbol)    AS token1_symbol,
                     COALESCE(dt1.decimals, qt1.decimals)                 AS token1_decimals,
                     COALESCE(t1.image_uri, dt1.image_uri, qt1.image_uri) AS token1_image,
+                    par.lp_fee_24h_usd::float8  AS lp_fee_24h_usd,
+                    par.tvl_24h_usd_avg::float8 AS tvl_24h_usd_avg,
                     par.lp_fee_7d_usd::float8   AS lp_fee_7d_usd,
-                    par.tvl_7d_usd_avg::float8  AS tvl_7d_usd_avg
+                    par.tvl_7d_usd_avg::float8  AS tvl_7d_usd_avg,
+                    par.lp_fee_30d_usd::float8  AS lp_fee_30d_usd,
+                    par.tvl_30d_usd_avg::float8 AS tvl_30d_usd_avg
                 FROM lp_position lp
                 JOIN pool p
                     ON p.pool_id = lp.pool_id
@@ -129,7 +153,16 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
     let pair_label = format!("{}-{}", token0_symbol, token1_symbol);
 
     let my_liq = my_liquidity_usd(&r.balance, &r.pool_value_usd, &r.pool_total_supply);
-    let apr = apr_pct_7d(r.lp_fee_7d_usd, r.tvl_7d_usd_avg);
+    let apr = apr_max_pct(
+        r.lp_fee_24h_usd, r.tvl_24h_usd_avg,
+        r.lp_fee_7d_usd,  r.tvl_7d_usd_avg,
+        r.lp_fee_30d_usd, r.tvl_30d_usd_avg,
+    );
+
+    // Per-side current pro-rata share = balance × reserve / total_supply.
+    // NULL when total_supply = 0 (guards divide-by-zero, mirrors my_liquidity_usd).
+    let current_token0 = current_share(&r.balance, &r.pool_reserve0, &r.pool_total_supply);
+    let current_token1 = current_share(&r.balance, &r.pool_reserve1, &r.pool_total_supply);
 
     LpPositionEntry {
         pool_id: r.pool_id,
@@ -141,6 +174,7 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
             image_uri: r.token0_image.unwrap_or_default(),
             deposited: r.deposited_token0.normalized().to_plain_string(),
             deposited_usd: r.deposited_token0_usd.normalized().to_plain_string(),
+            current_amount: current_token0.map(|v| v.normalized().to_plain_string()),
         },
         token1: LpPositionTokenSide {
             token_id: r.token1,
@@ -149,12 +183,24 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
             image_uri: r.token1_image.unwrap_or_default(),
             deposited: r.deposited_token1.normalized().to_plain_string(),
             deposited_usd: r.deposited_token1_usd.normalized().to_plain_string(),
+            current_amount: current_token1.map(|v| v.normalized().to_plain_string()),
         },
         balance: r.balance.normalized().to_plain_string(),
         my_liquidity_usd: my_liq.map(|v| v.normalized().to_plain_string()),
         tvl_usd: r.pool_value_usd.normalized().to_plain_string(),
-        apr_pct_7d: apr.map(|v| format!("{:.4}", v)),
+        apr: apr.map(|v| format!("{:.4}", v)),
     }
+}
+
+/// Per-token current pro-rata share = balance × reserve / total_supply.
+/// None when total_supply <= 0.
+fn current_share(balance: &BigDecimal, reserve: &BigDecimal, total_supply: &BigDecimal) -> Option<BigDecimal> {
+    if total_supply.is_zero()
+        || total_supply.sign() == bigdecimal::num_bigint::Sign::Minus
+    {
+        return None;
+    }
+    Some(balance * reserve / total_supply)
 }
 
 #[cfg(test)]
@@ -163,34 +209,63 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn apr_pct_7d_baseline_130pct() {
+    fn window_apr_pct_7d_baseline_130pct() {
         // 130% APR means weekly return of 130 / (365/7) / 100 = 2.49315068...%.
         // Inversely: fee=2.49315068% of TVL → APR = 130.
         let fee = 24.9315068493;
         let tvl = 1000.0;
-        let apr = apr_pct_7d(Some(fee), Some(tvl)).unwrap();
+        let apr = window_apr_pct(Some(fee), Some(tvl), 7.0).unwrap();
         assert!((apr - 130.0).abs() < 1e-6, "got {}", apr);
     }
 
     #[test]
-    fn apr_pct_7d_none_when_fee_missing() {
-        assert!(apr_pct_7d(None, Some(1000.0)).is_none());
+    fn window_apr_pct_none_when_fee_missing() {
+        assert!(window_apr_pct(None, Some(1000.0), 7.0).is_none());
     }
 
     #[test]
-    fn apr_pct_7d_none_when_tvl_missing() {
-        assert!(apr_pct_7d(Some(10.0), None).is_none());
+    fn window_apr_pct_none_when_tvl_missing() {
+        assert!(window_apr_pct(Some(10.0), None, 7.0).is_none());
     }
 
     #[test]
-    fn apr_pct_7d_none_when_tvl_zero() {
-        assert!(apr_pct_7d(Some(10.0), Some(0.0)).is_none());
+    fn window_apr_pct_none_when_tvl_zero() {
+        assert!(window_apr_pct(Some(10.0), Some(0.0), 7.0).is_none());
     }
 
     #[test]
-    fn apr_pct_7d_none_when_tvl_negative() {
+    fn window_apr_pct_none_when_tvl_negative() {
         // pool.value should never go negative, but guard anyway.
-        assert!(apr_pct_7d(Some(10.0), Some(-1.0)).is_none());
+        assert!(window_apr_pct(Some(10.0), Some(-1.0), 7.0).is_none());
+    }
+
+    #[test]
+    fn apr_max_pct_picks_largest_window() {
+        // 24h returns highest APR when 24h window has higher fee/tvl ratio
+        let r = apr_max_pct(
+            Some(10.0), Some(100.0),   // 24h: 10/100 * (365/1) * 100 = 3650
+            Some(10.0), Some(1000.0),  // 7d: 10/1000 * 365/7 * 100 ≈ 521
+            Some(10.0), Some(10000.0), // 30d: 10/10000 * 365/30 * 100 ≈ 12.17
+        )
+        .unwrap();
+        assert!((r - 3650.0).abs() < 1e-6, "got {}", r);
+    }
+
+    #[test]
+    fn apr_max_pct_skips_missing_windows() {
+        // Only 7d has data → returns 7d APR
+        let r = apr_max_pct(
+            None, None,
+            Some(24.9315068493), Some(1000.0), // ≈ 130 (baseline)
+            None, None,
+        )
+        .unwrap();
+        assert!((r - 130.0).abs() < 1e-6, "got {}", r);
+    }
+
+    #[test]
+    fn apr_max_pct_none_when_all_windows_missing() {
+        assert!(apr_max_pct(None, None, None, None, None, None).is_none());
     }
 
     #[test]
@@ -335,7 +410,11 @@ mod tests {
         let expected = BigDecimal::from_str("10.0061").unwrap();
         assert_eq!(my_liq, expected, "got {}", my_liq_str);
         // No pool_apr row seeded → apr null
-        assert!(p.apr_pct_7d.is_none());
+        assert!(p.apr.is_none());
+        // Current pro-rata share: balance × reserve / total_supply
+        // 50 × 100000 / 5000 = 1000, 50 × 200000 / 5000 = 2000
+        assert_eq!(p.token0.current_amount.as_deref(), Some("1000"));
+        assert_eq!(p.token1.current_amount.as_deref(), Some("2000"));
     }
 
     #[sqlx::test(migrations = "./migrations-test")]

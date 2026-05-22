@@ -9,9 +9,6 @@ use crate::{
     types::dex::tokens::{DexTokenEntry, DexTokenListQuery, DexTokenListResponse},
 };
 
-const DEFAULT_LIMIT: i64 = 50;
-const MAX_LIMIT: i64 = 200;
-
 #[derive(Debug, sqlx::FromRow)]
 struct TokenRow {
     token_id: String,
@@ -33,11 +30,24 @@ impl TokensController {
     }
 
     pub async fn list_tokens(&self, query: &DexTokenListQuery) -> Result<DexTokenListResponse> {
-        let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-        let offset = query.offset.unwrap_or(0).max(0);
+        let limit = query.limit;
+        let offset = (query.page - 1) * limit;
 
-        // Fetch one extra row to detect "has more pages" cheaply.
-        let fetch_n = limit + 1;
+        let total_count: i64 = measure_postgres!(
+            "dex.list_tokens.count",
+            sqlx::query_scalar::<_, i64>(
+                r#"
+                WITH tokens_in_pools AS (
+                    SELECT token0 AS token_id FROM pool
+                    UNION
+                    SELECT token1 AS token_id FROM pool
+                )
+                SELECT COUNT(*) FROM tokens_in_pools
+                "#,
+            )
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to count tokens: {}", e))?;
 
         let rows = measure_postgres!(
             "dex.list_tokens",
@@ -79,25 +89,20 @@ impl TokensController {
                 "#,
             )
             .bind(query.account.as_deref())
-            .bind(fetch_n)
+            .bind(limit)
             .bind(offset)
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|e| anyhow::anyhow!("Failed to list tokens: {}", e))?;
 
-        // "has more" detection: we asked for limit+1; if we got more than `limit`, next page exists.
-        let has_more = rows.len() as i64 > limit;
         let tokens: Vec<DexTokenEntry> = rows
             .into_iter()
-            .take(limit as usize)
             .map(|r| row_to_entry(r, query.account.is_some()))
             .collect();
 
-        let next_offset = if has_more { Some(offset + limit) } else { None };
-
         Ok(DexTokenListResponse {
             tokens,
-            next_offset,
+            total_count,
         })
     }
 }
@@ -206,8 +211,8 @@ mod tests {
     fn empty_query() -> DexTokenListQuery {
         DexTokenListQuery {
             account: None,
-            limit: None,
-            offset: None,
+            page: 1,
+            limit: 50,
         }
     }
 
@@ -217,7 +222,7 @@ mod tests {
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
         assert_eq!(resp.tokens.len(), 2);
-        assert!(resp.next_offset.is_none(), "only 2 tokens → no next page");
+        assert_eq!(resp.total_count, 2, "total_count reflects all matching rows");
 
         let chog = resp
             .tokens
@@ -247,8 +252,8 @@ mod tests {
         let resp = controller
             .list_tokens(&DexTokenListQuery {
                 account: Some(ACCOUNT.to_string()),
-                limit: None,
-                offset: None,
+                page: 1,
+                limit: 50,
             })
             .await
             .unwrap();
@@ -282,37 +287,33 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn pagination_next_offset_present_when_more_rows(pool: PgPool) {
+    async fn pagination_returns_total_count(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
+
+        // Page 1, limit 1 → 1 token returned, total_count = 2
         let resp = controller
             .list_tokens(&DexTokenListQuery {
                 account: None,
-                limit: Some(1),
-                offset: Some(0),
+                page: 1,
+                limit: 1,
             })
             .await
             .unwrap();
         assert_eq!(resp.tokens.len(), 1);
-        assert_eq!(
-            resp.next_offset,
-            Some(1),
-            "1 page consumed, next page exists"
-        );
+        assert_eq!(resp.total_count, 2, "total_count = all matching rows");
 
+        // Page 2, limit 1 → 1 token returned, total_count still = 2
         let resp2 = controller
             .list_tokens(&DexTokenListQuery {
                 account: None,
-                limit: Some(1),
-                offset: Some(1),
+                page: 2,
+                limit: 1,
             })
             .await
             .unwrap();
         assert_eq!(resp2.tokens.len(), 1);
-        assert!(
-            resp2.next_offset.is_none(),
-            "consumed last row → no more pages"
-        );
+        assert_eq!(resp2.total_count, 2, "total_count consistent across pages");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -320,6 +321,22 @@ mod tests {
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
         assert!(resp.tokens.is_empty());
-        assert!(resp.next_offset.is_none());
+        assert_eq!(resp.total_count, 0);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn pagination_out_of_range_page_returns_correct_total_count(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        let controller = make_controller(pool);
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                page: 99, // way past the end
+                limit: 1,
+            })
+            .await
+            .unwrap();
+        assert!(resp.tokens.is_empty(), "page 99 of 2-token list is empty");
+        assert_eq!(resp.total_count, 2, "total count still reflects all matches");
     }
 }

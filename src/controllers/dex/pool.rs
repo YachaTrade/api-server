@@ -4,7 +4,7 @@ use anyhow::Result;
 use bigdecimal::BigDecimal;
 
 use crate::{
-    controllers::dex::position::apr_pct_7d,
+    controllers::dex::position::apr_max_pct,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::dex::pool::{FeeConfigInfo, PoolDetailResponse, PoolTokenSide},
@@ -25,8 +25,12 @@ struct PoolRow {
     token1_symbol: Option<String>,
     token1_decimals: Option<i32>,
     token1_image: Option<String>,
+    lp_fee_24h_usd: Option<f64>,
+    tvl_24h_usd_avg: Option<f64>,
     lp_fee_7d_usd: Option<f64>,
     tvl_7d_usd_avg: Option<f64>,
+    lp_fee_30d_usd: Option<f64>,
+    tvl_30d_usd_avg: Option<f64>,
     fee_creator_bps: Option<i16>,
     fee_curve_bps: Option<i16>,
     fee_dex_bps: Option<i16>,
@@ -60,8 +64,12 @@ impl PoolController {
                     COALESCE(t1.symbol,    dt1.symbol,    qt1.symbol)    AS token1_symbol,
                     COALESCE(dt1.decimals, qt1.decimals)                 AS token1_decimals,
                     COALESCE(t1.image_uri, dt1.image_uri, qt1.image_uri) AS token1_image,
-                    par.lp_fee_7d_usd::float8  AS lp_fee_7d_usd,
-                    par.tvl_7d_usd_avg::float8 AS tvl_7d_usd_avg,
+                    par.lp_fee_24h_usd::float8  AS lp_fee_24h_usd,
+                    par.tvl_24h_usd_avg::float8 AS tvl_24h_usd_avg,
+                    par.lp_fee_7d_usd::float8   AS lp_fee_7d_usd,
+                    par.tvl_7d_usd_avg::float8  AS tvl_7d_usd_avg,
+                    par.lp_fee_30d_usd::float8  AS lp_fee_30d_usd,
+                    par.tvl_30d_usd_avg::float8 AS tvl_30d_usd_avg,
                     fc.creator_fee_rate        AS fee_creator_bps,
                     fc.curve_protocol_fee_rate AS fee_curve_bps,
                     fc.dex_protocol_fee_rate   AS fee_dex_bps
@@ -91,7 +99,11 @@ fn row_to_response(r: PoolRow) -> PoolDetailResponse {
     let token1_symbol = r.token1_symbol.unwrap_or_default();
     let pair_label = format!("{}-{}", token0_symbol, token1_symbol);
 
-    let apr = apr_pct_7d(r.lp_fee_7d_usd, r.tvl_7d_usd_avg);
+    let apr = apr_max_pct(
+        r.lp_fee_24h_usd, r.tvl_24h_usd_avg,
+        r.lp_fee_7d_usd,  r.tvl_7d_usd_avg,
+        r.lp_fee_30d_usd, r.tvl_30d_usd_avg,
+    );
 
     let fee_config = match (r.fee_creator_bps, r.fee_curve_bps, r.fee_dex_bps) {
         (Some(c), Some(p), Some(d)) => Some(FeeConfigInfo {
@@ -121,7 +133,7 @@ fn row_to_response(r: PoolRow) -> PoolDetailResponse {
         reserve1: r.reserve1.normalized().to_plain_string(),
         tvl_usd: r.pool_value_usd.normalized().to_plain_string(),
         total_supply: r.pool_total_supply.normalized().to_plain_string(),
-        apr_pct_7d: apr.map(|v| format!("{:.4}", v)),
+        apr: apr.map(|v| format!("{:.4}", v)),
         fee_config,
     }
 }
@@ -216,7 +228,7 @@ mod tests {
         let expected_tvl = bigdecimal::BigDecimal::from_str("1000.61").unwrap();
         assert_eq!(tvl, expected_tvl);
         assert_eq!(resp.total_supply, "5000");
-        assert!(resp.apr_pct_7d.is_none(), "no pool_apr row → APR is None");
+        assert!(resp.apr.is_none(), "no pool_apr row → APR is None");
         assert!(
             resp.fee_config.is_none(),
             "no fee_config row → fee_config is None"

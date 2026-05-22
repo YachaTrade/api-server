@@ -13,16 +13,16 @@ use crate::{
     utils::valid_account_id,
 };
 
-/// V2 DEX-tradeable token list with optional per-account balance, search, and
-/// pagination. Tokens are filtered to those appearing as `token0` or `token1`
-/// in at least one `pool` row.
+/// V2 DEX-tradeable token list, sorted by market cap descending and paginated.
+/// Optionally attaches per-account balance when `?account=` is provided.
+/// For text/address search use `GET /dex/search` instead.
 #[utoipa::path(
     get,
     path = DexPath::GetTokens.docs_str(),
     params(DexTokenListQuery),
     responses(
-        (status = 200, description = "Token list fetched successfully", body = DexTokenListResponse),
-        (status = 400, description = "Bad request"),
+        (status = 200, description = "Paginated token list with total_count", body = DexTokenListResponse),
+        (status = 400, description = "Invalid query (bad account address, page < 1, or limit out of 1..=100)"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Dex"

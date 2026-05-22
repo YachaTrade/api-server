@@ -12,9 +12,6 @@ use crate::{
     },
 };
 
-const DEFAULT_LIMIT: i64 = 50;
-const MAX_LIMIT: i64 = 200;
-
 #[derive(Debug, sqlx::FromRow)]
 struct SearchRow {
     token_id: String,
@@ -47,9 +44,24 @@ impl SearchController {
         query: &DexSearchQuery,
         account_id: &str,
     ) -> Result<DexTokenListResponse> {
-        let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-        let offset = query.offset.unwrap_or(0).max(0);
-        let fetch_n = limit + 1;
+        let limit = query.limit;
+        let offset = (query.page - 1) * limit;
+
+        let total_count: i64 = measure_postgres!(
+            "dex.search_tokens.count",
+            sqlx::query_scalar::<_, i64>(
+                r#"
+                SELECT COUNT(*) FROM dex_token dt
+                WHERE
+                    dt.symbol   ILIKE '%' || $1 || '%'
+                 OR dt.name     ILIKE '%' || $1 || '%'
+                 OR dt.token_id ILIKE '%' || $1 || '%'
+                "#,
+            )
+            .bind(&query.q)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to count search results: {}", e))?;
 
         let rows = measure_postgres!(
             "dex.search_tokens",
@@ -94,23 +106,17 @@ impl SearchController {
             )
             .bind(account_id)
             .bind(&query.q)
-            .bind(fetch_n)
+            .bind(limit)
             .bind(offset)
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|e| anyhow::anyhow!("Failed to search tokens: {}", e))?;
 
-        let has_more = rows.len() as i64 > limit;
-        let tokens: Vec<DexTokenEntry> = rows
-            .into_iter()
-            .take(limit as usize)
-            .map(row_to_entry)
-            .collect();
-        let next_offset = if has_more { Some(offset + limit) } else { None };
+        let tokens: Vec<DexTokenEntry> = rows.into_iter().map(row_to_entry).collect();
 
         Ok(DexTokenListResponse {
             tokens,
-            next_offset,
+            total_count,
         })
     }
 }
@@ -179,8 +185,8 @@ mod tests {
             .search_tokens(
                 &DexSearchQuery {
                     q: "CHO".to_string(),
-                    limit: None,
-                    offset: None,
+                    page: 1,
+                    limit: 50,
                 },
                 ACCOUNT,
             )
@@ -200,8 +206,8 @@ mod tests {
             .search_tokens(
                 &DexSearchQuery {
                     q: "Monad".to_string(),
-                    limit: None,
-                    offset: None,
+                    page: 1,
+                    limit: 50,
                 },
                 ACCOUNT,
             )
@@ -219,8 +225,8 @@ mod tests {
             .search_tokens(
                 &DexSearchQuery {
                     q: "bb01".to_string(),
-                    limit: None,
-                    offset: None,
+                    page: 1,
+                    limit: 50,
                 },
                 ACCOUNT,
             )
@@ -238,15 +244,34 @@ mod tests {
             .search_tokens(
                 &DexSearchQuery {
                     q: "NONEXISTENT".to_string(),
-                    limit: None,
-                    offset: None,
+                    page: 1,
+                    limit: 50,
                 },
                 ACCOUNT,
             )
             .await
             .unwrap();
         assert!(resp.tokens.is_empty());
-        assert!(resp.next_offset.is_none());
+        assert_eq!(resp.total_count, 0);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_out_of_range_page_returns_correct_total_count(pool: PgPool) {
+        seed_dex_tokens(&pool).await;
+        let controller = make_controller(pool);
+        let resp = controller
+            .search_tokens(
+                &DexSearchQuery {
+                    q: "MON".to_string(), // matches WMON
+                    page: 99,
+                    limit: 1,
+                },
+                ACCOUNT,
+            )
+            .await
+            .unwrap();
+        assert!(resp.tokens.is_empty());
+        assert_eq!(resp.total_count, 1, "total count still reflects the 1 match");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -268,8 +293,8 @@ mod tests {
             .search_tokens(
                 &DexSearchQuery {
                     q: "CHOG".to_string(),
-                    limit: None,
-                    offset: None,
+                    page: 1,
+                    limit: 50,
                 },
                 ACCOUNT,
             )
