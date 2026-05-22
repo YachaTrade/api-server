@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::types::dex::pool_info::PoolInfo;
+
 /// Response for `GET /dex/positions/:account_id` — every open LP position the
 /// wallet holds across V2 pools.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -16,13 +18,9 @@ pub struct LpPositionsResponse {
 /// wallets that fully exited a pool are omitted.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LpPositionEntry {
-    /// Pair contract address (EIP-55 checksum). Matches `pool.pool_id`.
-    pub pool_id: String,
-    /// Human-readable pair label, e.g. `"CHOG-WMON"`. Composed from
-    /// `token0.symbol` + `"-"` + `token1.symbol`. Empty-symbol tokens
-    /// render as `"-TOKEN"` or `"TOKEN-"`; verify against the symbols
-    /// directly if needed.
-    pub pair_label: String,
+    /// Pool-level info (reserves, TVL, APR, total supply, etc.) — same
+    /// shape as `/dex/pools/:pool_id` response's `pool` field.
+    pub pool: PoolInfo,
     /// Token at index 0 of the pool. Includes metadata, cost basis
     /// (deposited), and current pro-rata share.
     pub token0: LpPositionTokenSide,
@@ -32,20 +30,9 @@ pub struct LpPositionEntry {
     /// stored-generated column `lp_position.balance = lp_in - lp_out`.
     pub balance: String,
     /// CURRENT mark-to-market liquidity in USD =
-    /// `balance × pool.value / pool.total_supply`. NULL when
-    /// `pool.total_supply = 0` (no LP minted yet — should not happen
-    /// for an open position but guarded defensively).
-    pub my_liquidity_usd: Option<String>,
-    /// Pool-level TVL snapshot in USD — `pool.value`, maintained by
-    /// the indexer alongside reserve updates when token prices are
-    /// known.
-    pub tvl_usd: String,
-    /// Maximum LP-net APR across the 24h / 7d / 30d windows from the
-    /// `pool_apr` view, formatted as a percent string with 4 decimal
-    /// places (e.g. `"130.0000"` = 130%). NULL when no pool_apr row
-    /// exists for this pool OR all three windows lack data
-    /// (e.g. no swap volume).
-    pub apr: Option<String>,
+    /// `balance × pool.tvl_usd / pool.total_supply`. NULL when
+    /// `pool.total_supply = 0`.
+    pub liquidity_usd: Option<String>,
 }
 
 /// One side of an LP position — token metadata plus the wallet's
