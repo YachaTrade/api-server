@@ -18,10 +18,10 @@ const MAX_LIMIT: i64 = 200;
 #[derive(Debug, sqlx::FromRow)]
 struct SearchRow {
     token_id: String,
-    symbol: Option<String>,
-    name: Option<String>,
-    decimals: Option<i32>,
-    image_uri: Option<String>,
+    symbol: String,
+    name: String,
+    decimals: i32,
+    image_uri: String,
     balance: Option<BigDecimal>,
     market_cap_usd: Option<BigDecimal>,
 }
@@ -37,6 +37,11 @@ impl SearchController {
 
     /// Session-authenticated token search. `account_id` is the session.address —
     /// always present (the route requires `authenticate_user` middleware).
+    ///
+    /// Searches across `dex_token` — the canonical V2-tradeable token registry
+    /// (populated by the indexer on every PairCreated). ILIKE branches reference
+    /// `dex_token` columns directly so the planner can pick the per-column GIN
+    /// trgm indexes from `0029_dex_search_indexes.sql`.
     pub async fn search_tokens(
         &self,
         query: &DexSearchQuery,
@@ -50,26 +55,22 @@ impl SearchController {
             "dex.search_tokens",
             sqlx::query_as::<_, SearchRow>(
                 r#"
-                WITH tokens_in_pools AS (
-                    SELECT token0 AS token_id FROM pool
-                    UNION
-                    SELECT token1 AS token_id FROM pool
-                )
                 SELECT
-                    tp.token_id,
-                    COALESCE(t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
-                    COALESCE(t.name,      dt.name,      qt.name)      AS name,
-                    COALESCE(dt.decimals, qt.decimals)                AS decimals,
-                    COALESCE(t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
-                    b.balance                                         AS balance,
-                    (m.price * t.total_supply * lp.price)             AS market_cap_usd
-                FROM tokens_in_pools tp
-                LEFT JOIN token       t   ON t.token_id  = tp.token_id
-                LEFT JOIN dex_token   dt  ON dt.token_id = tp.token_id
-                LEFT JOIN quote_token qt  ON qt.quote_id = tp.token_id
-                LEFT JOIN balance     b   ON b.token_id  = tp.token_id
-                                         AND b.account_id = $1
-                LEFT JOIN market      m   ON m.token_id  = tp.token_id
+                    dt.token_id,
+                    dt.symbol,
+                    dt.name,
+                    dt.decimals,
+                    dt.image_uri,
+                    b.balance                              AS balance,
+                    (m.price * t.total_supply * lp.price)  AS market_cap_usd
+                FROM dex_token dt
+                LEFT JOIN balance b
+                    ON b.token_id = dt.token_id
+                   AND b.account_id = $1
+                LEFT JOIN token t
+                    ON t.token_id = dt.token_id
+                LEFT JOIN market m
+                    ON m.token_id = dt.token_id
                 LEFT JOIN LATERAL (
                     SELECT price FROM price
                      WHERE quote_id = m.quote_id
@@ -77,13 +78,16 @@ impl SearchController {
                      LIMIT 1
                 ) lp ON true
                 WHERE
-                    COALESCE(t.symbol,    dt.symbol,    qt.symbol) ILIKE '%' || $2 || '%'
-                 OR COALESCE(t.name,      dt.name,      qt.name)   ILIKE '%' || $2 || '%'
-                 OR tp.token_id                                    ILIKE '%' || $2 || '%'
+                    -- Direct column refs (NOT COALESCE wrappers) so the
+                    -- planner can use the per-column GIN trgm indexes from
+                    -- 0029_dex_search_indexes.sql.
+                    dt.symbol   ILIKE '%' || $2 || '%'
+                 OR dt.name     ILIKE '%' || $2 || '%'
+                 OR dt.token_id ILIKE '%' || $2 || '%'
                 ORDER BY
                     market_cap_usd DESC NULLS LAST,
-                    COALESCE(t.symbol, dt.symbol, qt.symbol) ASC NULLS LAST,
-                    tp.token_id ASC
+                    dt.symbol ASC,
+                    dt.token_id ASC
                 LIMIT $3
                 OFFSET $4
                 "#,
@@ -114,10 +118,10 @@ impl SearchController {
 fn row_to_entry(r: SearchRow) -> DexTokenEntry {
     DexTokenEntry {
         token_id: r.token_id,
-        symbol: r.symbol.unwrap_or_default(),
-        name: r.name.unwrap_or_default(),
-        decimals: r.decimals.unwrap_or(18),
-        image_uri: r.image_uri.unwrap_or_default(),
+        symbol: r.symbol,
+        name: r.name,
+        decimals: r.decimals,
+        image_uri: r.image_uri,
         // Session-authed → balance always Some. "0" when no balance row.
         balance: Some(
             r.balance
@@ -135,53 +139,28 @@ mod tests {
     use sqlx::PgPool;
 
     const ACCOUNT: &str = "0x000000000000000000000000000000000000aA11";
-    const POOL: &str = "0x9aEB5e0c5C8a3Bf3D6F8e8B7c3C2A1d0E9F8a7B6";
-    const TOKEN0: &str = "0x000000000000000000000000000000000000bB01"; // CHOG, launchpad
-    const TOKEN1: &str = "0x000000000000000000000000000000000000bB02"; // WMON, dex_token only
+    const TOKEN0: &str = "0x000000000000000000000000000000000000bB01"; // CHOG
+    const TOKEN1: &str = "0x000000000000000000000000000000000000bB02"; // WMON
 
-    async fn seed_pool_with_two_tokens(pool: &PgPool) {
-        sqlx::query(
-            r#"INSERT INTO pool (pool_id, token0, token1, reserve0, reserve1, price, volume, value,
-                                 latest_trade_at, created_at, block_number, tx_hash, total_supply)
-               VALUES ($1, $2, $3, 100000, 1500000, 15, 0, 1000, 0, 0, 1, '0x', 5000)"#,
-        )
-        .bind(POOL)
-        .bind(TOKEN0)
-        .bind(TOKEN1)
-        .execute(pool)
-        .await
-        .unwrap();
-
-        // TOKEN0 needs creator FK to account
-        sqlx::query(
-            r#"INSERT INTO account (account_id, nickname, bio, image_uri, follower_count, following_count)
-               VALUES ($1, 'creator', '', '', 0, 0) ON CONFLICT DO NOTHING"#,
-        )
-        .bind(ACCOUNT)
-        .execute(pool)
-        .await
-        .unwrap();
-
-        sqlx::query(
-            r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description,
-                                  twitter, telegram, website, created_at,
-                                  transaction_hash, total_supply)
-               VALUES ($1, 'Chog Token', 'CHOG', '', $2, '', '', '', '', 0, '0x', 1000000000000000000000000)"#,
-        )
-        .bind(TOKEN0)
-        .bind(ACCOUNT)
-        .execute(pool)
-        .await
-        .unwrap();
-
-        sqlx::query(
-            r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
-               VALUES ($1, 'WMON', 'WMON', 18, '', 0)"#,
-        )
-        .bind(TOKEN1)
-        .execute(pool)
-        .await
-        .unwrap();
+    async fn seed_dex_tokens(pool: &PgPool) {
+        // Two V2-tradeable tokens. The /dex/search endpoint reads only
+        // dex_token; pool / token / quote_token rows are not required for
+        // search-result inclusion.
+        for (id, sym, name) in [
+            (TOKEN0, "CHOG", "Chog Token"),
+            (TOKEN1, "WMON", "Wrapped Monad"),
+        ] {
+            sqlx::query(
+                r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
+                   VALUES ($1, $2, $3, 18, '', 0)"#,
+            )
+            .bind(id)
+            .bind(name)
+            .bind(sym)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
     }
 
     fn make_controller(pool: PgPool) -> SearchController {
@@ -194,7 +173,7 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn search_by_symbol_returns_match(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await;
+        seed_dex_tokens(&pool).await;
         let controller = make_controller(pool);
         let resp = controller
             .search_tokens(
@@ -214,8 +193,27 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_by_name_returns_match(pool: PgPool) {
+        seed_dex_tokens(&pool).await;
+        let controller = make_controller(pool);
+        let resp = controller
+            .search_tokens(
+                &DexSearchQuery {
+                    q: "Monad".to_string(),
+                    limit: None,
+                    offset: None,
+                },
+                ACCOUNT,
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.tokens.len(), 1);
+        assert_eq!(resp.tokens[0].symbol, "WMON");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
     async fn search_by_token_id_case_insensitive(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await;
+        seed_dex_tokens(&pool).await;
         let controller = make_controller(pool);
         let resp = controller
             .search_tokens(
@@ -234,7 +232,7 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn search_no_match_returns_empty(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await;
+        seed_dex_tokens(&pool).await;
         let controller = make_controller(pool);
         let resp = controller
             .search_tokens(
@@ -253,7 +251,8 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn search_balance_attached_when_present(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await;
+        seed_dex_tokens(&pool).await;
+        // account FK on balance: balance table has no FK to account, so this insert is safe.
         sqlx::query(
             r#"INSERT INTO balance (account_id, token_id, balance, created_at)
                VALUES ($1, $2, $3::NUMERIC, 0)"#,
