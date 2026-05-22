@@ -65,7 +65,14 @@ impl TokensController {
                     COALESCE(dt.decimals, qt.decimals)                AS decimals,
                     COALESCE(t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
                     b.balance                                         AS balance,
-                    (m.price * t.total_supply * lp.price)
+                    -- t.total_supply is wei; normalize by 10^decimals (whole
+                    -- tokens) before multiplying by m.price (quote/token) and
+                    -- lp.price (USD/quote). Without this, result is off by
+                    -- 10^decimals → sextillion-USD nonsense.
+                    (m.price
+                        * (t.total_supply
+                            / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC)
+                        * lp.price)
                                                                       AS market_cap_usd
                 FROM tokens_in_pools tp
                 LEFT JOIN token       t   ON t.token_id  = tp.token_id
