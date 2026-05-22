@@ -3,6 +3,7 @@ pub enum DexPath {
     GetPositions,
     GetPool,
     GetTokens,
+    SearchTokens,
 }
 
 impl DexPath {
@@ -11,6 +12,7 @@ impl DexPath {
             DexPath::GetPositions => "/dex/positions/:account_id",
             DexPath::GetPool => "/dex/pools/:pool_id",
             DexPath::GetTokens => "/dex/tokens",
+            DexPath::SearchTokens => "/dex/search",
         }
     }
     pub fn docs_str(&self) -> &'static str {
@@ -18,6 +20,7 @@ impl DexPath {
             DexPath::GetPositions => "/dex/positions/{account_id}",
             DexPath::GetPool => "/dex/pools/{pool_id}",
             DexPath::GetTokens => "/dex/tokens",
+            DexPath::SearchTokens => "/dex/search",
         }
     }
 }

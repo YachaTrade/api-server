@@ -76,6 +76,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::dex::positions::get_positions,
         router::dex::pool::get_pool,
         router::dex::tokens::get_tokens,
+        router::dex::search::search_tokens,
 
         // ----------------QuoteToken----------------
         router::quote_token::handler::list_quote_tokens,
@@ -469,7 +470,7 @@ async fn main() -> Result<()> {
         .merge(raffle::router(app_state.clone()))
         .merge(token::router())
         .merge(vault::router())
-        .merge(dex::router())
+        .merge(dex::router(app_state.clone()))
         .merge(quote_token::router())
         .merge(search::router())
         .merge(trade::router())
