@@ -7,9 +7,6 @@ pub struct DexTokenListQuery {
     /// Optional EIP-55 wallet address. When provided, each entry includes the
     /// user's balance for that token. Absent → balance omitted.
     pub account: Option<String>,
-    /// Optional case-insensitive search across `symbol`, `name`, and `token_id`.
-    /// When omitted, returns the full sorted list (paginated).
-    pub q: Option<String>,
     /// Page size. Default 50, hard-capped at 200.
     pub limit: Option<i64>,
     /// Page offset (number of rows to skip). Default 0.
