@@ -7,7 +7,7 @@ use crate::types::dex::pool_info::PoolInfo;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PoolDetailResponse {
     /// Pool-level info (reserves, TVL, APR, etc.) shared with `/dex/positions`.
-    pub pool: PoolInfo,
+    pub pool_info: PoolInfo,
     /// Token at index 0 of the pool.
     pub token0: PoolTokenSide,
     /// Token at index 1 of the pool.

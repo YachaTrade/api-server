@@ -20,7 +20,7 @@ pub struct LpPositionsResponse {
 pub struct LpPositionEntry {
     /// Pool-level info (reserves, TVL, APR, total supply, etc.) — same
     /// shape as `/dex/pools/:pool_id` response's `pool` field.
-    pub pool: PoolInfo,
+    pub pool_info: PoolInfo,
     /// Token at index 0 of the pool. Includes metadata, cost basis
     /// (deposited), and current pro-rata share.
     pub token0: LpPositionTokenSide,
