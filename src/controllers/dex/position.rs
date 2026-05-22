@@ -166,7 +166,7 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
     let current_token1 = current_share(&r.balance, &r.pool_reserve1, &r.pool_total_supply);
 
     LpPositionEntry {
-        pool: PoolInfo {
+        pool_info: PoolInfo {
             pool_id: r.pool_id,
             pair_label,
             reserve0: r.pool_reserve0.normalized().to_plain_string(),
@@ -396,8 +396,8 @@ mod tests {
 
         assert_eq!(resp.positions.len(), 1);
         let p = &resp.positions[0];
-        assert_eq!(p.pool.pool_id, POOL_ADDR);
-        assert_eq!(p.pool.pair_label, "CHOG-WMON");
+        assert_eq!(p.pool_info.pool_id, POOL_ADDR);
+        assert_eq!(p.pool_info.pair_label, "CHOG-WMON");
         assert_eq!(p.token0.symbol, "CHOG");
         assert_eq!(p.token0.deposited, "2500");
         assert_eq!(p.token1.symbol, "WMON");
@@ -405,10 +405,10 @@ mod tests {
         assert_eq!(p.balance, "50");
         // Compare as BigDecimal to tolerate trailing zeros added by Postgres NUMERIC.
         assert_eq!(
-            BigDecimal::from_str(&p.pool.tvl_usd).unwrap(),
+            BigDecimal::from_str(&p.pool_info.tvl_usd).unwrap(),
             BigDecimal::from_str("1000.61").unwrap(),
             "tvl_usd mismatch: got {}",
-            p.pool.tvl_usd
+            p.pool_info.tvl_usd
         );
         // my_liquidity_usd = 50 × 1000.61 / 5000 = 10.0061
         let my_liq_str = p.liquidity_usd.as_deref().unwrap();
@@ -416,7 +416,7 @@ mod tests {
         let expected = BigDecimal::from_str("10.0061").unwrap();
         assert_eq!(my_liq, expected, "got {}", my_liq_str);
         // No pool_apr row seeded → apr null
-        assert!(p.pool.apr.is_none());
+        assert!(p.pool_info.apr.is_none());
         // Current pro-rata share: balance × reserve / total_supply
         // 50 × 100000 / 5000 = 1000, 50 × 200000 / 5000 = 2000
         assert_eq!(p.token0.current_amount.as_deref(), Some("1000"));

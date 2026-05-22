@@ -116,7 +116,7 @@ fn row_to_response(r: PoolRow) -> PoolDetailResponse {
     };
 
     PoolDetailResponse {
-        pool: PoolInfo {
+        pool_info: PoolInfo {
             pool_id: r.pool_id,
             pair_label,
             reserve0: r.reserve0.normalized().to_plain_string(),
@@ -218,20 +218,20 @@ mod tests {
             .unwrap()
             .expect("pool exists");
 
-        assert_eq!(resp.pool.pool_id, POOL);
-        assert_eq!(resp.pool.pair_label, "MON-CHOG");
+        assert_eq!(resp.pool_info.pool_id, POOL);
+        assert_eq!(resp.pool_info.pair_label, "MON-CHOG");
         assert_eq!(resp.token0.symbol, "MON");
         assert_eq!(resp.token0.decimals, 18);
         assert_eq!(resp.token1.symbol, "CHOG");
-        assert_eq!(resp.pool.reserve0, "100000");
-        assert_eq!(resp.pool.reserve1, "1500000");
+        assert_eq!(resp.pool_info.reserve0, "100000");
+        assert_eq!(resp.pool_info.reserve1, "1500000");
         // tvl_usd from Postgres returns trailing zeros (e.g. "1000.6100" vs "1000.61").
         // Use BigDecimal comparison for robustness.
-        let tvl = bigdecimal::BigDecimal::from_str(&resp.pool.tvl_usd).unwrap();
+        let tvl = bigdecimal::BigDecimal::from_str(&resp.pool_info.tvl_usd).unwrap();
         let expected_tvl = bigdecimal::BigDecimal::from_str("1000.61").unwrap();
         assert_eq!(tvl, expected_tvl);
-        assert_eq!(resp.pool.total_supply, "5000");
-        assert!(resp.pool.apr.is_none(), "no pool_apr row → APR is None");
+        assert_eq!(resp.pool_info.total_supply, "5000");
+        assert!(resp.pool_info.apr.is_none(), "no pool_apr row → APR is None");
         assert!(
             resp.fee_config.is_none(),
             "no fee_config row → fee_config is None"
