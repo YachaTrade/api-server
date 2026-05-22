@@ -20,7 +20,7 @@ pub struct PoolDetailResponse {
     /// 7d LP-net APR as a percentage (e.g. `"130.0000"` = 130%). NULL when undefined
     /// (no `pool_apr` row for this pool, or `tvl_7d_usd_avg = 0`). Same formula
     /// as the `/dex/positions/:account_id` endpoint.
-    pub apr_pct_7d: Option<String>,
+    pub apr: Option<String>,
     /// Per-pair fee rates from `fee_config`. NULL when no `fee_config` row exists.
     pub fee_config: Option<FeeConfigInfo>,
 }
