@@ -1,6 +1,10 @@
 use lazy_static::lazy_static;
 use std::env;
 
+/// pg_advisory_lock key electing the single gift consumer leader across the
+/// multi-instance fleet. Arbitrary fixed 64-bit constant.
+pub const GIFT_CONSUMER_LOCK_KEY: i64 = 0x6749_4654_434F_4E53u64 as i64; // "gIFTCONS"
+
 lazy_static! {
     // Session expiration (in milliseconds)
     pub static ref EXPIRATION_SESSION_KEY: u64 = env::var("EXPIRATION_SESSION_KEY")

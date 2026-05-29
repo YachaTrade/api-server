@@ -3,6 +3,12 @@ name = "api-server"
 version = "1.0.0"
 edition = "2024"
 
+[features]
+# Enables anvil-backed integration tests for chain::rpc_chain.
+# Gated on resolving the tempfile version conflict (redis ^3.1 vs
+# alloy-node-bindings ^3.20). Re-enable in Phase 3.
+node-bindings = []
+
 [dependencies]
 # =====================================================
 # Database
@@ -33,6 +39,7 @@ redis = { version = "0.29.0", features = [
 # Async Runtime
 # =====================================================
 tokio = { version = "1.38.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 
 # =====================================================
 # Caching & Memory Management
@@ -76,8 +83,10 @@ utoipa-swagger-ui = { version = "7.1.0", features = ["axum"] }
 # Ethereum library for smart contract interaction
 alloy = { version = "1.0.24", features = [
     "contract",
+    "network",
     "providers",
     "rpc-types-eth",
+    "signer-local",
     "sol-types",
 ] }
 hex = "0.4"
@@ -112,6 +121,7 @@ base64 = "0.22.1"
 # =====================================================
 # Error handling
 anyhow = "1.0.92"
+thiserror = "2"
 
 # CLI argument parsing
 clap = { version = "4.4.11", features = ["derive"] }
@@ -130,6 +140,9 @@ rand = "0.8.5"
 
 # Cryptography
 sha2 = "0.10"  # SHA256 hashing for API keys
+hmac = "0.12"
+sha1 = "0.10"
+percent-encoding = "2.3"
 
 # Parallel processing
 rayon = "1.10.0"
@@ -145,3 +158,10 @@ tracing-subscriber = { version = "0.3.18", features = [
     "registry",
     "ansi",
 ] }
+
+# =====================================================
+# Dev dependencies (test-only)
+# =====================================================
+[dev-dependencies]
+# HTTP mock server for the gift reply worker's OAuth1 post_reply tests.
+mockito = "1"

@@ -25,6 +25,7 @@
 | 엔드포인트 | `GET /profile/gift-fee/{account_id}` 신규 — gift vault receiver로 등록된 토큰 목록. V2 reward 출처는 `v2_gift_vault_stats` (gift 수령용 잔액) |
 | `GiftFeeTokensResponse` | 신규 타입 — `TokenCreatedInfo[]` + `total_count` |
 | `RewardInfo` (소스 분기) | V2 토큰의 경우 `v2_creator_fee_vault_stats` 에서 산출 (V1은 기존 `creator_reward` Merkle) — 타입 형태는 그대로 |
+| 엔드포인트 | `GET/POST /gift/webhook` + `GET /gift/healthz` 신규 — X Account Activity 웹훅 수신(CRC + 서명). `api_key_gate` 우회, 인증은 HMAC 서명. gift-bot 역할 이전 (상세: [`docs/features/gift-webhook.md`](./features/gift-webhook.md)) |
 
 ---
 
