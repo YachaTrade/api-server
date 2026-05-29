@@ -3,14 +3,17 @@ use once_cell::sync::Lazy;
 use tracing::warn;
 
 pub mod db_metrics;
+pub mod gift_metrics;
 pub mod monitor;
 pub mod query;
 
 use db_metrics::DBMetrics;
+use gift_metrics::GiftMetrics;
 
 /// 중앙 집중화된 메트릭 관리
 pub struct Metrics {
     pub db: DBMetrics,
+    pub gift: GiftMetrics,
 }
 
 impl Default for Metrics {
@@ -23,6 +26,7 @@ impl Metrics {
     pub fn new() -> Self {
         Self {
             db: DBMetrics::new(),
+            gift: GiftMetrics::new(),
         }
     }
 }

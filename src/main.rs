@@ -2,7 +2,7 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, chester, cms, dex, health, hype, leaderboard,
+        self, account, agent, api_key, auth, chester, cms, dex, gift, health, hype, leaderboard,
         metadata, metrics, new_event, order, profile, quote_token, raffle, search, terminal, token,
         trade, trend, vault,
     },
@@ -461,6 +461,10 @@ async fn main() -> Result<()> {
         }
     });
 
+    // Gift consumer (single-leader via pg_advisory_lock). Webhook ingest runs on
+    // all instances; only the lock winner runs the on-chain consumer loop.
+    api_server::services::gift::worker::spawn(app_state.clone());
+
     let cookie_manager_layer = CookieManagerLayer::new();
     let root = Router::new().route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()
@@ -489,6 +493,7 @@ async fn main() -> Result<()> {
         .merge(api_key::router(app_state.clone()))
         .merge(cms::router(app_state.clone()))
         .merge(agent::router())
+        .merge(gift::router())
         .merge(SwaggerUi::new("/dev-sw").url("/dev-sw/openapi.json", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
