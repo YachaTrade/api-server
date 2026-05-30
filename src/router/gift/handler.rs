@@ -15,7 +15,7 @@ pub struct CrcQuery {
     pub crc_token: String,
 }
 
-/// GET /gift/webhook?crc_token=… → { "response_token": "sha256=…" }
+/// GET /x/webhook?crc_token=… → { "response_token": "sha256=…" }
 pub async fn crc_handler(
     State(state): State<AppState>,
     Query(q): Query<CrcQuery>,
@@ -32,7 +32,7 @@ pub async fn crc_handler(
     }
 }
 
-/// POST /gift/webhook — verify HMAC signature over raw body, parse, insert.
+/// POST /x/webhook — verify HMAC signature over raw body, parse, insert.
 pub async fn event_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -71,7 +71,7 @@ pub async fn event_handler(
     StatusCode::OK.into_response()
 }
 
-/// GET /gift/healthz — liveness for haproxy backend.
+/// GET /x/healthz — liveness for haproxy backend.
 pub async fn healthz_handler() -> impl IntoResponse {
     (StatusCode::OK, "ok")
 }
