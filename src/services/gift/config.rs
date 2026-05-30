@@ -39,10 +39,14 @@ pub struct GiftConfig {
     pub consumer_wait_time_ms: u64,
     pub dry_run: bool,
     pub paused: bool,
-    /// Reply-on-success worker toggle (`GIFT_X_REPLY_ENABLED`, default false).
-    /// When true the leader spawns the OAuth1 reply worker, which reuses the
-    /// four `GIFT_X_OAUTH_*` secrets for signing.
+    /// Reply-on-success worker toggle. **Derived**: true iff
+    /// `GIFT_X_REPLY_TEMPLATE` is set — no separate enable flag. When true the
+    /// leader spawns the OAuth1 reply worker (reuses the `GIFT_X_OAUTH_*` secrets).
     pub reply_enabled: bool,
+    /// Reply body template (`GIFT_X_REPLY_TEMPLATE`). `{receiver}` is
+    /// substituted with the gift receiver's 0x… address. Optional — falls
+    /// back to the production default. Set per-env (e.g. dev URL) here.
+    pub reply_template: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -91,6 +95,7 @@ impl GiftConfig {
             .map_err(|e: std::num::ParseIntError| {
                 GiftConfigError::Invalid("GIFT_MONAD_CHAIN_ID", e.to_string())
             })?;
+        let reply_template = get("GIFT_X_REPLY_TEMPLATE").filter(|s| !s.is_empty());
         Ok(Self {
             oauth_consumer_key: req("GIFT_X_OAUTH_CONSUMER_KEY")?,
             oauth_consumer_secret: req("GIFT_X_OAUTH_CONSUMER_SECRET")?,
@@ -127,9 +132,9 @@ impl GiftConfig {
                 .unwrap_or(0),
             dry_run: get("GIFT_DRY_RUN").map(|v| v == "true").unwrap_or(false),
             paused: get("GIFT_PAUSED").map(|v| v == "true").unwrap_or(false),
-            reply_enabled: get("GIFT_X_REPLY_ENABLED")
-                .map(|v| v == "true")
-                .unwrap_or(false),
+            // Reply is enabled simply by setting a template — no separate flag.
+            reply_template: reply_template.clone(),
+            reply_enabled: reply_template.is_some(),
         })
     }
 
@@ -228,6 +233,17 @@ mod tests {
         assert_eq!(cfg.recipient_prefix, "Fees will go to");
         assert_eq!(cfg.required_hashtag, "#Nadfun");
         assert!(cfg.webhook_id.is_none());
+        assert!(cfg.reply_template.is_none());
+    }
+
+    #[test]
+    fn reply_template_from_env_overrides_default() {
+        let mut env = full_env();
+        env.insert("GIFT_X_REPLY_TEMPLATE", "done {receiver}");
+        let cfg = GiftConfig::from_getter(|k| env.get(k).map(|v| v.to_string())).unwrap();
+        assert_eq!(cfg.reply_template.as_deref(), Some("done {receiver}"));
+        // Setting a template enables reply — no separate flag needed.
+        assert!(cfg.reply_enabled);
     }
 
     /// GIFT_-prefixed value wins over the existing fallback when both set.
