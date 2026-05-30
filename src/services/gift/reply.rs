@@ -80,7 +80,10 @@ impl ReplyConfig {
         Self {
             poll_interval_ms: DEFAULT_REPLY_POLL_INTERVAL_MS,
             max_attempts: DEFAULT_REPLY_MAX_ATTEMPTS,
-            template: DEFAULT_REPLY_TEMPLATE.to_string(),
+            template: config
+                .reply_template
+                .clone()
+                .unwrap_or_else(|| DEFAULT_REPLY_TEMPLATE.to_string()),
             creds: OAuth1Credentials {
                 consumer_key: config.oauth_consumer_key.clone(),
                 consumer_secret: config.oauth_consumer_secret.clone(),
