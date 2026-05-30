@@ -38,6 +38,7 @@ pub async fn event_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    tracing::info!(bytes = body.len(), "gift webhook POST received");
     let Some(g) = &state.gift else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
@@ -62,9 +63,11 @@ pub async fn event_handler(
     let pool = state.postgres.get_write_pool();
     let n = ingest::ingest(pool, &g.parser, &payload).await;
     crate::metrics::METRICS.gift.add_ingested(n as u64);
-    if n > 0 {
-        tracing::info!(inserted = n, "gift webhook batch ingested");
-    }
+    tracing::info!(
+        events = payload.tweet_create_events.len(),
+        inserted = n,
+        "gift webhook processed"
+    );
     StatusCode::OK.into_response()
 }
 
