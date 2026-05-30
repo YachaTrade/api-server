@@ -12,8 +12,14 @@ pub struct GiftConfig {
     pub oauth_consumer_secret: String,
     pub oauth_access_token: String,
     pub oauth_access_token_secret: String,
-    pub webhook_id: String,
+    /// Optional — only used by outbound subscription-management API calls
+    /// (done manually by the operator), never by the receive/consumer path.
+    /// Optional by design: you only get the id *after* registering, but
+    /// registration's CRC needs the runtime already live, so requiring it
+    /// would be a bootstrap deadlock.
+    pub webhook_id: Option<String>,
     // parser slots
+
     pub mention_account: String,
     pub activation_prefix: String,
     pub recipient_prefix: String,
@@ -61,26 +67,44 @@ impl GiftConfig {
                 .filter(|s| !s.is_empty())
                 .ok_or(GiftConfigError::Missing(k))
         };
-        let gift_vault_address = Address::from_str(&req("GIFT_VAULT_ADDRESS")?)
+        // GIFT_-prefixed value wins; otherwise fall back to an existing
+        // api-server env var so chain config isn't duplicated in .env. The
+        // error names the GIFT_ key (the canonical override).
+        let req_or = |primary: &'static str, fallback: &'static str| {
+            get(primary)
+                .filter(|s| !s.is_empty())
+                .or_else(|| get(fallback).filter(|s| !s.is_empty()))
+                .ok_or(GiftConfigError::Missing(primary))
+        };
+        // Parser slots: stable campaign values, so default them. Override
+        // via GIFT_X_* only if the campaign template changes.
+        let slot = |k: &str, default: &str| {
+            get(k)
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| default.to_string())
+        };
+
+        let gift_vault_address = Address::from_str(&req_or("GIFT_VAULT_ADDRESS", "V2_GIFT_VAULT")?)
             .map_err(|e| GiftConfigError::Invalid("GIFT_VAULT_ADDRESS", e.to_string()))?;
+        let monad_chain_id = req_or("GIFT_MONAD_CHAIN_ID", "CHAIN_ID")?
+            .parse()
+            .map_err(|e: std::num::ParseIntError| {
+                GiftConfigError::Invalid("GIFT_MONAD_CHAIN_ID", e.to_string())
+            })?;
         Ok(Self {
             oauth_consumer_key: req("GIFT_X_OAUTH_CONSUMER_KEY")?,
             oauth_consumer_secret: req("GIFT_X_OAUTH_CONSUMER_SECRET")?,
             oauth_access_token: req("GIFT_X_OAUTH_ACCESS_TOKEN")?,
             oauth_access_token_secret: req("GIFT_X_OAUTH_ACCESS_TOKEN_SECRET")?,
-            webhook_id: req("GIFT_X_WEBHOOK_ID")?,
-            mention_account: req("GIFT_X_MENTION_ACCOUNT")?,
-            activation_prefix: req("GIFT_X_ACTIVATION_PREFIX")?,
-            recipient_prefix: req("GIFT_X_RECIPIENT_PREFIX")?,
-            required_hashtag: req("GIFT_X_REQUIRED_HASHTAG")?,
-            main_rpc_url: req("GIFT_MAIN_RPC_URL")?,
+            webhook_id: get("GIFT_X_WEBHOOK_ID").filter(|s| !s.is_empty()),
+            mention_account: slot("GIFT_X_MENTION_ACCOUNT", "nadfunnews"),
+            activation_prefix: slot("GIFT_X_ACTIVATION_PREFIX", "Activating Gift for"),
+            recipient_prefix: slot("GIFT_X_RECIPIENT_PREFIX", "Fees will go to"),
+            required_hashtag: slot("GIFT_X_REQUIRED_HASHTAG", "#Nadfun"),
+            main_rpc_url: req_or("GIFT_MAIN_RPC_URL", "RPC_URL")?,
             sub_rpc_url_1: get("GIFT_SUB_RPC_URL_1").filter(|s| !s.is_empty()),
             sub_rpc_url_2: get("GIFT_SUB_RPC_URL_2").filter(|s| !s.is_empty()),
-            monad_chain_id: req("GIFT_MONAD_CHAIN_ID")?
-                .parse()
-                .map_err(|e: std::num::ParseIntError| {
-                    GiftConfigError::Invalid("GIFT_MONAD_CHAIN_ID", e.to_string())
-                })?,
+            monad_chain_id,
             gift_vault_address,
             bot_private_key: req("GIFT_BOT_PRIVATE_KEY")?,
             poll_interval_ms: get("GIFT_CONSUMER_POLL_INTERVAL_MS")
@@ -172,7 +196,72 @@ mod tests {
         assert_eq!(cfg.consumer_wait_time_ms, 0);
         assert!(!cfg.reply_enabled);
         assert_eq!(cfg.mention_account, "nadfunnews");
+        assert_eq!(cfg.webhook_id.as_deref(), Some("wh_test"));
         assert_eq!(cfg.rpc_endpoints(), vec!["https://rpc.example.com"]);
+    }
+
+    /// Chain config falls back to the EXISTING api-server env vars
+    /// (CHAIN_ID / RPC_URL / V2_GIFT_VAULT) when the GIFT_ overrides are
+    /// unset, parser slots default, and webhook_id is optional → only the
+    /// gift-specific secrets (OAuth 4-tuple + bot key) must be set.
+    #[test]
+    fn reuses_existing_chain_env_when_gift_unset() {
+        let mut m = HashMap::new();
+        m.insert("GIFT_X_OAUTH_CONSUMER_KEY", "ck");
+        m.insert("GIFT_X_OAUTH_CONSUMER_SECRET", "cs");
+        m.insert("GIFT_X_OAUTH_ACCESS_TOKEN", "at");
+        m.insert("GIFT_X_OAUTH_ACCESS_TOKEN_SECRET", "ats");
+        m.insert("GIFT_BOT_PRIVATE_KEY", "0xdead");
+        m.insert("CHAIN_ID", "10143");
+        m.insert("RPC_URL", "https://existing.rpc");
+        m.insert("V2_GIFT_VAULT", "0x0000000000000000000000000000000000000002");
+        let cfg =
+            GiftConfig::from_getter(|k| m.get(k).map(|v| v.to_string())).expect("fallback loads");
+        assert_eq!(cfg.monad_chain_id, 10143);
+        assert_eq!(cfg.main_rpc_url, "https://existing.rpc");
+        assert_eq!(
+            cfg.gift_vault_address,
+            Address::from_str("0x0000000000000000000000000000000000000002").unwrap()
+        );
+        assert_eq!(cfg.mention_account, "nadfunnews");
+        assert_eq!(cfg.activation_prefix, "Activating Gift for");
+        assert_eq!(cfg.recipient_prefix, "Fees will go to");
+        assert_eq!(cfg.required_hashtag, "#Nadfun");
+        assert!(cfg.webhook_id.is_none());
+    }
+
+    /// GIFT_-prefixed value wins over the existing fallback when both set.
+    #[test]
+    fn gift_prefixed_overrides_existing() {
+        let mut m = HashMap::new();
+        m.insert("GIFT_X_OAUTH_CONSUMER_KEY", "ck");
+        m.insert("GIFT_X_OAUTH_CONSUMER_SECRET", "cs");
+        m.insert("GIFT_X_OAUTH_ACCESS_TOKEN", "at");
+        m.insert("GIFT_X_OAUTH_ACCESS_TOKEN_SECRET", "ats");
+        m.insert("GIFT_BOT_PRIVATE_KEY", "0xdead");
+        m.insert("CHAIN_ID", "10143");
+        m.insert("GIFT_MONAD_CHAIN_ID", "999");
+        m.insert("RPC_URL", "https://existing.rpc");
+        m.insert("GIFT_MAIN_RPC_URL", "https://gift.rpc");
+        m.insert("V2_GIFT_VAULT", "0x0000000000000000000000000000000000000002");
+        let cfg =
+            GiftConfig::from_getter(|k| m.get(k).map(|v| v.to_string())).expect("override loads");
+        assert_eq!(cfg.monad_chain_id, 999);
+        assert_eq!(cfg.main_rpc_url, "https://gift.rpc");
+    }
+
+    /// Missing chain config with NO fallback present → Missing(GIFT_ key).
+    #[test]
+    fn missing_chain_without_fallback_errors() {
+        let mut m = HashMap::new();
+        m.insert("GIFT_X_OAUTH_CONSUMER_KEY", "ck");
+        m.insert("GIFT_X_OAUTH_CONSUMER_SECRET", "cs");
+        m.insert("GIFT_X_OAUTH_ACCESS_TOKEN", "at");
+        m.insert("GIFT_X_OAUTH_ACCESS_TOKEN_SECRET", "ats");
+        m.insert("GIFT_BOT_PRIVATE_KEY", "0xdead");
+        // no CHAIN_ID / RPC_URL / V2_GIFT_VAULT and no GIFT_ equivalents
+        let result = GiftConfig::from_getter(|k| m.get(k).map(|v| v.to_string()));
+        assert!(matches!(result, Err(GiftConfigError::Missing(_))));
     }
 
     #[test]
