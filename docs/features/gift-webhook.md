@@ -36,7 +36,18 @@ api-server는 다중 리전·다중 인스턴스. consumer 폴링 루프는 단�
 
 ## 설정 (`GIFT_*` env)
 
-`GIFT_X_OAUTH_*`(4-tuple, CRC/서명/reply 공용), `GIFT_X_WEBHOOK_ID`, 파서 슬롯(`GIFT_X_MENTION_ACCOUNT`/`_ACTIVATION_PREFIX`/`_RECIPIENT_PREFIX`/`_REQUIRED_HASHTAG`), 체인(`GIFT_MAIN_RPC_URL`/`_SUB_RPC_URL_1`/`_2`, `GIFT_MONAD_CHAIN_ID`, `GIFT_VAULT_ADDRESS`, `GIFT_BOT_PRIVATE_KEY`), 동작(`GIFT_DRY_RUN`, `GIFT_PAUSED`, `GIFT_X_REPLY_ENABLED`, `GIFT_CONSUMER_POLL_INTERVAL_MS`, `GIFT_RPC_READ_TIMEOUT_MS`, `GIFT_RPC_SEND_TIMEOUT_MS`, `GIFT_TX_CONFIRMATIONS`, `GIFT_TX_GRACEFUL_DRAIN_MS`, `GIFT_CONSUMER_WAIT_TIME_MS`). 전체 목록은 `.env.example`의 `GIFT_*` 블록 참조.
+**반드시 설정 (gift 전용, 기존 변수 없음):** `GIFT_X_OAUTH_*`(4-tuple, CRC/서명/reply 공용), `GIFT_BOT_PRIVATE_KEY`(vault OPERATOR_ROLE 핫월렛).
+
+**기존 변수 재사용 (GIFT_ 오버라이드 미설정 시 자동 fallback):**
+
+| GIFT_ 오버라이드 | fallback (기존 api-server 변수) |
+|---|---|
+| `GIFT_MAIN_RPC_URL` | `RPC_URL` |
+| `GIFT_MONAD_CHAIN_ID` | `CHAIN_ID` |
+| `GIFT_VAULT_ADDRESS` | `V2_GIFT_VAULT` |
+| consumer `LISTEN` | `PRIMARY_DATABASE_URL` |
+
+**기본값 있음 (선택):** 파서 슬롯(`GIFT_X_MENTION_ACCOUNT`=nadfunnews / `_ACTIVATION_PREFIX`=Activating Gift for / `_RECIPIENT_PREFIX`=Fees will go to / `_REQUIRED_HASHTAG`=#Nadfun), `GIFT_X_WEBHOOK_ID`(**optional** — 수신/consumer 경로 미사용, 등록 전 비워둬도 됨), `GIFT_SUB_RPC_URL_1/2`, `GIFT_DRY_RUN`/`GIFT_PAUSED`/`GIFT_X_REPLY_ENABLED`, 타임아웃·폴링(`GIFT_CONSUMER_POLL_INTERVAL_MS`/`GIFT_RPC_READ_TIMEOUT_MS`/`GIFT_RPC_SEND_TIMEOUT_MS`/`GIFT_TX_CONFIRMATIONS`/`GIFT_TX_GRACEFUL_DRAIN_MS`/`GIFT_CONSUMER_WAIT_TIME_MS`). 전체 목록은 `.env.example`의 `GIFT_*` 블록 참조.
 
 `gift_tweet` 테이블은 공유 `Naddotfun/migrations` 서브모듈(`migrations/0020_gift_tweet.sql`)에 이미 존재 — 스키마 변경 없음.
 
