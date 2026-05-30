@@ -8,8 +8,8 @@ pub enum GiftPath {
 impl GiftPath {
     pub fn as_str(&self) -> &'static str {
         match self {
-            GiftPath::Webhook => "/gift/webhook",
-            GiftPath::Healthz => "/gift/healthz",
+            GiftPath::Webhook => "/x/webhook",
+            GiftPath::Healthz => "/x/healthz",
         }
     }
 }
@@ -23,7 +23,7 @@ mod tests {
     /// If a route path changes, this test forces the constant to change too.
     #[test]
     fn path_constants_match_router_and_bypass() {
-        assert_eq!(GiftPath::Webhook.as_str(), "/gift/webhook");
-        assert_eq!(GiftPath::Healthz.as_str(), "/gift/healthz");
+        assert_eq!(GiftPath::Webhook.as_str(), "/x/webhook");
+        assert_eq!(GiftPath::Healthz.as_str(), "/x/healthz");
     }
 }

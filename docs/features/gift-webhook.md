@@ -10,8 +10,8 @@
 ```
 X (Account Activity API) ─ CRC GET / event POST ─▶ Cloudflare ─▶ haproxy ─▶ api-server
   [웹훅 수신: 전 인스턴스 stateless]
-    GET  /gift/webhook  → CRC HMAC-SHA256 응답
-    POST /gift/webhook  → 서명 검증(raw body) → GiftParser → V2 allowlist(token 테이블) → INSERT gift_tweet ON CONFLICT DO NOTHING
+    GET  /x/webhook     → CRC HMAC-SHA256 응답
+    POST /x/webhook     → 서명 검증(raw body) → GiftParser → V2 allowlist(token 테이블) → INSERT gift_tweet ON CONFLICT DO NOTHING
                                                           │ pg_notify('gift_tweet_new')
   [consumer 워커: pg_advisory_lock 단일 리더]              ▼
     LISTEN + 폴링 → preflight(getGiftInfo) → setReceiver → reconcile → (reply)
@@ -23,9 +23,9 @@ X (Account Activity API) ─ CRC GET / event POST ─▶ Cloudflare ─▶ hapro
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| `GET` | `/gift/webhook?crc_token=…` | X CRC challenge. `{ "response_token": "sha256=base64(HMAC-SHA256(consumer_secret, crc_token))" }` |
-| `POST` | `/gift/webhook` | Account Activity 이벤트. `x-twitter-webhooks-signature` 검증(불일치 401) → `tweet_create_events` 파싱 → `gift_tweet` 멱등 INSERT. 항상 200(서명 통과 시) |
-| `GET` | `/gift/healthz` | haproxy 백엔드 liveness |
+| `GET` | `/x/webhook?crc_token=…` | X CRC challenge. `{ "response_token": "sha256=base64(HMAC-SHA256(consumer_secret, crc_token))" }` |
+| `POST` | `/x/webhook` | Account Activity 이벤트. `x-twitter-webhooks-signature` 검증(불일치 401) → `tweet_create_events` 파싱 → `gift_tweet` 멱등 INSERT. 항상 200(서명 통과 시) |
+| `GET` | `/x/healthz` | haproxy 백엔드 liveness |
 
 - 세 경로 모두 `api_key_gate` 미들웨어 **우회**(X는 `X-API-Key`를 보내지 않음, 인증은 HMAC 서명).
 - `GIFT_*` env 미설정 시 gift 런타임 부재 → 웹훅 503 + 워커 미기동, **본 API는 정상 부팅**(graceful degradation).
