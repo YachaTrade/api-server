@@ -105,6 +105,15 @@ pub async fn preflight(
     evaluate(&info, receiver, handle)
 }
 
+/// Normalize an X handle for comparison: trim surrounding whitespace and
+/// strip a leading `@`. X usernames cannot contain `@`, so stripping it is
+/// safe. The on-chain `gift.id` may or may not carry the `@` while the tweet
+/// author handle arrives without it; normalizing both sides prevents every
+/// `@`-prefixed gift from being wrongly rejected as HandleMismatch.
+fn norm(h: &str) -> &str {
+    h.trim().trim_start_matches('@')
+}
+
 /// Pure decision logic for steps 2–5. Separated so the whole decision
 /// table is unit-testable without an RPC server.
 pub fn evaluate(info: &GiftVault::GiftInfo, receiver: Address, handle: &str) -> PreflightOutcome {
@@ -114,7 +123,7 @@ pub fn evaluate(info: &GiftVault::GiftInfo, receiver: Address, handle: &str) -> 
     if info.state == GiftVault::State::Burned {
         return PreflightOutcome::Rejected(RejectReason::GiftExpired);
     }
-    if !info.id.eq_ignore_ascii_case(handle) {
+    if !norm(&info.id).eq_ignore_ascii_case(norm(handle)) {
         return PreflightOutcome::Rejected(RejectReason::HandleMismatch);
     }
     if info.state == GiftVault::State::Active && info.receiver == receiver {
@@ -202,6 +211,32 @@ mod tests {
             "Alice",
         );
         assert_eq!(out, PreflightOutcome::Send);
+    }
+
+    #[test]
+    fn handle_match_ignores_at_prefix_and_whitespace() {
+        // Regression: some on-chain `gift.id` values carry a leading "@"
+        // (e.g. "@alice") while the tweet author handle arrives without it
+        // ("alice"). Without normalization EVERY such gift is wrongly
+        // rejected as HandleMismatch. X usernames can't contain "@", so
+        // stripping it (and trimming) before compare is safe.
+        let g = info(GiftVault::State::Active, Address::ZERO, "@alice");
+        let out = evaluate(
+            &g,
+            address!("00000000000000000000000000000000000000aa"),
+            "alice",
+        );
+        assert_eq!(out, PreflightOutcome::Send);
+
+        // Combined: leading "@", surrounding whitespace, and case all
+        // normalized on both sides.
+        let g2 = info(GiftVault::State::Active, Address::ZERO, "Alice");
+        let out2 = evaluate(
+            &g2,
+            address!("00000000000000000000000000000000000000aa"),
+            " @alice ",
+        );
+        assert_eq!(out2, PreflightOutcome::Send);
     }
 
     #[test]
