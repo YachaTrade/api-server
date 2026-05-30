@@ -25,29 +25,5 @@ async fn log_metrics_snapshot() {
     info!("[METRICS] Redis Timeouts: {}", redis_timeouts);
     info!("[METRICS] PostgreSQL Avg Query Time: {:.2}ms", pg_avg_time);
     info!("[METRICS] Redis Avg Query Time: {:.2}ms", redis_avg_time);
-
-    let (
-        gift_events,
-        gift_sig_failures,
-        gift_crc,
-        gift_ingested,
-        gift_tx_success,
-        gift_tx_failure,
-        gift_reply_success,
-        gift_reply_failure,
-        gift_db_read_errors,
-    ) = crate::metrics::METRICS.gift.get_values();
-    info!(
-        "[METRICS] Gift: webhook_events={} signature_failures={} crc={} ingested={} tx_success={} tx_failure={} reply_success={} reply_failure={} db_read_errors={}",
-        gift_events,
-        gift_sig_failures,
-        gift_crc,
-        gift_ingested,
-        gift_tx_success,
-        gift_tx_failure,
-        gift_reply_success,
-        gift_reply_failure,
-        gift_db_read_errors,
-    );
     info!("[METRICS] =======================");
 }

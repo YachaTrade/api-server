@@ -1,5 +1,4 @@
 pub mod agent;
-pub mod gift;
 pub mod api_key;
 pub mod auth;
 
