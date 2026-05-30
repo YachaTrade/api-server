@@ -108,10 +108,6 @@ pub async fn api_key_gate(
 ) -> Result<Response<Body>, AppError> {
     // 0. 제외할 경로 확인
     let path = req.uri().path();
-    // X webhook: X sends no X-API-Key — auth is the HMAC signature in the handler.
-    if path == "/x/webhook" || path == "/x/healthz" {
-        return Ok(next.run(req).await);
-    }
     if path == "/health"
         || path == "/"
         || path.starts_with("/cms/")
