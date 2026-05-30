@@ -131,6 +131,47 @@ async fn run_leader(
     };
     info!(bot = %chain.signer_address(), "gift consumer: RpcChain ready (chain_id verified)");
 
+    // Ensure the Account Activity (AAA) subscription exists so X delivers events
+    // to our webhook. gift-bot's producer reconciled stream rules at boot; this
+    // is the webhook equivalent — idempotent, runs only when GIFT_X_WEBHOOK_ID is
+    // set. The logged status doubles as a diagnostic (204=ok, 403=no AAA access,
+    // 401=token not the subscribed user).
+    if let Some(webhook_id) = config.webhook_id.as_deref() {
+        let creds = crate::services::gift::x_reply::OAuth1Credentials {
+            consumer_key: config.oauth_consumer_key.clone(),
+            consumer_secret: config.oauth_consumer_secret.clone(),
+            access_token: config.oauth_access_token.clone(),
+            access_token_secret: config.oauth_access_token_secret.clone(),
+        };
+        match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+        {
+            Ok(http) => {
+                match crate::services::gift::x_reply::ensure_subscription(
+                    &http,
+                    &creds,
+                    "https://api.x.com",
+                    webhook_id,
+                )
+                .await
+                {
+                    Ok((status, _body)) if (200..300).contains(&status) => {
+                        info!(status, webhook_id, "gift consumer: AAA subscription ensured");
+                    }
+                    Ok((status, body)) => {
+                        warn!(status, webhook_id, body = %body,
+                            "gift consumer: AAA subscription returned non-2xx (403=no AAA access, 401=wrong token)");
+                    }
+                    Err(e) => warn!(error = %e, "gift consumer: AAA subscription call failed"),
+                }
+            }
+            Err(e) => warn!(error = %e, "gift consumer: failed to build http client for subscription"),
+        }
+    } else {
+        info!("gift consumer: GIFT_X_WEBHOOK_ID unset — skipping AAA auto-subscribe (manual)");
+    }
+
     let exec_cfg = ExecutorConfig {
         dry_run: config.dry_run,
         tx_confirmations: config.tx_confirmations,

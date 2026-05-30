@@ -220,6 +220,38 @@ pub async fn post_reply(
 /// `timestamp` (epoch seconds) with `nonce`. Public-ish via `pub(crate)` so
 /// tests below can verify the canonical signature value against a fixed
 /// input vector.
+/// Ensure the Account Activity (AAA) subscription exists for this app's
+/// authenticating user on `webhook_id`. Idempotent — X returns 2xx (or a
+/// "already subscribed" duplicate error) — so callers can run it on every boot.
+/// The POST carries no body/params, so the OAuth1 signature is over the URL +
+/// oauth params only (reuses [`build_authorization_header`]). Returns the raw
+/// `(status, body)` so the caller can log/interpret (204=ok, 403=no AAA access,
+/// 401=token not the subscribed user).
+pub async fn ensure_subscription(
+    client: &Client,
+    creds: &OAuth1Credentials,
+    api_base: &str,
+    webhook_id: &str,
+) -> Result<(u16, String), ReplyError> {
+    let url = format!("{api_base}/2/account_activity/webhooks/{webhook_id}/subscriptions/all");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_secs()
+        .to_string();
+    let nonce = generate_nonce();
+    let auth_header = build_authorization_header(creds, &url, &timestamp, &nonce);
+    let resp = client
+        .post(&url)
+        .header("Authorization", auth_header)
+        .send()
+        .await
+        .map_err(|e| ReplyError::Http(e.to_string()))?;
+    let status = resp.status().as_u16();
+    let body = resp.text().await.unwrap_or_default();
+    Ok((status, body))
+}
+
 pub(crate) fn build_authorization_header(
     creds: &OAuth1Credentials,
     url: &str,
