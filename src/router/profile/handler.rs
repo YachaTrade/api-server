@@ -86,10 +86,12 @@ pub async fn get_hold_token(
     let account_id = valid_account_id(&account_id)
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
-    let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
+    let position_service =
+        PositionService::new(state.postgres.clone(), state.redis.clone(), state.capricorn.clone());
     let response = position_service
         .get_hold_token_by_account(&account_id, &query)
         .await?;
+
     Ok(Json(response))
 }
 
@@ -119,10 +121,11 @@ pub async fn get_token_created(
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
     let token_created_service =
-        TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
+        TokenCreatedService::new(state.postgres.clone(), state.redis.clone(), state.capricorn.clone());
     let response = token_created_service
         .get_tokens_created(&account_id, &pagination)
         .await?;
+
     Ok(Json(response))
 }
 
@@ -151,10 +154,11 @@ pub async fn get_gift_fee(
     let account_id = valid_account_id(&account_id)
         .ok_or_else(|| AppError::BadRequest("Invalid account ID".to_string()))?;
 
-    let service = GiftFeeService::new(state.postgres.clone(), state.redis.clone());
+    let service = GiftFeeService::new(state.postgres.clone(), state.redis.clone(), state.capricorn.clone());
     let response = service
         .get_gift_fee_tokens(&account_id, &pagination)
         .await?;
+
     Ok(Json(response))
 }
 

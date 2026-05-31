@@ -200,7 +200,7 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
 
 /// Per-token current pro-rata share = balance × reserve / total_supply.
 /// None when total_supply <= 0.
-fn current_share(balance: &BigDecimal, reserve: &BigDecimal, total_supply: &BigDecimal) -> Option<BigDecimal> {
+pub(crate) fn current_share(balance: &BigDecimal, reserve: &BigDecimal, total_supply: &BigDecimal) -> Option<BigDecimal> {
     if total_supply.is_zero()
         || total_supply.sign() == bigdecimal::num_bigint::Sign::Minus
     {
@@ -306,6 +306,19 @@ mod tests {
         let hi = BigDecimal::from_str("625.1").unwrap();
         assert!(got > lo, "got {} < lo {}", got, lo);
         assert!(got < hi, "got {} > hi {}", got, hi);
+    }
+
+    #[test]
+    fn current_share_basic_and_zero_supply() {
+        use bigdecimal::BigDecimal;
+        use std::str::FromStr;
+        let bal = BigDecimal::from_str("10").unwrap();
+        let res = BigDecimal::from_str("1000").unwrap();
+        let ts  = BigDecimal::from_str("100").unwrap();
+        // 10 * 1000 / 100 = 100
+        assert_eq!(current_share(&bal, &res, &ts), Some(BigDecimal::from_str("100").unwrap()));
+        // total_supply 0 -> None (guard)
+        assert_eq!(current_share(&bal, &res, &BigDecimal::from(0)), None);
     }
 
     // ----- Integration tests (require DATABASE_URL → real Postgres) -----

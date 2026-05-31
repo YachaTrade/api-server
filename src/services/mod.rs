@@ -1,5 +1,6 @@
 pub mod account;
 pub mod api_key;
+pub mod capricorn;
 pub mod auth;
 pub mod chester;
 pub mod cms;

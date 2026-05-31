@@ -90,10 +90,15 @@ pub async fn get_holder(
     State(state): State<AppState>,
 ) -> AppJsonResult<TokenHolderResponse> {
     let token_id = valid_existing_token_id(&state, &token_id).await?;
-    let position_service = PositionService::new(state.postgres.clone(), state.redis.clone());
+    let position_service = PositionService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.capricorn.clone(),
+    );
     let response = position_service
         .get_holders_by_token(&token_id, &params)
         .await?;
+
     Ok(Json(response))
 }
 
