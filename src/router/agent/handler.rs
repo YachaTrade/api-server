@@ -235,12 +235,16 @@ pub async fn get_holdings(
         error!("Invalid account ID format: {}", account_id);
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
-    let service = PositionService::new(state.postgres.clone(), state.redis.clone());
-    Ok(Json(
-        service
-            .get_hold_token_by_account(&account_id, &query)
-            .await?,
-    ))
+    let service = PositionService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.capricorn.clone(),
+    );
+    let response = service
+        .get_hold_token_by_account(&account_id, &query)
+        .await?;
+
+    Ok(Json(response))
 }
 
 // ============================================================================
@@ -334,10 +338,11 @@ pub async fn get_tokens_created(
         error!("Invalid account ID format: {}", account_id);
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
-    let service = TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
-    Ok(Json(
-        service.get_tokens_created(&account_id, &pagination).await?,
-    ))
+    let service =
+        TokenCreatedService::new(state.postgres.clone(), state.redis.clone(), state.capricorn.clone());
+    let response = service.get_tokens_created(&account_id, &pagination).await?;
+
+    Ok(Json(response))
 }
 
 // ============================================================================

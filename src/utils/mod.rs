@@ -34,10 +34,7 @@ pub fn valid_token_id(token_id: &str) -> Option<String> {
 ///    - exists=false → **404 NotFound** (캐싱 안 함 — 새 token 가시성 위해)
 /// 4) Redis 또는 DB 에러 → fail-open (요청 통과). 인프라 장애로 정상 트래픽
 ///    막히는 일은 만들지 않음. warn! 로그만 찍힘.
-pub async fn valid_existing_token_id(
-    state: &AppState,
-    token_id: &str,
-) -> Result<String, AppError> {
+pub async fn valid_existing_token_id(state: &AppState, token_id: &str) -> Result<String, AppError> {
     let token_id = valid_token_id(token_id)
         .ok_or_else(|| AppError::BadRequest("Invalid token id".to_string()))?;
 
@@ -47,12 +44,11 @@ pub async fn valid_existing_token_id(
     }
 
     // Cache miss or read error → DB에 묻기 (단일 EXISTS 쿼리, index lookup)
-    let exists_result: Result<bool, sqlx::Error> = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM token WHERE token_id = $1)",
-    )
-    .bind(&token_id)
-    .fetch_one(state.postgres.get_read_pool())
-    .await;
+    let exists_result: Result<bool, sqlx::Error> =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM token WHERE token_id = $1)")
+            .bind(&token_id)
+            .fetch_one(state.postgres.get_read_pool())
+            .await;
 
     match exists_result {
         Ok(true) => {
@@ -62,10 +58,7 @@ pub async fn valid_existing_token_id(
             }
             Ok(token_id)
         }
-        Ok(false) => Err(AppError::NotFound(format!(
-            "Token not found: {}",
-            token_id
-        ))),
+        Ok(false) => Err(AppError::NotFound(format!("Token not found: {}", token_id))),
         Err(e) => {
             // DB 에러 → fail-open: 요청은 통과시키고 후속 핸들러가 자기 식대로 처리하게 함.
             warn!(

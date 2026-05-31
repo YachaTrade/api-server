@@ -166,13 +166,19 @@ pub struct SwapInfo {
 /// Balance information with pricing (all prices in $)
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BalanceInfo {
-    /// Token balance quantity
+    /// Wallet-held token balance
     pub balance: String,
+    /// LP-locked amount of this token in the same units as `balance`. "0" when none.
+    pub lp_balance: String,
+    /// balance + lp_balance, in the same units. Sort key for holdings lists.
+    pub total_balance: String,
     /// Token/USD price
     pub token_price: String,
-    /// MON/USD price
+    /// quote/USD price (legacy alias; 실제로는 quote_id 기준 USD)
     pub native_price: String,
-    // holding period
+    /// quote/USD price (canonical). 현재 native_price와 동일 값
+    pub quote_price: String,
+    // holding period (지갑 balance 기준)
     pub created_at: i64,
 }
 
@@ -205,4 +211,27 @@ pub struct TokenCreatedInfo {
     pub market_info: MarketInfo,
     pub balance_info: BalanceInfo,
     pub reward_info: RewardInfo,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn balance_info_serializes_lp_balance_quote_price_and_total_balance() {
+        let b = BalanceInfo {
+            balance: "100".into(),
+            lp_balance: "5".into(),
+            total_balance: "105".into(),
+            token_price: "2".into(),
+            native_price: "3".into(),
+            quote_price: "3".into(),
+            created_at: 0,
+        };
+        let v = serde_json::to_value(&b).unwrap();
+        assert_eq!(v["lp_balance"], "5");
+        assert_eq!(v["total_balance"], "105");
+        assert_eq!(v["quote_price"], "3");
+        assert_eq!(v["quote_price"], v["native_price"]); // dual-field
+    }
 }

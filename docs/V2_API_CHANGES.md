@@ -445,3 +445,71 @@ V1/V2 토큰이 한 응답에 섞여 있어도 각 토큰의 version 에 따라 
 `native_*` 필드명(`native_price`, `native_amount`, `reserve_native`)은 하위 호환을 위해 유지됨. V1/WMON 토큰에서는 기존과 동일한 의미. V2 non-WMON quote 토큰(향후 등장 시)에서는 이 필드들이 MON 값이 아닌 quote 자산 값을 담게 됨 — `quote_*` 필드가 앞으로의 canonical source.
 
 현재 mainnet 데이터가 전부 V1/WMON이므로 이 의미 변화는 아직 관측되지 않음.
+
+---
+
+## BalanceInfo — `total_balance` 추가 + 지갑∪LP 합집합 전환
+
+### 변경 개요
+
+`BalanceInfo` 타입에 `total_balance` 필드가 추가되고, 6개 보유 조회 엔드포인트가 **지갑 잔액∪LP 포지션 합집합(union)** 방식으로 전환됨. LP-only 행(지갑 잔액 = 0, LP 포지션 > 0)도 결과에 포함됨.
+
+### BalanceInfo 타입 변경
+
+```typescript
+interface BalanceInfo {
+    balance: string;        // 지갑 보유 잔액 (변경 없음)
+    lp_balance: string;     // LP 포지션 환산 잔액 (변경 없음)
+    total_balance: string;  // ← 신규: balance + lp_balance (동일 단위)
+    token_price: string;
+    native_price: string;
+    quote_price: string;
+    created_at: number;     // LP-only 행은 0
+}
+```
+
+`total_balance = balance + lp_balance` (같은 십진 스케일). 홀딩 리스트의 정렬 기준으로 사용됨.
+
+### 영향받는 엔드포인트
+
+| 메서드 | 경로 | 기존 정렬 | 변경 후 정렬 |
+|---|---|---|---|
+| GET | `/profile/hold-token/{id}` | `balance DESC` | `total_balance DESC` |
+| GET | `/agent/holdings/{id}` | `balance DESC` | `total_balance DESC` |
+| GET | `/trade/holder/{token_id}` | `balance DESC` | `total_balance DESC` |
+| GET | `/profile/tokens/created/{id}` | `created_at DESC` | `created_at DESC` (유지) |
+| GET | `/agent/token/created/{id}` | `created_at DESC` | `created_at DESC` (유지) |
+| GET | `/profile/gift-fee/{id}` | `gift_current_balance DESC NULLS LAST` | `gift_current_balance DESC NULLS LAST` (유지) |
+
+### 행 집합 변경 (LP-only 행 포함)
+
+기존에는 `balance > 0` 인 행만 반환했으나, 이제 다음 세 소스의 합집합(UNION distinct)을 반환:
+
+1. **지갑 잔액** — `balance > 0` 인 행
+2. **V2 LP 포지션** — `lp_position` 테이블에 기록된 Capricorn V2 풀 포지션 (`lp_position.balance > 0`)
+3. **V1 LP 포지션** — Capricorn GraphQL API에서 조회한 포지션 (EIP-55 체크섬 변환 후 SQL JOIN)
+
+`total_count` 도 합집합 distinct 기준으로 재계산됨.
+
+### V1 LP 주입 동작
+
+- **소스**: Capricorn GraphQL (`cached_fetch_by_owner` / `cached_fetch_by_token`)
+- **주소 변환**: Capricorn이 반환하는 소문자 주소를 EIP-55 체크섬 형식으로 변환한 뒤 SQL JOIN (`LOWER()` 미사용)
+- **실패 처리(fail-to-empty)**: Capricorn API 호출 실패 시 V1 LP 행을 제외하고 응답 200을 유지함 (지갑∪V2 합집합만 반환). 에러를 전파하지 않음.
+- **cap**: 요청당 Capricorn LP 행이 2,000개를 초과하면 V1 LP 주입을 생략하고 지갑∪V2만 반환 (`tracing::warn!` 로그 기록).
+
+### FE 주의사항
+
+- **created / gift-fee 엔드포인트**: creator / receiver가 아닌 계정이어도 LP 포지션이 있으면 해당 토큰이 결과에 포함됨 (의도된 동작). LP-only 행은 `balance_info.created_at = 0`.
+- **`total_count` 증가**: LP-only 행이 포함되므로 이전보다 `total_count`가 클 수 있음.
+- **단위 일관성 가정**: `balance`, V2 풀 리저브 (`reserve0/1 / total_supply × lp.balance`), V1 Capricorn `amountHuman` 모두 동일한 십진 스케일로 가정. `total_balance = balance + lp_balance` 는 같은 단위의 합산. 실측 검증 권장 (V1 토큰 대상).
+
+### 요약표 업데이트
+
+| 타입/필드 | 변경 |
+|---|---|
+| `BalanceInfo.total_balance` | **신규 필드** (`balance + lp_balance`, 동일 단위) |
+| 6개 엔드포인트 행 집합 | `balance > 0` 전용 → 지갑∪V2 LP∪V1 LP 합집합 (LP-only 행 포함) |
+| `total_count` | 합집합 distinct 재계산 |
+| hold-token / holder / holdings 정렬 | `balance DESC` → `total_balance DESC` |
+| created / gift-fee 정렬 | 변경 없음 (`created_at DESC` / gift balance `DESC NULLS LAST`) |

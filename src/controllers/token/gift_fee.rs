@@ -34,33 +34,27 @@ impl GiftFeeController {
         Self { db }
     }
 
-    pub async fn get_total_count(&self, account_id: &str) -> Result<i64> {
-        let cache_key = cache_key!("gift_fee_count", account_id);
-
-        let count = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
-            let db = self.db.clone();
-            let account_id = account_id.to_string();
-            async move {
-                let controller = GiftFeeController::new(db);
-                controller.fetch_total_count(&account_id).await
-            }
-        })
-        .await?;
-
-        Ok(count)
-    }
-
-    async fn fetch_total_count(&self, account_id: &str) -> Result<i64> {
+    async fn fetch_total_count(&self, account_id: &str, v1_ids: &[String]) -> Result<i64> {
         let count = measure_postgres!(
             "gift_fee.fetch_total_count",
             sqlx::query_as::<_, CountRow>(
                 r#"
-                SELECT COALESCE(COUNT(*)::bigint, 0) as count
-                FROM v2_gift_vault_stats g
-                WHERE g.receiver = $1
+                SELECT COUNT(DISTINCT mm.token_id)::bigint as count
+                FROM (
+                    SELECT token_id FROM v2_gift_vault_stats WHERE receiver = $1
+                    UNION
+                    SELECT m.token_id FROM lp_position lp
+                        JOIN market m ON m.pool_id = lp.pool_id
+                        WHERE lp.account_id = $1 AND lp.balance > 0
+                    UNION
+                    SELECT token_id FROM unnest($2::varchar[]) AS u(token_id)
+                ) mm
+                JOIN token t  ON t.token_id = mm.token_id
+                JOIN market m ON m.token_id = t.token_id
                 "#,
             )
             .bind(account_id)
+            .bind(v1_ids)
             .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch gift fee count: {}", err))?;
@@ -72,6 +66,7 @@ impl GiftFeeController {
         &self,
         account_id: &str,
         pagination: &PaginationParams,
+        v1_lp: &[(String, BigDecimal)],
     ) -> Result<GiftFeeTokensResponse> {
         let cache_key = cache_key!(
             "gift_fee_tokens",
@@ -79,6 +74,8 @@ impl GiftFeeController {
             pagination.page,
             pagination.limit
         );
+
+        let v1_lp_owned: Vec<(String, BigDecimal)> = v1_lp.to_vec();
 
         let response = with_cache(&GLOBAL_CACHE.cache, &cache_key, || {
             let db = self.db.clone();
@@ -88,9 +85,12 @@ impl GiftFeeController {
                 limit: pagination.limit,
                 direction: pagination.direction.clone(),
             };
+            let v1_lp_inner = v1_lp_owned.clone();
             async move {
                 let controller = GiftFeeController::new(db);
-                controller.fetch_gift_fee_tokens(&account_id, &pagination).await
+                controller
+                    .fetch_gift_fee_tokens(&account_id, &pagination, &v1_lp_inner)
+                    .await
             }
         })
         .await?;
@@ -102,8 +102,12 @@ impl GiftFeeController {
         &self,
         account_id: &str,
         pagination: &PaginationParams,
+        v1_lp: &[(String, BigDecimal)],
     ) -> Result<GiftFeeTokensResponse> {
         let offset = (pagination.page - 1) * pagination.limit;
+
+        let v1_ids: Vec<String> = v1_lp.iter().map(|(id, _)| id.clone()).collect();
+        let v1_amts: Vec<BigDecimal> = v1_lp.iter().map(|(_, a)| a.clone()).collect();
 
         #[derive(sqlx::FromRow)]
         struct Row {
@@ -153,20 +157,36 @@ impl GiftFeeController {
             reward_status: Option<String>,
             v2_current_balance: Option<BigDecimal>,
             v2_total_claimed: Option<BigDecimal>,
+            lp_balance: BigDecimal,
+            total_balance: BigDecimal,
         }
 
         let rows = measure_postgres!(
             "gift_fee.fetch_gift_fee_tokens",
             sqlx::query_as::<_, Row>(
                 r#"
-                WITH paged_tokens AS (
-                    SELECT g.token_id,
+                WITH v1_lp AS (
+                    SELECT token_id, amt FROM unnest($4::varchar[], $5::numeric[]) AS u(token_id, amt)
+                ),
+                member_ids AS (
+                    SELECT token_id FROM v2_gift_vault_stats WHERE receiver = $1
+                    UNION
+                    SELECT m.token_id FROM lp_position lp
+                        JOIN market m ON m.pool_id = lp.pool_id
+                        WHERE lp.account_id = $1 AND lp.balance > 0
+                    UNION
+                    SELECT token_id FROM v1_lp
+                ),
+                paged_tokens AS (
+                    SELECT mi.token_id,
                            g.current_balance AS gift_current_balance,
                            g.total_claimed   AS gift_total_claimed,
                            g.updated_at      AS gift_updated_at
-                    FROM v2_gift_vault_stats g
-                    WHERE g.receiver = $1
-                    ORDER BY g.current_balance DESC, g.updated_at DESC
+                    FROM member_ids mi
+                    JOIN token tk  ON tk.token_id = mi.token_id
+                    JOIN market mk ON mk.token_id = mi.token_id
+                    LEFT JOIN v2_gift_vault_stats g ON g.token_id = mi.token_id AND g.receiver = $1
+                    ORDER BY g.current_balance DESC NULLS LAST, g.updated_at DESC NULLS LAST, mi.token_id ASC
                     LIMIT $2 OFFSET $3
                 ),
                 claimed_totals AS (
@@ -221,7 +241,18 @@ impl GiftFeeController {
                     COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
                     cr.status as reward_status,
                     pg.gift_current_balance as v2_current_balance,
-                    pg.gift_total_claimed   as v2_total_claimed
+                    pg.gift_total_claimed   as v2_total_claimed,
+                    (
+                      COALESCE(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                    WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                    ELSE 0 END, 0) + COALESCE(v1.amt, 0)
+                    ) AS lp_balance,
+                    (
+                      COALESCE(b.balance, 0)
+                      + COALESCE(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                      WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                      ELSE 0 END, 0) + COALESCE(v1.amt, 0)
+                    ) AS total_balance
                 FROM paged_tokens pg
                 JOIN token t ON t.token_id = pg.token_id
                 JOIN account a ON t.creator = a.account_id
@@ -232,6 +263,9 @@ impl GiftFeeController {
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
                 LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
                 LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
+                LEFT JOIN pool ON pool.pool_id = m.pool_id
+                LEFT JOIN lp_position lp_pos ON lp_pos.pool_id = pool.pool_id AND lp_pos.account_id = $1
+                LEFT JOIN v1_lp v1 ON v1.token_id = t.token_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
@@ -239,12 +273,14 @@ impl GiftFeeController {
                     ORDER BY p.block_number DESC
                     LIMIT 1
                 ) lp ON true
-                ORDER BY pg.gift_current_balance DESC, pg.gift_updated_at DESC
+                ORDER BY pg.gift_current_balance DESC NULLS LAST, pg.gift_updated_at DESC NULLS LAST, pg.token_id ASC
                 "#,
             )
             .bind(account_id)
             .bind(pagination.limit)
             .bind(offset)
+            .bind(&v1_ids)
+            .bind(&v1_amts)
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch gift fee tokens: {}", err))?;
@@ -328,8 +364,11 @@ impl GiftFeeController {
                     },
                     balance_info: BalanceInfo {
                         balance: row.balance.normalized().to_plain_string(),
+                        lp_balance: row.lp_balance.normalized().to_plain_string(),
+                        total_balance: row.total_balance.normalized().to_plain_string(),
                         token_price: row.token_price.normalized().to_plain_string(),
                         native_price: row.native_price.normalized().to_plain_string(),
+                        quote_price: row.native_price.normalized().to_plain_string(),
                         created_at: row.balance_created_at,
                     },
                     reward_info: match row.version {
@@ -353,7 +392,10 @@ impl GiftFeeController {
                         }
                         TokenVersion::V1 => RewardInfo {
                             amount: row.reward_amount.normalized().to_plain_string(),
-                            claimed_amount: row.reward_claimed_amount.normalized().to_plain_string(),
+                            claimed_amount: row
+                                .reward_claimed_amount
+                                .normalized()
+                                .to_plain_string(),
                             proof: row.reward_proof,
                             claimable: row.reward_status.as_deref() == Some("AWAITING"),
                         },
@@ -362,11 +404,84 @@ impl GiftFeeController {
             })
             .collect();
 
-        let total_count = self.fetch_total_count(account_id).await?;
+        let total_count = self.fetch_total_count(account_id, &v1_ids).await?;
 
         Ok(GiftFeeTokensResponse {
             tokens,
             total_count,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::common::pagination::PaginationParams;
+    use sqlx::PgPool;
+    use std::sync::Arc;
+
+    const ACCOUNT: &str = "0x000000000000000000000000000000000000Aa01";
+    const OTHER: &str = "0x000000000000000000000000000000000000Aa09";
+    const GIFT_TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
+    const LP_TOKEN: &str = "0x000000000000000000000000000000000000Bb09";
+    const POOL_ID: &str = "0x000000000000000000000000000000000000Cc09";
+    const QUOTE_ID: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
+
+    fn ctrl(pool: PgPool) -> GiftFeeController {
+        GiftFeeController::new(Arc::new(crate::db::postgres::PostgresDatabase {
+            write_pool: pool.clone(),
+            read_pool: pool,
+        }))
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn gift_fee_union_lp_only_sorts_last(pool: PgPool) {
+        for (a, n) in [(ACCOUNT, "me"), (OTHER, "other")] {
+            sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,$2,'','') ON CONFLICT DO NOTHING").bind(a).bind(n).execute(&pool).await.unwrap();
+        }
+        // GIFT_TOKEN: created by OTHER, ACCOUNT is gift receiver (gift vault current_balance=999)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'Gift','GFT','',$2,NULL,false,false,false,100,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#).bind(GIFT_TOKEN).bind(OTHER).execute(&pool).await.unwrap();
+        // LP_TOKEN: created by OTHER, ACCOUNT provides LP, NOT a gift receiver
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'Lp','LP','',$2,NULL,false,false,false,200,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#).bind(LP_TOKEN).bind(OTHER).execute(&pool).await.unwrap();
+        for t in [GIFT_TOKEN, LP_TOKEN] {
+            sqlx::query("INSERT INTO swap_count (token_id,count,buy_count,sell_count) VALUES ($1,0,0,0) ON CONFLICT DO NOTHING").bind(t).execute(&pool).await.unwrap();
+        }
+        sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,NULL,0,0,1,$2,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#).bind(GIFT_TOKEN).bind(QUOTE_ID).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO pool (pool_id,token0,token1,reserve0,reserve1,price,volume,value,latest_trade_at,created_at,block_number,tx_hash,total_supply) VALUES ($1,$2,$3,10000,20000,1,0,0,0,0,1,'0xtx',1000) ON CONFLICT DO NOTHING"#).bind(POOL_ID).bind(LP_TOKEN).bind("0x000000000000000000000000000000000000Bb0a").execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,$2,10000,20000,1,$3,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#).bind(LP_TOKEN).bind(POOL_ID).bind(QUOTE_ID).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO lp_position (account_id,pool_id,lp_in,lp_out,token0_in,token0_out,token1_in,token1_out,token0_in_usd,token0_out_usd,token1_in_usd,token1_out_usd,created_at,updated_at,epoch_start_block,epoch_start_tx_index,epoch_start_log_index) VALUES ($1,$2,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0) ON CONFLICT DO NOTHING"#).bind(ACCOUNT).bind(POOL_ID).execute(&pool).await.unwrap();
+        // gift vault: ACCOUNT receives fees for GIFT_TOKEN
+        sqlx::query(r#"INSERT INTO v2_gift_vault_stats (token_id,receiver,current_balance,total_claimed,updated_at) VALUES ($1,$2,999,0,0) ON CONFLICT DO NOTHING"#).bind(GIFT_TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
+
+        let p = PaginationParams {
+            page: 1,
+            limit: 10,
+            direction: "DESC".to_string(),
+        };
+        let resp = ctrl(pool)
+            .get_gift_fee_tokens(ACCOUNT, &p, &[])
+            .await
+            .unwrap();
+        let ids: Vec<&str> = resp
+            .tokens
+            .iter()
+            .map(|t| t.token_info.token_id.as_str())
+            .collect();
+        assert_eq!(
+            ids[0], GIFT_TOKEN,
+            "gift token (non-null gift balance) sorts first"
+        );
+        assert!(
+            ids.contains(&LP_TOKEN),
+            "LP-only token present in gift union"
+        );
+        let lp_row = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_info.token_id == LP_TOKEN)
+            .unwrap();
+        assert_eq!(lp_row.balance_info.lp_balance, "1000"); // 100*10000/1000
+        assert_eq!(lp_row.balance_info.total_balance, "1000");
+        assert_eq!(resp.total_count, 2);
     }
 }
