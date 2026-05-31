@@ -7,19 +7,23 @@ pub struct CapricornPosition {
     pub owner: String,
     pub token0: String,
     pub token1: String,
-    pub amount0_human: String,
-    pub amount1_human: String,
+    /// Raw on-chain amount (wei) for token0, same decimal scale as the `balance` table.
+    /// NOTE: this is Capricorn's raw `amount0`, NOT `amount0Human` — `balance` and the
+    /// V2 lp formula are raw, so V1 LP must be raw too or `total_balance` units mismatch.
+    pub amount0: String,
+    /// Raw on-chain amount (wei) for token1 (see `amount0`).
+    pub amount1: String,
 }
 
 impl CapricornPosition {
-    /// Returns the amountHuman of whichever side matches token_id (case-insensitive).
+    /// Returns the raw on-chain amount of whichever side matches token_id (case-insensitive).
     /// Returns None if neither token side matches.
     pub fn amount_for_token(&self, token_id: &str) -> Option<String> {
         let t = token_id.to_lowercase();
         if self.token0.to_lowercase() == t {
-            Some(self.amount0_human.clone())
+            Some(self.amount0.clone())
         } else if self.token1.to_lowercase() == t {
-            Some(self.amount1_human.clone())
+            Some(self.amount1.clone())
         } else {
             None
         }
@@ -45,7 +49,7 @@ pub fn lp_amounts_by_token(
     use std::collections::HashMap;
     let mut acc: HashMap<String, bigdecimal::BigDecimal> = HashMap::new();
     for p in positions {
-        for (addr, amt) in [(&p.token0, &p.amount0_human), (&p.token1, &p.amount1_human)] {
+        for (addr, amt) in [(&p.token0, &p.amount0), (&p.token1, &p.amount1)] {
             if let Some(checksum) = crate::utils::valid_account_id(addr) {
                 *acc.entry(checksum)
                     .or_insert_with(|| bigdecimal::BigDecimal::from(0)) += parse_amt(amt);
@@ -100,7 +104,7 @@ impl CapricornClient {
         let mut offset = 0i64;
         loop {
             let query = format!(
-                r#"{{ positions(where: {{ owner: {{ _eq: "{owner}" }} }}, activeOnly: true, limit: 500, offset: {offset}) {{ positions {{ owner token0 {{ tokenAddress }} token1 {{ tokenAddress }} amount0Human amount1Human }} }} }}"#
+                r#"{{ positions(where: {{ owner: {{ _eq: "{owner}" }} }}, activeOnly: true, limit: 500, offset: {offset}) {{ positions {{ owner token0 {{ tokenAddress }} token1 {{ tokenAddress }} amount0 amount1 }} }} }}"#
             );
             let page = self.post(query).await;
             let n = page.len();
@@ -127,7 +131,7 @@ impl CapricornClient {
         let mut offset = 0i64;
         loop {
             let query = format!(
-                r#"{{ positions(token0Addresses: ["{t}"], activeOnly: true, limit: 500, offset: {offset}) {{ positions {{ owner token0 {{ tokenAddress }} token1 {{ tokenAddress }} amount0Human amount1Human }} }} }}"#
+                r#"{{ positions(token0Addresses: ["{t}"], activeOnly: true, limit: 500, offset: {offset}) {{ positions {{ owner token0 {{ tokenAddress }} token1 {{ tokenAddress }} amount0 amount1 }} }} }}"#
             );
             let page = self.post(query).await;
             let n = page.len();
@@ -224,8 +228,8 @@ impl CapricornClient {
                     .as_str()
                     .unwrap_or_default()
                     .to_string(),
-                amount0_human: p["amount0Human"].as_str().unwrap_or("0").to_string(),
-                amount1_human: p["amount1Human"].as_str().unwrap_or("0").to_string(),
+                amount0: p["amount0"].as_str().unwrap_or("0").to_string(),
+                amount1: p["amount1"].as_str().unwrap_or("0").to_string(),
             })
             .collect())
     }
@@ -397,8 +401,8 @@ mod tests {
             owner: "0xAbC".into(),
             token0: "0xToKeN".into(),
             token1: "0xWmon".into(),
-            amount0_human: "12.5".into(),
-            amount1_human: "0".into(),
+            amount0: "12.5".into(),
+            amount1: "0".into(),
         };
         assert_eq!(p.amount_for_token("0xTOKEN"), Some("12.5".to_string())); // checksum vs lowercase
         assert_eq!(p.amount_for_token("0xOTHER"), None);
@@ -410,8 +414,8 @@ mod tests {
             owner: "0xAbC".into(),
             token0: "0xAAA".into(),
             token1: "0xBBB".into(),
-            amount0_human: "5.0".into(),
-            amount1_human: "99.9".into(),
+            amount0: "5.0".into(),
+            amount1: "99.9".into(),
         };
         assert_eq!(p.amount_for_token("0xbbb"), Some("99.9".to_string()));
         assert_eq!(p.amount_for_token("0xaaa"), Some("5.0".to_string()));
@@ -423,8 +427,8 @@ mod tests {
             owner: "0x1".into(),
             token0: "0x2".into(),
             token1: "0x3".into(),
-            amount0_human: "1".into(),
-            amount1_human: "2".into(),
+            amount0: "1".into(),
+            amount1: "2".into(),
         };
         assert_eq!(p.amount_for_token("0x4"), None);
     }
@@ -437,15 +441,15 @@ mod tests {
                 owner: "0xa".into(),
                 token0: lower.into(),
                 token1: "0xwmon".into(),
-                amount0_human: "3".into(),
-                amount1_human: "0".into(),
+                amount0: "3".into(),
+                amount1: "0".into(),
             },
             CapricornPosition {
                 owner: "0xa".into(),
                 token0: lower.into(),
                 token1: "0xwmon".into(),
-                amount0_human: "4.5".into(),
-                amount1_human: "0".into(),
+                amount0: "4.5".into(),
+                amount1: "0".into(),
             },
         ];
         let out = lp_amounts_by_token(&positions);
@@ -467,15 +471,15 @@ mod tests {
                 owner: "0x000000000000000000000000000000000000aa01".into(),
                 token0: token.into(),
                 token1: "0xw".into(),
-                amount0_human: "2".into(),
-                amount1_human: "0".into(),
+                amount0: "2".into(),
+                amount1: "0".into(),
             },
             CapricornPosition {
                 owner: "0x000000000000000000000000000000000000aa01".into(),
                 token0: token.into(),
                 token1: "0xw".into(),
-                amount0_human: "5".into(),
-                amount1_human: "0".into(),
+                amount0: "5".into(),
+                amount1: "0".into(),
             },
         ];
         let out = lp_amounts_by_owner(&positions, token);
