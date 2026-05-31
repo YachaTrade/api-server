@@ -341,6 +341,41 @@ mod tests {
         );
     }
 
+    // ── success path: raw amount0/amount1 parsing ─────────────────────────────
+    //
+    // Regression guard for the amountHuman→raw fix (#111). Capricorn returns RAW
+    // on-chain amounts in `amount0`/`amount1`; the parser must read those (not the
+    // human-scaled `amount0Human`) so V1 lp_balance shares the raw `balance` scale.
+
+    #[tokio::test]
+    async fn fetch_by_owner_parses_raw_amount0_amount1() {
+        let body = r#"{"data":{"positions":{"positions":[
+            {"owner":"0x000000000000000000000000000000000000Aa01",
+             "token0":{"tokenAddress":"0x000000000000000000000000000000000000Bb01"},
+             "token1":{"tokenAddress":"0x000000000000000000000000000000000000Cc01"},
+             "amount0":"1961178955610182134800088","amount1":"0"}
+        ]}}}"#;
+        let (url, _guard) = mock_server(200, body).await;
+        let positions = CapricornClient::new(url)
+            .fetch_by_owner("0x000000000000000000000000000000000000Aa01")
+            .await;
+
+        assert_eq!(positions.len(), 1, "expected 1 parsed position");
+        // raw integer string (wei), NOT a human-scaled decimal
+        assert_eq!(positions[0].amount0, "1961178955610182134800088");
+        assert_eq!(positions[0].amount1, "0");
+
+        // the raw matching-side amount flows through owner aggregation unchanged
+        let agg = lp_amounts_by_owner(&positions, "0x000000000000000000000000000000000000Bb01");
+        let owner_cs =
+            crate::utils::valid_account_id("0x000000000000000000000000000000000000Aa01").unwrap();
+        let found = agg.iter().find(|(o, _)| o == &owner_cs).expect("owner present");
+        assert_eq!(
+            found.1.normalized().to_plain_string(),
+            "1961178955610182134800088"
+        );
+    }
+
     // ── fail-to-empty: malformed JSON ─────────────────────────────────────────
 
     #[tokio::test]
