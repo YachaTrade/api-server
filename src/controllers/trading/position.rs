@@ -132,16 +132,16 @@ impl PositionController {
                     a.bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                     (
-                      COALESCE(CASE WHEN pool.token0 = m.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
-                                    WHEN pool.token1 = m.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
-                                    ELSE 0 END, 0)
+                      COALESCE(FLOOR(CASE WHEN pool.token0 = m.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                         WHEN pool.token1 = m.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                         ELSE 0 END), 0)
                       + COALESCE(v1.amt, 0)
                     ) AS lp_balance,
                     (
                       COALESCE(b.balance, 0)
-                      + COALESCE(CASE WHEN pool.token0 = m.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
-                                      WHEN pool.token1 = m.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
-                                      ELSE 0 END, 0)
+                      + COALESCE(FLOOR(CASE WHEN pool.token0 = m.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                            WHEN pool.token1 = m.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                            ELSE 0 END), 0)
                       + COALESCE(v1.amt, 0)
                     ) AS total_balance
                 FROM holders h
@@ -335,16 +335,16 @@ impl PositionController {
                     t.token_holder_count as holder_count,
                     fc.creator_fee_rate, fc.curve_protocol_fee_rate, fc.dex_protocol_fee_rate,
                     (
-                      COALESCE(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
-                                    WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
-                                    ELSE 0 END, 0)
+                      COALESCE(FLOOR(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                         WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                         ELSE 0 END), 0)
                       + COALESCE(v1.amt, 0)
                     ) AS lp_balance,
                     (
                       COALESCE(b.balance, 0)
-                      + COALESCE(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
-                                      WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
-                                      ELSE 0 END, 0)
+                      + COALESCE(FLOOR(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                            WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                            ELSE 0 END), 0)
                       + COALESCE(v1.amt, 0)
                     ) AS total_balance
                 FROM held h
@@ -892,5 +892,31 @@ mod tests {
             .expect("v1 lp-only holder present");
         assert_eq!(row.balance_info.lp_balance, "777");
         assert_eq!(row.balance_info.total_balance, "777");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn hold_token_v2_lp_balance_is_floored(pool: PgPool) {
+        seed_v2_dex(&pool).await;
+        // 100 * 10001 / 1000 = 1000.1 → floor → 1000 (Uniswap V2 integer division)
+        sqlx::query("UPDATE pool SET reserve0 = 10001 WHERE pool_id = $1")
+            .bind(POOL_ID)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let ctrl = make_controller(pool);
+        let p = PaginationParams {
+            page: 1,
+            limit: 10,
+            direction: "DESC".to_string(),
+        };
+        let resp = ctrl
+            .get_hold_token_by_account(ACCOUNT, &p, &[])
+            .await
+            .unwrap();
+        assert_eq!(resp.tokens[0].balance_info.lp_balance, "1000"); // floored, NOT "1000.1"
+        assert!(
+            !resp.tokens[0].balance_info.lp_balance.contains('.'),
+            "lp_balance must be integer"
+        );
     }
 }

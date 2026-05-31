@@ -234,15 +234,15 @@ impl TokenCreatedController {
                     v2cfv.current_balance as v2_current_balance,
                     v2cfv.total_claimed as v2_total_claimed,
                     (
-                      COALESCE(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
-                                    WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
-                                    ELSE 0 END, 0) + COALESCE(v1.amt, 0)
+                      COALESCE(FLOOR(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                         WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                         ELSE 0 END), 0) + COALESCE(v1.amt, 0)
                     ) AS lp_balance,
                     (
                       COALESCE(b.balance, 0)
-                      + COALESCE(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
-                                      WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
-                                      ELSE 0 END, 0) + COALESCE(v1.amt, 0)
+                      + COALESCE(FLOOR(CASE WHEN pool.token0 = t.token_id THEN lp_pos.balance * pool.reserve0 / NULLIF(pool.total_supply, 0)
+                                            WHEN pool.token1 = t.token_id THEN lp_pos.balance * pool.reserve1 / NULLIF(pool.total_supply, 0)
+                                            ELSE 0 END), 0) + COALESCE(v1.amt, 0)
                     ) AS total_balance
                 FROM paged_tokens t
                 JOIN account a ON t.creator = a.account_id
