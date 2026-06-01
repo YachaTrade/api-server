@@ -44,7 +44,11 @@ impl SessionController {
                     COALESCE(ax.x_handle, a.nickname) as nickname,
                     COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
                     a.bio
-                FROM account a
+                -- Read from the account_upsert CTE, not the base `account` table:
+                -- data-modifying CTEs run under the statement's start snapshot, so a
+                -- just-inserted brand-new account is invisible to `FROM account` and
+                -- the query would return 0 rows (RowNotFound) on first login.
+                FROM account_upsert a
                 LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 CROSS JOIN session_upsert
                 WHERE a.account_id = $2
@@ -91,5 +95,107 @@ impl SessionController {
         .map_err(|err| anyhow!("Failed to delete session: {}", err))?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::PgPool;
+
+    // EIP-55 checksummed addresses (VARCHAR(42))
+    const NEW_ACCOUNT: &str = "0x000000000000000000000000000000000000Ab01";
+    const EXISTING_ACCOUNT: &str = "0x000000000000000000000000000000000000Ab02";
+    const SESSION_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
+    const SESSION_ID2: &str = "0000000000000000000000000000000000000000000000000000000000000002";
+
+    fn make_controller(pool: PgPool) -> SessionController {
+        SessionController::new(Arc::new(crate::db::postgres::PostgresDatabase {
+            write_pool: pool.clone(),
+            read_pool: pool,
+        }))
+    }
+
+    /// `AccountInfo::new` reads `DEFAULT_IMAGE_{1..=5}` and panics if unset.
+    fn set_default_image_env() {
+        for i in 1..=5 {
+            // SAFETY: tests set the same constant value; no concurrent reader depends
+            // on it being unset.
+            unsafe { std::env::set_var(format!("DEFAULT_IMAGE_{i}"), "default.png") };
+        }
+    }
+
+    async fn session_account_id(pool: &PgPool, session_id: &str) -> Option<String> {
+        sqlx::query_as::<_, SessionRow>("SELECT account_id FROM account_session WHERE id = $1")
+            .bind(session_id)
+            .fetch_optional(pool)
+            .await
+            .unwrap()
+            .map(|r| r.account_id)
+    }
+
+    /// Root cause regression: a brand-new wallet (no pre-existing `account` row)
+    /// logging in for the first time. The final `SELECT` must see the row the
+    /// `account_upsert` CTE just inserted, otherwise `fetch_one` hits RowNotFound
+    /// → InternalError("Database error: no rows returned ...").
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn set_session_succeeds_for_brand_new_account(pool: PgPool) {
+        set_default_image_env();
+        let ctrl = make_controller(pool.clone());
+
+        let account_info = ctrl
+            .set_session(SESSION_ID, NEW_ACCOUNT)
+            .await
+            .expect("set_session must succeed for a brand-new account");
+
+        assert_eq!(account_info.account_id, NEW_ACCOUNT);
+        assert_eq!(
+            session_account_id(&pool, SESSION_ID).await.as_deref(),
+            Some(NEW_ACCOUNT),
+            "account_session row must be created for the new account"
+        );
+    }
+
+    /// Returning user: the `account` row already exists. The upsert must return the
+    /// stored profile (not the generated default) and rotate the session id via
+    /// `ON CONFLICT (account_id) DO UPDATE`.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn set_session_updates_session_for_existing_account(pool: PgPool) {
+        set_default_image_env();
+        sqlx::query(
+            "INSERT INTO account (account_id, nickname, bio, image_uri) VALUES ($1, 'stored_nick', 'stored bio', 'stored.png')",
+        )
+        .bind(EXISTING_ACCOUNT)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO account_session (id, account_id) VALUES ($1, $2)")
+            .bind(SESSION_ID)
+            .bind(EXISTING_ACCOUNT)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let ctrl = make_controller(pool.clone());
+        let account_info = ctrl
+            .set_session(SESSION_ID2, EXISTING_ACCOUNT)
+            .await
+            .expect("set_session must succeed for an existing account");
+
+        // returns the stored profile, not AccountInfo::new defaults
+        assert_eq!(account_info.account_id, EXISTING_ACCOUNT);
+        assert_eq!(account_info.nickname, "stored_nick");
+        assert_eq!(account_info.bio, "stored bio");
+        // session id rotated to the new one
+        assert_eq!(
+            session_account_id(&pool, SESSION_ID2).await.as_deref(),
+            Some(EXISTING_ACCOUNT),
+            "new session id must point to the account"
+        );
+        assert_eq!(
+            session_account_id(&pool, SESSION_ID).await,
+            None,
+            "old session id must be replaced (one session row per account)"
+        );
     }
 }
