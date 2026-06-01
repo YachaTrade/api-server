@@ -5,6 +5,7 @@ pub enum AnalyticsPath {
     NewUsers,
     UserRoi,
     ChesterRetention,
+    CreatorFee,
 }
 
 impl AnalyticsPath {
@@ -15,6 +16,7 @@ impl AnalyticsPath {
             AnalyticsPath::NewUsers => "/cms/analytics/new-users",
             AnalyticsPath::UserRoi => "/cms/analytics/user-roi",
             AnalyticsPath::ChesterRetention => "/cms/analytics/chester-retention",
+            AnalyticsPath::CreatorFee => "/cms/analytics/creator-fee",
         }
     }
 
