@@ -52,6 +52,7 @@ impl PositionController {
                     SELECT account_id FROM unnest($2::varchar[]) AS u(account_id)
                 ) h
                 JOIN account a ON a.account_id = h.account_id
+                WHERE LOWER(a.account_id) <> '0x000000000000000000000000000000000000dead'
                 "#,
             )
             .bind(token_id)
@@ -156,6 +157,7 @@ impl PositionController {
                     SELECT p.price FROM price p WHERE p.quote_id = m.quote_id
                     ORDER BY p.block_number DESC LIMIT 1
                 ) lp ON true
+                WHERE LOWER(a.account_id) <> '0x000000000000000000000000000000000000dead'
                 ORDER BY total_balance DESC, a.account_id ASC
                 OFFSET $2 LIMIT $3
                 "#,
@@ -918,5 +920,45 @@ mod tests {
             !resp.tokens[0].balance_info.lp_balance.contains('.'),
             "lp_balance must be integer"
         );
+    }
+
+    /// The burn address (0x…dEaD) must be excluded from the holder list and count,
+    /// even when it holds the token (it shows up via the wallet/LP union otherwise).
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn holder_excludes_burn_address(pool: PgPool) {
+        seed_v2_dex(&pool).await; // ACCOUNT is a holder (balance + lp)
+        let dead = "0x000000000000000000000000000000000000dEaD";
+        sqlx::query(
+            "INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'burn','','') ON CONFLICT DO NOTHING",
+        )
+        .bind(dead)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO balance (account_id, token_id, balance, created_at) VALUES ($1, $2, 999, 0) ON CONFLICT DO NOTHING",
+        )
+        .bind(dead)
+        .bind(TOKEN_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let ctrl = make_controller(pool);
+        let p = PaginationParams {
+            page: 1,
+            limit: 13,
+            direction: "DESC".to_string(),
+        };
+        let resp = ctrl.get_holders_by_token(TOKEN_ID, &p, &[]).await.unwrap();
+
+        assert!(
+            resp.holders
+                .iter()
+                .all(|h| h.account_info.account_id != dead),
+            "burn address must be excluded from holder list"
+        );
+        // only ACCOUNT remains in the union after excluding the burn address
+        assert_eq!(resp.total_count, 1, "total_count must exclude burn address");
     }
 }
