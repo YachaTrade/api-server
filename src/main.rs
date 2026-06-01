@@ -153,6 +153,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::analytics::handler::get_new_users,
         router::cms::analytics::handler::get_user_roi,
         router::cms::analytics::handler::get_chester_retention,
+        router::cms::analytics::handler::get_creator_fee,
 
         // ----------------Agent----------------
         router::agent::handler::get_chart,
@@ -359,6 +360,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::analytics::UserRoiResponse,
             types::cms::analytics::ChesterRetentionRound,
             types::cms::analytics::ChesterRetentionResponse,
+            types::cms::analytics::CreatorFeeResponse,
 
         )
     ),
