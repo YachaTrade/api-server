@@ -77,7 +77,7 @@ impl AuthService {
         // Use atomic DELETE ... RETURNING to prevent nonce reuse attacks
         let nonce_controller = NonceController::new(self.postgres.clone());
         let sign_message = nonce_controller
-            .get_and_delete_nonce(&address)
+            .get_and_delete_nonce(&address, &payload.nonce)
             .await
             .map_err(|_| AppError::Unauthorized("Invalid nonce".into()))?;
 
