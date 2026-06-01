@@ -104,3 +104,12 @@ pub struct UpdateMetadataResponse {
     pub success: bool,
     pub metadata_uri: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct DexTokenImageResponse {
+    pub success: bool,
+    /// 체크섬 정규화된 dex_token 주소
+    pub token_id: String,
+    /// 업로드된 이미지 URL (https://storage.nadapp.net/coin/{uuid})
+    pub image_uri: String,
+}

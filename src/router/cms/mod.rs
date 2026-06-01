@@ -22,5 +22,11 @@ pub fn router(state: AppState) -> Router<AppState> {
                 .layer(DefaultBodyLimit::max(5_000_000)) // 5MB for image upload
                 .layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
+        .route(
+            CmsPath::UploadDexTokenImage.as_str(),
+            post(handler::upload_dex_token_image)
+                .layer(DefaultBodyLimit::max(5_000_000)) // 5MB for image upload
+                .layer(from_fn_with_state(state.clone(), authenticate_user)),
+        )
         .merge(analytics::router(state.clone()))
 }

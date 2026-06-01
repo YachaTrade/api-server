@@ -13,12 +13,12 @@ use crate::{
     result::AppError,
     types::{
         cms::{
-            CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
-            UpdateMetadataResponse,
+            CmsActionResponse, DexTokenImageResponse, InsertTrendRequest, SetNsfwRequest,
+            UpdateMetadataRequest, UpdateMetadataResponse,
         },
         metadata::TokenMetadata,
     },
-    utils::single_flight::GLOBAL_CACHE,
+    utils::{single_flight::GLOBAL_CACHE, valid_account_id},
 };
 
 sol! {
@@ -186,6 +186,69 @@ impl CmsService {
         Ok(UpdateMetadataResponse {
             success: true,
             metadata_uri,
+        })
+    }
+
+    /// dex_token 로고 이미지 업로드 + image_uri 등록 (admin).
+    /// 이미지를 R2(`coin/{uuid}`)에 올리고 dex_token.image_uri를 갱신한다.
+    pub async fn update_dex_token_image(
+        &self,
+        session_address: &str,
+        token_id: &str,
+        image_data: Bytes,
+    ) -> Result<DexTokenImageResponse, AppError> {
+        // dex 토큰은 베니티 접미사 없음 → 순수 EIP-55 체크섬 정규화
+        let token_id = valid_account_id(token_id)
+            .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
+
+        let controller = CmsController::new(self.postgres.clone());
+
+        // Verify admin status on the PRIMARY (write pool). write 경로 인가를 replica에서
+        // 읽으면 복제 지연 동안 방금 권한 회수된 admin이 통과할 수 있어 primary로 확인한다.
+        let is_admin = controller
+            .verify_admin_on_writer(session_address)
+            .await
+            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
+        if !is_admin {
+            return Err(AppError::AuthError("Admin access required".to_string()));
+        }
+
+        // 존재 확인을 업로드 前에 → 미존재 시 R2 orphan 방지
+        let exists = controller
+            .dex_token_exists(&token_id)
+            .await
+            .map_err(|err| {
+                AppError::InternalError(format!("Failed to check dex_token: {}", err))
+            })?;
+        if !exists {
+            return Err(AppError::NotFound(format!(
+                "dex_token not found: {}",
+                token_id
+            )));
+        }
+
+        // 이미지 검증(magic byte) + R2 업로드 → coin/{uuid}
+        let image_uri = self.upload_new_image(&image_data).await?;
+
+        // 최종 UPDATE에 admin EXISTS를 원자적으로 묶음 → 업로드 동안 권한이 회수되는 TOCTOU 창 차단.
+        let updated = controller
+            .set_dex_token_image(session_address, &token_id, &image_uri)
+            .await
+            .map_err(|err| {
+                AppError::InternalError(format!("Failed to set dex_token image: {}", err))
+            })?;
+        if !updated {
+            // 사전 admin/존재 확인 통과 후 0건 → 업로드 중 admin 회수(또는 토큰 삭제).
+            // 원자적 admin 가드에서 막힌 것이므로 인가 실패로 처리.
+            return Err(AppError::AuthError("Admin access required".to_string()));
+        }
+
+        info!("Updated dex_token image for {}: {}", token_id, image_uri);
+
+        Ok(DexTokenImageResponse {
+            success: true,
+            token_id,
+            image_uri,
         })
     }
 

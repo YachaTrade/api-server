@@ -146,6 +146,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::set_nsfw,
         router::cms::handler::insert_trend,
         router::cms::handler::update_metadata,
+        router::cms::handler::upload_dex_token_image,
 
         // ----------------CMS Analytics----------------
         router::cms::analytics::handler::get_churned_users,
@@ -351,7 +352,9 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::CmsActionResponse,
             types::cms::UpdateMetadataRequest,
             types::cms::UpdateMetadataResponse,
+            types::cms::DexTokenImageResponse,
             router::cms::handler::UpdateMetadataMultipart,
+            router::cms::handler::UploadDexTokenImageMultipart,
 
             // CMS Analytics
             types::cms::analytics::TopHeldToken,
@@ -536,7 +539,8 @@ async fn method_based_timeout(
     let path = req.uri().path();
     let is_upload_endpoint = path.starts_with("/metadata/image")
         || path.starts_with("/metadata/metadata")
-        || path.starts_with("/agent/token/image");
+        || path.starts_with("/agent/token/image")
+        || path.starts_with("/cms/dex-token/image");
 
     if is_upload_endpoint {
         // No timeout for upload endpoints
