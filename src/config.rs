@@ -186,6 +186,9 @@ lazy_static! {
     // NOTE: startup flush is keyed off this value. Empty prefix → startup
     // flush is a no-op (we never run FLUSHALL — too dangerous on shared
     // Redis). Non-empty prefix → SCAN+DEL only the keys we own.
+    pub static ref PYTH_HERMES_URL: String =
+        env::var("PYTH_HERMES_URL").unwrap_or_else(|_| "https://hermes.pyth.network".to_string());
+
     pub static ref REDIS_KEY_PREFIX: String = {
         let raw = env::var("REDIS_KEY_PREFIX").unwrap_or_default();
         let trimmed = raw.trim().trim_end_matches(':');

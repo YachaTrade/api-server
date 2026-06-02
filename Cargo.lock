@@ -733,6 +733,7 @@ version = "1.0.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "async-trait",
  "aws-config",
  "aws-sdk-rekognition",
  "aws-sdk-s3",

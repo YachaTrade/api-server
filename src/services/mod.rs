@@ -9,6 +9,7 @@ pub mod hype;
 pub mod leaderboard;
 pub mod metadata;
 pub mod new_event;
+pub mod pricing;
 pub mod quote_token;
 pub mod rate_limiter;
 pub mod search;

@@ -120,6 +120,7 @@ base64 = "0.22.1"
 # =====================================================
 # Error handling
 anyhow = "1.0.92"
+async-trait = "0.1"
 thiserror = "2"
 
 # CLI argument parsing

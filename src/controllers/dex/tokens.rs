@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -6,6 +7,10 @@ use bigdecimal::BigDecimal;
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
+    services::pricing::{
+        balance::RpcBalanceSource, compute_balance_usd, pyth::PythHermesClient, BalanceSource,
+        PriceSource,
+    },
     types::dex::tokens::{DexTokenEntry, DexTokenListQuery, DexTokenListResponse},
 };
 
@@ -19,18 +24,32 @@ struct TokenRow {
     image_uri: Option<String>,
     balance: Option<BigDecimal>,
     balance_usd: Option<BigDecimal>,
-    market_cap_usd: Option<BigDecimal>,
-    is_held: bool,
-    tier: i32,
+    price_feed_id: Option<String>,
 }
 
 pub struct TokensController {
     db: Arc<PostgresDatabase>,
+    balance_source: Arc<dyn BalanceSource>,
+    price_source: Arc<dyn PriceSource>,
 }
 
 impl TokensController {
+    /// 운영용 — 실제 RPC/Pyth 소스.
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
-        Self { db }
+        Self {
+            db,
+            balance_source: Arc::new(RpcBalanceSource::new()),
+            price_source: Arc::new(PythHermesClient::new()),
+        }
+    }
+
+    /// 테스트용 — 소스 주입.
+    pub fn with_sources(
+        db: Arc<PostgresDatabase>,
+        balance_source: Arc<dyn BalanceSource>,
+        price_source: Arc<dyn PriceSource>,
+    ) -> Self {
+        Self { db, balance_source, price_source }
     }
 
     pub async fn list_tokens(&self, query: &DexTokenListQuery) -> Result<DexTokenListResponse> {
@@ -70,7 +89,7 @@ impl TokensController {
         )
         .map_err(|e| anyhow::anyhow!("Failed to list tokens: {}", e))?;
 
-        let tokens = rows.into_iter().map(|r| row_to_entry(r, query.account.is_some())).collect();
+        let tokens = self.enrich(rows, query.account.as_deref()).await;
         Ok(DexTokenListResponse { tokens, total_count })
     }
 
@@ -135,7 +154,7 @@ impl TokensController {
         )
         .map_err(|e| anyhow::anyhow!("Failed to search tokens: {}", e))?;
 
-        let tokens = rows.into_iter().map(|r| row_to_entry(r, account.is_some())).collect();
+        let tokens = self.enrich(rows, account).await;
         Ok(DexTokenListResponse { tokens, total_count })
     }
 
@@ -153,9 +172,53 @@ impl TokensController {
         )
         .map_err(|e| anyhow::anyhow!("Failed full CA search: {}", e))?;
         let total_count = rows.len() as i64;
-        let tokens =
-            rows.into_iter().map(|r| row_to_entry(r, query.account.is_some())).collect();
+        let tokens = self.enrich(rows, query.account.as_deref()).await;
         Ok(DexTokenListResponse { tokens, total_count })
+    }
+
+    /// whitelist + account 행만 RPC 잔액 + Pyth 가격으로 보강. 나머지는 row_to_entry 그대로.
+    async fn enrich(&self, rows: Vec<TokenRow>, account: Option<&str>) -> Vec<DexTokenEntry> {
+        let Some(account) = account else {
+            return rows.into_iter().map(row_to_entry).collect();
+        };
+        // 1) whitelist 행의 raw 잔액 조회 (순차 — 캐시로 충분; 후속에 병렬화).
+        let mut wl_balance: HashMap<String, BigDecimal> = HashMap::new();
+        for r in rows.iter().filter(|r| r.token_type == "whitelist") {
+            if let Some(b) = self.balance_source.balance_of(&r.token_id, account).await {
+                if b > BigDecimal::from(0) {
+                    wl_balance.insert(r.token_id.clone(), b);
+                }
+            }
+        }
+        // 2) 보유 whitelist의 feed_id 모아 한 번에 가격 조회.
+        let feed_ids: Vec<String> = rows
+            .iter()
+            .filter(|r| r.token_type == "whitelist" && wl_balance.contains_key(&r.token_id))
+            .filter_map(|r| r.price_feed_id.clone())
+            .collect();
+        let prices = if feed_ids.is_empty() {
+            HashMap::new()
+        } else {
+            self.price_source.prices_usd(&feed_ids).await
+        };
+        // 3) 매핑.
+        rows.into_iter()
+            .map(|r| {
+                if r.token_type == "whitelist" {
+                    let balance = wl_balance.get(&r.token_id).cloned();
+                    let decimals = r.decimals.unwrap_or(18);
+                    let balance_usd = match (&balance, &r.price_feed_id) {
+                        (Some(b), Some(feed)) => prices
+                            .get(&crate::services::pricing::normalize_feed_id(feed))
+                            .map(|p| compute_balance_usd(b, decimals, p)),
+                        _ => None,
+                    };
+                    whitelist_entry(r, balance, balance_usd)
+                } else {
+                    row_to_entry(r)
+                }
+            })
+            .collect()
     }
 }
 
@@ -166,7 +229,7 @@ impl TokensController {
 /// Candidate + enrichment CTEs. Uses $1 = account (nullable). No braces in SQL → safe for format!.
 const ENRICHED_CTE: &str = r#"
 WITH wl AS (
-    SELECT token_id, sort_order FROM whitelist_token WHERE enabled
+    SELECT token_id, sort_order, price_feed_id, name, symbol, image_uri, decimals FROM whitelist_token WHERE enabled
 ),
 v2 AS (
     SELECT t.token_id
@@ -176,25 +239,26 @@ v2 AS (
       AND t.token_id NOT IN (SELECT token_id FROM wl)
 ),
 candidates AS (
-    SELECT token_id, 'whitelist'::text AS token_type, sort_order FROM wl
+    SELECT token_id, 'whitelist'::text AS token_type, sort_order, price_feed_id, name, symbol, image_uri, decimals FROM wl
     UNION ALL
-    SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order FROM v2
+    SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order, NULL::varchar AS price_feed_id,
+           NULL::varchar AS name, NULL::varchar AS symbol, NULL::varchar AS image_uri, NULL::int AS decimals FROM v2
 ),
 enriched AS (
     SELECT
         c.token_id,
         c.token_type,
         c.sort_order,
-        COALESCE(t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
-        COALESCE(t.name,      dt.name,      qt.name)      AS name,
-        COALESCE(dt.decimals, qt.decimals)                AS decimals,
-        COALESCE(t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
+        c.price_feed_id,
+        COALESCE(c.symbol,    t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
+        COALESCE(c.name,      t.name,      dt.name,      qt.name)      AS name,
+        COALESCE(c.decimals,  dt.decimals, qt.decimals)   AS decimals,
+        COALESCE(c.image_uri, t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
         b.balance AS balance,
         (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC
             * m.price * lp.price) AS balance_usd,
         (m.price * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC)
             * lp.price) AS market_cap_usd,
-        (b.balance IS NOT NULL AND b.balance > 0) AS is_held,
         CASE
           WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='whitelist' THEN 1
           WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='nadfun_v2' THEN 2
@@ -216,7 +280,7 @@ enriched AS (
 "#;
 
 const ENRICHED_COLS: &str = r#"SELECT token_id, token_type, symbol, name, decimals, image_uri,
-       balance, balance_usd, market_cap_usd, is_held, tier
+       balance, balance_usd, price_feed_id
 FROM enriched
 "#;
 
@@ -241,20 +305,13 @@ SELECT
       WHEN t.version = 'V2' THEN 'nadfun_v2'
       ELSE 'external'
     END AS token_type,
-    COALESCE(t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
-    COALESCE(t.name,      dt.name,      qt.name)      AS name,
-    COALESCE(dt.decimals, qt.decimals)                AS decimals,
-    COALESCE(t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
+    COALESCE(wl.symbol,    t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
+    COALESCE(wl.name,      t.name,      dt.name,      qt.name)      AS name,
+    COALESCE(wl.decimals, dt.decimals, qt.decimals)   AS decimals,
+    COALESCE(wl.image_uri, t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
     b.balance AS balance,
     (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * m.price * lp.price) AS balance_usd,
-    (m.price * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC) * lp.price) AS market_cap_usd,
-    (b.balance IS NOT NULL AND b.balance > 0) AS is_held,
-    CASE
-      WHEN $1 IS NOT NULL AND b.balance > 0 AND wl.token_id IS NOT NULL THEN 1
-      WHEN $1 IS NOT NULL AND b.balance > 0 AND t.version='V2' THEN 2
-      WHEN wl.token_id IS NOT NULL THEN 3
-      ELSE 4
-    END AS tier
+    wl.price_feed_id AS price_feed_id
 FROM target tg
 LEFT JOIN whitelist_token wl ON wl.token_id = tg.token_id AND wl.enabled
 LEFT JOIN token       t  ON t.token_id  = tg.token_id
@@ -291,24 +348,38 @@ fn classify_query(q: &str) -> SearchKind {
 // Row → response entry
 // ---------------------------------------------------------------------------
 
-fn row_to_entry(r: TokenRow, account_provided: bool) -> DexTokenEntry {
+fn row_to_entry(r: TokenRow) -> DexTokenEntry {
+    // 보유(balance > 0)일 때만 balance/balance_usd 노출. 미보유·계정 미제공이면 둘 다 null →
+    // FE는 balance != null로 보유 판정. balance_usd는 balance에 결합한다(codex P2: 0-잔고 행에서
+    // balance=null인데 balance_usd="0"으로 어긋나는 것 방지).
+    let held = r.balance.filter(|b| *b > BigDecimal::from(0));
+    let balance_usd = if held.is_some() { r.balance_usd } else { None };
     DexTokenEntry {
         token_id: r.token_id,
         symbol: r.symbol.unwrap_or_default(),
         name: r.name.unwrap_or_default(),
         decimals: r.decimals.unwrap_or(18),
         image_uri: r.image_uri.unwrap_or_default(),
-        is_external: r.token_type == "external",
         token_type: r.token_type,
-        is_held: r.is_held,
-        balance: if account_provided {
-            Some(r.balance.unwrap_or_else(|| BigDecimal::from(0)).normalized().to_plain_string())
-        } else {
-            None
-        },
-        balance_usd: r.balance_usd.map(|v| v.normalized().to_plain_string()),
-        market_cap_usd: r.market_cap_usd.map(|v| v.normalized().to_plain_string()),
-        tier: r.tier,
+        balance: held.map(|b| b.normalized().to_plain_string()),
+        balance_usd: balance_usd.map(|v| v.normalized().to_plain_string()),
+    }
+}
+
+fn whitelist_entry(
+    r: TokenRow,
+    balance: Option<BigDecimal>,
+    balance_usd: Option<BigDecimal>,
+) -> DexTokenEntry {
+    DexTokenEntry {
+        token_id: r.token_id,
+        symbol: r.symbol.unwrap_or_default(),
+        name: r.name.unwrap_or_default(),
+        decimals: r.decimals.unwrap_or(18),
+        image_uri: r.image_uri.unwrap_or_default(),
+        token_type: r.token_type,
+        balance: balance.as_ref().map(|b| b.normalized().to_plain_string()),
+        balance_usd: balance_usd.map(|v| v.normalized().to_plain_string()),
     }
 }
 
@@ -317,6 +388,11 @@ mod tests {
     use super::*;
     use sqlx::PgPool;
 
+    use crate::services::pricing::{BalanceSource, PriceSource};
+    use std::collections::HashMap;
+    use std::str::FromStr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     const ACCOUNT: &str = "0x000000000000000000000000000000000000aA11";
     const POOL: &str = "0x9aEB5e0c5C8a3Bf3D6F8e8B7c3C2A1d0E9F8a7B6";
     const TOKEN0: &str = "0x000000000000000000000000000000000000bB01"; // CHOG, launchpad
@@ -324,6 +400,78 @@ mod tests {
 
     const WL_A: &str = "0x000000000000000000000000000000000000cC01"; // whitelist sort 1
     const WL_B: &str = "0x000000000000000000000000000000000000cC02"; // whitelist sort 2
+
+    // -----------------------------------------------------------------------
+    // Fake sources
+    // -----------------------------------------------------------------------
+
+    struct FakeBalance {
+        balances: HashMap<(String, String), BigDecimal>, // (token, account) → wei
+        calls: AtomicUsize,
+    }
+
+    impl Default for FakeBalance {
+        fn default() -> Self {
+            Self { balances: HashMap::new(), calls: AtomicUsize::new(0) }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl BalanceSource for FakeBalance {
+        async fn balance_of(&self, token_id: &str, account: &str) -> Option<BigDecimal> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.balances.get(&(token_id.to_string(), account.to_string())).cloned()
+        }
+    }
+
+    struct FakePrice {
+        prices: HashMap<String, BigDecimal>, // normalized feed_id → usd
+    }
+
+    impl Default for FakePrice {
+        fn default() -> Self {
+            Self { prices: HashMap::new() }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl PriceSource for FakePrice {
+        async fn prices_usd(&self, feed_ids: &[String]) -> HashMap<String, BigDecimal> {
+            feed_ids
+                .iter()
+                .filter_map(|id| {
+                    let k = crate::services::pricing::normalize_feed_id(id);
+                    self.prices.get(&k).map(|v| (k, v.clone()))
+                })
+                .collect()
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Controller constructors
+    // -----------------------------------------------------------------------
+
+    fn make_controller(pool: PgPool) -> TokensController {
+        use crate::db::postgres::PostgresDatabase;
+        TokensController::with_sources(
+            std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
+            std::sync::Arc::new(FakeBalance::default()),
+            std::sync::Arc::new(FakePrice::default()),
+        )
+    }
+
+    fn controller_with(pool: PgPool, bal: FakeBalance, price: FakePrice) -> TokensController {
+        use crate::db::postgres::PostgresDatabase;
+        TokensController::with_sources(
+            std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
+            std::sync::Arc::new(bal),
+            std::sync::Arc::new(price),
+        )
+    }
+
+    fn empty_query() -> DexTokenListQuery {
+        DexTokenListQuery { account: None, q: None, page: 1, limit: 50 }
+    }
 
     async fn seed_pool_with_two_tokens(pool: &PgPool) {
         // pool row referencing two token addresses
@@ -389,20 +537,17 @@ mod tests {
             .bind(token_id).bind(order).execute(pool).await.unwrap();
     }
 
-    fn make_controller(pool: PgPool) -> TokensController {
-        use crate::db::postgres::PostgresDatabase;
-        TokensController::new(std::sync::Arc::new(PostgresDatabase {
-            write_pool: pool.clone(),
-            read_pool: pool,
-        }))
-    }
-
-    fn empty_query() -> DexTokenListQuery {
-        DexTokenListQuery { account: None, q: None, page: 1, limit: 50 }
+    async fn seed_whitelist_with_feed(pool: &PgPool, token_id: &str, order: i32, feed: &str) {
+        sqlx::query("INSERT INTO whitelist_token (token_id, sort_order, price_feed_id) VALUES ($1,$2,$3)")
+            .bind(token_id).bind(order).bind(feed).execute(pool).await.unwrap();
+        // 메타(symbol/name/decimals)는 dex_token에서 옴
+        sqlx::query(r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
+                       VALUES ($1,'USD Coin','USDC',18,'',0)"#)
+            .bind(token_id).execute(pool).await.unwrap();
     }
 
     // -----------------------------------------------------------------------
-    // Existing 8 tests
+    // Existing tests
     // -----------------------------------------------------------------------
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -427,7 +572,7 @@ mod tests {
             .expect("CHOG present");
         assert_eq!(chog.token_id, TOKEN0);
         assert!(chog.balance.is_none(), "no ?account= → balance is None");
-        assert!(!chog.is_external, "nadfun V2 is not external");
+        assert_eq!(chog.token_type, "nadfun_v2", "nadfun V2 (external 아님)");
 
         assert!(
             resp.tokens.iter().all(|t| t.token_id != TOKEN1),
@@ -561,10 +706,10 @@ mod tests {
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
         assert_eq!(resp.tokens[0].token_id, WL_A);
-        assert_eq!(resp.tokens[0].tier, 3);
+        assert_eq!(resp.tokens[0].token_type, "whitelist");
         assert_eq!(resp.tokens[1].token_id, WL_B);
-        assert_eq!(resp.tokens[2].token_id, TOKEN0); // CHOG nadfun V2, tier4
-        assert_eq!(resp.tokens[2].tier, 4);
+        assert_eq!(resp.tokens[2].token_id, TOKEN0); // CHOG nadfun V2 (whitelist 다음)
+        assert_eq!(resp.tokens[2].token_type, "nadfun_v2");
         assert!(resp.tokens.iter().all(|t| t.token_id != TOKEN1), "external WMON 제외");
     }
 
@@ -578,12 +723,13 @@ mod tests {
         let resp = controller.list_tokens(&DexTokenListQuery {
             account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
         }).await.unwrap();
-        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).unwrap();
-        assert_eq!(chog.tier, 2, "보유 nadfun V2 → tier2");
-        assert!(chog.is_held);
-        assert_eq!(chog.balance.as_deref(), Some("1000000000000000000000"));
-        let wl = resp.tokens.iter().find(|t| t.token_id == WL_A).unwrap();
-        assert_eq!(wl.tier, 3, "미보유 화이트리스트 → tier3");
+        // 보유 nadfun V2(CHOG)가 미보유 화이트리스트(WL_A)보다 상위로 정렬돼야 한다.
+        let chog_idx = resp.tokens.iter().position(|t| t.token_id == TOKEN0).expect("CHOG present");
+        let wl_idx = resp.tokens.iter().position(|t| t.token_id == WL_A).expect("WL_A present");
+        assert!(chog_idx < wl_idx, "보유 nadfun V2가 미보유 화이트리스트보다 상위");
+        let chog = &resp.tokens[chog_idx];
+        assert_eq!(chog.balance.as_deref(), Some("1000000000000000000000"), "보유 → balance 노출");
+        assert!(resp.tokens[wl_idx].balance.is_none(), "미보유 → balance null (account 제공돼도)");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -598,7 +744,7 @@ mod tests {
             account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
         }).await.unwrap();
         let wl_ids: Vec<&str> = resp.tokens.iter()
-            .filter(|t| t.tier == 3).map(|t| t.token_id.as_str()).collect();
+            .filter(|t| t.token_type == "whitelist").map(|t| t.token_id.as_str()).collect();
         assert_eq!(wl_ids, vec![WL_B, WL_A], "미보유 화이트리스트는 account 있어도 sort_order 우선");
     }
 
@@ -675,8 +821,6 @@ mod tests {
         assert_eq!(resp.tokens.len(), 1);
         assert_eq!(resp.tokens[0].token_id, TOKEN1);
         assert_eq!(resp.tokens[0].token_type, "external");
-        assert!(resp.tokens[0].is_external);
-        assert_eq!(resp.tokens[0].tier, 4);
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -743,5 +887,119 @@ mod tests {
             resp.tokens.iter().all(|t| t.token_id != TOKEN1),
             "text 검색은 symbol이 prefix 매칭돼도 external 제외"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // row_to_entry 불변식 (codex P2): balance == null ⇒ balance_usd == null
+    // -----------------------------------------------------------------------
+
+    fn token_row(balance: Option<i64>, balance_usd: Option<i64>) -> TokenRow {
+        TokenRow {
+            token_id: "0x000000000000000000000000000000000000dEaD".into(),
+            token_type: "nadfun_v2".into(),
+            symbol: Some("X".into()),
+            name: Some("X".into()),
+            decimals: Some(18),
+            image_uri: Some(String::new()),
+            balance: balance.map(BigDecimal::from),
+            balance_usd: balance_usd.map(BigDecimal::from),
+            price_feed_id: None,
+        }
+    }
+
+    #[test]
+    fn balance_usd_null_when_not_held() {
+        // 0-잔고 행: balance는 null로 떨어지는데 balance_usd가 "0"으로 남으면 불일치.
+        let e = row_to_entry(token_row(Some(0), Some(0)));
+        assert!(e.balance.is_none(), "0 잔고 → balance null");
+        assert!(e.balance_usd.is_none(), "balance null이면 balance_usd도 null");
+    }
+
+    #[test]
+    fn balance_and_balance_usd_present_when_held() {
+        let e = row_to_entry(token_row(Some(1000), Some(42)));
+        assert_eq!(e.balance.as_deref(), Some("1000"));
+        assert_eq!(e.balance_usd.as_deref(), Some("42"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Task 5 (whitelist enrichment) — new tests
+    // -----------------------------------------------------------------------
+
+    const WL_FEED: &str = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn whitelist_balance_and_usd_from_rpc_and_pyth(pool: PgPool) {
+        seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
+        let mut bal = FakeBalance::default();
+        bal.balances.insert(
+            (WL_A.to_string(), ACCOUNT.to_string()),
+            BigDecimal::from_str("2000000000000000000").unwrap(), // 2 USDC (18dp)
+        );
+        let mut price = FakePrice::default();
+        price.prices.insert(
+            WL_FEED.trim_start_matches("0x").to_string(),
+            BigDecimal::from_str("1.5").unwrap(), // $1.5
+        );
+        let c = controller_with(pool, bal, price);
+        let resp = c.list_tokens(&DexTokenListQuery {
+            account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
+        }).await.unwrap();
+        let t = resp.tokens.iter().find(|t| t.token_id == WL_A).unwrap();
+        assert_eq!(t.balance.as_deref(), Some("2000000000000000000"), "RPC 잔액 노출");
+        // normalized() strips trailing zeros: 3.0 → "3". Compare as BigDecimal for canonical equality.
+        let usd: BigDecimal = t.balance_usd.as_deref().unwrap().parse().unwrap();
+        assert_eq!(usd, BigDecimal::from_str("3.0").unwrap(), "2 × $1.5 = $3");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn whitelist_unheld_has_null_balance_and_no_price_call(pool: PgPool) {
+        seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
+        let bal = FakeBalance::default(); // 잔액 없음 → 미보유
+        let price = FakePrice::default();
+        let c = controller_with(pool, bal, price);
+        let resp = c.list_tokens(&DexTokenListQuery {
+            account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
+        }).await.unwrap();
+        let t = resp.tokens.iter().find(|t| t.token_id == WL_A).unwrap();
+        assert!(t.balance.is_none(), "미보유 → balance null");
+        assert!(t.balance_usd.is_none(), "미보유 → balance_usd null");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn no_account_skips_balance_source(pool: PgPool) {
+        seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
+        let bal = std::sync::Arc::new(FakeBalance::default());
+        let c = {
+            use crate::db::postgres::PostgresDatabase;
+            TokensController::with_sources(
+                std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
+                bal.clone(),
+                std::sync::Arc::new(FakePrice::default()),
+            )
+        };
+        let _ = c.list_tokens(&empty_query()).await.unwrap();
+        assert_eq!(bal.calls.load(Ordering::SeqCst), 0, "account 없으면 balanceOf 호출 0");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn whitelist_uses_own_metadata_over_join_tables(pool: PgPool) {
+        // whitelist_token에 직접 넣은 name/symbol/image_uri는 token/dex_token/quote_token
+        // 행이 전혀 없어도 그대로 노출돼야 한다 (whitelist는 self-described 우선).
+        sqlx::query(
+            "INSERT INTO whitelist_token (token_id, sort_order, name, symbol, image_uri, decimals)
+             VALUES ($1, 1, 'USD Coin', 'USDC', 'https://img/usdc.png', 6)",
+        )
+        .bind(WL_A)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let controller = make_controller(pool);
+        let resp = controller.list_tokens(&empty_query()).await.unwrap();
+        let t = resp.tokens.iter().find(|t| t.token_id == WL_A).expect("WL_A present");
+        assert_eq!(t.symbol, "USDC", "whitelist_token.symbol 우선");
+        assert_eq!(t.name, "USD Coin", "whitelist_token.name 우선");
+        assert_eq!(t.image_uri, "https://img/usdc.png", "whitelist_token.image_uri 우선");
+        assert_eq!(t.decimals, 6, "whitelist_token.decimals 우선 (join 없어도)");
     }
 }

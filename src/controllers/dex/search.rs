@@ -84,8 +84,11 @@ mod tests {
             &DexSearchQuery { q: "CHO".into(), page: 1, limit: 50 }, ACCOUNT,
         ).await.unwrap();
         let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
-        assert!(chog.is_held, "session account → balance attached");
-        assert_eq!(chog.balance.as_deref(), Some("1000000000000000000000"));
+        assert_eq!(
+            chog.balance.as_deref(),
+            Some("1000000000000000000000"),
+            "session account 보유 → balance attached"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -97,6 +100,6 @@ mod tests {
             &DexSearchQuery { q: EXT.into(), page: 1, limit: 50 }, ACCOUNT,
         ).await.unwrap();
         assert_eq!(resp.tokens.len(), 1);
-        assert!(resp.tokens[0].is_external);
+        assert_eq!(resp.tokens[0].token_type, "external");
     }
 }
