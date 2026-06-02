@@ -10,6 +10,9 @@ use path::DexPath;
 
 use crate::{middleware::authenticate_user, state::AppState};
 
+// `search::search_tokens` is intentionally `#[deprecated]` (delegates to
+// `/dex/tokens?q=`); the route stays registered for one release.
+#[allow(deprecated)]
 pub fn router(app_state: AppState) -> Router<AppState> {
     Router::new()
         .route(

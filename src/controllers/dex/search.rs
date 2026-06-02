@@ -1,28 +1,18 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use bigdecimal::BigDecimal;
 
 use crate::{
+    controllers::dex::tokens::TokensController,
     db::postgres::PostgresDatabase,
-    measure_postgres,
     types::dex::{
         search::DexSearchQuery,
-        tokens::{DexTokenEntry, DexTokenListResponse},
+        tokens::{DexTokenListQuery, DexTokenListResponse},
     },
 };
 
-#[derive(Debug, sqlx::FromRow)]
-struct SearchRow {
-    token_id: String,
-    symbol: String,
-    name: String,
-    decimals: i32,
-    image_uri: String,
-    balance: Option<BigDecimal>,
-    market_cap_usd: Option<BigDecimal>,
-}
-
+/// DEPRECATED. `/dex/search` now delegates to the unified `/dex/tokens` logic.
+/// Kept for one release while the FE migrates to `GET /dex/tokens?q=`.
 pub struct SearchController {
     db: Arc<PostgresDatabase>,
 }
@@ -32,110 +22,23 @@ impl SearchController {
         Self { db }
     }
 
-    /// Session-authenticated token search. `account_id` is the session.address —
-    /// always present (the route requires `authenticate_user` middleware).
-    ///
-    /// Searches across `dex_token` — the canonical V2-tradeable token registry
-    /// (populated by the indexer on every PairCreated). ILIKE branches reference
-    /// `dex_token` columns directly so the planner can pick the per-column GIN
-    /// trgm indexes from `0029_dex_search_indexes.sql`.
+    /// Session-authenticated search. Delegates to `TokensController::list_tokens`
+    /// with the session address as `account` and the search term as `q`.
     pub async fn search_tokens(
         &self,
         query: &DexSearchQuery,
         account_id: &str,
     ) -> Result<DexTokenListResponse> {
-        let limit = query.limit;
-        let offset = (query.page - 1) * limit;
+        let q = crate::utils::normalize_ca_query(&query.q);
 
-        let total_count: i64 = measure_postgres!(
-            "dex.search_tokens.count",
-            sqlx::query_scalar::<_, i64>(
-                r#"
-                SELECT COUNT(*) FROM dex_token dt
-                WHERE
-                    dt.symbol   ILIKE '%' || $1 || '%'
-                 OR dt.name     ILIKE '%' || $1 || '%'
-                 OR dt.token_id ILIKE '%' || $1 || '%'
-                "#,
-            )
-            .bind(&query.q)
-            .fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to count search results: {}", e))?;
-
-        let rows = measure_postgres!(
-            "dex.search_tokens",
-            sqlx::query_as::<_, SearchRow>(
-                r#"
-                SELECT
-                    dt.token_id,
-                    dt.symbol,
-                    dt.name,
-                    dt.decimals,
-                    dt.image_uri,
-                    b.balance                              AS balance,
-                    (m.price * t.total_supply * lp.price)  AS market_cap_usd
-                FROM dex_token dt
-                LEFT JOIN balance b
-                    ON b.token_id = dt.token_id
-                   AND b.account_id = $1
-                LEFT JOIN token t
-                    ON t.token_id = dt.token_id
-                LEFT JOIN market m
-                    ON m.token_id = dt.token_id
-                LEFT JOIN LATERAL (
-                    SELECT price FROM price
-                     WHERE quote_id = m.quote_id
-                     ORDER BY block_number DESC
-                     LIMIT 1
-                ) lp ON true
-                WHERE
-                    -- Direct column refs (NOT COALESCE wrappers) so the
-                    -- planner can use the per-column GIN trgm indexes from
-                    -- 0029_dex_search_indexes.sql.
-                    dt.symbol   ILIKE '%' || $2 || '%'
-                 OR dt.name     ILIKE '%' || $2 || '%'
-                 OR dt.token_id ILIKE '%' || $2 || '%'
-                ORDER BY
-                    market_cap_usd DESC NULLS LAST,
-                    dt.symbol ASC,
-                    dt.token_id ASC
-                LIMIT $3
-                OFFSET $4
-                "#,
-            )
-            .bind(account_id)
-            .bind(&query.q)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(self.db.get_read_pool())
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to search tokens: {}", e))?;
-
-        let tokens: Vec<DexTokenEntry> = rows.into_iter().map(row_to_entry).collect();
-
-        Ok(DexTokenListResponse {
-            tokens,
-            total_count,
-        })
-    }
-}
-
-fn row_to_entry(r: SearchRow) -> DexTokenEntry {
-    DexTokenEntry {
-        token_id: r.token_id,
-        symbol: r.symbol,
-        name: r.name,
-        decimals: r.decimals,
-        image_uri: r.image_uri,
-        // Session-authed → balance always Some. "0" when no balance row.
-        balance: Some(
-            r.balance
-                .unwrap_or_else(|| BigDecimal::from(0))
-                .normalized()
-                .to_plain_string(),
-        ),
-        market_cap_usd: r.market_cap_usd.map(|v| v.normalized().to_plain_string()),
+        TokensController::new(self.db.clone())
+            .list_tokens(&DexTokenListQuery {
+                account: Some(account_id.to_string()),
+                q: Some(q),
+                page: query.page,
+                limit: query.limit,
+            })
+            .await
     }
 }
 
@@ -146,161 +49,54 @@ mod tests {
 
     const ACCOUNT: &str = "0x000000000000000000000000000000000000aA11";
     const TOKEN0: &str = "0x000000000000000000000000000000000000bB01"; // CHOG
-    const TOKEN1: &str = "0x000000000000000000000000000000000000bB02"; // WMON
-
-    async fn seed_dex_tokens(pool: &PgPool) {
-        // Two V2-tradeable tokens. The /dex/search endpoint reads only
-        // dex_token; pool / token / quote_token rows are not required for
-        // search-result inclusion.
-        for (id, sym, name) in [
-            (TOKEN0, "CHOG", "Chog Token"),
-            (TOKEN1, "WMON", "Wrapped Monad"),
-        ] {
-            sqlx::query(
-                r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
-                   VALUES ($1, $2, $3, 18, '', 0)"#,
-            )
-            .bind(id)
-            .bind(name)
-            .bind(sym)
-            .execute(pool)
-            .await
-            .unwrap();
-        }
-    }
+    const EXT: &str = "0x000000000000000000000000000000000000bB02"; // external
 
     fn make_controller(pool: PgPool) -> SearchController {
-        use crate::db::postgres::PostgresDatabase;
         SearchController::new(std::sync::Arc::new(PostgresDatabase {
             write_pool: pool.clone(),
             read_pool: pool,
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_by_symbol_returns_match(pool: PgPool) {
-        seed_dex_tokens(&pool).await;
-        let controller = make_controller(pool);
-        let resp = controller
-            .search_tokens(
-                &DexSearchQuery {
-                    q: "CHO".to_string(),
-                    page: 1,
-                    limit: 50,
-                },
-                ACCOUNT,
-            )
-            .await
-            .unwrap();
-        assert_eq!(resp.tokens.len(), 1);
-        assert_eq!(resp.tokens[0].symbol, "CHOG");
-        // session-authed → balance always Some, "0" when no balance row
-        assert_eq!(resp.tokens[0].balance.as_deref(), Some("0"));
+    async fn seed_nadfun_v2_in_pool(pool: &PgPool) {
+        // account (creator FK), token (nadfun V2), and a pool referencing it.
+        sqlx::query(r#"INSERT INTO account (account_id, nickname, bio, image_uri, follower_count, following_count)
+                       VALUES ($1,'c','','',0,0) ON CONFLICT DO NOTHING"#)
+            .bind(ACCOUNT).execute(pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description,
+                                          twitter, telegram, website, created_at, transaction_hash, total_supply, version)
+                       VALUES ($1,'Chog Token','CHOG','',$2,'','','','',0,'0x',1000000000000000000000000,'V2')"#)
+            .bind(TOKEN0).bind(ACCOUNT).execute(pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO pool (pool_id, token0, token1, reserve0, reserve1, price, volume, value,
+                                         latest_trade_at, created_at, block_number, tx_hash)
+                       VALUES ('0x9aEB5e0c5C8a3Bf3D6F8e8B7c3C2A1d0E9F8a7B6',$1,'0x0000000000000000000000000000000000000001',
+                               100,100,1,0,0,0,0,1,'0x')"#)
+            .bind(TOKEN0).execute(pool).await.unwrap();
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_by_name_returns_match(pool: PgPool) {
-        seed_dex_tokens(&pool).await;
+    async fn delegates_text_search_to_tokens(pool: PgPool) {
+        seed_nadfun_v2_in_pool(&pool).await;
+        sqlx::query("INSERT INTO balance (account_id, token_id, balance, created_at) VALUES ($1,$2,$3::NUMERIC,0)")
+            .bind(ACCOUNT).bind(TOKEN0).bind("1000000000000000000000").execute(&pool).await.unwrap();
         let controller = make_controller(pool);
-        let resp = controller
-            .search_tokens(
-                &DexSearchQuery {
-                    q: "Monad".to_string(),
-                    page: 1,
-                    limit: 50,
-                },
-                ACCOUNT,
-            )
-            .await
-            .unwrap();
-        assert_eq!(resp.tokens.len(), 1);
-        assert_eq!(resp.tokens[0].symbol, "WMON");
-    }
-
-    #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_by_token_id_case_insensitive(pool: PgPool) {
-        seed_dex_tokens(&pool).await;
-        let controller = make_controller(pool);
-        let resp = controller
-            .search_tokens(
-                &DexSearchQuery {
-                    q: "bb01".to_string(),
-                    page: 1,
-                    limit: 50,
-                },
-                ACCOUNT,
-            )
-            .await
-            .unwrap();
-        assert_eq!(resp.tokens.len(), 1);
-        assert_eq!(resp.tokens[0].token_id, TOKEN0);
-    }
-
-    #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_no_match_returns_empty(pool: PgPool) {
-        seed_dex_tokens(&pool).await;
-        let controller = make_controller(pool);
-        let resp = controller
-            .search_tokens(
-                &DexSearchQuery {
-                    q: "NONEXISTENT".to_string(),
-                    page: 1,
-                    limit: 50,
-                },
-                ACCOUNT,
-            )
-            .await
-            .unwrap();
-        assert!(resp.tokens.is_empty());
-        assert_eq!(resp.total_count, 0);
-    }
-
-    #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_out_of_range_page_returns_correct_total_count(pool: PgPool) {
-        seed_dex_tokens(&pool).await;
-        let controller = make_controller(pool);
-        let resp = controller
-            .search_tokens(
-                &DexSearchQuery {
-                    q: "MON".to_string(), // matches WMON
-                    page: 99,
-                    limit: 1,
-                },
-                ACCOUNT,
-            )
-            .await
-            .unwrap();
-        assert!(resp.tokens.is_empty());
-        assert_eq!(resp.total_count, 1, "total count still reflects the 1 match");
-    }
-
-    #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_balance_attached_when_present(pool: PgPool) {
-        seed_dex_tokens(&pool).await;
-        // account FK on balance: balance table has no FK to account, so this insert is safe.
-        sqlx::query(
-            r#"INSERT INTO balance (account_id, token_id, balance, created_at)
-               VALUES ($1, $2, $3::NUMERIC, 0)"#,
-        )
-        .bind(ACCOUNT)
-        .bind(TOKEN0)
-        .bind("1000000000000000000000")
-        .execute(&pool)
-        .await
-        .unwrap();
-        let controller = make_controller(pool);
-        let resp = controller
-            .search_tokens(
-                &DexSearchQuery {
-                    q: "CHOG".to_string(),
-                    page: 1,
-                    limit: 50,
-                },
-                ACCOUNT,
-            )
-            .await
-            .unwrap();
-        let chog = resp.tokens.iter().find(|t| t.symbol == "CHOG").unwrap();
+        let resp = controller.search_tokens(
+            &DexSearchQuery { q: "CHO".into(), page: 1, limit: 50 }, ACCOUNT,
+        ).await.unwrap();
+        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        assert!(chog.is_held, "session account → balance attached");
         assert_eq!(chog.balance.as_deref(), Some("1000000000000000000000"));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn delegates_full_ca_exposes_external(pool: PgPool) {
+        sqlx::query(r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
+                       VALUES ($1,'Ext','EXT',18,'',0)"#).bind(EXT).execute(&pool).await.unwrap();
+        let controller = make_controller(pool);
+        let resp = controller.search_tokens(
+            &DexSearchQuery { q: EXT.into(), page: 1, limit: 50 }, ACCOUNT,
+        ).await.unwrap();
+        assert_eq!(resp.tokens.len(), 1);
+        assert!(resp.tokens[0].is_external);
     }
 }

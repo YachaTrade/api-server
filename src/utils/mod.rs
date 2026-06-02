@@ -14,6 +14,18 @@ pub fn valid_account_id(address: &str) -> Option<String> {
         .ok()
 }
 
+/// If `q` is a full contract address (0x/0X + 40 hex), return its EIP-55 checksum;
+/// otherwise return `q` unchanged. Makes exact-CA token search casing-insensitive.
+pub fn normalize_ca_query(q: &str) -> String {
+    let t = q.trim();
+    if t.len() == 42 && (t.starts_with("0x") || t.starts_with("0X")) {
+        if let Some(cs) = valid_account_id(t) {
+            return cs;
+        }
+    }
+    q.to_string()
+}
+
 /// Token ID 검증: EVM 주소 형식 + VANITY_ADDRESS_SUFFIX 확인 후 체크섬 주소 반환
 pub fn valid_token_id(token_id: &str) -> Option<String> {
     if !token_id
