@@ -10,12 +10,15 @@ use crate::{
     services::dex::DexService,
     state::AppState,
     types::dex::tokens::{DexTokenListQuery, DexTokenListResponse},
-    utils::valid_account_id,
+    utils::{normalize_ca_query, valid_account_id},
 };
 
-/// V2 DEX-tradeable token list, sorted by market cap descending and paginated.
-/// Optionally attaches per-account balance when `?account=` is provided.
-/// For text/address search use `GET /dex/search` instead.
+/// V2 DEX-tradeable token list for the Select Token modal. Without `q`: a
+/// 4-tier list (held whitelist → held nadfun V2 → whitelist → nadfun V2;
+/// held tiers require `?account=`). With `q`: case-insensitive prefix search
+/// on symbol/name/CA; external tokens surface only on an exact full contract
+/// address. Optionally attaches per-account balance/USD when `?account=` is
+/// provided.
 #[utoipa::path(
     get,
     path = DexPath::GetTokens.docs_str(),
@@ -39,6 +42,11 @@ pub async fn get_tokens(
                 .ok_or_else(|| AppError::BadRequest("Invalid account id".to_string()))?,
         );
     }
+
+    // Normalize a full contract-address search term to EIP-55 checksum so exact
+    // token_id matching works (handles 0x/0X and any input casing). Non-CA terms
+    // (symbol/name, partial CA) are passed through untouched.
+    params.q = params.q.as_deref().map(normalize_ca_query);
 
     let service = DexService::new(state.postgres.clone());
     let response = service.get_tokens(&params).await?;

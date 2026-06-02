@@ -6,12 +6,14 @@ fn default_dex_search_limit() -> i64 {
     50
 }
 
-/// Query params for `GET /dex/search`. Requires a valid session cookie —
-/// the user's account address is derived from the session, not query params.
+/// Query params for `GET /dex/search` (DEPRECATED — use `GET /dex/tokens?q=`).
+/// Requires a valid session cookie; the account address is derived from the
+/// session. Delegates to the unified `/dex/tokens` logic.
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct DexSearchQuery {
-    /// Required case-insensitive search term. Matched via ILIKE against
-    /// `symbol`, `name`, and `token_id` of pool-backed tokens.
+    /// Required search term, case-insensitive. Delegated to `/dex/tokens?q=`:
+    /// prefix match on `symbol`/`name` (or `token_id` for a `0x` prefix); an
+    /// external token surfaces only on an exact full contract address.
     pub q: String,
     /// 1-indexed page number. Default 1.
     #[serde(default = "default_page", deserialize_with = "deserialize_page")]

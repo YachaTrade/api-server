@@ -12,9 +12,8 @@ use crate::{
     types::dex::{search::DexSearchQuery, tokens::DexTokenListResponse},
 };
 
-/// Session-authenticated DEX token search. Returns matching tokens with the
-/// logged-in user's balance attached. Marketcap-desc sorted. Returns 401 when
-/// session cookie is missing or invalid.
+/// DEPRECATED — use `GET /dex/tokens?q=` instead. Session-authenticated token
+/// search; delegates to the unified token list.
 #[utoipa::path(
     get,
     path = DexPath::SearchTokens.docs_str(),
@@ -26,6 +25,7 @@ use crate::{
     ),
     tag = "Dex"
 )]
+#[deprecated(note = "use GET /dex/tokens?q= instead")]
 #[instrument(skip(state, session_address))]
 pub async fn search_tokens(
     State(state): State<AppState>,

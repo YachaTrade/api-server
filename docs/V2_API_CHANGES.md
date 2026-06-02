@@ -513,3 +513,105 @@ interface BalanceInfo {
 | `total_count` | 합집합 distinct 재계산 |
 | hold-token / holder / holdings 정렬 | `balance DESC` → `total_balance DESC` |
 | created / gift-fee 정렬 | 변경 없음 (`created_at DESC` / gift balance `DESC NULLS LAST`) |
+
+---
+
+## Select Token 모달 — `GET /dex/tokens` 단일화
+
+Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하나로 통합. `GET /dex/search`는 **deprecated** (한 릴리스 동안 `/dex/tokens` 로직에 위임, FE 컷오버 후 제거 예정).
+
+### 기존 → 변경 (dex 엔드포인트 영향 범위)
+
+이번 변경은 `/dex/tokens`, `/dex/search` 두 개만 건드립니다. `/dex/positions/{account_id}`, `/dex/pools/{pool_id}`는 **변경 없음**.
+
+#### `GET /dex/tokens`
+
+| 항목 | 기존 (현행 v2) | 변경 (this PR) |
+|---|---|---|
+| 후보 집합 | `pool`의 token0/token1 **전부**(external 포함) | **화이트리스트 + nadfun V2만** (external/V1 제외) |
+| 정렬 | 마켓캡 desc **평면** | **4-tier** (보유/미보유 × 화이트리스트/V2) |
+| 검색 | 불가 (검색은 `/dex/search` 별도) | `q` 파라미터로 **통합** (prefix/CA) |
+| 인증/계정 | 무인증, `?account=` 옵션(잔고) | 동일 (무인증, `?account=` 옵션) |
+| 응답 필드 | `token_id, symbol, name, decimals, image_uri, balance?, market_cap_usd` | **+ `token_type`, `is_external`, `is_held`, `balance_usd`, `tier`** |
+| 페이지네이션 | `page`/`limit`, `total_count` | 동일 (`total_count`는 후보 집합 기준 재계산) |
+
+#### `GET /dex/search`
+
+| 항목 | 기존 (현행 v2) | 변경 (this PR) |
+|---|---|---|
+| 상태 | 활성 | **deprecated** (`#[deprecated]`, OpenAPI 표기). 한 릴리스 유지 후 제거 |
+| 구현 | 자체 SQL (`dex_token` ILIKE) | `/dex/tokens` 로직에 **위임** (세션 주소 = `account`) |
+| 매칭 | **substring** `%q%` | **prefix** (`q%`); external은 full CA exact만 |
+| 대상 | `dex_token` 전부(external 포함) | 화이트리스트+nadfun V2 (+ full CA시 external) |
+| 인증 | 세션 필수 (유지) | 세션 필수 (유지), 잔고 항상 첨부 |
+| 응답 | 구 `DexTokenEntry` | 신 `DexTokenEntry`(위 신규 필드 포함) |
+
+> **FE 영향:** `/dex/search` 결과가 substring→prefix로 좁아지고 external이 기본 제외됨. `/dex/tokens?q=`로 이전 권장.
+
+### 엔드포인트
+
+```
+GET /dex/tokens?account=0x..&q=..&page=1&limit=50
+```
+
+- `account` (optional, EIP-55): 있으면 wallet-connected → 보유 티어링 + `balance_usd` 첨부.
+- `q` (optional): 없으면 4-티어 기본 리스트, 있으면 검색.
+- 인증 레이어 없음 (잔고는 온체인 공개 정보).
+
+### 기본 리스트 (q 없음) — 4-티어 우선순위
+
+후보 = **화이트리스트** (`whitelist_token`) ∪ **Nadfun V2** (`token.version='V2'` 이면서 pool 보유). external(dex_token-only) / V1 토큰은 기본 리스트에서 제외.
+
+| tier | 그룹 | 정렬 |
+|---|---|---|
+| 1 | 보유 화이트리스트 | `balance_usd` DESC |
+| 2 | 보유 Nadfun V2 | `balance_usd` DESC |
+| 3 | 미보유 화이트리스트 | 화이트리스트 고정순서 (MON, WMON, USDC, USDT, LVMON) |
+| 4 | 미보유 Nadfun V2 | 마켓캡 DESC |
+
+`account` 없으면 보유 티어(1,2)가 비어 화이트리스트(고정순서) → Nadfun V2(마켓캡) 순서 = wallet-not-connected.
+
+### 검색 (q 있음)
+
+case-insensitive **prefix** 매칭 (기존 substring → prefix로 변경).
+
+| q 형태 | 동작 |
+|---|---|
+| 텍스트 (0x 아님) | `symbol`/`name` prefix, 화이트리스트+Nadfun V2만 (external 제외) |
+| `0x` + full CA (42자) | `token_id` exact, **모든 토큰** (external 포함) → external 노출 경로 |
+| `0x` partial | `token_id` prefix, 화이트리스트+Nadfun V2만 (external 제외) |
+
+### `DexTokenEntry` (응답 항목)
+
+```typescript
+interface DexTokenEntry {
+    token_id: string;
+    symbol: string;
+    name: string;
+    decimals: number;
+    image_uri: string;
+    token_type: "whitelist" | "nadfun_v2" | "external";  // 신규 — FE 렌더 분기
+    is_external: boolean;        // 신규 — true면 grey 첫글자 아이콘 + 경고 + CA 표시
+    is_held: boolean;            // 신규 — balance > 0
+    balance: string | null;      // raw wei, account 제공 시에만
+    balance_usd: string | null;  // 신규 — balance/10^decimals × market.price × price
+    market_cap_usd: string | null;
+    tier: number;                // 신규 — 1~4 (FE 섹션 헤더용)
+}
+// 응답 루트: { tokens: DexTokenEntry[]; total_count: number }
+```
+
+### 백엔드/인덱서 의존
+
+- 신규 `whitelist_token` 테이블 (`token_id`, `sort_order`, `enabled`). seed: MON, LVMON (WMON/USDC/USDT는 온체인 주소 확정 후 추가).
+- 화이트리스트 렌더 메타는 `token`/`dex_token`/`quote_token` LEFT JOIN으로 채움 → 5개 주소가 셋 중 하나엔 row가 있어야 symbol/image 노출.
+
+### 요약표 업데이트
+
+| 타입/필드 | 변경 |
+|---|---|
+| `DexTokenListQuery.q` | **신규** optional 검색어 (4-티어 기본 vs prefix/CA 검색 분기) |
+| `DexTokenEntry` | `token_type`, `is_external`, `is_held`, `balance_usd`, `tier` **신규 필드** |
+| `GET /dex/tokens` | 평면 마켓캡 정렬 → 4-티어(보유/미보유 × 화이트리스트/V2) + 검색 통합 |
+| `GET /dex/search` | **deprecated** → `GET /dex/tokens?q=` 위임 |
+| `whitelist_token` 테이블 | **신규** — 고정순서 화이트리스트 |
