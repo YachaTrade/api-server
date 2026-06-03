@@ -148,7 +148,11 @@ impl TokensController {
                 SELECT (SELECT COUNT(*) FROM whitelist_token WHERE enabled)
                      + (SELECT COUNT(*) FROM token t
                          WHERE t.version='V2'
-                           AND EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id OR p.token1=t.token_id)
+                           -- OR split into two EXISTS so idx_pool_token0/1 are usable.
+                           -- A single EXISTS(token0=? OR token1=?) can't use either index →
+                           -- correlated seq scan of pool per token (O(tokens × pools)).
+                           AND (EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id)
+                                OR EXISTS (SELECT 1 FROM pool p WHERE p.token1=t.token_id))
                            AND t.token_id NOT IN (SELECT token_id FROM whitelist_token WHERE enabled))
                 "#,
             )
@@ -365,7 +369,11 @@ v2 AS (
     SELECT t.token_id
     FROM token t
     WHERE t.version='V2'
-      AND EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id OR p.token1=t.token_id)
+      -- OR split into two EXISTS so idx_pool_token0/1 are usable. A single
+      -- EXISTS(token0=? OR token1=?) can't use either index → correlated seq
+      -- scan of pool per token (O(tokens × pools); ~157s at 50k V2 tokens).
+      AND (EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id)
+           OR EXISTS (SELECT 1 FROM pool p WHERE p.token1=t.token_id))
       AND t.token_id NOT IN (SELECT token_id FROM wl)
 ),
 candidates AS (

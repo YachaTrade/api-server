@@ -7,15 +7,13 @@ use tracing::error;
 
 use crate::{
     controllers::dex::{
-        pool::PoolController, position::PositionController, search::SearchController,
-        tokens::TokensController,
+        pool::PoolController, position::PositionController, tokens::TokensController,
     },
     db::postgres::PostgresDatabase,
     result::AppError,
     types::dex::{
         pool::PoolDetailResponse,
         position::LpPositionsResponse,
-        search::DexSearchQuery,
         tokens::{DexTokenListQuery, DexTokenListResponse},
     },
     utils::single_flight::with_cache,
@@ -105,24 +103,6 @@ impl DexService {
             error!("Failed to list dex tokens: error={}", err);
             AppError::InternalError(err.to_string())
         })
-    }
-
-    pub async fn search_tokens(
-        &self,
-        query: &DexSearchQuery,
-        account_id: &str,
-    ) -> Result<DexTokenListResponse, AppError> {
-        let controller = SearchController::new(self.postgres.clone());
-        controller
-            .search_tokens(query, account_id)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to search dex tokens: account_id={}, error={}",
-                    account_id, err
-                );
-                AppError::InternalError(err.to_string())
-            })
     }
 }
 
