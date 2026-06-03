@@ -177,7 +177,9 @@ impl TerminalService {
             AppError::NotFound(format!("Pair not found: {}", e))
         })?;
 
-        // Get block number from transaction hash
+        // Creation block from the token's creation tx. Optional: tokens created
+        // without an initial buy have no balance_history row, so this is None
+        // rather than an error — `createdAtBlockNumber` is then omitted.
         let block_number = controller
             .get_block_number_by_tx(&pair_row.transaction_hash)
             .await
@@ -199,7 +201,7 @@ impl TerminalService {
             dex_key: dex_key_for(&pair_row.market_type).to_string(),
             asset0_id,
             asset1_id,
-            created_at_block_number: Some(block_number),
+            created_at_block_number: block_number,
             created_at_block_timestamp: Some(pair_row.created_at as u64),
             created_at_txn_id: Some(pair_row.transaction_hash),
             creator: Some(pair_row.creator),
