@@ -30,8 +30,8 @@ pub struct LpPositionEntry {
     /// stored-generated column `lp_position.balance = lp_in - lp_out`.
     pub balance: String,
     /// CURRENT mark-to-market liquidity in USD =
-    /// `balance × pool.tvl_usd / pool.total_supply`. NULL when
-    /// `pool.total_supply = 0`.
+    /// `balance × pool.tvl_usd / pool.total_supply`, truncated to 8 decimals.
+    /// NULL when `pool.total_supply = 0`.
     pub liquidity_usd: Option<String>,
 }
 
@@ -62,8 +62,9 @@ pub struct LpPositionTokenSide {
     /// `lp_position.token{0,1}_in_usd - token{0,1}_out_usd`.
     pub deposited_usd: String,
     /// CURRENT pro-rata amount of this token claimable on a full
-    /// withdraw NOW (raw wei) =
-    /// `balance × pool.reserve{0,1} / pool.total_supply`.
+    /// withdraw NOW (**raw wei, integer**) =
+    /// `floor(balance × pool.reserve{0,1} / pool.total_supply)`.
+    /// Floored to a whole number — there is no fractional wei.
     /// Live mark-to-market — reflects the latest reserves indexed.
     /// NULL when `pool.total_supply = 0`.
     pub current_amount: Option<String>,

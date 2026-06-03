@@ -38,8 +38,13 @@ pub(crate) fn apr_max_pct(
     .reduce(f64::max)
 }
 
-/// `my_liquidity_usd = balance × pool.value / pool.total_supply`.
+/// `my_liquidity_usd = balance × pool.value / pool.total_supply`, a USD value
+/// truncated to 8 decimal places.
 /// `None` when `total_supply <= 0` (defensive — pool has no LP at all).
+///
+/// The 8dp truncation matters: BigDecimal `/` keeps ~100 fractional digits on
+/// non-even division, so without it the USD value serializes with a meaningless
+/// long decimal tail (e.g. `"0.004065253230704521…337854"`).
 pub(crate) fn my_liquidity_usd(
     balance: &BigDecimal,
     pool_value_usd: &BigDecimal,
@@ -50,7 +55,10 @@ pub(crate) fn my_liquidity_usd(
     {
         return None;
     }
-    Some(balance * pool_value_usd / pool_total_supply)
+    Some(
+        (balance * pool_value_usd / pool_total_supply)
+            .with_scale_round(8, bigdecimal::RoundingMode::Down),
+    )
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -198,15 +206,21 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
     }
 }
 
-/// Per-token current pro-rata share = balance × reserve / total_supply.
+/// Per-token current pro-rata share = floor(balance × reserve / total_supply).
 /// None when total_supply <= 0.
+///
+/// Result is **raw wei (integer base units)** — there is no fractional wei, so we
+/// floor to a whole number. Without this, BigDecimal `/` keeps ~100 fractional
+/// digits on non-even division and the amount serializes with a meaningless long
+/// decimal tail (e.g. `"1219326312467611623.8256…"`).
 pub(crate) fn current_share(balance: &BigDecimal, reserve: &BigDecimal, total_supply: &BigDecimal) -> Option<BigDecimal> {
     if total_supply.is_zero()
         || total_supply.sign() == bigdecimal::num_bigint::Sign::Minus
     {
         return None;
     }
-    Some(balance * reserve / total_supply)
+    // RoundingMode::Down = truncate toward zero = floor for non-negative values.
+    Some((balance * reserve / total_supply).with_scale_round(0, bigdecimal::RoundingMode::Down))
 }
 
 #[cfg(test)]
@@ -285,6 +299,22 @@ mod tests {
     }
 
     #[test]
+    fn my_liquidity_usd_truncates_to_8dp() {
+        use std::str::FromStr;
+        // Live case (api.nad.fun MON-USDC position): balance × tvl / total_supply
+        // is non-even → BigDecimal division would keep ~100 fractional digits.
+        let got = my_liquidity_usd(
+            &BigDecimal::from_str("13947259859").unwrap(),
+            &BigDecimal::from_str("2.5506091973").unwrap(),
+            &BigDecimal::from_str("8750748663038").unwrap(),
+        )
+        .unwrap();
+        let s = got.normalized().to_plain_string();
+        let frac = s.split('.').nth(1).map(|f| f.len()).unwrap_or(0);
+        assert!(frac <= 8, "liquidity_usd must be <= 8 decimals, got '{}' ({} dp)", s, frac);
+    }
+
+    #[test]
     fn my_liquidity_usd_none_on_zero_supply() {
         let bal = BigDecimal::from(50);
         let value = BigDecimal::from(1000);
@@ -306,6 +336,27 @@ mod tests {
         let hi = BigDecimal::from_str("625.1").unwrap();
         assert!(got > lo, "got {} < lo {}", got, lo);
         assert!(got < hi, "got {} > hi {}", got, hi);
+    }
+
+    #[test]
+    fn current_share_floors_to_integer_raw_wei() {
+        use std::str::FromStr;
+        // Non-even division at realistic raw-wei scale. current_amount is raw wei
+        // (integer base units) — there is no fractional wei, so the result must be
+        // a whole number, NOT a ~100-digit BigDecimal-division tail.
+        let got = current_share(
+            &BigDecimal::from_str("1234567890123456789").unwrap(),
+            &BigDecimal::from_str("987654321987654321").unwrap(),
+            &BigDecimal::from_str("1000000000000000007").unwrap(),
+        )
+        .unwrap();
+        let s = got.normalized().to_plain_string();
+        assert!(
+            !s.contains('.'),
+            "current_amount must be integer raw wei (no fractional tail), got '{}'",
+            s
+        );
+        assert_eq!(s, "1219326312467611623", "floored integer raw wei");
     }
 
     #[test]
