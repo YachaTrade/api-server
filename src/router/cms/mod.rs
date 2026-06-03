@@ -28,5 +28,12 @@ pub fn router(state: AppState) -> Router<AppState> {
                 .layer(DefaultBodyLimit::max(5_000_000)) // 5MB for image upload
                 .layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
+        .route(
+            CmsPath::UpsertWhitelistToken.as_str(),
+            post(handler::upsert_whitelist_token)
+                .get(handler::list_whitelist_token)
+                .layer(DefaultBodyLimit::max(5_000_000)) // 5MB for image upload
+                .layer(from_fn_with_state(state.clone(), authenticate_user)),
+        )
         .merge(analytics::router(state.clone()))
 }

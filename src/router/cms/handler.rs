@@ -12,7 +12,7 @@ use crate::{
     state::AppState,
     types::cms::{
         CmsActionResponse, DexTokenImageResponse, InsertTrendRequest, SetNsfwRequest,
-        UpdateMetadataRequest, UpdateMetadataResponse,
+        UpdateMetadataRequest, UpdateMetadataResponse, WhitelistTokenListResponse,
     },
 };
 
@@ -255,6 +255,180 @@ pub async fn upload_dex_token_image(
         .await?;
 
     Ok(Json(response))
+}
+
+/// POST /cms/whitelist-token — 화이트리스트 토큰 upsert (admin, multipart).
+/// Accepts multipart/form-data: token_id (required), sort_order (required),
+/// enabled (optional bool, default true), name, symbol, price_feed_id, decimals (optional),
+/// image (optional file).
+#[utoipa::path(
+    post,
+    path = "/cms/whitelist-token",
+    params(
+        ("session" = String, Cookie, description = "Session cookie (Admin only)")
+    ),
+    request_body(
+        content_type = "multipart/form-data",
+        content = UpsertWhitelistTokenMultipart,
+    ),
+    responses(
+        (status = 200, description = "Upserted", body = CmsActionResponse),
+        (status = 400, description = "Invalid token_id or missing required field"),
+        (status = 403, description = "Admin access required"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Cms"
+)]
+#[instrument(skip(state, multipart))]
+pub async fn upsert_whitelist_token(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    mut multipart: Multipart,
+) -> AppJsonResult<CmsActionResponse> {
+    let mut token_id: Option<String> = None;
+    let mut sort_order: Option<i32> = None;
+    let mut enabled: Option<bool> = None;
+    let mut name: Option<String> = None;
+    let mut symbol: Option<String> = None;
+    let mut price_feed_id: Option<String> = None;
+    let mut decimals: Option<i32> = None;
+    let mut image_data: Option<Bytes> = None;
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        error!("Failed to read multipart field: {}", e);
+        AppError::BadRequest(format!("Failed to read form data: {}", e))
+    })? {
+        let field_name = field.name().unwrap_or("").to_string();
+        match field_name.as_str() {
+            "token_id" => {
+                token_id = Some(field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read token_id: {}", e))
+                })?);
+            }
+            "sort_order" => {
+                let s = field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read sort_order: {}", e))
+                })?;
+                sort_order = Some(s.trim().parse::<i32>().map_err(|_| {
+                    AppError::BadRequest("sort_order must be an integer".to_string())
+                })?);
+            }
+            "enabled" => {
+                let s = field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read enabled: {}", e))
+                })?;
+                enabled = Some(s.trim().parse::<bool>().map_err(|_| {
+                    AppError::BadRequest("enabled must be true or false".to_string())
+                })?);
+            }
+            "name" => {
+                let v = field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read name: {}", e))
+                })?;
+                if !v.is_empty() { name = Some(v); }
+            }
+            "symbol" => {
+                let v = field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read symbol: {}", e))
+                })?;
+                if !v.is_empty() { symbol = Some(v); }
+            }
+            "price_feed_id" => {
+                let v = field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read price_feed_id: {}", e))
+                })?;
+                if !v.is_empty() { price_feed_id = Some(v); }
+            }
+            "decimals" => {
+                let s = field.text().await.map_err(|e| {
+                    AppError::BadRequest(format!("Failed to read decimals: {}", e))
+                })?;
+                if !s.trim().is_empty() {
+                    decimals = Some(s.trim().parse::<i32>().map_err(|_| {
+                        AppError::BadRequest("decimals must be an integer".to_string())
+                    })?);
+                }
+            }
+            "image" => {
+                let bytes = field
+                    .bytes()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Failed to read image: {}", e)))?;
+                if !bytes.is_empty() {
+                    image_data = Some(bytes);
+                }
+            }
+            _ => {
+                info!("Ignoring unknown field: {}", field_name);
+            }
+        }
+    }
+
+    let token_id =
+        token_id.ok_or_else(|| AppError::BadRequest("token_id is required".to_string()))?;
+    let sort_order =
+        sort_order.ok_or_else(|| AppError::BadRequest("sort_order is required".to_string()))?;
+    let enabled = enabled.unwrap_or(true);
+
+    let service = CmsService::new(state.postgres.clone(), state.r2.clone());
+    let response = service
+        .upsert_whitelist_token(
+            &session_address,
+            &token_id,
+            sort_order,
+            enabled,
+            name,
+            symbol,
+            price_feed_id,
+            decimals,
+            image_data,
+        )
+        .await?;
+    Ok(Json(response))
+}
+
+/// GET /cms/whitelist-token — 화이트리스트 목록 (admin).
+#[utoipa::path(
+    get,
+    path = "/cms/whitelist-token",
+    responses(
+        (status = 200, description = "Whitelist tokens", body = WhitelistTokenListResponse),
+        (status = 403, description = "Admin access required"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Cms"
+)]
+#[instrument(skip(state, session_address))]
+pub async fn list_whitelist_token(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+) -> AppJsonResult<WhitelistTokenListResponse> {
+    let service = CmsService::new(state.postgres.clone(), state.r2.clone());
+    let response = service.list_whitelist_tokens(&session_address).await?;
+    Ok(Json(response))
+}
+
+/// Schema for whitelist-token upsert multipart form
+#[derive(utoipa::ToSchema)]
+pub struct UpsertWhitelistTokenMultipart {
+    /// Token address (required)
+    pub token_id: String,
+    /// Sort order (required)
+    pub sort_order: i32,
+    /// Enabled (optional, default true)
+    #[schema(nullable = true)]
+    pub enabled: Option<bool>,
+    #[schema(nullable = true)]
+    pub name: Option<String>,
+    #[schema(nullable = true)]
+    pub symbol: Option<String>,
+    #[schema(nullable = true)]
+    pub price_feed_id: Option<String>,
+    #[schema(nullable = true)]
+    pub decimals: Option<i32>,
+    /// Image file (optional)
+    #[schema(value_type = Option<String>, format = Binary, nullable = true)]
+    pub image: Option<String>,
 }
 
 /// Schema for dex_token image multipart form

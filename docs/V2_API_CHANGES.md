@@ -615,3 +615,51 @@ interface DexTokenEntry {
 | `GET /dex/tokens` | 평면 마켓캡 정렬 → 4-티어(보유/미보유 × 화이트리스트/V2) + 검색 통합 |
 | `GET /dex/search` | **deprecated** → `GET /dex/tokens?q=` 위임 |
 | `whitelist_token` 테이블 | **신규** — 고정순서 화이트리스트 |
+
+---
+
+## CMS — 화이트리스트 토큰 관리
+
+admin이 `whitelist_token`(Select Token 4-tier 화이트리스트)을 런타임에 추가/수정/숨김/조회. 마이그레이션 하드코딩 없이 WMON/USDC/USDT 등 등록.
+
+### `POST /cms/whitelist-token` (admin)
+
+upsert(추가/수정/소프트삭제). `authenticate_user` 세션 + admin 인가(write pool, 원자 가드).
+
+요청 `WhitelistTokenUpsertRequest`:
+```typescript
+interface WhitelistTokenUpsertRequest {
+    token_id: string;      // external 허용 → valid_account_id(순수 체크섬). valid_token_id(베니티) 아님
+    sort_order: number;    // 모달 고정 순서(작을수록 위)
+    enabled?: boolean;     // 생략 시 true. 소프트삭제 = false
+}
+```
+- `token_id`가 `token`/`dex_token`/`quote_token` 중 어디에도 없으면 **404** (빈 메타 항목 방지).
+- non-admin → **403** (기존 행도 덮어쓸 수 없음, INSERT...WHERE EXISTS(admin) 원자 가드).
+- 잘못된 주소 → **400**.
+- 응답: `CmsActionResponse { success: boolean }`.
+
+### `GET /cms/whitelist-token` (admin)
+
+전체 목록(disabled 포함), `sort_order` ASC. symbol/name/image는 `token`/`dex_token`/`quote_token` LEFT JOIN.
+
+응답 `WhitelistTokenListResponse`:
+```typescript
+interface WhitelistTokenEntry {
+    token_id: string;
+    symbol: string;
+    name: string;
+    image_uri: string;
+    sort_order: number;
+    enabled: boolean;
+}
+interface WhitelistTokenListResponse { tokens: WhitelistTokenEntry[] }
+```
+
+### 요약표
+
+| 타입/엔드포인트 | 변경 |
+|---|---|
+| `POST /cms/whitelist-token` | **신규** — 화이트리스트 upsert(admin). 메타 없으면 404, 소프트삭제=enabled:false |
+| `GET /cms/whitelist-token` | **신규** — 화이트리스트 목록(admin, disabled 포함) |
+| `WhitelistTokenUpsertRequest` / `WhitelistTokenEntry` / `WhitelistTokenListResponse` | **신규 타입** |
