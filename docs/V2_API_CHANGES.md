@@ -518,7 +518,7 @@ interface BalanceInfo {
 
 ## Select Token 모달 — `GET /dex/tokens` 단일화
 
-Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하나로 통합. `GET /dex/search`는 **deprecated** (한 릴리스 동안 `/dex/tokens` 로직에 위임, FE 컷오버 후 제거 예정).
+Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하나로 통합. `GET /dex/search`는 **제거됨** (라우터·핸들러·`DexSearchQuery`·OpenAPI 등록 전부 삭제). 검색은 `GET /dex/tokens?q=` 사용.
 
 ### 기존 → 변경 (dex 엔드포인트 영향 범위)
 
@@ -535,18 +535,14 @@ Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하�
 | 응답 필드 | `token_id, symbol, name, decimals, image_uri, balance?, market_cap_usd` | **+ `token_type`, `is_external`, `is_held`, `balance_usd`, `tier`** |
 | 페이지네이션 | `page`/`limit`, `total_count` | 동일 (`total_count`는 후보 집합 기준 재계산) |
 
-#### `GET /dex/search`
+#### `GET /dex/search` — **제거됨**
 
 | 항목 | 기존 (현행 v2) | 변경 (this PR) |
 |---|---|---|
-| 상태 | 활성 | **deprecated** (`#[deprecated]`, OpenAPI 표기). 한 릴리스 유지 후 제거 |
-| 구현 | 자체 SQL (`dex_token` ILIKE) | `/dex/tokens` 로직에 **위임** (세션 주소 = `account`) |
-| 매칭 | **substring** `%q%` | **prefix** (`q%`); external은 full CA exact만 |
-| 대상 | `dex_token` 전부(external 포함) | 화이트리스트+nadfun V2 (+ full CA시 external) |
-| 인증 | 세션 필수 (유지) | 세션 필수 (유지), 잔고 항상 첨부 |
-| 응답 | 구 `DexTokenEntry` | 신 `DexTokenEntry`(위 신규 필드 포함) |
+| 상태 | 활성 | **제거** — 라우트/핸들러/`DexSearchQuery`/OpenAPI 등록 전부 삭제 |
+| 대체 | — | `GET /dex/tokens?q=` (검색 로직이 통합 엔드포인트에 흡수됨) |
 
-> **FE 영향:** `/dex/search` 결과가 substring→prefix로 좁아지고 external이 기본 제외됨. `/dex/tokens?q=`로 이전 권장.
+> **FE 영향:** `/dex/search` 호출은 이제 **404**. `/dex/tokens?q=`로 전환 필수. 기존 `/dex/search` 대비 매칭이 substring→prefix로 좁아지고 external은 full CA exact일 때만 노출되며, 세션 대신 `?account=` 옵션으로 잔고를 첨부한다.
 
 ### 엔드포인트
 
@@ -613,7 +609,7 @@ interface DexTokenEntry {
 | `DexTokenListQuery.q` | **신규** optional 검색어 (4-티어 기본 vs prefix/CA 검색 분기) |
 | `DexTokenEntry` | `token_type`, `is_external`, `is_held`, `balance_usd`, `tier` **신규 필드** |
 | `GET /dex/tokens` | 평면 마켓캡 정렬 → 4-티어(보유/미보유 × 화이트리스트/V2) + 검색 통합 |
-| `GET /dex/search` | **deprecated** → `GET /dex/tokens?q=` 위임 |
+| `GET /dex/search` | **제거** → `GET /dex/tokens?q=` 사용 (404) |
 | `whitelist_token` 테이블 | **신규** — 고정순서 화이트리스트 |
 
 ---
