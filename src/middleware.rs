@@ -17,12 +17,14 @@ use std::net::SocketAddr;
 use tower_cookies::Cookies;
 use tracing::{error, info, warn};
 
-/// 허용된 Origin인지 검증
+/// 허용된 Origin인지 검증 (CSRF 방어).
+/// 허용 목록은 `crate::cors::is_origin_allowed`(CORS predicate)와 반드시 동기 유지.
 fn is_allowed_origin(origin: &str) -> bool {
     origin == "https://nad.fun"
         || origin == "https://nadapp.net"
         || origin.ends_with(".nad.fun")
         || origin.ends_with(".symphony.io")
+        || origin.ends_with(".cloudfront.net")
         || origin.starts_with("http://localhost:")
 }
 
@@ -241,5 +243,26 @@ pub async fn api_key_gate(
 
             return Ok(response);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_allowed_origin;
+
+    #[test]
+    fn cloudfront_and_existing_origins() {
+        // newly allowed
+        assert!(is_allowed_origin("https://d111abcdef8.cloudfront.net"));
+        assert!(is_allowed_origin("https://assets.d111.cloudfront.net"));
+        // existing allowed
+        assert!(is_allowed_origin("https://nad.fun"));
+        assert!(is_allowed_origin("https://app.nad.fun"));
+        assert!(is_allowed_origin("https://x.symphony.io"));
+        assert!(is_allowed_origin("http://localhost:3000"));
+        // rejected
+        assert!(!is_allowed_origin("https://evil.com"));
+        assert!(!is_allowed_origin("https://cloudfront.net")); // apex, no subdomain
+        assert!(!is_allowed_origin("https://notcloudfront.net"));
     }
 }
