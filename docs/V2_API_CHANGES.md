@@ -591,6 +591,7 @@ interface DexTokenEntry {
     is_held: boolean;            // 신규 — balance > 0
     balance: string | null;      // raw wei, account 제공 시에만
     balance_usd: string | null;  // 신규 — balance/10^decimals × market.price × price
+    price_usd: string | null;    // 신규 — 토큰 1개당 USD 단가, account 무관·8자리 truncate (V2=market×quote, whitelist=Pyth)
     market_cap_usd: string | null;
     tier: number;                // 신규 — 1~4 (FE 섹션 헤더용)
 }

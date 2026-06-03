@@ -108,8 +108,10 @@ const res = await fetch(`/dex/tokens?${params}`);
 | `token_type` | string | `"whitelist"` \| `"nadfun_v2"` \| `"external"`. **렌더 분기·external 판정용** |
 | `balance` | string \| null | **raw wei** 잔고(보유 시). 미보유 또는 `account` 미제공 시 `null` → **`balance != null` 로 보유 판정** |
 | `balance_usd` | string \| null | 보유분 USD 가치. 미보유/미제공 시 `null` |
+| `price_usd` | string \| null | 토큰 1개당 **USD 단가**. **`account` 무관**(보유 여부와 상관없이 항상 제공). 소수점 **8자리까지 truncate**. 가격 미상이면 `null`. (V2/external = market × quote→USD, whitelist = Pyth) |
 
 > `balance`는 **raw 정수 문자열(×10^decimals)** 입니다. 표시할 땐 FE에서 `decimals`로 나누세요. (`balance` / `10^decimals`)
+> `price_usd`는 이미 **사람이 읽는 USD 단가**(스케일 적용 완료)입니다. 스왑 금액의 USD 환산 = 입력수량 × `price_usd`.
 
 ### 정렬 (tier) — 기본 리스트일 때
 

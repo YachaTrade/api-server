@@ -45,4 +45,8 @@ pub struct DexTokenEntry {
     pub balance: Option<String>,
     /// 보유분 USD 가치 = balance/10^decimals × market.price × price. 미보유면 None.
     pub balance_usd: Option<String>,
+    /// 토큰 1개당 USD 단가. **account 무관**(보유 여부와 상관없이 항상 제공).
+    /// nadfun_v2/external = market.price × quote→USD, whitelist = Pyth.
+    /// 소수점 8자리까지 truncate. 가격 미상이면 None.
+    pub price_usd: Option<String>,
 }
