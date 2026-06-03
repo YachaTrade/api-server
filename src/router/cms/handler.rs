@@ -277,7 +277,7 @@ pub async fn upload_dex_token_image(
         (status = 403, description = "Admin access required"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Cms"
+    tag = "CMS"
 )]
 #[instrument(skip(state, multipart))]
 pub async fn upsert_whitelist_token(
@@ -396,7 +396,7 @@ pub async fn upsert_whitelist_token(
         (status = 403, description = "Admin access required"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Cms"
+    tag = "CMS"
 )]
 #[instrument(skip(state, session_address))]
 pub async fn list_whitelist_token(
