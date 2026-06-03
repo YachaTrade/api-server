@@ -660,3 +660,26 @@ interface WhitelistTokenListResponse { tokens: WhitelistTokenEntry[] }
 | `POST /cms/whitelist-token` | **신규** — 화이트리스트 upsert(admin). 메타 없으면 404, 소프트삭제=enabled:false |
 | `GET /cms/whitelist-token` | **신규** — 화이트리스트 목록(admin, disabled 포함) |
 | `WhitelistTokenUpsertRequest` / `WhitelistTokenEntry` / `WhitelistTokenListResponse` | **신규 타입** |
+
+---
+
+## Terminal API — V2-aware 라우팅 / 가격 산정
+
+GeckoTerminal 호환 Terminal 엔드포인트(`GET /pair`, `GET /events`)가 V2(멀티 quote bonding curve + NadSwap DEX)를 인식하도록 변경됨. **응답 스키마(타입/필드명/JSON 키)는 V1과 100% 동일** — `Pair`, `Event`(`swap`/`join`/`exit`)의 모양은 그대로다. 값과 산정 방식만 바뀌는 **동작(behavioral) 변경**이며 타입 변경이 아니다. 상세 스펙은 [`terminal-api.md`](./terminal-api.md) 참고.
+
+핵심 변경 (V1 토큰 응답은 불변):
+
+- **라우팅/가격이 `quote_id` 기준**: asset 정렬(`asset0Id`/`asset1Id`)·`reserves`·`priceNative`가 WMON 하드코딩 대신 토큰의 `market.quote_id`(WMON 또는 LVMON 등) 기준으로 산정됨. `asset0`/`asset1`은 토큰 vs quote 주소를 소문자 오름차순 비교하여 정렬, `priceNative`는 quote 자산 단위.
+- **`dexKey` 확장**: `nadfun-v2`(V2_CURVE), `nadswap`(V2_DEX) 추가. 기존 `nadfun`(CURVE)/`capricorn`(DEX)는 유지.
+- **`feeBps` V2 fee-config 기반**: V2_CURVE = `creator_fee_rate + curve_protocol_fee_rate`, V2_DEX = `25(NadSwap LP) + creator_fee_rate + dex_protocol_fee_rate`. V1(CURVE/DEX)은 `100` 고정. V2 토큰에 `fee_config` 행이 없으면 `feeBps` 필드 생략.
+- **swap `pairId` per-event 산정**: `/events`의 swap은 이벤트 자신의 `market_type`으로 pairId를 결정(졸업 토큰의 커브 시절 swap은 본딩 커브, DEX 시절은 풀 주소).
+
+### 요약표
+
+| 엔드포인트/항목 | 변경 |
+|---|---|
+| `GET /pair`, `GET /events` | **동작 변경** (스키마 불변) — `quote_id` 기준 라우팅/가격 산정 |
+| `dexKey` | `nadfun-v2`(V2_CURVE), `nadswap`(V2_DEX) **값 추가** |
+| `feeBps` | V2 fee-config 파생 (V2_DEX는 +25 LP). fee_config 없으면 생략 |
+| swap `pairId` | 이벤트별 `market_type` 기준 산정 |
+| 응답 타입 (`Pair`/`Event`) | **변경 없음** (값/동작만 변경) |
