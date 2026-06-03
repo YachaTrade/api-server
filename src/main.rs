@@ -147,6 +147,8 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::insert_trend,
         router::cms::handler::update_metadata,
         router::cms::handler::upload_dex_token_image,
+        router::cms::handler::upsert_whitelist_token,
+        router::cms::handler::list_whitelist_token,
 
         // ----------------CMS Analytics----------------
         router::cms::analytics::handler::get_churned_users,
@@ -353,8 +355,11 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::UpdateMetadataRequest,
             types::cms::UpdateMetadataResponse,
             types::cms::DexTokenImageResponse,
+            types::cms::WhitelistTokenEntry,
+            types::cms::WhitelistTokenListResponse,
             router::cms::handler::UpdateMetadataMultipart,
             router::cms::handler::UploadDexTokenImageMultipart,
+            router::cms::handler::UpsertWhitelistTokenMultipart,
 
             // CMS Analytics
             types::cms::analytics::TopHeldToken,

@@ -4,6 +4,8 @@ pub enum CmsPath {
     InsertTrend,
     UpdateMetadata,
     UploadDexTokenImage,
+    UpsertWhitelistToken,
+    ListWhitelistToken,
 }
 
 impl CmsPath {
@@ -13,6 +15,8 @@ impl CmsPath {
             CmsPath::InsertTrend => "/cms/trend/insert",
             CmsPath::UpdateMetadata => "/cms/token/metadata",
             CmsPath::UploadDexTokenImage => "/cms/dex-token/image",
+            CmsPath::UpsertWhitelistToken => "/cms/whitelist-token",
+            CmsPath::ListWhitelistToken => "/cms/whitelist-token",
         }
     }
 

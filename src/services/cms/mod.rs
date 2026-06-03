@@ -8,13 +8,13 @@ use tracing::{error, info};
 
 use crate::{
     config::RPC_URL,
-    controllers::cms::CmsController,
+    controllers::cms::{CmsController, WhitelistUpsert},
     db::{postgres::PostgresDatabase, r2::R2Client},
     result::AppError,
     types::{
         cms::{
             CmsActionResponse, DexTokenImageResponse, InsertTrendRequest, SetNsfwRequest,
-            UpdateMetadataRequest, UpdateMetadataResponse,
+            UpdateMetadataRequest, UpdateMetadataResponse, WhitelistTokenListResponse,
         },
         metadata::TokenMetadata,
     },
@@ -250,6 +250,107 @@ impl CmsService {
             token_id,
             image_uri,
         })
+    }
+
+    /// 화이트리스트 토큰 upsert (admin, multipart).
+    /// valid_account_id 정규화 → admin(write) 확인 → 이미지 있으면 R2 업로드 → 원자 upsert.
+    /// whitelist_token은 self-contained — token/dex_token/quote_token 존재 확인 없음.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn upsert_whitelist_token(
+        &self,
+        session_address: &str,
+        token_id: &str,
+        sort_order: i32,
+        enabled: bool,
+        name: Option<String>,
+        symbol: Option<String>,
+        price_feed_id: Option<String>,
+        decimals: Option<i32>,
+        image_data: Option<Bytes>,
+    ) -> Result<CmsActionResponse, AppError> {
+        let token_id = valid_account_id(token_id)
+            .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
+
+        let controller = CmsController::new(self.postgres.clone());
+
+        let is_admin = controller
+            .verify_admin_on_writer(session_address)
+            .await
+            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
+        if !is_admin {
+            return Err(AppError::AuthError("Admin access required".to_string()));
+        }
+
+        // Upload image if provided
+        let image_uri = if let Some(bytes) = image_data {
+            let fmt = self.validate_image(&bytes)?;
+            // Sanitize symbol: lowercase, keep [a-z0-9._-] only
+            let raw_symbol = symbol.as_deref().unwrap_or("");
+            let sanitized: String = raw_symbol
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+                .collect();
+            if sanitized.is_empty() {
+                return Err(AppError::BadRequest(
+                    "symbol required for image upload".to_string(),
+                ));
+            }
+            let url = self
+                .r2
+                .upload_whitelist_image_file(&sanitized, &bytes, &fmt)
+                .await
+                .map_err(|e| {
+                    error!("Failed to upload whitelist image: {}", e);
+                    AppError::InternalError(format!("Failed to upload image: {}", e))
+                })?;
+            info!("Uploaded whitelist image: {}", url);
+            Some(url)
+        } else {
+            None
+        };
+
+        let p = WhitelistUpsert {
+            account_id: session_address,
+            token_id: &token_id,
+            sort_order,
+            enabled,
+            name: name.as_deref(),
+            symbol: symbol.as_deref(),
+            image_uri: image_uri.as_deref(),
+            price_feed_id: price_feed_id.as_deref(),
+            decimals,
+        };
+
+        let ok = controller
+            .upsert_whitelist_token_with_admin_guard(&p)
+            .await
+            .map_err(|err| AppError::InternalError(format!("Failed to upsert whitelist: {}", err)))?;
+        if !ok {
+            return Err(AppError::AuthError("Admin access required".to_string()));
+        }
+
+        Ok(CmsActionResponse { success: true })
+    }
+
+    /// 화이트리스트 목록 (admin).
+    pub async fn list_whitelist_tokens(
+        &self,
+        session_address: &str,
+    ) -> Result<WhitelistTokenListResponse, AppError> {
+        let controller = CmsController::new(self.postgres.clone());
+        let is_admin = controller
+            .verify_admin_on_writer(session_address)
+            .await
+            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
+        if !is_admin {
+            return Err(AppError::AuthError("Admin access required".to_string()));
+        }
+        let tokens = controller
+            .list_whitelist_tokens()
+            .await
+            .map_err(|err| AppError::InternalError(format!("Failed to list whitelist: {}", err)))?;
+        Ok(WhitelistTokenListResponse { tokens })
     }
 
     async fn get_token_uri(&self, token_address: &Address) -> Result<String, AppError> {

@@ -148,6 +148,49 @@ impl R2Client {
         }
     }
 
+    // Uploads whitelist token image to R2 and returns the CDN URL
+    // Key: whitelist/{symbol} (caller must sanitize symbol)
+    pub async fn upload_whitelist_image_file(
+        &self,
+        symbol: &str,
+        body: &Bytes,
+        content_type: &str,
+    ) -> Result<String> {
+        let key = format!("whitelist/{}", symbol);
+        info!(
+            "Uploading whitelist image to R2: key={}, content_type={}",
+            key, content_type
+        );
+
+        let result = self
+            .client
+            .put_object()
+            .bucket(&self.bucket_name)
+            .key(&key)
+            .body(ByteStream::from(body.clone()))
+            .content_type(content_type)
+            .send()
+            .await;
+
+        match result {
+            Ok(output) => {
+                info!(
+                    "Successfully uploaded whitelist image to R2: key={}, output={:?}",
+                    key, output
+                );
+                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                Ok(r2_url)
+            }
+            Err(err) => {
+                error!(
+                    "Failed to upload whitelist image to R2: key={}, error={:?}",
+                    key, err
+                );
+                Err(anyhow!("Upload whitelist image failed. Error: {}", err))
+            }
+        }
+    }
+
     // Uploads account profile image to R2 and returns the CDN URL
     // Parameters:
     // - image_id: Unique identifier (UUID) for the image

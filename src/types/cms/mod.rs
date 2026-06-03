@@ -113,3 +113,27 @@ pub struct DexTokenImageResponse {
     /// 업로드된 이미지 URL (https://storage.nadapp.net/coin/{uuid})
     pub image_uri: String,
 }
+
+/// `GET /cms/whitelist-token` 항목.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct WhitelistTokenEntry {
+    pub token_id: String,
+    #[schema(nullable = true)]
+    pub symbol: Option<String>,
+    #[schema(nullable = true)]
+    pub name: Option<String>,
+    #[schema(nullable = true)]
+    pub image_uri: Option<String>,
+    #[schema(nullable = true)]
+    pub price_feed_id: Option<String>,
+    #[schema(nullable = true)]
+    pub decimals: Option<i32>,
+    pub sort_order: i32,
+    pub enabled: bool,
+}
+
+/// `GET /cms/whitelist-token` 응답.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct WhitelistTokenListResponse {
+    pub tokens: Vec<WhitelistTokenEntry>,
+}

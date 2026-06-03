@@ -59,6 +59,84 @@ impl TokensController {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Pre-fetch: RPC balances for enabled whitelist tokens (P2 ordering fix)
+    // -----------------------------------------------------------------------
+
+    /// When `account` is present, fetches on-chain balances for all enabled whitelist tokens
+    /// via RPC, then resolves USD values via Pyth. Returns two aligned vecs:
+    ///   - `held_ids`: token_ids with balance > 0
+    ///   - `held_usd`: corresponding balance_usd (0 if price unavailable)
+    ///
+    /// These are injected into the SQL as `wl_rpc` CTE (UNNEST arrays) so the DB-side
+    /// tier/ordering uses real on-chain data before pagination.
+    async fn prefetch_wl_rpc(
+        &self,
+        account: &str,
+    ) -> Result<(Vec<String>, Vec<BigDecimal>)> {
+        // 1. Query all enabled whitelist tokens with their feed/decimals.
+        let wl_rows: Vec<(String, Option<String>, Option<i32>)> = sqlx::query_as::<_, (String, Option<String>, Option<i32>)>(
+            "SELECT token_id, price_feed_id, decimals FROM whitelist_token WHERE enabled",
+        )
+        .fetch_all(self.db.get_read_pool())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query whitelist tokens: {}", e))?;
+
+        if wl_rows.is_empty() {
+            return Ok((vec![], vec![]));
+        }
+
+        // 2. Fetch RPC balance for each; keep only held (> 0).
+        let mut held: Vec<(String, BigDecimal, Option<String>, i32)> = vec![];
+        for (token_id, price_feed_id, decimals) in &wl_rows {
+            if let Some(bal) = self.balance_source.balance_of(token_id, account).await {
+                if bal > BigDecimal::from(0) {
+                    held.push((
+                        token_id.clone(),
+                        bal,
+                        price_feed_id.clone(),
+                        decimals.unwrap_or(18),
+                    ));
+                }
+            }
+        }
+
+        if held.is_empty() {
+            return Ok((vec![], vec![]));
+        }
+
+        // 3. Batch price lookup for held tokens that have a feed_id.
+        let feed_ids: Vec<String> = held
+            .iter()
+            .filter_map(|(_, _, feed, _)| feed.clone())
+            .collect();
+        let prices = if feed_ids.is_empty() {
+            HashMap::new()
+        } else {
+            self.price_source.prices_usd(&feed_ids).await
+        };
+
+        // 4. Build aligned output vecs.
+        let mut held_ids: Vec<String> = Vec::with_capacity(held.len());
+        let mut held_usd: Vec<BigDecimal> = Vec::with_capacity(held.len());
+        for (token_id, bal, feed, decimals) in held {
+            let usd = match &feed {
+                Some(f) => {
+                    let key = crate::services::pricing::normalize_feed_id(f);
+                    prices
+                        .get(&key)
+                        .map(|p| compute_balance_usd(&bal, decimals, p))
+                        .unwrap_or_else(|| BigDecimal::from(0))
+                }
+                None => BigDecimal::from(0),
+            };
+            held_ids.push(token_id);
+            held_usd.push(usd);
+        }
+
+        Ok((held_ids, held_usd))
+    }
+
     async fn list_default(&self, query: &DexTokenListQuery) -> Result<DexTokenListResponse> {
         let limit = query.limit;
         let offset = (query.page - 1) * limit;
@@ -78,11 +156,23 @@ impl TokensController {
         )
         .map_err(|e| anyhow::anyhow!("Failed to count tokens: {}", e))?;
 
-        let list_sql = format!("{ENRICHED_CTE}{ENRICHED_COLS}{ORDER_CLAUSE}LIMIT $2 OFFSET $3");
+        // P2 fix: pre-fetch held whitelist balances via RPC before SQL sort.
+        let (wl_ids, wl_usd) = match query.account.as_deref() {
+            Some(acct) => self.prefetch_wl_rpc(acct).await?,
+            None => (vec![], vec![]),
+        };
+
+        // $1=account, $2=wl_ids[], $3=wl_usd[], $4=limit, $5=offset
+        let list_sql = format!(
+            "{}{ENRICHED_COLS}{ORDER_CLAUSE}LIMIT $4 OFFSET $5",
+            enriched_cte_sql()
+        );
         let rows = measure_postgres!(
             "dex.list_tokens",
             sqlx::query_as::<_, TokenRow>(&list_sql)
                 .bind(query.account.as_deref())
+                .bind(&wl_ids)
+                .bind(&wl_usd)
                 .bind(limit)
                 .bind(offset)
                 .fetch_all(self.db.get_read_pool())
@@ -102,7 +192,7 @@ impl TokensController {
                 self.run_filtered_search(
                     query.account.as_deref(),
                     &format!("{}%", s),
-                    "WHERE (symbol ILIKE $2 OR name ILIKE $2)",
+                    "WHERE (symbol ILIKE $4 OR name ILIKE $4)",
                     limit,
                     offset,
                 )
@@ -112,7 +202,7 @@ impl TokensController {
                 self.run_filtered_search(
                     query.account.as_deref(),
                     &format!("{}%", s),
-                    "WHERE token_id ILIKE $2",
+                    "WHERE token_id ILIKE $4",
                     limit,
                     offset,
                 )
@@ -129,15 +219,26 @@ impl TokensController {
         limit: i64,
         offset: i64,
     ) -> Result<DexTokenListResponse> {
-        let list_sql =
-            format!("{ENRICHED_CTE}{ENRICHED_COLS}{where_clause}\n{ORDER_CLAUSE}LIMIT $3 OFFSET $4");
-        let count_sql =
-            format!("{ENRICHED_CTE}SELECT COUNT(*) FROM enriched {where_clause}");
+        // P2 fix: pre-fetch held whitelist balances via RPC before SQL sort.
+        let (wl_ids, wl_usd) = match account {
+            Some(acct) => self.prefetch_wl_rpc(acct).await?,
+            None => (vec![], vec![]),
+        };
+
+        let cte = enriched_cte_sql();
+        // $1=account, $2=wl_ids[], $3=wl_usd[], $4=pattern, $5=limit, $6=offset
+        let list_sql = format!(
+            "{cte}{ENRICHED_COLS}{where_clause}\n{ORDER_CLAUSE}LIMIT $5 OFFSET $6"
+        );
+        // count: $1=account, $2=wl_ids[], $3=wl_usd[], $4=pattern
+        let count_sql = format!("{cte}SELECT COUNT(*) FROM enriched {where_clause}");
 
         let total_count: i64 = measure_postgres!(
             "dex.search_tokens.count",
             sqlx::query_scalar::<_, i64>(&count_sql)
                 .bind(account)
+                .bind(&wl_ids)
+                .bind(&wl_usd)
                 .bind(pattern)
                 .fetch_one(self.db.get_read_pool())
         )
@@ -147,6 +248,8 @@ impl TokensController {
             "dex.search_tokens",
             sqlx::query_as::<_, TokenRow>(&list_sql)
                 .bind(account)
+                .bind(&wl_ids)
+                .bind(&wl_usd)
                 .bind(pattern)
                 .bind(limit)
                 .bind(offset)
@@ -163,10 +266,20 @@ impl TokensController {
         query: &DexTokenListQuery,
         ca: &str,
     ) -> Result<DexTokenListResponse> {
+        // P2 fix: pre-fetch for correct tier in full-CA result.
+        let (wl_ids, wl_usd) = match query.account.as_deref() {
+            Some(acct) => self.prefetch_wl_rpc(acct).await?,
+            None => (vec![], vec![]),
+        };
+
+        // $1=account, $2=wl_ids[], $3=wl_usd[], $4=ca
+        let sql = search_full_ca_sql();
         let rows = measure_postgres!(
             "dex.search_full_ca",
-            sqlx::query_as::<_, TokenRow>(SEARCH_FULL_CA_SQL)
+            sqlx::query_as::<_, TokenRow>(&sql)
                 .bind(query.account.as_deref())
+                .bind(&wl_ids)
+                .bind(&wl_usd)
                 .bind(ca)
                 .fetch_all(self.db.get_read_pool())
         )
@@ -177,6 +290,9 @@ impl TokensController {
     }
 
     /// whitelist + account 행만 RPC 잔액 + Pyth 가격으로 보강. 나머지는 row_to_entry 그대로.
+    /// NOTE: enrich() still formats balance/balance_usd strings for whitelist rows.
+    /// The tier/ordering is already correct from SQL (wl_rpc CTE). Double RPC calls are
+    /// acceptable here (curated set is small); a cache layer can be added later if needed.
     async fn enrich(&self, rows: Vec<TokenRow>, account: Option<&str>) -> Vec<DexTokenEntry> {
         let Some(account) = account else {
             return rows.into_iter().map(row_to_entry).collect();
@@ -223,12 +339,26 @@ impl TokensController {
 }
 
 // ---------------------------------------------------------------------------
-// SQL consts — shared by default list and search paths
+// SQL builders — shared by default list and search paths
 // ---------------------------------------------------------------------------
 
-/// Candidate + enrichment CTEs. Uses $1 = account (nullable). No braces in SQL → safe for format!.
-const ENRICHED_CTE: &str = r#"
-WITH wl AS (
+/// Returns the ENRICHED_CTE with wl_rpc injected for P2 ordering fix.
+///
+/// Bind indices:
+///   $1 = account (nullable VARCHAR)
+///   $2 = held whitelist token_ids (VARCHAR[])  — may be empty
+///   $3 = held whitelist balance_usd  (NUMERIC[]) — may be empty
+///
+/// The wl_rpc CTE holds RPC-derived (token_id, balance_usd) for held whitelist tokens.
+/// It is LEFT JOINed into `enriched`, overriding the DB balance table for tier/order.
+fn enriched_cte_sql() -> String {
+    format!(
+        r#"
+WITH wl_rpc AS (
+    SELECT t.token_id, t.balance_usd
+    FROM UNNEST($2::varchar[], $3::numeric[]) AS t(token_id, balance_usd)
+),
+wl AS (
     SELECT token_id, sort_order, price_feed_id, name, symbol, image_uri, decimals FROM whitelist_token WHERE enabled
 ),
 v2 AS (
@@ -255,12 +385,15 @@ enriched AS (
         COALESCE(c.decimals,  dt.decimals, qt.decimals)   AS decimals,
         COALESCE(c.image_uri, t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
         b.balance AS balance,
-        (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC
-            * m.price * lp.price) AS balance_usd,
+        COALESCE(
+            wl_rpc.balance_usd,
+            (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC
+                * m.price * lp.price)
+        ) AS balance_usd,
         (m.price * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC)
             * lp.price) AS market_cap_usd,
         CASE
-          WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='whitelist' THEN 1
+          WHEN $1 IS NOT NULL AND wl_rpc.token_id IS NOT NULL AND c.token_type='whitelist' THEN 1
           WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='nadfun_v2' THEN 2
           WHEN c.token_type='whitelist' THEN 3
           ELSE 4
@@ -276,8 +409,11 @@ enriched AS (
         SELECT price FROM price WHERE quote_id = m.quote_id
         ORDER BY block_number DESC LIMIT 1
     ) lp ON true
+    LEFT JOIN wl_rpc      ON wl_rpc.token_id = c.token_id
 )
-"#;
+"#
+    )
+}
 
 const ENRICHED_COLS: &str = r#"SELECT token_id, token_type, symbol, name, decimals, image_uri,
        balance, balance_usd, price_feed_id
@@ -295,9 +431,15 @@ const ORDER_CLAUSE: &str = r#"ORDER BY
 "#;
 
 /// Full-CA search — resolves a single exact token_id across ALL tables (incl. external).
-/// $1 = account (nullable), $2 = exact token_id (EIP-55 checksum).
-const SEARCH_FULL_CA_SQL: &str = r#"
-WITH target AS (SELECT $2::VARCHAR AS token_id)
+/// $1 = account (nullable), $2 = wl_ids[], $3 = wl_usd[], $4 = exact token_id (EIP-55 checksum).
+fn search_full_ca_sql() -> String {
+    format!(
+        r#"
+WITH wl_rpc AS (
+    SELECT t.token_id, t.balance_usd
+    FROM UNNEST($2::varchar[], $3::numeric[]) AS t(token_id, balance_usd)
+),
+target AS (SELECT $4::VARCHAR AS token_id)
 SELECT
     tg.token_id,
     CASE
@@ -310,18 +452,24 @@ SELECT
     COALESCE(wl.decimals, dt.decimals, qt.decimals)   AS decimals,
     COALESCE(wl.image_uri, t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
     b.balance AS balance,
-    (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * m.price * lp.price) AS balance_usd,
+    COALESCE(
+        wl_rpc.balance_usd,
+        (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * m.price * lp.price)
+    ) AS balance_usd,
     wl.price_feed_id AS price_feed_id
 FROM target tg
 LEFT JOIN whitelist_token wl ON wl.token_id = tg.token_id AND wl.enabled
+LEFT JOIN wl_rpc              ON wl_rpc.token_id = tg.token_id
 LEFT JOIN token       t  ON t.token_id  = tg.token_id
 LEFT JOIN dex_token   dt ON dt.token_id = tg.token_id
 LEFT JOIN quote_token qt ON qt.quote_id = tg.token_id
 LEFT JOIN balance     b  ON b.token_id  = tg.token_id AND b.account_id = COALESCE($1::VARCHAR, '__NO_ACCOUNT__')
 LEFT JOIN market      m  ON m.token_id  = tg.token_id
 LEFT JOIN LATERAL (SELECT price FROM price WHERE quote_id=m.quote_id ORDER BY block_number DESC LIMIT 1) lp ON true
-WHERE (t.token_id IS NOT NULL OR dt.token_id IS NOT NULL OR qt.quote_id IS NOT NULL)
-"#;
+WHERE (t.token_id IS NOT NULL OR dt.token_id IS NOT NULL OR qt.quote_id IS NOT NULL OR wl.token_id IS NOT NULL)
+"#
+    )
+}
 
 // ---------------------------------------------------------------------------
 // Query classification
@@ -1001,5 +1149,98 @@ mod tests {
         assert_eq!(t.name, "USD Coin", "whitelist_token.name 우선");
         assert_eq!(t.image_uri, "https://img/usdc.png", "whitelist_token.image_uri 우선");
         assert_eq!(t.decimals, 6, "whitelist_token.decimals 우선 (join 없어도)");
+    }
+
+    // -----------------------------------------------------------------------
+    // Codex P2 fix — whitelist-only token must appear in full-CA search
+    // -----------------------------------------------------------------------
+
+    /// Token present ONLY in whitelist_token (not in token/dex_token/quote_token).
+    /// Full-CA search must return it with token_type="whitelist".
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_full_ca_returns_whitelist_only_token(pool: PgPool) {
+        // WL_A exists only in whitelist_token — no row in token/dex_token/quote_token.
+        sqlx::query(
+            "INSERT INTO whitelist_token (token_id, sort_order, name, symbol, image_uri, decimals)
+             VALUES ($1, 1, 'USD Coin', 'USDC', 'https://img/usdc.png', 6)",
+        )
+        .bind(WL_A)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let controller = make_controller(pool);
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some(WL_A.to_string()), // exact full-CA search
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(resp.tokens.len(), 1, "whitelist-only token이 full-CA 검색에 나와야 함");
+        assert_eq!(resp.tokens[0].token_id, WL_A, "token_id 일치");
+        assert_eq!(resp.tokens[0].token_type, "whitelist", "token_type은 whitelist");
+        assert_eq!(resp.tokens[0].symbol, "USDC", "whitelist 메타데이터 그대로 노출");
+    }
+
+    // -----------------------------------------------------------------------
+    // P2 ordering fix — held whitelist (off-DEX, RPC balance) sorts before held V2
+    // -----------------------------------------------------------------------
+
+    /// Proves the P2 ordering bug is fixed:
+    /// A whitelist token with NO DB balance row (off-DEX) but held on-chain (RPC)
+    /// must sort as tier=1 and appear BEFORE a held nadfun V2 token (tier=2).
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn held_whitelist_rpc_sorts_before_held_v2(pool: PgPool) {
+        // Seed: CHOG as nadfun V2, account holds it in DB balance (tier 2).
+        seed_pool_with_two_tokens(&pool).await;
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
+        seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // CHOG held → tier2
+
+        // WL_A: off-DEX whitelist token — NO DB balance row, but RPC returns held balance.
+        seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
+        // (no seed_balance for WL_A — off-DEX, not in DB balance table)
+
+        // Mock: RPC reports WL_A held for ACCOUNT.
+        let mut bal = FakeBalance::default();
+        bal.balances.insert(
+            (WL_A.to_string(), ACCOUNT.to_string()),
+            BigDecimal::from_str("5000000000000000000").unwrap(), // 5 tokens (18dp)
+        );
+        let mut price = FakePrice::default();
+        price.prices.insert(
+            WL_FEED.trim_start_matches("0x").to_string(),
+            BigDecimal::from_str("2.0").unwrap(), // $2 each → $10 USD
+        );
+
+        let c = controller_with(pool, bal, price);
+        let resp = c.list_tokens(&DexTokenListQuery {
+            account: Some(ACCOUNT.to_string()),
+            q: None,
+            page: 1,
+            limit: 50,
+        }).await.unwrap();
+
+        let wl_idx = resp.tokens.iter().position(|t| t.token_id == WL_A)
+            .expect("WL_A (held whitelist) must be present");
+        let v2_idx = resp.tokens.iter().position(|t| t.token_id == TOKEN0)
+            .expect("CHOG (held V2) must be present");
+
+        // Core assertion: held whitelist (tier 1) before held V2 (tier 2).
+        assert!(
+            wl_idx < v2_idx,
+            "held whitelist (RPC, off-DEX) must sort before held nadfun V2 (positions: WL_A={wl_idx}, CHOG={v2_idx})"
+        );
+
+        // Confirm WL_A exposes balance (set by enrich()).
+        let wl_tok = &resp.tokens[wl_idx];
+        assert!(wl_tok.balance.is_some(), "held whitelist must have balance set");
     }
 }
