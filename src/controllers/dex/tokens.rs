@@ -24,6 +24,9 @@ struct TokenRow {
     image_uri: Option<String>,
     balance: Option<BigDecimal>,
     balance_usd: Option<BigDecimal>,
+    /// USD unit price from SQL (market.price × quote→USD). NULL for whitelist
+    /// (no market row) — filled from Pyth in enrich().
+    price_usd: Option<BigDecimal>,
     price_feed_id: Option<String>,
 }
 
@@ -298,22 +301,11 @@ impl TokensController {
     /// The tier/ordering is already correct from SQL (wl_rpc CTE). Double RPC calls are
     /// acceptable here (curated set is small); a cache layer can be added later if needed.
     async fn enrich(&self, rows: Vec<TokenRow>, account: Option<&str>) -> Vec<DexTokenEntry> {
-        let Some(account) = account else {
-            return rows.into_iter().map(row_to_entry).collect();
-        };
-        // 1) whitelist 행의 raw 잔액 조회 (순차 — 캐시로 충분; 후속에 병렬화).
-        let mut wl_balance: HashMap<String, BigDecimal> = HashMap::new();
-        for r in rows.iter().filter(|r| r.token_type == "whitelist") {
-            if let Some(b) = self.balance_source.balance_of(&r.token_id, account).await {
-                if b > BigDecimal::from(0) {
-                    wl_balance.insert(r.token_id.clone(), b);
-                }
-            }
-        }
-        // 2) 보유 whitelist의 feed_id 모아 한 번에 가격 조회.
+        // price_usd is account-independent: always resolve Pyth prices for ALL
+        // enabled whitelist tokens (they have no market row → SQL price_usd is NULL).
         let feed_ids: Vec<String> = rows
             .iter()
-            .filter(|r| r.token_type == "whitelist" && wl_balance.contains_key(&r.token_id))
+            .filter(|r| r.token_type == "whitelist")
             .filter_map(|r| r.price_feed_id.clone())
             .collect();
         let prices = if feed_ids.is_empty() {
@@ -321,19 +313,34 @@ impl TokensController {
         } else {
             self.price_source.prices_usd(&feed_ids).await
         };
-        // 3) 매핑.
+
+        // balance / balance_usd require an account: fetch held whitelist balances via RPC.
+        let mut wl_balance: HashMap<String, BigDecimal> = HashMap::new();
+        if let Some(account) = account {
+            for r in rows.iter().filter(|r| r.token_type == "whitelist") {
+                if let Some(b) = self.balance_source.balance_of(&r.token_id, account).await {
+                    if b > BigDecimal::from(0) {
+                        wl_balance.insert(r.token_id.clone(), b);
+                    }
+                }
+            }
+        }
+
         rows.into_iter()
             .map(|r| {
                 if r.token_type == "whitelist" {
+                    let price_usd = r.price_feed_id.as_deref().and_then(|feed| {
+                        prices
+                            .get(&crate::services::pricing::normalize_feed_id(feed))
+                            .cloned()
+                    });
                     let balance = wl_balance.get(&r.token_id).cloned();
                     let decimals = r.decimals.unwrap_or(18);
-                    let balance_usd = match (&balance, &r.price_feed_id) {
-                        (Some(b), Some(feed)) => prices
-                            .get(&crate::services::pricing::normalize_feed_id(feed))
-                            .map(|p| compute_balance_usd(b, decimals, p)),
+                    let balance_usd = match (&balance, &price_usd) {
+                        (Some(b), Some(p)) => Some(compute_balance_usd(b, decimals, p)),
                         _ => None,
                     };
-                    whitelist_entry(r, balance, balance_usd)
+                    whitelist_entry(r, balance, balance_usd, price_usd)
                 } else {
                     row_to_entry(r)
                 }
@@ -400,6 +407,9 @@ enriched AS (
         ) AS balance_usd,
         (m.price * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC)
             * lp.price) AS market_cap_usd,
+        -- per-token USD unit price (V2/external). whitelist has no market row →
+        -- NULL here, filled from Pyth in enrich(). account-independent.
+        (m.price * lp.price) AS price_usd,
         CASE
           WHEN $1 IS NOT NULL AND wl_rpc.token_id IS NOT NULL AND c.token_type='whitelist' THEN 1
           WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='nadfun_v2' THEN 2
@@ -424,7 +434,7 @@ enriched AS (
 }
 
 const ENRICHED_COLS: &str = r#"SELECT token_id, token_type, symbol, name, decimals, image_uri,
-       balance, balance_usd, price_feed_id
+       balance, balance_usd, price_usd, price_feed_id
 FROM enriched
 "#;
 
@@ -464,6 +474,7 @@ SELECT
         wl_rpc.balance_usd,
         (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * m.price * lp.price)
     ) AS balance_usd,
+    (m.price * lp.price) AS price_usd,
     wl.price_feed_id AS price_feed_id
 FROM target tg
 LEFT JOIN whitelist_token wl ON wl.token_id = tg.token_id AND wl.enabled
@@ -519,13 +530,23 @@ fn row_to_entry(r: TokenRow) -> DexTokenEntry {
         token_type: r.token_type,
         balance: held.map(|b| b.normalized().to_plain_string()),
         balance_usd: balance_usd.map(|v| v.normalized().to_plain_string()),
+        price_usd: r.price_usd.map(|v| fmt_price_usd(&v)),
     }
+}
+
+/// Format a USD unit price: truncate to 8 decimal places (round toward zero),
+/// then strip trailing zeros. Keeps responses to ≤8 decimals.
+fn fmt_price_usd(v: &BigDecimal) -> String {
+    v.with_scale_round(8, bigdecimal::RoundingMode::Down)
+        .normalized()
+        .to_plain_string()
 }
 
 fn whitelist_entry(
     r: TokenRow,
     balance: Option<BigDecimal>,
     balance_usd: Option<BigDecimal>,
+    price_usd: Option<BigDecimal>,
 ) -> DexTokenEntry {
     DexTokenEntry {
         token_id: r.token_id,
@@ -536,6 +557,7 @@ fn whitelist_entry(
         token_type: r.token_type,
         balance: balance.as_ref().map(|b| b.normalized().to_plain_string()),
         balance_usd: balance_usd.map(|v| v.normalized().to_plain_string()),
+        price_usd: price_usd.map(|v| fmt_price_usd(&v)),
     }
 }
 
@@ -1059,6 +1081,7 @@ mod tests {
             image_uri: Some(String::new()),
             balance: balance.map(BigDecimal::from),
             balance_usd: balance_usd.map(BigDecimal::from),
+            price_usd: None,
             price_feed_id: None,
         }
     }
@@ -1250,5 +1273,71 @@ mod tests {
         // Confirm WL_A exposes balance (set by enrich()).
         let wl_tok = &resp.tokens[wl_idx];
         assert!(wl_tok.balance.is_some(), "held whitelist must have balance set");
+    }
+
+    // -----------------------------------------------------------------------
+    // price_usd (per-token USD unit price, account-independent, 8dp truncated)
+    // -----------------------------------------------------------------------
+
+    async fn seed_market_price(pool: &PgPool, token_id: &str, market_price: &str, quote_usd: &str) {
+        // market.quote_id and price.quote_id MUST match exactly (case-sensitive
+        // join), so pin both to the same address rather than relying on defaults.
+        const MON_QUOTE: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
+        sqlx::query(
+            r#"INSERT INTO market (market_type, token_id, price, quote_id, latest_trade_at, created_at)
+               VALUES ('V2_DEX', $1, $2::NUMERIC, $3, 0, 0)"#,
+        )
+        .bind(token_id).bind(market_price).bind(MON_QUOTE)
+        .execute(pool).await.unwrap();
+        sqlx::query(
+            r#"INSERT INTO price (quote_id, block_number, price) VALUES ($1, 1, $2::NUMERIC)"#,
+        )
+        .bind(MON_QUOTE).bind(quote_usd)
+        .execute(pool).await.unwrap();
+    }
+
+    /// whitelist price_usd comes from Pyth and must be present even with NO account
+    /// (price is account-independent), truncated to 8 decimals.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn price_usd_for_whitelist_without_account(pool: PgPool) {
+        const FEED: &str = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        seed_whitelist_with_feed(&pool, WL_A, 1, FEED).await;
+        let mut price = FakePrice::default();
+        // Pyth → 2.123456789 USD; 8dp truncate → "2.12345678"
+        price.prices.insert(
+            crate::services::pricing::normalize_feed_id(FEED),
+            "2.123456789".parse().unwrap(),
+        );
+        let controller = controller_with(pool, FakeBalance::default(), price);
+
+        // No ?account= — price_usd must still be populated.
+        let resp = controller.list_tokens(&empty_query()).await.unwrap();
+        let wl = resp.tokens.iter().find(|t| t.token_id == WL_A).expect("whitelist present");
+        assert!(wl.balance.is_none(), "no account → balance None");
+        assert!(wl.balance_usd.is_none(), "no account → balance_usd None");
+        assert_eq!(
+            wl.price_usd.as_deref(),
+            Some("2.12345678"),
+            "whitelist price_usd = Pyth price, account-independent, 8dp truncated"
+        );
+    }
+
+    /// nadfun_v2 price_usd = market.price × quote→USD, from SQL, account-independent.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn price_usd_for_v2_from_market(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0).execute(&pool).await.unwrap();
+        // m.price=3, quote→USD=0.5 → price_usd = 1.5
+        seed_market_price(&pool, TOKEN0, "3", "0.5").await;
+        let controller = make_controller(pool);
+
+        let resp = controller.list_tokens(&empty_query()).await.unwrap();
+        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        assert_eq!(
+            chog.price_usd.as_deref(),
+            Some("1.5"),
+            "nadfun_v2 price_usd = market.price × quote→USD (account-independent)"
+        );
     }
 }
