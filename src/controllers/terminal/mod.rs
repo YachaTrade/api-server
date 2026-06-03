@@ -148,8 +148,13 @@ impl TerminalController {
         Ok(row)
     }
 
-    /// Get block number by transaction hash from balance_history
-    pub async fn get_block_number_by_tx(&self, transaction_hash: &str) -> Result<u64> {
+    /// Get block number by transaction hash from balance_history.
+    ///
+    /// Returns `None` when the tx has no balance_history row — e.g. a token
+    /// created without an initial buy produces no balance change, so its
+    /// creation tx is absent here. Callers treat the block number as optional
+    /// rather than failing the request.
+    pub async fn get_block_number_by_tx(&self, transaction_hash: &str) -> Result<Option<u64>> {
         let row = measure_postgres!(
             "terminal.get_block_number_by_tx",
             sqlx::query_as::<_, BlockNumberRow>(
@@ -161,11 +166,11 @@ impl TerminalController {
                 "#,
             )
             .bind(transaction_hash)
-            .fetch_one(self.db.get_read_pool())
+            .fetch_optional(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to get block number by transaction hash: {}", err))?;
 
-        Ok(row.block_number as u64)
+        Ok(row.map(|r| r.block_number as u64))
     }
 
     /// Get swap events from swap table for a block range
@@ -424,5 +429,28 @@ mod tests {
         let rows = ctrl(pool).get_burn_events(0, 100).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].quote_id, QUOTE_LVMON);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn block_number_by_tx_none_when_no_balance_history(pool: PgPool) {
+        // A token created without an initial buy has no balance_history row for
+        // its creation tx. get_block_number_by_tx must return None, not error.
+        let got = ctrl(pool)
+            .get_block_number_by_tx("0xnotindexed")
+            .await
+            .unwrap();
+        assert_eq!(got, None);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn block_number_by_tx_some_when_present(pool: PgPool) {
+        sqlx::query(r#"INSERT INTO balance_history (token_id,account_id,balance,block_number,transaction_hash,log_index,tx_index)
+            VALUES ($1,$2,0,12345,'0xseedtx',0,0)"#)
+            .bind(TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
+        let got = ctrl(pool)
+            .get_block_number_by_tx("0xseedtx")
+            .await
+            .unwrap();
+        assert_eq!(got, Some(12345));
     }
 }
