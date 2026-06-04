@@ -8,8 +8,8 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     services::pricing::{
-        balance::RpcBalanceSource, compute_balance_usd, pyth::PythHermesClient, BalanceSource,
-        PriceSource,
+        balance::RpcBalanceSource, compute_balance_usd, meta::RpcMetaSource,
+        pyth::PythHermesClient, BalanceSource, PriceSource, TokenMetaSource,
     },
     types::dex::tokens::{DexTokenEntry, DexTokenListQuery, DexTokenListResponse},
 };
@@ -34,6 +34,8 @@ pub struct TokensController {
     db: Arc<PostgresDatabase>,
     balance_source: Arc<dyn BalanceSource>,
     price_source: Arc<dyn PriceSource>,
+    /// full-CA 미발견 시 온체인 메타 fallback. None이면 fallback 없음(미발견 → 빈 결과).
+    meta_source: Option<Arc<dyn TokenMetaSource>>,
 }
 
 impl TokensController {
@@ -43,16 +45,23 @@ impl TokensController {
             db,
             balance_source: Arc::new(RpcBalanceSource::new()),
             price_source: Arc::new(PythHermesClient::new()),
+            meta_source: Some(Arc::new(RpcMetaSource::new())),
         }
     }
 
-    /// 테스트용 — 소스 주입.
+    /// 테스트용 — 소스 주입. meta fallback은 기본 비활성(미발견 → 빈 결과).
     pub fn with_sources(
         db: Arc<PostgresDatabase>,
         balance_source: Arc<dyn BalanceSource>,
         price_source: Arc<dyn PriceSource>,
     ) -> Self {
-        Self { db, balance_source, price_source }
+        Self { db, balance_source, price_source, meta_source: None }
+    }
+
+    /// 테스트용 — full-CA 미발견 시 외부 토큰 메타 fallback 주입.
+    pub fn with_meta_source(mut self, meta_source: Arc<dyn TokenMetaSource>) -> Self {
+        self.meta_source = Some(meta_source);
+        self
     }
 
     pub async fn list_tokens(&self, query: &DexTokenListQuery) -> Result<DexTokenListResponse> {
@@ -199,7 +208,7 @@ impl TokensController {
                 self.run_filtered_search(
                     query.account.as_deref(),
                     &format!("{}%", s),
-                    "WHERE (symbol ILIKE $4 OR name ILIKE $4)",
+                    &search_enriched_cte_sql(TEXT_MATCHED_UNION),
                     limit,
                     offset,
                 )
@@ -209,7 +218,7 @@ impl TokensController {
                 self.run_filtered_search(
                     query.account.as_deref(),
                     &format!("{}%", s),
-                    "WHERE token_id ILIKE $4",
+                    &search_enriched_cte_sql(CA_MATCHED_UNION),
                     limit,
                     offset,
                 )
@@ -222,7 +231,7 @@ impl TokensController {
         &self,
         account: Option<&str>,
         pattern: &str,
-        where_clause: &str,
+        cte: &str,
         limit: i64,
         offset: i64,
     ) -> Result<DexTokenListResponse> {
@@ -232,13 +241,12 @@ impl TokensController {
             None => (vec![], vec![]),
         };
 
-        let cte = enriched_cte_sql();
+        // The $4 prefix filter lives inside `cte`'s candidate set (matched union),
+        // so the outer projection needs no extra WHERE.
         // $1=account, $2=wl_ids[], $3=wl_usd[], $4=pattern, $5=limit, $6=offset
-        let list_sql = format!(
-            "{cte}{ENRICHED_COLS}{where_clause}\n{ORDER_CLAUSE}LIMIT $5 OFFSET $6"
-        );
+        let list_sql = format!("{cte}{ENRICHED_COLS}\n{ORDER_CLAUSE}LIMIT $5 OFFSET $6");
         // count: $1=account, $2=wl_ids[], $3=wl_usd[], $4=pattern
-        let count_sql = format!("{cte}SELECT COUNT(*) FROM enriched {where_clause}");
+        let count_sql = format!("{cte}SELECT COUNT(*) FROM enriched");
 
         let total_count: i64 = measure_postgres!(
             "dex.search_tokens.count",
@@ -291,9 +299,38 @@ impl TokensController {
                 .fetch_all(self.db.get_read_pool())
         )
         .map_err(|e| anyhow::anyhow!("Failed full CA search: {}", e))?;
+
+        // Unindexed external token: present in no table → resolve on-chain
+        // metadata via RPC and surface it as an external entry (no price/balance,
+        // it isn't in any pool we track). No meta source / no on-chain match →
+        // fall through to the empty result below.
+        if rows.is_empty() {
+            if let Some(entry) = self.fetch_external_meta(ca).await {
+                return Ok(DexTokenListResponse { tokens: vec![entry], total_count: 1 });
+            }
+        }
+
         let total_count = rows.len() as i64;
         let tokens = self.enrich(rows, query.account.as_deref()).await;
         Ok(DexTokenListResponse { tokens, total_count })
+    }
+
+    /// On-chain ERC20 metadata fallback for a full CA absent from every table.
+    /// Returns an `external` entry with RPC-sourced name/symbol/decimals; price
+    /// and balance stay null (the token is in no pool/market we index).
+    async fn fetch_external_meta(&self, ca: &str) -> Option<DexTokenEntry> {
+        let meta = self.meta_source.as_ref()?.token_meta(ca).await?;
+        Some(DexTokenEntry {
+            token_id: ca.to_string(),
+            symbol: meta.symbol,
+            name: meta.name,
+            decimals: meta.decimals,
+            image_uri: String::new(),
+            token_type: "external".to_string(),
+            balance: None,
+            balance_usd: None,
+            price_usd: None,
+        })
     }
 
     /// whitelist + account 행만 RPC 잔액 + Pyth 가격으로 보강. 나머지는 row_to_entry 그대로.
@@ -362,13 +399,9 @@ impl TokensController {
 ///
 /// The wl_rpc CTE holds RPC-derived (token_id, balance_usd) for held whitelist tokens.
 /// It is LEFT JOINed into `enriched`, overriding the DB balance table for tier/order.
-fn enriched_cte_sql() -> String {
-    format!(
-        r#"
-WITH wl_rpc AS (
-    SELECT t.token_id, t.balance_usd
-    FROM UNNEST($2::varchar[], $3::numeric[]) AS t(token_id, balance_usd)
-),
+/// Default-list candidate CTEs: whitelist ∪ (nadfun V2 with a pool). Slots into
+/// `enriched_cte_with` between wl_rpc and enriched; must end with `candidates AS (…),`.
+const DEFAULT_CANDIDATES_CTES: &str = r#"
 wl AS (
     SELECT token_id, sort_order, price_feed_id, name, symbol, image_uri, decimals FROM whitelist_token WHERE enabled
 ),
@@ -389,6 +422,66 @@ candidates AS (
     SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order, NULL::varchar AS price_feed_id,
            NULL::varchar AS name, NULL::varchar AS symbol, NULL::varchar AS image_uri, NULL::int AS decimals FROM v2
 ),
+"#;
+
+/// name/symbol search universe: token ∪ dex_token ∪ quote_token ∪ whitelist,
+/// prefix-matched (`$4`). Feeds `search_enriched_cte_sql`.
+const TEXT_MATCHED_UNION: &str = r#"
+    SELECT token_id FROM token            WHERE name ILIKE $4 OR symbol ILIKE $4
+    UNION SELECT token_id FROM dex_token   WHERE name ILIKE $4 OR symbol ILIKE $4
+    UNION SELECT quote_id FROM quote_token WHERE name ILIKE $4 OR symbol ILIKE $4
+    UNION SELECT token_id FROM whitelist_token WHERE enabled AND (name ILIKE $4 OR symbol ILIKE $4)
+"#;
+
+/// CA (partial/prefix) search universe — same tables, matched on token_id (`$4`).
+const CA_MATCHED_UNION: &str = r#"
+    SELECT token_id FROM token            WHERE token_id ILIKE $4
+    UNION SELECT token_id FROM dex_token   WHERE token_id ILIKE $4
+    UNION SELECT quote_id FROM quote_token WHERE quote_id ILIKE $4
+    UNION SELECT token_id FROM whitelist_token WHERE enabled AND token_id ILIKE $4
+"#;
+
+/// Default list candidate set (whitelist + nadfun V2 with pool).
+fn enriched_cte_sql() -> String {
+    enriched_cte_with(DEFAULT_CANDIDATES_CTES)
+}
+
+/// Search candidate set spanning token ∪ dex_token ∪ quote_token ∪ whitelist.
+/// token_type is by table membership: whitelist_token → whitelist, `token`
+/// version V2/V1 → nadfun_v2/nadfun_v1, otherwise → external. `matched_union`
+/// supplies the prefix filter (name/symbol or token_id) over `$4`.
+fn search_enriched_cte_sql(matched_union: &str) -> String {
+    let mid = format!(
+        r#"
+matched AS (
+{matched_union}
+),
+candidates AS (
+    SELECT m.token_id,
+           CASE WHEN wl.token_id IS NOT NULL THEN 'whitelist'
+                WHEN t.version = 'V2'        THEN 'nadfun_v2'
+                WHEN t.version = 'V1'        THEN 'nadfun_v1'
+                ELSE 'external' END::text AS token_type,
+           wl.sort_order, wl.price_feed_id, wl.name, wl.symbol, wl.image_uri, wl.decimals
+    FROM matched m
+    LEFT JOIN whitelist_token wl ON wl.token_id = m.token_id AND wl.enabled
+    LEFT JOIN token           t  ON t.token_id  = m.token_id
+),
+"#
+    );
+    enriched_cte_with(&mid)
+}
+
+/// Shared enrichment template. `mid_ctes` defines `candidates` (plus any helper
+/// CTEs) and slots between wl_rpc and enriched; it must end with a trailing comma.
+fn enriched_cte_with(mid_ctes: &str) -> String {
+    format!(
+        r#"
+WITH wl_rpc AS (
+    SELECT t.token_id, t.balance_usd
+    FROM UNNEST($2::varchar[], $3::numeric[]) AS t(token_id, balance_usd)
+),
+{mid_ctes}
 enriched AS (
     SELECT
         c.token_id,
@@ -403,13 +496,15 @@ enriched AS (
         COALESCE(
             wl_rpc.balance_usd,
             (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC
-                * m.price * lp.price)
+                * COALESCE(dtp.price_usd, m.price * lp.price))
         ) AS balance_usd,
         (m.price * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC)
             * lp.price) AS market_cap_usd,
-        -- per-token USD unit price (V2/external). whitelist has no market row →
-        -- NULL here, filled from Pyth in enrich(). account-independent.
-        (m.price * lp.price) AS price_usd,
+        -- per-token USD unit price (V2/external). Pool view (deepest-TVL pool's
+        -- per-token USD, observer-set) first, legacy market.price × quote→USD as
+        -- fallback. whitelist has no market/pool row → NULL here, filled from Pyth
+        -- in enrich(). account-independent.
+        COALESCE(dtp.price_usd, m.price * lp.price) AS price_usd,
         CASE
           WHEN $1 IS NOT NULL AND wl_rpc.token_id IS NOT NULL AND c.token_type='whitelist' THEN 1
           WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='nadfun_v2' THEN 2
@@ -428,6 +523,7 @@ enriched AS (
         ORDER BY block_number DESC LIMIT 1
     ) lp ON true
     LEFT JOIN wl_rpc      ON wl_rpc.token_id = c.token_id
+    LEFT JOIN dex_token_price dtp ON dtp.token_id = c.token_id
 )
 "#
     )
@@ -463,6 +559,7 @@ SELECT
     CASE
       WHEN wl.token_id IS NOT NULL THEN 'whitelist'
       WHEN t.version = 'V2' THEN 'nadfun_v2'
+      WHEN t.version = 'V1' THEN 'nadfun_v1'
       ELSE 'external'
     END AS token_type,
     COALESCE(wl.symbol,    t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
@@ -472,9 +569,9 @@ SELECT
     b.balance AS balance,
     COALESCE(
         wl_rpc.balance_usd,
-        (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * m.price * lp.price)
+        (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * COALESCE(dtp.price_usd, m.price * lp.price))
     ) AS balance_usd,
-    (m.price * lp.price) AS price_usd,
+    COALESCE(dtp.price_usd, m.price * lp.price) AS price_usd,
     wl.price_feed_id AS price_feed_id
 FROM target tg
 LEFT JOIN whitelist_token wl ON wl.token_id = tg.token_id AND wl.enabled
@@ -485,6 +582,7 @@ LEFT JOIN quote_token qt ON qt.quote_id = tg.token_id
 LEFT JOIN balance     b  ON b.token_id  = tg.token_id AND b.account_id = COALESCE($1::VARCHAR, '__NO_ACCOUNT__')
 LEFT JOIN market      m  ON m.token_id  = tg.token_id
 LEFT JOIN LATERAL (SELECT price FROM price WHERE quote_id=m.quote_id ORDER BY block_number DESC LIMIT 1) lp ON true
+LEFT JOIN dex_token_price dtp ON dtp.token_id = tg.token_id
 WHERE (t.token_id IS NOT NULL OR dt.token_id IS NOT NULL OR qt.quote_id IS NOT NULL OR wl.token_id IS NOT NULL)
 "#
     )
@@ -566,7 +664,7 @@ mod tests {
     use super::*;
     use sqlx::PgPool;
 
-    use crate::services::pricing::{BalanceSource, PriceSource};
+    use crate::services::pricing::{BalanceSource, PriceSource, TokenMeta, TokenMetaSource};
     use std::collections::HashMap;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -622,6 +720,18 @@ mod tests {
                     self.prices.get(&k).map(|v| (k, v.clone()))
                 })
                 .collect()
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeMeta {
+        metas: HashMap<String, TokenMeta>, // token_id → on-chain meta
+    }
+
+    #[async_trait::async_trait]
+    impl TokenMetaSource for FakeMeta {
+        async fn token_meta(&self, token_id: &str) -> Option<TokenMeta> {
+            self.metas.get(token_id).cloned()
         }
     }
 
@@ -1001,8 +1111,10 @@ mod tests {
         assert_eq!(resp.tokens[0].token_type, "external");
     }
 
+    /// Policy change: CA search (incl. partial) now covers dex_token, so indexed
+    /// external tokens surface by CA prefix too (was: partial-CA excluded external).
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_partial_ca_excludes_external(pool: PgPool) {
+    async fn search_partial_ca_includes_external(pool: PgPool) {
         sqlx::query(
             r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
                VALUES ($1, 'Ext', 'EXT', 18, '', 0)"#,
@@ -1022,7 +1134,12 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(resp.tokens.is_empty(), "partial CA는 external 제외");
+        let ext = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN1)
+            .expect("external present by partial CA");
+        assert_eq!(ext.token_type, "external", "partial CA는 dex_token(external)도 노출");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -1040,8 +1157,10 @@ mod tests {
         assert!(resp.tokens.is_empty(), "어느 테이블에도 없는 full CA → 빈 결과");
     }
 
+    /// Policy change: name/symbol search now covers dex_token, so an external
+    /// token whose symbol prefix-matches surfaces (was: text search excluded external).
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_text_excludes_external_symbol_match(pool: PgPool) {
+    async fn search_text_includes_external_symbol_match(pool: PgPool) {
         // external token (dex_token only) whose symbol matches the "CHO" prefix
         sqlx::query(
             r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
@@ -1061,10 +1180,80 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(
-            resp.tokens.iter().all(|t| t.token_id != TOKEN1),
-            "text 검색은 symbol이 prefix 매칭돼도 external 제외"
-        );
+        let ext = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN1)
+            .expect("external present by symbol prefix");
+        assert_eq!(ext.token_type, "external", "text 검색은 dex_token(external) symbol prefix도 노출");
+    }
+
+    /// V1 nadfun token (in `token`, version V1) must surface in name/symbol search,
+    /// labeled nadfun_v1. Previously invisible — search reused the V2-only candidate set.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_text_finds_v1(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await; // TOKEN0 = CHOG, version stays V1
+        let controller = make_controller(pool);
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some("CHO".into()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let v1 = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("V1 token present by symbol prefix");
+        assert_eq!(v1.token_type, "nadfun_v1", "V1 nadfun token → nadfun_v1");
+    }
+
+    /// V1 nadfun token found by partial CA too.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_partial_ca_finds_v1(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        let controller = make_controller(pool);
+        let prefix = &TOKEN0[..10];
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some(prefix.to_string()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let v1 = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("V1 present by partial CA");
+        assert_eq!(v1.token_type, "nadfun_v1");
+    }
+
+    /// full-CA on a V1 token labels it nadfun_v1 (was external under the version='V2' CASE).
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_full_ca_v1_labeled_nadfun_v1(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await; // TOKEN0 V1
+        let controller = make_controller(pool);
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some(TOKEN0.to_string()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let v1 = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("V1 present by full CA");
+        assert_eq!(v1.token_type, "nadfun_v1", "full-CA V1 → nadfun_v1 (not external)");
     }
 
     // -----------------------------------------------------------------------
@@ -1339,5 +1528,176 @@ mod tests {
             Some("1.5"),
             "nadfun_v2 price_usd = market.price × quote→USD (account-independent)"
         );
+    }
+
+    /// Set the per-token USD unit price the observer's RawSync inference writes
+    /// onto a pool. `side` is 0 or 1 (which side of POOL the token sits on).
+    async fn seed_pool_token_price_usd(pool: &PgPool, side: u8, price_usd: &str) {
+        let col = if side == 0 { "token0_price_usd" } else { "token1_price_usd" };
+        sqlx::query(&format!("UPDATE pool SET {col} = $1::NUMERIC WHERE pool_id = $2"))
+            .bind(price_usd).bind(POOL)
+            .execute(pool).await.unwrap();
+    }
+
+    /// pure-DEX nadfun_v2 token with NO market row: price_usd must come from the
+    /// dex_token_price view (deepest-TVL pool's per-token USD), not market.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn price_usd_for_pure_dex_v2_from_pool_view(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0).execute(&pool).await.unwrap();
+        // No market row. Observer set TOKEN0 (token0 side) USD price = 0.5 on the pool.
+        seed_pool_token_price_usd(&pool, 0, "0.5").await;
+        let controller = make_controller(pool);
+
+        let resp = controller.list_tokens(&empty_query()).await.unwrap();
+        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        assert_eq!(
+            chog.price_usd.as_deref(),
+            Some("0.5"),
+            "pure-dex nadfun_v2 price_usd = pool view (deepest-TVL token0_price_usd), market absent"
+        );
+    }
+
+    /// Held pure-DEX token (pool-view price, no market row): balance_usd must use
+    /// the same unit price as price_usd. codex P2 — was null because balance_usd
+    /// only multiplied the market path (m.price × lp.price).
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn balance_usd_for_held_pure_dex_from_pool_view(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0).execute(&pool).await.unwrap();
+        seed_pool_token_price_usd(&pool, 0, "0.5").await; // pool view unit price, NO market row
+        seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // 1000 CHOG (18dp)
+        let controller = make_controller(pool);
+
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: None,
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        assert_eq!(chog.price_usd.as_deref(), Some("0.5"), "price from pool view");
+        let usd: BigDecimal = chog
+            .balance_usd
+            .as_deref()
+            .expect("held → balance_usd present")
+            .parse()
+            .unwrap();
+        assert_eq!(
+            usd,
+            BigDecimal::from_str("500").unwrap(),
+            "balance_usd = 1000 × 0.5 (pool-view unit price, not market)"
+        );
+    }
+
+    /// When both a market row and a pool view price exist, the pool view wins
+    /// (COALESCE(view, market) — pool is the canonical single source).
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn price_usd_pool_view_takes_precedence_over_market(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0).execute(&pool).await.unwrap();
+        // market path would yield 3 × 0.5 = 1.5; pool view yields 0.5 → view wins.
+        seed_market_price(&pool, TOKEN0, "3", "0.5").await;
+        seed_pool_token_price_usd(&pool, 0, "0.5").await;
+        let controller = make_controller(pool);
+
+        let resp = controller.list_tokens(&empty_query()).await.unwrap();
+        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        assert_eq!(
+            chog.price_usd.as_deref(),
+            Some("0.5"),
+            "pool view price_usd takes precedence over market path"
+        );
+    }
+
+    /// Full-CA search path resolves price_usd from the pool view too (second SQL
+    /// builder: search_full_ca_sql). Pure-dex token, no market row.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn price_usd_full_ca_search_from_pool_view(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0).execute(&pool).await.unwrap();
+        seed_pool_token_price_usd(&pool, 0, "0.25").await;
+        let controller = make_controller(pool);
+
+        // q = exact full CA → search_full_ca path.
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some(TOKEN0.to_string()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        assert_eq!(
+            chog.price_usd.as_deref(),
+            Some("0.25"),
+            "full-CA search price_usd = pool view (search_full_ca_sql)"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2 — full-CA RPC metadata fallback for unindexed external tokens
+    // -----------------------------------------------------------------------
+
+    const UNKNOWN_CA: &str = "0x000000000000000000000000000000000000FeeD";
+
+    /// full CA that is in NO table → fall back to on-chain meta and surface it
+    /// as an external token (name/symbol/decimals from RPC, price/balance null).
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_full_ca_rpc_fallback_external(pool: PgPool) {
+        let mut meta = FakeMeta::default();
+        meta.metas.insert(
+            UNKNOWN_CA.to_string(),
+            TokenMeta { name: "Foreign".into(), symbol: "FRGN".into(), decimals: 6 },
+        );
+        let controller = make_controller(pool).with_meta_source(std::sync::Arc::new(meta));
+
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some(UNKNOWN_CA.to_string()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(resp.tokens.len(), 1, "RPC-resolved external surfaces");
+        assert_eq!(resp.total_count, 1);
+        let t = &resp.tokens[0];
+        assert_eq!(t.token_id, UNKNOWN_CA);
+        assert_eq!(t.token_type, "external");
+        assert_eq!(t.symbol, "FRGN");
+        assert_eq!(t.name, "Foreign");
+        assert_eq!(t.decimals, 6);
+        assert!(t.price_usd.is_none(), "unindexed external has no price");
+        assert!(t.balance.is_none(), "no balance for RPC-fallback external");
+    }
+
+    /// meta source present but the address resolves to nothing on-chain → empty.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_full_ca_meta_miss_returns_empty(pool: PgPool) {
+        let controller =
+            make_controller(pool).with_meta_source(std::sync::Arc::new(FakeMeta::default()));
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: None,
+                q: Some(UNKNOWN_CA.to_string()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        assert!(resp.tokens.is_empty(), "meta miss → no entry");
+        assert_eq!(resp.total_count, 0);
     }
 }

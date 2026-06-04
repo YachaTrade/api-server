@@ -39,14 +39,18 @@ pub struct DexTokenEntry {
     pub name: String,
     pub decimals: i32,
     pub image_uri: String,
-    /// "whitelist" | "nadfun_v2" | "external". FE 렌더 분기용 (external 판정 = token_type == "external").
+    /// "whitelist" | "nadfun_v2" | "nadfun_v1" | "external". 테이블 멤버십 기준
+    /// (whitelist_token→whitelist, token.version V2/V1→nadfun_v2/nadfun_v1, 그 외→external).
+    /// FE 렌더 분기용 (external 판정 = token_type == "external"). 기본 리스트는 whitelist+nadfun_v2만,
+    /// nadfun_v1/external은 검색에서만 노출.
     pub token_type: String,
     /// 보유(balance > 0) 시에만 raw wei balance. 미보유·account 미제공이면 null → FE는 balance != null로 보유 판정.
     pub balance: Option<String>,
     /// 보유분 USD 가치 = balance/10^decimals × market.price × price. 미보유면 None.
     pub balance_usd: Option<String>,
     /// 토큰 1개당 USD 단가. **account 무관**(보유 여부와 상관없이 항상 제공).
-    /// nadfun_v2/external = market.price × quote→USD, whitelist = Pyth.
+    /// nadfun_v2/external = dex_token_price 뷰(deepest-TVL 풀의 per-token USD) 우선,
+    /// 없으면 market.price × quote→USD fallback. whitelist = Pyth.
     /// 소수점 8자리까지 truncate. 가격 미상이면 None.
     pub price_usd: Option<String>,
 }

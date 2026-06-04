@@ -520,6 +520,12 @@ interface BalanceInfo {
 
 Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하나로 통합. `GET /dex/search`는 **제거됨** (라우터·핸들러·`DexSearchQuery`·OpenAPI 등록 전부 삭제). 검색은 `GET /dex/tokens?q=` 사용.
 
+> **2026-06-04 업데이트** (branch `feat/dex-cache-policy`):
+> - `price_usd` 소스를 `dex_token_price` 뷰(deepest-TVL 풀 per-token USD) 우선 + market fallback으로 전환 → transitive pure-DEX 토큰도 가격 노출.
+> - `token_type`에 **`nadfun_v1`** 추가 (테이블 멤버십 분류). V1 토큰이 더 이상 external로 오분류되지 않음.
+> - 검색을 `token∪dex_token∪quote_token∪whitelist`로 확장 → **V1·external이 name/symbol·partial-CA 검색에 노출**(이전엔 full-CA exact만). 기본 리스트는 무변경.
+> - full-CA 미발견 시 **RPC 온체인 메타 fallback**으로 external 1건 반환.
+
 ### 기존 → 변경 (dex 엔드포인트 영향 범위)
 
 이번 변경은 `/dex/tokens`, `/dex/search` 두 개만 건드립니다. `/dex/positions/{account_id}`, `/dex/pools/{pool_id}`는 **변경 없음**.
@@ -571,11 +577,15 @@ GET /dex/tokens?account=0x..&q=..&page=1&limit=50
 
 case-insensitive **prefix** 매칭 (기존 substring → prefix로 변경).
 
+검색 후보집합은 기본 리스트(화이트리스트+Nadfun V2)와 **다르다** — `token`(V1·V2) ∪ `dex_token`(external) ∪ `quote_token` ∪ `whitelist_token` 전체를 대상으로 한다. 즉 **V1·external 토큰은 검색에서만 노출**(기본 리스트엔 여전히 제외).
+
 | q 형태 | 동작 |
 |---|---|
-| 텍스트 (0x 아님) | `symbol`/`name` prefix, 화이트리스트+Nadfun V2만 (external 제외) |
-| `0x` + full CA (42자) | `token_id` exact, **모든 토큰** (external 포함) → external 노출 경로 |
-| `0x` partial | `token_id` prefix, 화이트리스트+Nadfun V2만 (external 제외) |
+| 텍스트 (0x 아님) | `symbol`/`name` prefix — `token`(V1·V2) ∪ `dex_token`(external) ∪ `quote_token` ∪ 화이트리스트 |
+| `0x` + full CA (42자) | `token_id` exact, **모든 토큰**. DB 어느 테이블에도 없으면 **RPC 온체인 메타(name/symbol/decimals)로 external 1건 fallback** |
+| `0x` partial | `token_id` prefix — full CA와 동일 테이블 집합 (external 포함) |
+
+> 정책 변경: 이전엔 external이 full-CA exact일 때만 노출됐으나, 이제 텍스트/partial-CA 검색도 `dex_token`(indexed external)을 포함한다.
 
 ### `DexTokenEntry` (응답 항목)
 
@@ -586,12 +596,12 @@ interface DexTokenEntry {
     name: string;
     decimals: number;
     image_uri: string;
-    token_type: "whitelist" | "nadfun_v2" | "external";  // 신규 — FE 렌더 분기
+    token_type: "whitelist" | "nadfun_v2" | "nadfun_v1" | "external";  // FE 렌더 분기. 테이블 멤버십: whitelist_token→whitelist, token.version V2/V1→nadfun_v2/nadfun_v1, 그 외→external. (external 판정 = token_type==="external")
     is_external: boolean;        // 신규 — true면 grey 첫글자 아이콘 + 경고 + CA 표시
     is_held: boolean;            // 신규 — balance > 0
     balance: string | null;      // raw wei, account 제공 시에만
     balance_usd: string | null;  // 신규 — balance/10^decimals × market.price × price
-    price_usd: string | null;    // 신규 — 토큰 1개당 USD 단가, account 무관·8자리 truncate (V2=market×quote, whitelist=Pyth)
+    price_usd: string | null;    // 토큰 1개당 USD 단가, account 무관·8자리 truncate. V2/external=dex_token_price 뷰(deepest-TVL 풀 per-token USD) 우선·없으면 market×quote fallback, whitelist=Pyth
     market_cap_usd: string | null;
     tier: number;                // 신규 — 1~4 (FE 섹션 헤더용)
 }
