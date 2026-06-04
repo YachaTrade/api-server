@@ -188,8 +188,8 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
             symbol: token0_symbol,
             decimals: r.token0_decimals.unwrap_or(18),
             image_uri: r.token0_image.unwrap_or_default(),
-            deposited: r.deposited_token0.normalized().to_plain_string(),
-            deposited_usd: r.deposited_token0_usd.normalized().to_plain_string(),
+            deposit_amount: r.deposited_token0.normalized().to_plain_string(),
+            deposit_usd: r.deposited_token0_usd.normalized().to_plain_string(),
             current_amount: current_token0.map(|v| v.normalized().to_plain_string()),
         },
         token1: LpPositionTokenSide {
@@ -197,8 +197,8 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
             symbol: token1_symbol,
             decimals: r.token1_decimals.unwrap_or(18),
             image_uri: r.token1_image.unwrap_or_default(),
-            deposited: r.deposited_token1.normalized().to_plain_string(),
-            deposited_usd: r.deposited_token1_usd.normalized().to_plain_string(),
+            deposit_amount: r.deposited_token1.normalized().to_plain_string(),
+            deposit_usd: r.deposited_token1_usd.normalized().to_plain_string(),
             current_amount: current_token1.map(|v| v.normalized().to_plain_string()),
         },
         balance: r.balance.normalized().to_plain_string(),
@@ -463,9 +463,9 @@ mod tests {
         assert_eq!(p.pool_info.pool_id, POOL_ADDR);
         assert_eq!(p.pool_info.pair_label, "CHOG-WMON");
         assert_eq!(p.token0.symbol, "CHOG");
-        assert_eq!(p.token0.deposited, "2500");
+        assert_eq!(p.token0.deposit_amount, "2500");
         assert_eq!(p.token1.symbol, "WMON");
-        assert_eq!(p.token1.deposited, "100");
+        assert_eq!(p.token1.deposit_amount, "100");
         assert_eq!(p.balance, "50");
         // Compare as BigDecimal to tolerate trailing zeros added by Postgres NUMERIC.
         assert_eq!(

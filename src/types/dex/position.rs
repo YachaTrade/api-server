@@ -55,12 +55,12 @@ pub struct LpPositionTokenSide {
     /// wallet across all mints, net of burns at this side's reserve
     /// share. FROZEN at deposit time, NOT live mark-to-market.
     /// Sourced from `lp_position.token{0,1}_in - token{0,1}_out`.
-    pub deposited: String,
-    /// USD value of `deposited` at the time the deposit/withdraw
+    pub deposit_amount: String,
+    /// USD value of `deposit_amount` at the time the deposit/withdraw
     /// happened (block-time price). FROZEN — does NOT track current
     /// price. Sourced from
     /// `lp_position.token{0,1}_in_usd - token{0,1}_out_usd`.
-    pub deposited_usd: String,
+    pub deposit_usd: String,
     /// CURRENT pro-rata amount of this token claimable on a full
     /// withdraw NOW (**raw wei, integer**) =
     /// `floor(balance × pool.reserve{0,1} / pool.total_supply)`.
