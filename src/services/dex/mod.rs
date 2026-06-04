@@ -7,13 +7,15 @@ use tracing::error;
 
 use crate::{
     controllers::dex::{
-        pool::PoolController, position::PositionController, tokens::TokensController,
+        pool::PoolController, position::PositionController, reserves::ReservesController,
+        tokens::TokensController,
     },
     db::postgres::PostgresDatabase,
     result::AppError,
     types::dex::{
         pool::PoolDetailResponse,
         position::LpPositionsResponse,
+        reserves::ReservesResponse,
         tokens::{DexTokenListQuery, DexTokenListResponse},
     },
     utils::single_flight::with_cache,
@@ -79,6 +81,17 @@ impl DexService {
                 "Failed to get pool detail: pool_id={}, error={}",
                 pool_id, err
             );
+            AppError::InternalError(err.to_string())
+        })
+    }
+
+    pub async fn get_reserves(
+        &self,
+        pool_id: &str,
+    ) -> Result<Option<ReservesResponse>, AppError> {
+        let controller = ReservesController::new(self.postgres.clone());
+        controller.get_reserves(pool_id).await.map_err(|err| {
+            error!("Failed to get reserves: pool_id={}, error={}", pool_id, err);
             AppError::InternalError(err.to_string())
         })
     }
