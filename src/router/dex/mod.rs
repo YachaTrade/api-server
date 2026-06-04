@@ -1,6 +1,7 @@
 pub mod path;
 pub mod pool;
 pub mod positions;
+pub mod reserves;
 pub mod tokens;
 
 use axum::{Router, routing::get};
@@ -17,4 +18,5 @@ pub fn router() -> Router<AppState> {
         )
         .route(DexPath::GetPool.as_str(), get(pool::get_pool))
         .route(DexPath::GetTokens.as_str(), get(tokens::get_tokens))
+        .route(DexPath::GetReserves.as_str(), get(reserves::get_reserves))
 }
