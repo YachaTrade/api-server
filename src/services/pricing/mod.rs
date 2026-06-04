@@ -1,4 +1,5 @@
 pub mod balance;
+pub mod meta;
 pub mod pyth;
 
 use std::collections::HashMap;
@@ -7,6 +8,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use bigdecimal::num_bigint::BigInt;
 use bigdecimal::BigDecimal;
+use serde::{Deserialize, Serialize};
 
 /// 토큰별 USD 가격 소스 (운영=Pyth Hermes, 테스트=fake).
 #[async_trait]
@@ -20,6 +22,21 @@ pub trait PriceSource: Send + Sync {
 pub trait BalanceSource: Send + Sync {
     /// raw wei 잔액. 조회 실패 시 None(graceful degrade).
     async fn balance_of(&self, token_id: &str, account: &str) -> Option<BigDecimal>;
+}
+
+/// ERC20 온체인 메타데이터 (미인덱스 외부 토큰 full-CA fallback용).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenMeta {
+    pub name: String,
+    pub symbol: String,
+    pub decimals: i32,
+}
+
+/// 미인덱스 외부 토큰의 온체인 메타 소스 (운영=RPC name/symbol/decimals, 테스트=fake).
+#[async_trait]
+pub trait TokenMetaSource: Send + Sync {
+    /// ERC20 name/symbol/decimals. 비표준 컨트랙트/조회 실패면 None(graceful degrade).
+    async fn token_meta(&self, token_id: &str) -> Option<TokenMeta>;
 }
 
 /// balance_usd = balance / 10^decimals × price_usd.
