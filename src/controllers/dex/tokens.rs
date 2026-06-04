@@ -507,7 +507,10 @@ enriched AS (
         COALESCE(dtp.price_usd, m.price * lp.price) AS price_usd,
         CASE
           WHEN $1 IS NOT NULL AND wl_rpc.token_id IS NOT NULL AND c.token_type='whitelist' THEN 1
-          WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type='nadfun_v2' THEN 2
+          -- held (balance > 0) non-whitelist floats up: nadfun_v2/v1 and external
+          -- alike (search surfaces V1/external; holding any of them ranks above
+          -- unheld). Default list only has nadfun_v2 candidates here, so unchanged.
+          WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type <> 'whitelist' THEN 2
           WHEN c.token_type='whitelist' THEN 3
           ELSE 4
         END AS tier
@@ -1209,6 +1212,50 @@ mod tests {
             .find(|t| t.token_id == TOKEN0)
             .expect("V1 token present by symbol prefix");
         assert_eq!(v1.token_type, "nadfun_v1", "V1 nadfun token → nadfun_v1");
+    }
+
+    /// Search: a held token (balance > 0) must sort above unheld results even when
+    /// it's nadfun_v1/external — previously only nadfun_v2 got the held tier, so a
+    /// held V1 sank to tier 4 below unheld tokens.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn search_held_v1_sorts_above_unheld(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await; // TOKEN0 = V1 "CHOG" (token row)
+        seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // hold CHOG
+        // unheld external that also prefix-matches "CHO"
+        const OTHER: &str = "0x000000000000000000000000000000000000c0DE";
+        sqlx::query(
+            r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
+               VALUES ($1, 'Choco', 'CHOC', 18, '', 0)"#,
+        )
+        .bind(OTHER)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let controller = make_controller(pool);
+
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: Some("CHO".into()),
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let held = resp
+            .tokens
+            .iter()
+            .position(|t| t.token_id == TOKEN0)
+            .expect("held V1 present");
+        let unheld = resp
+            .tokens
+            .iter()
+            .position(|t| t.token_id == OTHER)
+            .expect("unheld external present");
+        assert!(
+            held < unheld,
+            "held (balance>0) sorts above unheld in search (held={held}, unheld={unheld})"
+        );
     }
 
     /// V1 nadfun token found by partial CA too.
