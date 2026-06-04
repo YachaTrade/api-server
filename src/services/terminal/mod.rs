@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 use tracing::error;
 
 use crate::{
-    config::{RPC_URL, V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::{RPC_URL, V1_BONDING_CURVE, V2_BONDING_CURVE, WMON},
     controllers::terminal::TerminalController,
     db::postgres::PostgresDatabase,
     result::AppError,
@@ -23,73 +23,6 @@ fn to_truncated_string(value: &BigDecimal) -> String {
     let normalized = value.normalized();
     let truncated = normalized.with_scale(50);
     truncated.normalized().to_plain_string()
-}
-
-/// LP fee on the NadSwap (NadFunPair) AMM — fixed 25 BPS (0.25%).
-/// Source: nadfun-contract-v2/src/dex/NadFunPair.sol `LP_FEE_RATE = 25`.
-const NADSWAP_LP_FEE_BPS: u32 = 25;
-
-/// V1 fixed trading fee, 1% = 100 BPS.
-const V1_FEE_BPS: u32 = 100;
-
-/// GeckoTerminal `dexKey` (trading venue identifier) for a market_type.
-fn dex_key_for(market_type: &str) -> &'static str {
-    match market_type {
-        "DEX" => "capricorn",
-        "V2_CURVE" => "nadfun-v2",
-        "V2_DEX" => "nadswap",
-        // "CURVE" and any unknown value fall back to the V1 bonding-curve key.
-        _ => "nadfun",
-    }
-}
-
-/// `pairId` for a market_type. DEX markets use the pool address; curve markets
-/// use the version's bonding-curve contract. Falls back to the bonding curve
-/// when a DEX market somehow has no pool id.
-fn pair_id_for(
-    market_type: &str,
-    pool_id: Option<&str>,
-    v1_bonding_curve: &str,
-    v2_bonding_curve: &str,
-) -> String {
-    match market_type {
-        "DEX" => pool_id.unwrap_or(v1_bonding_curve).to_string(),
-        "V2_DEX" => pool_id.unwrap_or(v2_bonding_curve).to_string(),
-        "V2_CURVE" => v2_bonding_curve.to_string(),
-        // "CURVE" and any unknown value map to the V1 bonding curve.
-        _ => v1_bonding_curve.to_string(),
-    }
-}
-
-/// Total trading fee in BPS for a market_type. V1 is fixed at 100. V2 sums the
-/// applicable `fee_config` rates; returns `None` when fee_config is missing so
-/// callers can omit `feeBps` rather than report a wrong 0%.
-fn fee_bps_for(
-    market_type: &str,
-    creator_fee_rate: Option<i16>,
-    curve_protocol_fee_rate: Option<i16>,
-    dex_protocol_fee_rate: Option<i16>,
-) -> Option<u32> {
-    let nonneg = |r: i16| r.max(0) as u32;
-    match market_type {
-        "V2_CURVE" => Some(nonneg(creator_fee_rate?) + nonneg(curve_protocol_fee_rate?)),
-        "V2_DEX" => {
-            Some(NADSWAP_LP_FEE_BPS + nonneg(creator_fee_rate?) + nonneg(dex_protocol_fee_rate?))
-        }
-        // "CURVE", "DEX", and any unknown value use the fixed V1 fee.
-        _ => Some(V1_FEE_BPS),
-    }
-}
-
-/// Order (token, quote) into (asset0, asset1) by ascending lowercase address,
-/// matching GeckoTerminal's alphabetical pairing. Returns
-/// `(asset0, asset1, is_quote_token0)`.
-fn order_assets(token_id: &str, quote_id: &str) -> (String, String, bool) {
-    if quote_id.to_lowercase() < token_id.to_lowercase() {
-        (quote_id.to_string(), token_id.to_string(), true)
-    } else {
-        (token_id.to_string(), quote_id.to_string(), false)
-    }
 }
 
 pub struct TerminalService {
@@ -177,9 +110,7 @@ impl TerminalService {
             AppError::NotFound(format!("Pair not found: {}", e))
         })?;
 
-        // Creation block from the token's creation tx. Optional: tokens created
-        // without an initial buy have no balance_history row, so this is None
-        // rather than an error — `createdAtBlockNumber` is then omitted.
+        // Get block number from transaction hash
         let block_number = controller
             .get_block_number_by_tx(&pair_row.transaction_hash)
             .await
@@ -188,29 +119,34 @@ impl TerminalService {
                 AppError::InternalError(format!("Failed to get block number: {}", e))
             })?;
 
-        // Order assets by quote_id (replaces the WMON-hardcoded ordering).
-        let (asset0_id, asset1_id, _) = order_assets(&pair_row.token_id, &pair_row.quote_id);
+        // Order assets: compare token_id with WMON alphabetically
+        // asset0 should be the one that comes first alphabetically
+        let (asset0_id, asset1_id) = if pair_row.token_id.to_lowercase() < WMON.to_lowercase() {
+            (pair_row.token_id.to_string(), WMON.to_string())
+        } else {
+            (WMON.to_string(), pair_row.token_id.to_string())
+        };
+
+        // Determine pair_id and dex_key based on market_type
+        let (pair_id, dex_key) = match pair_row.market_type.as_str() {
+            "DEX" | "V2_DEX" => (
+                pair_row.pool_id.unwrap_or_else(|| token_id.to_string()),
+                "capricorn",
+            ),
+            "V2_CURVE" => (V2_BONDING_CURVE.to_string(), "nadfun"),
+            _ => (V1_BONDING_CURVE.to_string(), "nadfun"),
+        };
 
         let pair = Pair {
-            id: pair_id_for(
-                &pair_row.market_type,
-                pair_row.pool_id.as_deref(),
-                &V1_BONDING_CURVE,
-                &V2_BONDING_CURVE,
-            ),
-            dex_key: dex_key_for(&pair_row.market_type).to_string(),
+            id: pair_id,
+            dex_key: dex_key.to_string(),
             asset0_id,
             asset1_id,
-            created_at_block_number: block_number,
+            created_at_block_number: Some(block_number),
             created_at_block_timestamp: Some(pair_row.created_at as u64),
             created_at_txn_id: Some(pair_row.transaction_hash),
             creator: Some(pair_row.creator),
-            fee_bps: fee_bps_for(
-                &pair_row.market_type,
-                pair_row.creator_fee_rate,
-                pair_row.curve_protocol_fee_rate,
-                pair_row.dex_protocol_fee_rate,
-            ),
+            fee_bps: Some(100), // 1% fee
         };
 
         Ok(PairResponse { pair })
@@ -249,11 +185,7 @@ impl TerminalService {
         let mut events: Vec<Event> = Vec::new();
 
         // Process swap events
-        events.extend(
-            swap_rows
-                .into_iter()
-                .map(|r| Self::convert_swap_event(r, &V1_BONDING_CURVE, &V2_BONDING_CURVE)),
-        );
+        events.extend(swap_rows.into_iter().map(Self::convert_swap_event));
 
         // Process mint events (join events)
         events.extend(mint_rows.into_iter().map(Self::convert_mint_event));
@@ -273,13 +205,11 @@ impl TerminalService {
         Ok(EventsResponse { events })
     }
 
-    fn convert_swap_event(
-        row: SwapEventRow,
-        v1_bonding_curve: &str,
-        v2_bonding_curve: &str,
-    ) -> Event {
+    fn convert_swap_event(row: SwapEventRow) -> Event {
+        // Decimals divisor: 10^18
         let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64);
 
+        // Decimalize amounts (amount / 10^18)
         let quote_amount_decimalized = &row.quote_amount / &decimals_divisor;
         let token_amount_decimalized = &row.token_amount / &decimals_divisor;
         let reserve_quote_decimalized = row
@@ -293,28 +223,34 @@ impl TerminalService {
             .map(|r| r / &decimals_divisor)
             .unwrap_or_default();
 
-        // quote vs token ordering (replaces the old WMON-hardcoded comparison).
-        let (_, _, is_quote_token0) = order_assets(&row.token_id, &row.quote_id);
+        // Determine token0/token1 by comparing WMON (native) and token_id alphabetically
+        // token0 comes first alphabetically
+        let is_native_token0 = WMON.to_lowercase() < row.token_id.to_lowercase();
 
-        let (asset0_in, asset1_in, asset0_out, asset1_out) = match (is_quote_token0, row.is_buy) {
+        // Map amounts based on token order and is_buy
+        let (asset0_in, asset1_in, asset0_out, asset1_out) = match (is_native_token0, row.is_buy) {
+            // token0 = WMON (native), token1 = token, Buy: native in, token out
             (true, true) => (
                 Some(to_truncated_string(&quote_amount_decimalized)),
                 None,
                 None,
                 Some(to_truncated_string(&token_amount_decimalized)),
             ),
+            // token0 = WMON (native), token1 = token, Sell: token in, native out
             (true, false) => (
                 None,
                 Some(to_truncated_string(&token_amount_decimalized)),
                 Some(to_truncated_string(&quote_amount_decimalized)),
                 None,
             ),
+            // token0 = token, token1 = WMON (native), Buy: native in, token out
             (false, true) => (
                 None,
                 Some(to_truncated_string(&quote_amount_decimalized)),
                 Some(to_truncated_string(&token_amount_decimalized)),
                 None,
             ),
+            // token0 = token, token1 = WMON (native), Sell: token in, native out
             (false, false) => (
                 Some(to_truncated_string(&token_amount_decimalized)),
                 None,
@@ -323,22 +259,29 @@ impl TerminalService {
             ),
         };
 
-        let (reserve_asset0, reserve_asset1) = if is_quote_token0 {
-            (
+        // Calculate reserves based on token order
+        let (reserve_asset0, reserve_asset1) = match is_native_token0 {
+            // token0 = native, token1 = token
+            true => (
                 to_truncated_string(&reserve_quote_decimalized),
                 to_truncated_string(&reserve_token_decimalized),
-            )
-        } else {
-            (
+            ),
+            // token0 = token, token1 = native
+            false => (
                 to_truncated_string(&reserve_token_decimalized),
                 to_truncated_string(&reserve_quote_decimalized),
-            )
+            ),
         };
 
-        let price_native = if is_quote_token0 {
-            to_truncated_string(&(&token_amount_decimalized / &quote_amount_decimalized))
-        } else {
-            to_truncated_string(&(&quote_amount_decimalized / &token_amount_decimalized))
+        // Calculate priceNative = amount(asset1) / amount(asset0)
+        // This is the price of asset0 quoted in asset1
+        let price_native = match is_native_token0 {
+            // token0 = native, token1 = token
+            // priceNative = amount(asset1) / amount(asset0) = token_amount / quote_amount
+            true => to_truncated_string(&(&token_amount_decimalized / &quote_amount_decimalized)),
+            // token0 = token, token1 = native
+            // priceNative = amount(asset1) / amount(asset0) = quote_amount / token_amount
+            false => to_truncated_string(&(&quote_amount_decimalized / &token_amount_decimalized)),
         };
 
         Event::Swap {
@@ -350,12 +293,7 @@ impl TerminalService {
             txn_index: row.tx_index.unwrap_or(0) as u32,
             event_index: row.log_index as u32,
             maker: row.account_id,
-            pair_id: pair_id_for(
-                &row.market_type,
-                row.pool_id.as_deref(),
-                v1_bonding_curve,
-                v2_bonding_curve,
-            ),
+            pair_id: row.pool_id.unwrap_or_else(|| V1_BONDING_CURVE.to_string()),
             asset0_in,
             asset1_in,
             asset0_out,
@@ -378,17 +316,18 @@ impl TerminalService {
         let reserve_quote_decimalized = &row.reserve_quote / &decimals_divisor;
         let reserve_token_decimalized = &row.reserve_token / &decimals_divisor;
 
-        let (_, _, is_quote_token0) = order_assets(&row.token_id, &row.quote_id);
+        // Determine token0/token1 by comparing WMON (native) and token_id alphabetically
+        let is_native_token0 = WMON.to_lowercase() < row.token_id.to_lowercase();
 
         // Map amounts based on token order
         // Mint (Join): both assets are added to the pool
-        let (amount0, amount1) = match is_quote_token0 {
-            // token0 = quote, token1 = token
+        let (amount0, amount1) = match is_native_token0 {
+            // token0 = native, token1 = token
             true => (
                 to_truncated_string(&quote_amount_decimalized),
                 to_truncated_string(&token_amount_decimalized),
             ),
-            // token0 = token, token1 = quote
+            // token0 = token, token1 = native
             false => (
                 to_truncated_string(&token_amount_decimalized),
                 to_truncated_string(&quote_amount_decimalized),
@@ -396,13 +335,13 @@ impl TerminalService {
         };
 
         // Calculate reserves based on token order
-        let (reserve_asset0, reserve_asset1) = match is_quote_token0 {
-            // token0 = quote, token1 = token
+        let (reserve_asset0, reserve_asset1) = match is_native_token0 {
+            // token0 = native, token1 = token
             true => (
                 to_truncated_string(&reserve_quote_decimalized),
                 to_truncated_string(&reserve_token_decimalized),
             ),
-            // token0 = token, token1 = quote
+            // token0 = token, token1 = native
             false => (
                 to_truncated_string(&reserve_token_decimalized),
                 to_truncated_string(&reserve_quote_decimalized),
@@ -438,17 +377,18 @@ impl TerminalService {
         let reserve_quote_decimalized = &row.reserve_quote / &decimals_divisor;
         let reserve_token_decimalized = &row.reserve_token / &decimals_divisor;
 
-        let (_, _, is_quote_token0) = order_assets(&row.token_id, &row.quote_id);
+        // Determine token0/token1 by comparing WMON (native) and token_id alphabetically
+        let is_native_token0 = WMON.to_lowercase() < row.token_id.to_lowercase();
 
         // Map amounts based on token order
         // Burn (Exit): both assets are removed from the pool
-        let (amount0, amount1) = match is_quote_token0 {
-            // token0 = quote, token1 = token
+        let (amount0, amount1) = match is_native_token0 {
+            // token0 = native, token1 = token
             true => (
                 to_truncated_string(&quote_amount_decimalized),
                 to_truncated_string(&token_amount_decimalized),
             ),
-            // token0 = token, token1 = quote
+            // token0 = token, token1 = native
             false => (
                 to_truncated_string(&token_amount_decimalized),
                 to_truncated_string(&quote_amount_decimalized),
@@ -456,13 +396,13 @@ impl TerminalService {
         };
 
         // Calculate reserves based on token order
-        let (reserve_asset0, reserve_asset1) = match is_quote_token0 {
-            // token0 = quote, token1 = token
+        let (reserve_asset0, reserve_asset1) = match is_native_token0 {
+            // token0 = native, token1 = token
             true => (
                 to_truncated_string(&reserve_quote_decimalized),
                 to_truncated_string(&reserve_token_decimalized),
             ),
-            // token0 = token, token1 = quote
+            // token0 = token, token1 = native
             false => (
                 to_truncated_string(&reserve_token_decimalized),
                 to_truncated_string(&reserve_quote_decimalized),
@@ -485,206 +425,6 @@ impl TerminalService {
                 asset0: reserve_asset0,
                 asset1: reserve_asset1,
             },
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::controllers::terminal::{BurnEventRow, MintEventRow, SwapEventRow};
-    use bigdecimal::BigDecimal;
-
-    const WMON_ADDR: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
-    const LVMON_ADDR: &str = "0xBe3fa50514D9617ce645a02B34F595541AF02b6b";
-    const V1_BC: &str = "0x0000000000000000000000000000000000000001";
-    const V2_BC: &str = "0x0000000000000000000000000000000000000002";
-    const POOL: &str = "0x00000000000000000000000000000000000000aa";
-    // Token whose lowercase address is greater than both quotes above.
-    const TOKEN_HI: &str = "0xff00000000000000000000000000000000000000";
-
-    #[test]
-    fn dex_key_maps_all_market_types() {
-        assert_eq!(dex_key_for("CURVE"), "nadfun");
-        assert_eq!(dex_key_for("DEX"), "capricorn");
-        assert_eq!(dex_key_for("V2_CURVE"), "nadfun-v2");
-        assert_eq!(dex_key_for("V2_DEX"), "nadswap");
-        assert_eq!(dex_key_for("UNKNOWN"), "nadfun");
-    }
-
-    #[test]
-    fn pair_id_routes_by_market_type() {
-        assert_eq!(pair_id_for("CURVE", None, V1_BC, V2_BC), V1_BC);
-        assert_eq!(pair_id_for("V2_CURVE", None, V1_BC, V2_BC), V2_BC);
-        assert_eq!(pair_id_for("DEX", Some(POOL), V1_BC, V2_BC), POOL);
-        assert_eq!(pair_id_for("V2_DEX", Some(POOL), V1_BC, V2_BC), POOL);
-        // DEX with missing pool falls back to the version's bonding curve.
-        assert_eq!(pair_id_for("V2_DEX", None, V1_BC, V2_BC), V2_BC);
-        assert_eq!(pair_id_for("DEX", None, V1_BC, V2_BC), V1_BC);
-    }
-
-    #[test]
-    fn fee_bps_v1_is_fixed_100() {
-        assert_eq!(fee_bps_for("CURVE", None, None, None), Some(100));
-        assert_eq!(fee_bps_for("DEX", Some(500), Some(50), Some(30)), Some(100));
-    }
-
-    #[test]
-    fn fee_bps_v2_curve_is_creator_plus_curve() {
-        assert_eq!(fee_bps_for("V2_CURVE", Some(500), Some(50), Some(30)), Some(550));
-    }
-
-    #[test]
-    fn fee_bps_v2_dex_is_lp_plus_creator_plus_dex() {
-        // 25 (LP) + 500 (creator) + 30 (dex) = 555
-        assert_eq!(fee_bps_for("V2_DEX", Some(500), Some(50), Some(30)), Some(555));
-    }
-
-    #[test]
-    fn fee_bps_v2_missing_fee_config_is_none() {
-        assert_eq!(fee_bps_for("V2_CURVE", None, None, None), None);
-        assert_eq!(fee_bps_for("V2_DEX", None, None, None), None);
-        assert_eq!(fee_bps_for("V2_DEX", Some(500), Some(50), None), None);
-    }
-
-    #[test]
-    fn order_assets_sorts_by_lowercase_address() {
-        // quote (WMON 0x3b...) < token (0xff...) => quote is asset0
-        let (a0, a1, quote0) = order_assets(TOKEN_HI, WMON_ADDR);
-        assert_eq!(a0, WMON_ADDR);
-        assert_eq!(a1, TOKEN_HI);
-        assert!(quote0);
-
-        // token (0x00..01) < quote (LVMON 0xbe..) => token is asset0
-        let low_token = "0x0000000000000000000000000000000000000abc";
-        let (b0, b1, quote0b) = order_assets(low_token, LVMON_ADDR);
-        assert_eq!(b0, low_token);
-        assert_eq!(b1, LVMON_ADDR);
-        assert!(!quote0b);
-    }
-
-    fn e18(n: u64) -> BigDecimal {
-        BigDecimal::from(n) * BigDecimal::from(1_000_000_000_000_000_000u64)
-    }
-
-    fn swap_row(market_type: &str, quote_id: &str, is_buy: bool) -> SwapEventRow {
-        SwapEventRow {
-            account_id: "0xmaker".to_string(),
-            token_id: TOKEN_HI.to_string(),
-            is_buy,
-            quote_amount: e18(1),
-            token_amount: e18(2),
-            reserve_quote: Some(e18(100)),
-            reserve_token: Some(e18(200)),
-            created_at: 123,
-            transaction_hash: "0xs".to_string(),
-            block_number: 10,
-            tx_index: Some(0),
-            log_index: 0,
-            pool_id: Some(POOL.to_string()),
-            price: e18(1),
-            quote_id: quote_id.to_string(),
-            market_type: market_type.to_string(),
-        }
-    }
-
-    #[test]
-    fn swap_v2_dex_lvmon_quote_buy_maps_quote_as_asset0() {
-        // TOKEN_HI (0xff..) > LVMON (0xbe..) => quote is asset0.
-        let ev = TerminalService::convert_swap_event(swap_row("V2_DEX", LVMON_ADDR, true), V1_BC, V2_BC);
-        match ev {
-            Event::Swap { asset0_in, asset1_in, asset0_out, asset1_out, price_native, reserves, pair_id, .. } => {
-                assert_eq!(asset0_in, Some("1".to_string()));   // quote in
-                assert_eq!(asset1_out, Some("2".to_string()));  // token out
-                assert_eq!(asset1_in, None);
-                assert_eq!(asset0_out, None);
-                assert_eq!(reserves.asset0, "100");             // reserve_quote
-                assert_eq!(reserves.asset1, "200");             // reserve_token
-                assert_eq!(price_native, "2");                  // token/quote
-                assert_eq!(pair_id, POOL);                      // V2_DEX -> pool
-            }
-            _ => panic!("expected swap"),
-        }
-    }
-
-    #[test]
-    fn swap_pair_id_uses_per_event_market_type() {
-        // A graduated token's curve-era swap must reference the bonding curve,
-        // not the current pool.
-        let ev = TerminalService::convert_swap_event(swap_row("V2_CURVE", LVMON_ADDR, true), V1_BC, V2_BC);
-        match ev {
-            Event::Swap { pair_id, .. } => assert_eq!(pair_id, V2_BC),
-            _ => panic!("expected swap"),
-        }
-    }
-
-    #[test]
-    fn swap_v1_wmon_quote_unchanged() {
-        // Regression: WMON quote keeps the legacy asset ordering/pricing.
-        let ev = TerminalService::convert_swap_event(swap_row("CURVE", WMON_ADDR, true), V1_BC, V2_BC);
-        match ev {
-            Event::Swap { asset0_in, asset1_out, pair_id, .. } => {
-                assert_eq!(asset0_in, Some("1".to_string()));
-                assert_eq!(asset1_out, Some("2".to_string()));
-                assert_eq!(pair_id, V1_BC);
-            }
-            _ => panic!("expected swap"),
-        }
-    }
-
-    #[test]
-    fn mint_v2_dex_lvmon_quote_orders_by_quote() {
-        let row = MintEventRow {
-            token_id: TOKEN_HI.to_string(),
-            account_id: "0xmaker".to_string(),
-            market_id: POOL.to_string(),
-            quote_amount: e18(1),
-            token_amount: e18(2),
-            reserve_quote: e18(100),
-            reserve_token: e18(200),
-            created_at: 123,
-            transaction_hash: "0xm".to_string(),
-            block_number: 10,
-            tx_index: 0,
-            log_index: 0,
-            quote_id: LVMON_ADDR.to_string(),
-        };
-        match TerminalService::convert_mint_event(row) {
-            Event::Join { amount0, amount1, reserves, pair_id, .. } => {
-                assert_eq!(amount0, "1");   // quote side
-                assert_eq!(amount1, "2");   // token side
-                assert_eq!(reserves.asset0, "100");
-                assert_eq!(reserves.asset1, "200");
-                assert_eq!(pair_id, POOL);  // market_id preserved
-            }
-            _ => panic!("expected join"),
-        }
-    }
-
-    #[test]
-    fn burn_v2_dex_lvmon_quote_orders_by_quote() {
-        let row = BurnEventRow {
-            token_id: TOKEN_HI.to_string(),
-            account_id: "0xmaker".to_string(),
-            market_id: POOL.to_string(),
-            quote_amount: e18(1),
-            token_amount: e18(2),
-            reserve_quote: e18(100),
-            reserve_token: e18(200),
-            created_at: 123,
-            transaction_hash: "0xb".to_string(),
-            block_number: 10,
-            tx_index: 0,
-            log_index: 0,
-            quote_id: LVMON_ADDR.to_string(),
-        };
-        match TerminalService::convert_burn_event(row) {
-            Event::Exit { amount0, amount1, pair_id, .. } => {
-                assert_eq!(amount0, "1");
-                assert_eq!(amount1, "2");
-                assert_eq!(pair_id, POOL);
-            }
-            _ => panic!("expected exit"),
         }
     }
 }
