@@ -38,6 +38,30 @@ static DEX_TOKENS_ACCOUNT_CACHE: Lazy<Cache<String, Arc<Vec<u8>>>> = Lazy::new(|
         .build()
 });
 
+/// `/dex/reserves` 캐시. PK 단건이라 가볍지만, 핫풀 동시 폴링(thundering herd)을
+/// single-flight로 1회 DB 조회로 합친다. reserve 신선도 우선 → **1초**.
+static DEX_RESERVES_CACHE: Lazy<Cache<String, Arc<Vec<u8>>>> = Lazy::new(|| {
+    Cache::builder()
+        .time_to_live(Duration::from_secs(1))
+        .max_capacity(50_000)
+        .build()
+});
+/// `/dex/positions/{account_id}` 캐시. 계정별 LP 포지션(whitelist RPC 잔액 보강 포함,
+/// 비교적 무거움) → **5초**. 키에 account_id 포함 → 계정 간 공유 없음.
+static DEX_POSITIONS_CACHE: Lazy<Cache<String, Arc<Vec<u8>>>> = Lazy::new(|| {
+    Cache::builder()
+        .time_to_live(Duration::from_secs(5))
+        .max_capacity(50_000)
+        .build()
+});
+/// `/dex/pools/{pool_id}` 캐시. reserve/TVL/APR. reserve 신선도 우선 → **1초**.
+static DEX_POOL_CACHE: Lazy<Cache<String, Arc<Vec<u8>>>> = Lazy::new(|| {
+    Cache::builder()
+        .time_to_live(Duration::from_secs(1))
+        .max_capacity(50_000)
+        .build()
+});
+
 /// 캐시 키. 계정(핸들러에서 EIP-55 검증·정규화된 값)을 첫 세그먼트에 넣어 **계정 간 절대
 /// 공유되지 않게** 한다(잔액 유출 방지). 자유 텍스트 `q`는 **맨 뒤**에 둬서 `:` 포함 입력이
 /// 앞쪽 구조 세그먼트(account/page/limit)를 밀어 충돌시키는 것을 원천 차단한다.
@@ -61,8 +85,14 @@ impl DexService {
     }
 
     pub async fn get_positions(&self, account_id: &str) -> Result<LpPositionsResponse, AppError> {
-        let controller = PositionController::new(self.postgres.clone());
-        controller.get_positions(account_id).await.map_err(|err| {
+        let key = format!("dexpos:{}", account_id);
+        let postgres = self.postgres.clone();
+        let account = account_id.to_string();
+        with_cache(&DEX_POSITIONS_CACHE, key, move || async move {
+            PositionController::new(postgres).get_positions(&account).await
+        })
+        .await
+        .map_err(|err| {
             error!(
                 "Failed to get LP positions: account_id={}, error={}",
                 account_id, err
@@ -75,8 +105,14 @@ impl DexService {
         &self,
         pool_id: &str,
     ) -> Result<Option<PoolDetailResponse>, AppError> {
-        let controller = PoolController::new(self.postgres.clone());
-        controller.get_pool_detail(pool_id).await.map_err(|err| {
+        let key = format!("dexpool:{}", pool_id);
+        let postgres = self.postgres.clone();
+        let pid = pool_id.to_string();
+        with_cache(&DEX_POOL_CACHE, key, move || async move {
+            PoolController::new(postgres).get_pool_detail(&pid).await
+        })
+        .await
+        .map_err(|err| {
             error!(
                 "Failed to get pool detail: pool_id={}, error={}",
                 pool_id, err
@@ -89,8 +125,14 @@ impl DexService {
         &self,
         pool_id: &str,
     ) -> Result<Option<ReservesResponse>, AppError> {
-        let controller = ReservesController::new(self.postgres.clone());
-        controller.get_reserves(pool_id).await.map_err(|err| {
+        let key = format!("dexres:{}", pool_id);
+        let postgres = self.postgres.clone();
+        let pid = pool_id.to_string();
+        with_cache(&DEX_RESERVES_CACHE, key, move || async move {
+            ReservesController::new(postgres).get_reserves(&pid).await
+        })
+        .await
+        .map_err(|err| {
             error!("Failed to get reserves: pool_id={}, error={}", pool_id, err);
             AppError::InternalError(err.to_string())
         })
