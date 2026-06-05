@@ -1,4 +1,5 @@
 pub mod balance;
+pub mod defillama;
 pub mod meta;
 pub mod pyth;
 

@@ -8,8 +8,8 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     services::pricing::{
-        balance::RpcBalanceSource, compute_balance_usd, meta::RpcMetaSource,
-        pyth::PythHermesClient, BalanceSource, PriceSource, TokenMetaSource,
+        balance::RpcBalanceSource, compute_balance_usd, defillama::DefiLlamaPriceSource,
+        meta::RpcMetaSource, BalanceSource, PriceSource, TokenMetaSource,
     },
     types::dex::tokens::{DexTokenEntry, DexTokenListQuery, DexTokenListResponse},
 };
@@ -44,7 +44,7 @@ impl TokensController {
         Self {
             db,
             balance_source: Arc::new(RpcBalanceSource::new()),
-            price_source: Arc::new(PythHermesClient::new()),
+            price_source: Arc::new(DefiLlamaPriceSource::new()),
             meta_source: Some(Arc::new(RpcMetaSource::new())),
         }
     }
@@ -117,31 +117,22 @@ impl TokensController {
             return Ok((vec![], vec![]));
         }
 
-        // 3. Batch price lookup for held tokens that have a feed_id.
-        let feed_ids: Vec<String> = held
-            .iter()
-            .filter_map(|(_, _, feed, _)| feed.clone())
-            .collect();
-        let prices = if feed_ids.is_empty() {
+        // 3. Batch price lookup (DefiLlama, by token address) for held tokens.
+        let addrs: Vec<String> = held.iter().map(|(id, _, _, _)| id.clone()).collect();
+        let prices = if addrs.is_empty() {
             HashMap::new()
         } else {
-            self.price_source.prices_usd(&feed_ids).await
+            self.price_source.prices_usd(&addrs).await
         };
 
         // 4. Build aligned output vecs.
         let mut held_ids: Vec<String> = Vec::with_capacity(held.len());
         let mut held_usd: Vec<BigDecimal> = Vec::with_capacity(held.len());
-        for (token_id, bal, feed, decimals) in held {
-            let usd = match &feed {
-                Some(f) => {
-                    let key = crate::services::pricing::normalize_feed_id(f);
-                    prices
-                        .get(&key)
-                        .map(|p| compute_balance_usd(&bal, decimals, p))
-                        .unwrap_or_else(|| BigDecimal::from(0))
-                }
-                None => BigDecimal::from(0),
-            };
+        for (token_id, bal, _feed, decimals) in held {
+            let usd = prices
+                .get(&token_id.to_lowercase())
+                .map(|p| compute_balance_usd(&bal, decimals, p))
+                .unwrap_or_else(|| BigDecimal::from(0));
             held_ids.push(token_id);
             held_usd.push(usd);
         }
@@ -340,15 +331,15 @@ impl TokensController {
     async fn enrich(&self, rows: Vec<TokenRow>, account: Option<&str>) -> Vec<DexTokenEntry> {
         // price_usd is account-independent: always resolve Pyth prices for ALL
         // enabled whitelist tokens (they have no market row → SQL price_usd is NULL).
-        let feed_ids: Vec<String> = rows
+        let wl_addrs: Vec<String> = rows
             .iter()
             .filter(|r| r.token_type == "whitelist")
-            .filter_map(|r| r.price_feed_id.clone())
+            .map(|r| r.token_id.clone())
             .collect();
-        let prices = if feed_ids.is_empty() {
+        let prices = if wl_addrs.is_empty() {
             HashMap::new()
         } else {
-            self.price_source.prices_usd(&feed_ids).await
+            self.price_source.prices_usd(&wl_addrs).await
         };
 
         // balance / balance_usd require an account: fetch held whitelist balances via RPC.
@@ -366,11 +357,7 @@ impl TokensController {
         rows.into_iter()
             .map(|r| {
                 if r.token_type == "whitelist" {
-                    let price_usd = r.price_feed_id.as_deref().and_then(|feed| {
-                        prices
-                            .get(&crate::services::pricing::normalize_feed_id(feed))
-                            .cloned()
-                    });
+                    let price_usd = prices.get(&r.token_id.to_lowercase()).cloned();
                     let balance = wl_balance.get(&r.token_id).cloned();
                     let decimals = r.decimals.unwrap_or(18);
                     let balance_usd = match (&balance, &price_usd) {
@@ -715,11 +702,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl PriceSource for FakePrice {
-        async fn prices_usd(&self, feed_ids: &[String]) -> HashMap<String, BigDecimal> {
-            feed_ids
-                .iter()
+        async fn prices_usd(&self, ids: &[String]) -> HashMap<String, BigDecimal> {
+            // DefiLlama 소스처럼 토큰 주소(소문자)로 키.
+            ids.iter()
                 .filter_map(|id| {
-                    let k = crate::services::pricing::normalize_feed_id(id);
+                    let k = id.to_lowercase();
                     self.prices.get(&k).map(|v| (k, v.clone()))
                 })
                 .collect()
@@ -1353,7 +1340,7 @@ mod tests {
         );
         let mut price = FakePrice::default();
         price.prices.insert(
-            WL_FEED.trim_start_matches("0x").to_string(),
+            WL_A.to_lowercase(),
             BigDecimal::from_str("1.5").unwrap(), // $1.5
         );
         let c = controller_with(pool, bal, price);
@@ -1541,7 +1528,7 @@ mod tests {
         let mut price = FakePrice::default();
         // Pyth → 2.123456789 USD; 8dp truncate → "2.12345678"
         price.prices.insert(
-            crate::services::pricing::normalize_feed_id(FEED),
+            WL_A.to_lowercase(),
             "2.123456789".parse().unwrap(),
         );
         let controller = controller_with(pool, FakeBalance::default(), price);
