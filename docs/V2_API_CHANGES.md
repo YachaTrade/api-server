@@ -538,7 +538,7 @@ Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하�
 | 정렬 | 마켓캡 desc **평면** | **4-tier** (보유/미보유 × 화이트리스트/V2) |
 | 검색 | 불가 (검색은 `/dex/search` 별도) | `q` 파라미터로 **통합** (prefix/CA) |
 | 인증/계정 | 무인증, `?account=` 옵션(잔고) | 동일 (무인증, `?account=` 옵션) |
-| 응답 필드 | `token_id, symbol, name, decimals, image_uri, balance?, market_cap_usd` | **+ `token_type`, `is_external`, `is_held`, `balance_usd`, `tier`** |
+| 응답 필드 | `token_id, symbol, name, decimals, image_uri, balance?, market_cap_usd` | **+ `token_type`, `balance_usd`, `price_usd`** (`market_cap_usd` 제거 — 정렬 내부값) |
 | 페이지네이션 | `page`/`limit`, `total_count` | 동일 (`total_count`는 후보 집합 기준 재계산) |
 
 #### `GET /dex/search` — **제거됨**
@@ -597,15 +597,16 @@ interface DexTokenEntry {
     decimals: number;
     image_uri: string;
     token_type: "whitelist" | "nadfun_v2" | "nadfun_v1" | "external";  // FE 렌더 분기. 테이블 멤버십: whitelist_token→whitelist, token.version V2/V1→nadfun_v2/nadfun_v1, 그 외→external. (external 판정 = token_type==="external")
-    is_external: boolean;        // 신규 — true면 grey 첫글자 아이콘 + 경고 + CA 표시
-    is_held: boolean;            // 신규 — balance > 0
-    balance: string | null;      // raw wei, account 제공 시에만
-    balance_usd: string | null;  // 신규 — balance/10^decimals × market.price × price
+    balance: string | null;      // raw wei. 보유(balance>0) + account 제공 시에만, 그 외 null
+    balance_usd: string | null;  // 보유분 USD = balance/10^decimals × price_usd. 미보유면 null
     price_usd: string | null;    // 토큰 1개당 USD 단가, account 무관·8자리 truncate. V2/external=dex_token_price 뷰(deepest-TVL 풀 per-token USD) 우선·없으면 market×quote fallback, whitelist=Pyth
-    market_cap_usd: string | null;
-    tier: number;                // 신규 — 1~4 (FE 섹션 헤더용)
 }
 // 응답 루트: { tokens: DexTokenEntry[]; total_count: number }
+//
+// 참고 — 응답에 없는 파생/내부값 (FE에서 계산):
+//   is_external  → token_type === "external"
+//   is_held      → balance != null
+//   market_cap_usd / tier → 서버 정렬 내부값일 뿐 응답에 포함되지 않음
 ```
 
 ### 백엔드/인덱서 의존
@@ -618,7 +619,7 @@ interface DexTokenEntry {
 | 타입/필드 | 변경 |
 |---|---|
 | `DexTokenListQuery.q` | **신규** optional 검색어 (4-티어 기본 vs prefix/CA 검색 분기) |
-| `DexTokenEntry` | `token_type`, `is_external`, `is_held`, `balance_usd`, `tier` **신규 필드** |
+| `DexTokenEntry` | `token_type`, `balance_usd`, `price_usd` **신규 필드** (is_external/is_held/tier/market_cap_usd는 응답 미포함 — FE 파생/서버 내부값) |
 | `GET /dex/tokens` | 평면 마켓캡 정렬 → 4-티어(보유/미보유 × 화이트리스트/V2) + 검색 통합 |
 | `GET /dex/search` | **제거** → `GET /dex/tokens?q=` 사용 (404) |
 | `whitelist_token` 테이블 | **신규** — 고정순서 화이트리스트 |
