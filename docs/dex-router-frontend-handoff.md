@@ -82,9 +82,11 @@ const res = await fetch(`/dex/tokens?${params}`);
 | 입력 형태 | 분류 | 동작 |
 |-----------|------|------|
 | `q` 없음 / 빈 문자열 | 기본 리스트 | 화이트리스트 ∪ nadfun V2 4-tier 정렬 |
-| `0x` + **정확히 40 hex** | **full CA** | 모든 테이블에서 해당 주소 1건 정확 조회 (**external 포함**) |
-| `0x` + 40 미만 hex | **partial CA** | `token_id` prefix 매칭 (external 제외) |
-| 그 외 텍스트 | **text** | `symbol`/`name` prefix(`q%`) 매칭 (external 제외) |
+| `0x` + **정확히 40 hex** | **full CA** | `token∪dex_token∪quote_token∪whitelist`에서 1건 조회. DB에 없으면 **RPC 온체인 메타로 `external` 1건 fallback** |
+| `0x` + 40 미만 hex | **partial CA** | `token_id` prefix — 검색 후보집합 `token∪dex_token∪quote_token∪whitelist` (**external·V1 포함**) |
+| 그 외 텍스트 | **text** | `symbol`/`name` prefix(`q%`) — 동일 후보집합 (**external·V1 포함**) |
+
+> 검색 후보집합은 기본 리스트(화이트리스트+nadfun V2)와 **다릅니다** — V1·external 토큰은 **검색에서만** 노출됩니다(기본 리스트엔 제외). 검색 시 보유(`balance>0`) 토큰은 타입과 무관하게 상단으로 정렬됩니다.
 
 ### 응답 형태
 
@@ -105,10 +107,10 @@ const res = await fetch(`/dex/tokens?${params}`);
 | `name` | string | 토큰명 |
 | `decimals` | int | 소수 자릿수 |
 | `image_uri` | string | 로고 URL (없으면 빈 문자열) |
-| `token_type` | string | `"whitelist"` \| `"nadfun_v2"` \| `"external"`. **렌더 분기·external 판정용** |
+| `token_type` | string | `"whitelist"` \| `"nadfun_v2"` \| `"nadfun_v1"` \| `"external"`. 테이블 멤버십(whitelist_token / token.version V2·V1 / 그 외). **렌더 분기·external 판정(`=== "external"`)용** |
 | `balance` | string \| null | **raw wei** 잔고(보유 시). 미보유 또는 `account` 미제공 시 `null` → **`balance != null` 로 보유 판정** |
 | `balance_usd` | string \| null | 보유분 USD 가치. 미보유/미제공 시 `null` |
-| `price_usd` | string \| null | 토큰 1개당 **USD 단가**. **`account` 무관**(보유 여부와 상관없이 항상 제공). 소수점 **8자리까지 truncate**. 가격 미상이면 `null`. (V2/external = market × quote→USD, whitelist = Pyth) |
+| `price_usd` | string \| null | 토큰 1개당 **USD 단가**. **`account` 무관**(보유 여부와 상관없이 항상 제공). 소수점 **8자리까지 truncate**. 가격 미상이면 `null`. (V2/external = `dex_token_price` 뷰(deepest-TVL 풀) 우선·없으면 market×quote fallback, whitelist = Pyth) |
 
 > `balance`는 **raw 정수 문자열(×10^decimals)** 입니다. 표시할 땐 FE에서 `decimals`로 나누세요. (`balance` / `10^decimals`)
 > `price_usd`는 이미 **사람이 읽는 USD 단가**(스케일 적용 완료)입니다. 스왑 금액의 USD 환산 = 입력수량 × `price_usd`.
