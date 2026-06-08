@@ -236,6 +236,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::dex::pool_info::PoolInfo,
             types::dex::tokens::DexTokenListResponse,
             types::dex::tokens::DexTokenEntry,
+            types::dex::tokens::DexTokenType,
             types::dex::reserves::ReservesResponse,
 
             // QuoteToken
@@ -561,5 +562,31 @@ async fn method_based_timeout(
     match tokio::time::timeout(timeout_duration, next.run(req)).await {
         Ok(response) => Ok(response),
         Err(_) => Err(StatusCode::REQUEST_TIMEOUT),
+    }
+}
+
+#[cfg(test)]
+mod openapi_tests {
+    use super::ApiDoc;
+    use utoipa::OpenApi;
+
+    /// token_type의 가능한 값이 swagger(OpenAPI)에 enum으로 명시되는지 검증.
+    #[test]
+    fn dex_token_type_enum_documented_in_openapi() {
+        let spec = ApiDoc::openapi();
+        let json = serde_json::to_value(&spec).unwrap();
+        let schema = &json["components"]["schemas"]["DexTokenType"];
+        assert!(!schema.is_null(), "DexTokenType schema가 OpenAPI components에 등록돼야 함");
+        let vals: Vec<&str> = schema["enum"]
+            .as_array()
+            .expect("DexTokenType는 string enum이어야 함")
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(
+            vals,
+            vec!["whitelist", "nadfun_v2", "nadfun_v1", "external"],
+            "token_type 가능한 값이 swagger에 명시돼야 함"
+        );
     }
 }
