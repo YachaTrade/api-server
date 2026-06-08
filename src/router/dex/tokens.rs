@@ -19,6 +19,11 @@ use crate::{
 /// on symbol/name/CA; external tokens surface only on an exact full contract
 /// address. Optionally attaches per-account balance/USD when `?account=` is
 /// provided.
+///
+/// Each entry's `token_type` ∈ `whitelist` | `nadfun_v2` | `nadfun_v1` | `external`
+/// (테이블 멤버십 분류: whitelist_token / token.version V2·V1 / 그 외 external).
+/// 기본 리스트는 `whitelist`+`nadfun_v2`만, `nadfun_v1`·`external`은 검색에서만 노출.
+/// 값별 의미는 `DexTokenType` 스키마 참고.
 #[utoipa::path(
     get,
     path = DexPath::GetTokens.docs_str(),
