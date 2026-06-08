@@ -41,6 +41,7 @@ pub struct DexTokenListResponse {
 /// external 판정 = `token_type == "external"`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[schema(example = "whitelist")]
 pub enum DexTokenType {
     Whitelist,
     NadfunV2,
@@ -58,7 +59,7 @@ pub struct DexTokenEntry {
     pub image_uri: String,
     /// 토큰 분류 — 가능한 값과 의미는 [`DexTokenType`] 참고.
     /// 런타임은 string이며 `whitelist` | `nadfun_v2` | `nadfun_v1` | `external` 중 하나.
-    #[schema(value_type = DexTokenType, example = "whitelist")]
+    #[schema(value_type = DexTokenType)]
     pub token_type: String,
     /// 보유(balance > 0) 시에만 raw wei balance. 미보유·account 미제공이면 null → FE는 balance != null로 보유 판정.
     pub balance: Option<String>,
