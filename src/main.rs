@@ -588,5 +588,19 @@ mod openapi_tests {
             vec!["whitelist", "nadfun_v2", "nadfun_v1", "external"],
             "token_type 가능한 값이 swagger에 명시돼야 함"
         );
+        // $ref 필드는 example을 못 가지므로(OpenAPI 3.0), example은 컴포넌트에 있어야
+        // swagger Example Value의 token_type이 "string"이 아닌 실제 값으로 렌더됨.
+        assert_eq!(
+            schema["example"].as_str(),
+            Some("whitelist"),
+            "DexTokenType 컴포넌트에 example이 있어야 Example Value에 반영됨"
+        );
+        // DexTokenEntry.token_type이 DexTokenType을 참조하는지(=enum이 필드에 연결됨).
+        let field = &json["components"]["schemas"]["DexTokenEntry"]["properties"]["token_type"];
+        assert_eq!(
+            field["$ref"].as_str(),
+            Some("#/components/schemas/DexTokenType"),
+            "token_type 필드가 DexTokenType을 참조해야 함"
+        );
     }
 }
