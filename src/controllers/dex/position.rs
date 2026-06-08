@@ -116,12 +116,12 @@ impl PositionController {
                     p.reserve1     AS pool_reserve1,
                     p.value        AS pool_value_usd,
                     p.total_supply AS pool_total_supply,
-                    COALESCE(t0.symbol,    dt0.symbol,    qt0.symbol)    AS token0_symbol,
-                    COALESCE(dt0.decimals, qt0.decimals)                 AS token0_decimals,
-                    COALESCE(t0.image_uri, dt0.image_uri, qt0.image_uri) AS token0_image,
-                    COALESCE(t1.symbol,    dt1.symbol,    qt1.symbol)    AS token1_symbol,
-                    COALESCE(dt1.decimals, qt1.decimals)                 AS token1_decimals,
-                    COALESCE(t1.image_uri, dt1.image_uri, qt1.image_uri) AS token1_image,
+                    COALESCE(wl0.symbol,    t0.symbol,    dt0.symbol,    qt0.symbol)    AS token0_symbol,
+                    COALESCE(wl0.decimals,  dt0.decimals, qt0.decimals)                 AS token0_decimals,
+                    COALESCE(wl0.image_uri, t0.image_uri, dt0.image_uri, qt0.image_uri) AS token0_image,
+                    COALESCE(wl1.symbol,    t1.symbol,    dt1.symbol,    qt1.symbol)    AS token1_symbol,
+                    COALESCE(wl1.decimals,  dt1.decimals, qt1.decimals)                 AS token1_decimals,
+                    COALESCE(wl1.image_uri, t1.image_uri, dt1.image_uri, qt1.image_uri) AS token1_image,
                     par.lp_fee_24h_usd::float8  AS lp_fee_24h_usd,
                     par.tvl_24h_usd_avg::float8 AS tvl_24h_usd_avg,
                     par.lp_fee_7d_usd::float8   AS lp_fee_7d_usd,
@@ -131,13 +131,15 @@ impl PositionController {
                 FROM lp_position lp
                 JOIN pool p
                     ON p.pool_id = lp.pool_id
-                LEFT JOIN token       t0  ON t0.token_id  = p.token0
-                LEFT JOIN dex_token   dt0 ON dt0.token_id = p.token0
-                LEFT JOIN quote_token qt0 ON qt0.quote_id = p.token0
-                LEFT JOIN token       t1  ON t1.token_id  = p.token1
-                LEFT JOIN dex_token   dt1 ON dt1.token_id = p.token1
-                LEFT JOIN quote_token qt1 ON qt1.quote_id = p.token1
-                LEFT JOIN pool_apr   par  ON par.pool_id  = p.pool_id
+                LEFT JOIN token          t0  ON t0.token_id  = p.token0
+                LEFT JOIN dex_token      dt0 ON dt0.token_id = p.token0
+                LEFT JOIN quote_token    qt0 ON qt0.quote_id = p.token0
+                LEFT JOIN whitelist_token wl0 ON wl0.token_id = p.token0 AND wl0.enabled
+                LEFT JOIN token          t1  ON t1.token_id  = p.token1
+                LEFT JOIN dex_token      dt1 ON dt1.token_id = p.token1
+                LEFT JOIN quote_token    qt1 ON qt1.quote_id = p.token1
+                LEFT JOIN whitelist_token wl1 ON wl1.token_id = p.token1 AND wl1.enabled
+                LEFT JOIN pool_apr       par ON par.pool_id  = p.pool_id
                 WHERE lp.account_id = $1
                   AND lp.balance > 0
                 ORDER BY lp.pool_id

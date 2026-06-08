@@ -526,6 +526,11 @@ Swap "Select Token" 모달용 토큰 리스팅/검색을 `GET /dex/tokens` 하�
 > - 검색을 `token∪dex_token∪quote_token∪whitelist`로 확장 → **V1·external이 name/symbol·partial-CA 검색에 노출**(이전엔 full-CA exact만). 기본 리스트는 무변경.
 > - full-CA 미발견 시 **RPC 온체인 메타 fallback**으로 external 1건 반환.
 
+> **2026-06-08 업데이트** (branch `feat/defillama-whitelist-pricing`):
+> - **신규 엔드포인트 `GET /dex/reserves?pool_id=`** — 온체인 `lpPair.getReserves()` 백엔드 드롭인. 인덱서 `pool` 행에서 리저브를 반환하므로 **RPC 없음**. 응답: `{ pool_id, token0, token1, reserve0, reserve1, block_number }` (reserve는 raw wei, token0/1 순서 일치). 풀 없으면 404.
+> - **`/dex/pools/{pool_id}`·`/dex/positions/{account_id}` 토큰 메타(symbol/decimals/image_uri) 소스에 `whitelist_token` 우선 추가** — `COALESCE(whitelist_token → token → dex_token → quote_token)`. 화이트리스트 페어(USDT/WMON 등)가 registry의 빈 `image_uri`(`quote_token`은 NOT NULL이라 `''` 저장 → 기존 COALESCE가 빈 문자열에서 멈춤) 대신 큐레이션된 아이콘·심볼로 노출. (이전 "두 엔드포인트 변경 없음" 명시를 갱신.)
+> - 화이트리스트 가격 소스 **Pyth → DefiLlama** 전환 완료(주소 기반). `/dex/tokens` `price_usd`의 whitelist 경로 포함.
+
 ### 기존 → 변경 (dex 엔드포인트 영향 범위)
 
 이번 변경은 `/dex/tokens`, `/dex/search` 두 개만 건드립니다. `/dex/positions/{account_id}`, `/dex/pools/{pool_id}`는 **변경 없음**.
@@ -599,7 +604,7 @@ interface DexTokenEntry {
     token_type: "whitelist" | "nadfun_v2" | "nadfun_v1" | "external";  // FE 렌더 분기. 테이블 멤버십: whitelist_token→whitelist, token.version V2/V1→nadfun_v2/nadfun_v1, 그 외→external. (external 판정 = token_type==="external")
     balance: string | null;      // raw wei. 보유(balance>0) + account 제공 시에만, 그 외 null
     balance_usd: string | null;  // 보유분 USD = balance/10^decimals × price_usd. 미보유면 null
-    price_usd: string | null;    // 토큰 1개당 USD 단가, account 무관·8자리 truncate. V2/external=dex_token_price 뷰(deepest-TVL 풀 per-token USD) 우선·없으면 market×quote fallback, whitelist=Pyth
+    price_usd: string | null;    // 토큰 1개당 USD 단가, account 무관·8자리 truncate. V2/external=dex_token_price 뷰(deepest-TVL 풀 per-token USD) 우선·없으면 market×quote fallback, whitelist=DefiLlama
 }
 // 응답 루트: { tokens: DexTokenEntry[]; total_count: number }
 //

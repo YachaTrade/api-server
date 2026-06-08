@@ -59,12 +59,12 @@ impl PoolController {
                     p.reserve1,
                     p.value        AS pool_value_usd,
                     p.total_supply AS pool_total_supply,
-                    COALESCE(t0.symbol,    dt0.symbol,    qt0.symbol)    AS token0_symbol,
-                    COALESCE(dt0.decimals, qt0.decimals)                 AS token0_decimals,
-                    COALESCE(t0.image_uri, dt0.image_uri, qt0.image_uri) AS token0_image,
-                    COALESCE(t1.symbol,    dt1.symbol,    qt1.symbol)    AS token1_symbol,
-                    COALESCE(dt1.decimals, qt1.decimals)                 AS token1_decimals,
-                    COALESCE(t1.image_uri, dt1.image_uri, qt1.image_uri) AS token1_image,
+                    COALESCE(wl0.symbol,    t0.symbol,    dt0.symbol,    qt0.symbol)    AS token0_symbol,
+                    COALESCE(wl0.decimals,  dt0.decimals, qt0.decimals)                 AS token0_decimals,
+                    COALESCE(wl0.image_uri, t0.image_uri, dt0.image_uri, qt0.image_uri) AS token0_image,
+                    COALESCE(wl1.symbol,    t1.symbol,    dt1.symbol,    qt1.symbol)    AS token1_symbol,
+                    COALESCE(wl1.decimals,  dt1.decimals, qt1.decimals)                 AS token1_decimals,
+                    COALESCE(wl1.image_uri, t1.image_uri, dt1.image_uri, qt1.image_uri) AS token1_image,
                     par.lp_fee_24h_usd::float8  AS lp_fee_24h_usd,
                     par.tvl_24h_usd_avg::float8 AS tvl_24h_usd_avg,
                     par.lp_fee_7d_usd::float8   AS lp_fee_7d_usd,
@@ -75,14 +75,16 @@ impl PoolController {
                     fc.curve_protocol_fee_rate AS fee_curve_bps,
                     fc.dex_protocol_fee_rate   AS fee_dex_bps
                 FROM pool p
-                LEFT JOIN token       t0  ON t0.token_id  = p.token0
-                LEFT JOIN dex_token   dt0 ON dt0.token_id = p.token0
-                LEFT JOIN quote_token qt0 ON qt0.quote_id = p.token0
-                LEFT JOIN token       t1  ON t1.token_id  = p.token1
-                LEFT JOIN dex_token   dt1 ON dt1.token_id = p.token1
-                LEFT JOIN quote_token qt1 ON qt1.quote_id = p.token1
-                LEFT JOIN pool_apr    par ON par.pool_id  = p.pool_id
-                LEFT JOIN fee_config  fc  ON fc.pair_id   = p.pool_id
+                LEFT JOIN token          t0  ON t0.token_id  = p.token0
+                LEFT JOIN dex_token      dt0 ON dt0.token_id = p.token0
+                LEFT JOIN quote_token    qt0 ON qt0.quote_id = p.token0
+                LEFT JOIN whitelist_token wl0 ON wl0.token_id = p.token0 AND wl0.enabled
+                LEFT JOIN token          t1  ON t1.token_id  = p.token1
+                LEFT JOIN dex_token      dt1 ON dt1.token_id = p.token1
+                LEFT JOIN quote_token    qt1 ON qt1.quote_id = p.token1
+                LEFT JOIN whitelist_token wl1 ON wl1.token_id = p.token1 AND wl1.enabled
+                LEFT JOIN pool_apr       par ON par.pool_id  = p.pool_id
+                LEFT JOIN fee_config     fc  ON fc.pair_id   = p.pool_id
                 WHERE p.pool_id = $1
                 "#,
             )
@@ -191,6 +193,20 @@ mod tests {
         .unwrap();
     }
 
+    /// Seeds a curated whitelist_token row (mirrors CMS-curated metadata).
+    async fn seed_whitelist(pool: &PgPool, token_id: &str, symbol: &str, image: &str) {
+        sqlx::query(
+            r#"INSERT INTO whitelist_token (token_id, sort_order, enabled, name, symbol, image_uri, decimals)
+               VALUES ($1, 1, TRUE, $2, $2, $3, 6)"#,
+        )
+        .bind(token_id)
+        .bind(symbol)
+        .bind(image)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
     fn make_controller(pool: PgPool) -> PoolController {
         PoolController::new(std::sync::Arc::new(PostgresDatabase {
             write_pool: pool.clone(),
@@ -236,6 +252,37 @@ mod tests {
             resp.fee_config.is_none(),
             "no fee_config row → fee_config is None"
         );
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn integration_whitelist_token_overrides_empty_image(pool: PgPool) {
+        // Repro: TOKEN1 is in dex_token with image_uri='' (empty, not NULL). Plain COALESCE
+        // would short-circuit on '' and return "". whitelist_token must win for curated tokens.
+        seed_pool(&pool).await;
+        seed_whitelist(
+            &pool,
+            TOKEN1,
+            "USDT",
+            "https://storage.nadapp.net/whitelist/usdt.png",
+        )
+        .await;
+        let controller = make_controller(pool);
+        let resp = controller
+            .get_pool_detail(POOL)
+            .await
+            .unwrap()
+            .expect("pool exists");
+
+        // token1 metadata now sourced from whitelist_token, not dex_token's empty image.
+        assert_eq!(resp.token1.symbol, "USDT");
+        assert_eq!(resp.token1.decimals, 6);
+        assert_eq!(
+            resp.token1.image_uri,
+            "https://storage.nadapp.net/whitelist/usdt.png"
+        );
+        assert_eq!(resp.pool_info.pair_label, "MON-USDT");
+        // token0 (not whitelisted here) still falls back to dex_token.
+        assert_eq!(resp.token0.symbol, "MON");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
