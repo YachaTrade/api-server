@@ -33,6 +33,7 @@ use tower_cookies::CookieManagerLayer;
 use tracing::{info, warn};
 use utoipa::OpenApi;
 
+use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(OpenApi)]
@@ -502,6 +503,7 @@ async fn main() -> Result<()> {
         .merge(cms::router(app_state.clone()))
         .merge(agent::router())
         .merge(SwaggerUi::new("/dev-sw").url("/dev-sw/openapi.json", ApiDoc::openapi()))
+        .merge(Scalar::with_url("/dev-scalar", ApiDoc::openapi()))
         .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(axum_middleware::from_fn_with_state(

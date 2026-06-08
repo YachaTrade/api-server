@@ -776,6 +776,7 @@ dependencies = [
  "urlencoding",
  "usvg",
  "utoipa",
+ "utoipa-scalar",
  "utoipa-swagger-ui",
  "uuid",
 ]
@@ -7080,6 +7081,18 @@ dependencies = [
  "quote",
  "regex",
  "syn 2.0.100",
+]
+
+[[package]]
+name = "utoipa-scalar"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3ab4b7269d14d93626b0bfedf212f1b0995cb7d13d35daba21d579511e7fae8"
+dependencies = [
+ "axum",
+ "serde",
+ "serde_json",
+ "utoipa",
 ]
 
 [[package]]
