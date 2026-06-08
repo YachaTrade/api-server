@@ -41,15 +41,17 @@ pub struct LpPositionEntry {
 pub struct LpPositionTokenSide {
     /// Token contract address (EIP-55 checksum).
     pub token_id: String,
-    /// Token symbol — sourced from `token`, falling back to
-    /// `dex_token`, then `quote_token`. Empty string when none of
-    /// the three registries has the token (shouldn't happen for
+    /// Token symbol — sourced from curated `whitelist_token` first, then
+    /// falling back to `token`, `dex_token`, `quote_token`. Empty string
+    /// when none of the registries has the token (shouldn't happen for
     /// pool-backed tokens).
     pub symbol: String,
-    /// Token decimals. Defaults to 18 when missing from registries.
+    /// Token decimals. Whitelist-first, then `dex_token`/`quote_token`.
+    /// Defaults to 18 when missing from registries.
     pub decimals: i32,
-    /// Token icon URL. Empty string when none of the registries
-    /// provide one.
+    /// Token icon URL — curated `whitelist_token` image wins, then
+    /// `token`/`dex_token`/`quote_token`. Empty string when none of the
+    /// registries provide one.
     pub image_uri: String,
     /// Cost-basis amount of this token (raw wei) deposited by the
     /// wallet across all mints, net of burns at this side's reserve
