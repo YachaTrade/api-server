@@ -259,7 +259,7 @@ pub async fn upload_dex_token_image(
 
 /// POST /cms/whitelist-token — 화이트리스트 토큰 upsert (admin, multipart).
 /// Accepts multipart/form-data: token_id (required), sort_order (required),
-/// enabled (optional bool, default true), name, symbol, price_feed_id, decimals (optional),
+/// enabled (optional bool, default true), name, symbol, decimals (optional),
 /// image (optional file).
 #[utoipa::path(
     post,
@@ -290,7 +290,6 @@ pub async fn upsert_whitelist_token(
     let mut enabled: Option<bool> = None;
     let mut name: Option<String> = None;
     let mut symbol: Option<String> = None;
-    let mut price_feed_id: Option<String> = None;
     let mut decimals: Option<i32> = None;
     let mut image_data: Option<Bytes> = None;
 
@@ -333,12 +332,6 @@ pub async fn upsert_whitelist_token(
                 })?;
                 if !v.is_empty() { symbol = Some(v); }
             }
-            "price_feed_id" => {
-                let v = field.text().await.map_err(|e| {
-                    AppError::BadRequest(format!("Failed to read price_feed_id: {}", e))
-                })?;
-                if !v.is_empty() { price_feed_id = Some(v); }
-            }
             "decimals" => {
                 let s = field.text().await.map_err(|e| {
                     AppError::BadRequest(format!("Failed to read decimals: {}", e))
@@ -379,7 +372,6 @@ pub async fn upsert_whitelist_token(
             enabled,
             name,
             symbol,
-            price_feed_id,
             decimals,
             image_data,
         )
@@ -422,8 +414,6 @@ pub struct UpsertWhitelistTokenMultipart {
     pub name: Option<String>,
     #[schema(nullable = true)]
     pub symbol: Option<String>,
-    #[schema(nullable = true)]
-    pub price_feed_id: Option<String>,
     #[schema(nullable = true)]
     pub decimals: Option<i32>,
     /// Image file (optional)
