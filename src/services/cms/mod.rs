@@ -264,7 +264,6 @@ impl CmsService {
         enabled: bool,
         name: Option<String>,
         symbol: Option<String>,
-        price_feed_id: Option<String>,
         decimals: Option<i32>,
         image_data: Option<Bytes>,
     ) -> Result<CmsActionResponse, AppError> {
@@ -318,7 +317,6 @@ impl CmsService {
             name: name.as_deref(),
             symbol: symbol.as_deref(),
             image_uri: image_uri.as_deref(),
-            price_feed_id: price_feed_id.as_deref(),
             decimals,
         };
 

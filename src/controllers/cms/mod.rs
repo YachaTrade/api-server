@@ -280,16 +280,15 @@ impl CmsController {
             "cms.upsert_whitelist_token",
             sqlx::query(
                 r#"
-                INSERT INTO whitelist_token (token_id, sort_order, enabled, name, symbol, image_uri, price_feed_id, decimals)
-                SELECT $1, $2, $3, $4, $5, $6, $7, $8
-                WHERE EXISTS (SELECT 1 FROM admin WHERE account_id = $9)
+                INSERT INTO whitelist_token (token_id, sort_order, enabled, name, symbol, image_uri, decimals)
+                SELECT $1, $2, $3, $4, $5, $6, $7
+                WHERE EXISTS (SELECT 1 FROM admin WHERE account_id = $8)
                 ON CONFLICT (token_id) DO UPDATE SET
                     sort_order    = EXCLUDED.sort_order,
                     enabled       = EXCLUDED.enabled,
                     name          = COALESCE(EXCLUDED.name, whitelist_token.name),
                     symbol        = COALESCE(EXCLUDED.symbol, whitelist_token.symbol),
                     image_uri     = COALESCE(EXCLUDED.image_uri, whitelist_token.image_uri),
-                    price_feed_id = COALESCE(EXCLUDED.price_feed_id, whitelist_token.price_feed_id),
                     decimals      = COALESCE(EXCLUDED.decimals, whitelist_token.decimals)
                 "#
             )
@@ -299,7 +298,6 @@ impl CmsController {
             .bind(p.name)
             .bind(p.symbol)
             .bind(p.image_uri)
-            .bind(p.price_feed_id)
             .bind(p.decimals)
             .bind(p.account_id)
             .execute(self.db.get_write_pool())
@@ -351,7 +349,6 @@ pub struct WhitelistUpsert<'a> {
     pub name: Option<&'a str>,
     pub symbol: Option<&'a str>,
     pub image_uri: Option<&'a str>,
-    pub price_feed_id: Option<&'a str>,
     pub decimals: Option<i32>,
 }
 
@@ -469,7 +466,6 @@ mod tests {
         name: Option<&'a str>,
         symbol: Option<&'a str>,
         image_uri: Option<&'a str>,
-        price_feed_id: Option<&'a str>,
         decimals: Option<i32>,
     ) -> WhitelistUpsert<'a> {
         WhitelistUpsert {
@@ -480,7 +476,6 @@ mod tests {
             name,
             symbol,
             image_uri,
-            price_feed_id,
             decimals,
         }
     }
@@ -494,7 +489,7 @@ mod tests {
             ACC_ADMIN, DEX_TOKEN, 3, true,
             Some("External Token"), Some("EXT"),
             Some("https://storage.nadapp.net/whitelist/ext"),
-            Some("0xfeed"), Some(6),
+            Some(6),
         );
         let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p).await.unwrap();
         assert!(ok);
@@ -511,7 +506,7 @@ mod tests {
         assert_eq!(row.2.as_deref(), Some("External Token"));
         assert_eq!(row.3.as_deref(), Some("EXT"));
         assert_eq!(row.4.as_deref(), Some("https://storage.nadapp.net/whitelist/ext"));
-        assert_eq!(row.5.as_deref(), Some("0xfeed"));
+        assert_eq!(row.5, None, "price_feed_id no longer written by upsert");
         assert_eq!(row.6, Some(6));
     }
 
@@ -524,13 +519,13 @@ mod tests {
             ACC_ADMIN, DEX_TOKEN, 1, true,
             Some("My Token"), Some("MTK"),
             Some("https://storage.nadapp.net/whitelist/mtk"),
-            Some("0xfeed1"), Some(18),
+            Some(18),
         );
         ctrl.upsert_whitelist_token_with_admin_guard(&p1).await.unwrap();
-        // Second upsert — omit name, symbol, image_uri, price_feed_id, decimals
+        // Second upsert — omit name, symbol, image_uri, decimals
         let p2 = wl_upsert(
             ACC_ADMIN, DEX_TOKEN, 9, false,
-            None, None, None, None, None,
+            None, None, None, None,
         );
         let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p2).await.unwrap();
         assert!(ok);
@@ -548,7 +543,7 @@ mod tests {
         assert_eq!(row.2.as_deref(), Some("My Token"), "name preserved");
         assert_eq!(row.3.as_deref(), Some("MTK"), "symbol preserved");
         assert_eq!(row.4.as_deref(), Some("https://storage.nadapp.net/whitelist/mtk"), "image_uri preserved");
-        assert_eq!(row.5.as_deref(), Some("0xfeed1"), "price_feed_id preserved");
+        assert_eq!(row.5, None, "price_feed_id no longer written");
         assert_eq!(row.6, Some(18), "decimals preserved");
     }
 
@@ -556,7 +551,7 @@ mod tests {
     async fn whitelist_upsert_false_when_not_admin(pool: PgPool) {
         // ACC_ADMIN is NOT in admin table
         let ctrl = make_controller(pool);
-        let p = wl_upsert(ACC_ADMIN, DEX_TOKEN, 1, true, None, None, None, None, None);
+        let p = wl_upsert(ACC_ADMIN, DEX_TOKEN, 1, true, None, None, None, None);
         let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p).await.unwrap();
         assert!(!ok);
         let cnt: i64 =
@@ -578,7 +573,7 @@ mod tests {
             .unwrap();
         let ctrl = make_controller(pool);
         // ACC_ADMIN not in admin — attempt to overwrite existing
-        let p = wl_upsert(ACC_ADMIN, DEX_TOKEN, 99, false, None, None, None, None, None);
+        let p = wl_upsert(ACC_ADMIN, DEX_TOKEN, 99, false, None, None, None, None);
         let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p).await.unwrap();
         assert!(!ok, "non-admin → no update (atomic guard)");
         let (so, en): (i32, bool) =
