@@ -231,6 +231,8 @@ use utoipa_swagger_ui::SwaggerUi;
             types::vault::CreatorFeeStats,
             types::vault::GiftStats,
             types::vault::EmptyStats,
+            types::vault::DividendStats,
+            types::vault::DividendVaultTokenStat,
 
             // Dividend
             types::dividend::DividendTokensResponse,

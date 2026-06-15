@@ -108,18 +108,17 @@ enriched AS (
         c.token_id,
         c.token_type,
         c.sort_order,
-        COALESCE(wl.symbol, t.symbol, dt.symbol, qt.symbol)             AS symbol,
-        COALESCE(wl.name, t.name, dt.name, qt.name)                     AS name,
-        COALESCE(wl.decimals, dt.decimals, qt.decimals, 18)             AS decimals,
-        COALESCE(wl.image_uri, t.image_uri, dt.image_uri, qt.image_uri) AS image_uri,
-        COALESCE(dtp.price_usd, m.price * lp.price, wlp.price)          AS price_usd,
+        COALESCE(wl.symbol, t.symbol, qt.symbol)               AS symbol,
+        COALESCE(wl.name, t.name, qt.name)                     AS name,
+        COALESCE(wl.decimals, qt.decimals, 18)                 AS decimals,
+        COALESCE(wl.image_uri, t.image_uri, qt.image_uri)      AS image_uri,
+        COALESCE(dtp.price_usd, m.price * lp.price, wlp.price) AS price_usd,
         (m.price
-            * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::numeric)
+            * (t.total_supply / POWER(10, COALESCE(qt.decimals, 18))::numeric)
             * lp.price)                                                 AS market_cap_usd
     FROM cand c
     LEFT JOIN whitelist_token wl ON wl.token_id = c.token_id AND wl.enabled
     LEFT JOIN token       t  ON t.token_id  = c.token_id
-    LEFT JOIN dex_token   dt ON dt.token_id = c.token_id
     LEFT JOIN quote_token qt ON qt.quote_id = c.token_id
     LEFT JOIN market      m  ON m.token_id  = c.token_id
     LEFT JOIN LATERAL (
@@ -138,6 +137,7 @@ const DIVIDEND_TOKEN_LIST_TAIL: &str = r#"
 SELECT token_id, token_type, symbol, name, decimals, image_uri, price_usd
 FROM enriched
 WHERE ($1::varchar IS NULL OR symbol ILIKE $1 OR name ILIKE $1 OR token_id ILIKE $1)
+  AND token_id <> '0x0000000000000000000000000000000000000000'
 ORDER BY
     CASE WHEN token_type = 'whitelist' THEN 0 ELSE 1 END,
     sort_order ASC NULLS LAST,
@@ -151,6 +151,7 @@ const DIVIDEND_TOKEN_COUNT_TAIL: &str = r#"
 SELECT COUNT(*)::bigint AS count
 FROM enriched
 WHERE ($1::varchar IS NULL OR symbol ILIKE $1 OR name ILIKE $1 OR token_id ILIKE $1)
+  AND token_id <> '0x0000000000000000000000000000000000000000'
 "#;
 
 #[derive(Debug, sqlx::FromRow)]
@@ -341,13 +342,12 @@ impl DividendController {
                 SELECT
                     s.dividend_token,
                     s.ratio,
-                    COALESCE(qt.name, dx.name, tk.name, '') AS dt_name,
-                    COALESCE(qt.symbol, dx.symbol, tk.symbol, '') AS dt_symbol,
-                    COALESCE(qt.decimals, dx.decimals, 18) AS dt_decimals,
-                    COALESCE(qt.image_uri, dx.image_uri, tk.image_uri, '') AS dt_image_uri
+                    COALESCE(qt.name, tk.name, '') AS dt_name,
+                    COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
+                    COALESCE(qt.decimals, 18) AS dt_decimals,
+                    COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri
                 FROM v2_dividend_setups s
                 LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
-                LEFT JOIN dex_token dx ON dx.token_id = s.dividend_token
                 LEFT JOIN token tk ON tk.token_id = s.dividend_token
                 WHERE s.source_token = $1
                 ORDER BY s.entry_index
@@ -475,14 +475,13 @@ impl DividendController {
                         COALESCE(c.claimed_amount, 0)               AS claimed_amount,
                         COALESCE(c.claimed_usd, 0)                  AS claimed_usd,
                         c.last_claimed_at,
-                        COALESCE(qt.name, dx.name, tk.name, '')      AS dt_name,
-                        COALESCE(qt.symbol, dx.symbol, tk.symbol, '') AS dt_symbol,
-                        COALESCE(qt.decimals, dx.decimals, 18)       AS dt_decimals,
-                        COALESCE(qt.image_uri, dx.image_uri, tk.image_uri, '') AS dt_image_uri
+                        COALESCE(qt.name, tk.name, '')      AS dt_name,
+                        COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
+                        COALESCE(qt.decimals, 18)       AS dt_decimals,
+                        COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri
                     FROM dist d
                     FULL OUTER JOIN claimed c USING (source_token, dividend_token)
                     LEFT JOIN quote_token qt ON qt.quote_id = COALESCE(d.dividend_token, c.dividend_token)
-                    LEFT JOIN dex_token dx ON dx.token_id = COALESCE(d.dividend_token, c.dividend_token)
                     LEFT JOIN token tk ON tk.token_id = COALESCE(d.dividend_token, c.dividend_token)
                     "#,
                 )
@@ -652,7 +651,7 @@ impl DividendController {
                            MAX(h.updated_at) AS last_received_at,
                            COALESCE(SUM(
                                h.accrued
-                               / POWER(10, COALESCE(qt.decimals, dx.decimals, 18))::numeric
+                               / POWER(10, COALESCE(qt.decimals, 18))::numeric
                                * COALESCE(
                                    (SELECT pr.price FROM price pr
                                       WHERE pr.quote_id = h.dividend_token
@@ -663,7 +662,6 @@ impl DividendController {
                            ), 0) AS total_value_usd
                     FROM acc h
                     LEFT JOIN quote_token qt ON qt.quote_id = h.dividend_token
-                    LEFT JOIN dex_token dx ON dx.token_id = h.dividend_token
                     GROUP BY h.holder
                 )
                 SELECT v.holder, v.total_value_usd, v.last_received_at,
@@ -923,6 +921,9 @@ mod tests {
             .bind(V1NONGRAD).bind(CREATOR).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ($1,99,true,'USD Coin','USDC') ON CONFLICT DO NOTHING")
             .bind(WLTOKEN).execute(&pool).await.unwrap();
+        // native MON placeholder (zero address) must be excluded from results
+        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ('0x0000000000000000000000000000000000000000',1,true,'Monad','MON') ON CONFLICT DO NOTHING")
+            .execute(&pool).await.unwrap();
 
         let c = ctrl(pool);
 
@@ -936,6 +937,10 @@ mod tests {
         assert!(ids.contains(&TOKEN), "V2 token present");
         assert!(ids.contains(&V1TOKEN), "V1 graduated token present");
         assert!(!ids.contains(&V1NONGRAD), "V1 non-graduated excluded");
+        assert!(
+            !ids.contains(&"0x0000000000000000000000000000000000000000"),
+            "zero-address (native MON) excluded"
+        );
         assert_eq!(
             all.tokens.iter().find(|t| t.token_id == WLTOKEN).unwrap().token_type,
             "whitelist"
