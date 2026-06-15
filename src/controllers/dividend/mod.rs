@@ -90,8 +90,11 @@ const TOKEN_MARKET_JOINS: &str = r#"
 // (whitelist/quote tokens). Appended with a SELECT/COUNT tail before execution.
 const DIVIDEND_TOKEN_CTE: &str = r#"
 WITH cand AS (
+    -- Dividend-eligible whitelist tokens only (curated by symbol; env-stable,
+    -- unlike addresses). Excludes native MON (zero addr) and WETH.
     SELECT token_id, 'whitelist'::text AS token_type, sort_order
-    FROM whitelist_token WHERE enabled
+    FROM whitelist_token
+    WHERE enabled AND symbol IN ('USDC','USDT','AUSD','LV','XAUt0','LVMON','WMON')
     UNION ALL
     SELECT token_id, 'nadfun_v1'::text AS token_type, NULL::int AS sort_order
     FROM token
@@ -924,6 +927,9 @@ mod tests {
         // native MON placeholder (zero address) must be excluded from results
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ('0x0000000000000000000000000000000000000000',1,true,'Monad','MON') ON CONFLICT DO NOTHING")
             .execute(&pool).await.unwrap();
+        // WETH is whitelisted but not dividend-eligible -> excluded by symbol allowlist
+        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ('0x000000000000000000000000000000000000Dd04',2,true,'Wrapped Ether','WETH') ON CONFLICT DO NOTHING")
+            .execute(&pool).await.unwrap();
 
         let c = ctrl(pool);
 
@@ -940,6 +946,10 @@ mod tests {
         assert!(
             !ids.contains(&"0x0000000000000000000000000000000000000000"),
             "zero-address (native MON) excluded"
+        );
+        assert!(
+            !ids.contains(&"0x000000000000000000000000000000000000Dd04"),
+            "non-eligible whitelist (WETH) excluded by symbol allowlist"
         );
         assert_eq!(
             all.tokens.iter().find(|t| t.token_id == WLTOKEN).unwrap().token_type,
