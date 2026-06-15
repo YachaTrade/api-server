@@ -33,6 +33,9 @@ struct TokenRow {
 pub struct TokensController {
     db: Arc<PostgresDatabase>,
     balance_source: Arc<dyn BalanceSource>,
+    /// Retained for source injection in tests; production pricing now reads the
+    /// `price_usd` table via SQL (no external price source calls in this controller).
+    #[allow(dead_code)]
     price_source: Arc<dyn PriceSource>,
     /// full-CA 미발견 시 온체인 메타 fallback. None이면 fallback 없음(미발견 → 빈 결과).
     meta_source: Option<Arc<dyn TokenMetaSource>>,
@@ -76,7 +79,7 @@ impl TokensController {
     // -----------------------------------------------------------------------
 
     /// When `account` is present, fetches on-chain balances for all enabled whitelist tokens
-    /// via RPC, then resolves USD values via Pyth. Returns two aligned vecs:
+    /// via RPC, then resolves USD values from the `price_usd` table. Returns two aligned vecs:
     ///   - `held_ids`: token_ids with balance > 0
     ///   - `held_usd`: corresponding balance_usd (0 if price unavailable)
     ///
@@ -86,9 +89,9 @@ impl TokensController {
         &self,
         account: &str,
     ) -> Result<(Vec<String>, Vec<BigDecimal>)> {
-        // 1. Query all enabled whitelist tokens with their feed/decimals.
-        let wl_rows: Vec<(String, Option<String>, Option<i32>)> = sqlx::query_as::<_, (String, Option<String>, Option<i32>)>(
-            "SELECT token_id, price_feed_id, decimals FROM whitelist_token WHERE enabled",
+        // 1. Query all enabled whitelist tokens with their decimals.
+        let wl_rows: Vec<(String, Option<i32>)> = sqlx::query_as::<_, (String, Option<i32>)>(
+            "SELECT token_id, decimals FROM whitelist_token WHERE enabled",
         )
         .fetch_all(self.db.get_read_pool())
         .await
@@ -99,16 +102,11 @@ impl TokensController {
         }
 
         // 2. Fetch RPC balance for each; keep only held (> 0).
-        let mut held: Vec<(String, BigDecimal, Option<String>, i32)> = vec![];
-        for (token_id, price_feed_id, decimals) in &wl_rows {
+        let mut held: Vec<(String, BigDecimal, i32)> = vec![];
+        for (token_id, decimals) in &wl_rows {
             if let Some(bal) = self.balance_source.balance_of(token_id, account).await {
                 if bal > BigDecimal::from(0) {
-                    held.push((
-                        token_id.clone(),
-                        bal,
-                        price_feed_id.clone(),
-                        decimals.unwrap_or(18),
-                    ));
+                    held.push((token_id.clone(), bal, decimals.unwrap_or(18)));
                 }
             }
         }
@@ -117,20 +115,26 @@ impl TokensController {
             return Ok((vec![], vec![]));
         }
 
-        // 3. Batch price lookup (DefiLlama, by token address) for held tokens.
-        let addrs: Vec<String> = held.iter().map(|(id, _, _, _)| id.clone()).collect();
-        let prices = if addrs.is_empty() {
-            HashMap::new()
-        } else {
-            self.price_source.prices_usd(&addrs).await
-        };
+        // 3. Latest USD unit price per held token from the price_usd table (DefiLlama-fed).
+        let held_ids_q: Vec<String> = held.iter().map(|(id, _, _)| id.clone()).collect();
+        let price_rows: Vec<(String, BigDecimal)> = sqlx::query_as::<_, (String, BigDecimal)>(
+            r#"SELECT DISTINCT ON (token_id) token_id, price
+               FROM price_usd
+               WHERE token_id = ANY($1)
+               ORDER BY token_id, block_number DESC"#,
+        )
+        .bind(&held_ids_q)
+        .fetch_all(self.db.get_read_pool())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query price_usd: {}", e))?;
+        let prices: HashMap<String, BigDecimal> = price_rows.into_iter().collect();
 
         // 4. Build aligned output vecs.
         let mut held_ids: Vec<String> = Vec::with_capacity(held.len());
         let mut held_usd: Vec<BigDecimal> = Vec::with_capacity(held.len());
-        for (token_id, bal, _feed, decimals) in held {
+        for (token_id, bal, decimals) in held {
             let usd = prices
-                .get(&token_id.to_lowercase())
+                .get(&token_id)
                 .map(|p| compute_balance_usd(&bal, decimals, p))
                 .unwrap_or_else(|| BigDecimal::from(0));
             held_ids.push(token_id);
@@ -329,19 +333,8 @@ impl TokensController {
     /// The tier/ordering is already correct from SQL (wl_rpc CTE). Double RPC calls are
     /// acceptable here (curated set is small); a cache layer can be added later if needed.
     async fn enrich(&self, rows: Vec<TokenRow>, account: Option<&str>) -> Vec<DexTokenEntry> {
-        // price_usd now comes from the price_usd table (DefiLlama) via SQL. Pyth is
-        // only a fallback for whitelist tokens that have no price_usd row yet.
-        let wl_addrs: Vec<String> = rows
-            .iter()
-            .filter(|r| r.token_type == "whitelist" && r.price_usd.is_none())
-            .map(|r| r.token_id.clone())
-            .collect();
-        let prices = if wl_addrs.is_empty() {
-            HashMap::new()
-        } else {
-            self.price_source.prices_usd(&wl_addrs).await
-        };
-
+        // price_usd comes solely from the price_usd table (DefiLlama-fed) via SQL — no
+        // external price source. Whitelist tokens with no price_usd row → price None.
         // balance / balance_usd require an account: fetch held whitelist balances via RPC.
         let mut wl_balance: HashMap<String, BigDecimal> = HashMap::new();
         if let Some(account) = account {
@@ -357,10 +350,7 @@ impl TokensController {
         rows.into_iter()
             .map(|r| {
                 if r.token_type == "whitelist" {
-                    let price_usd = r
-                        .price_usd
-                        .clone()
-                        .or_else(|| prices.get(&r.token_id.to_lowercase()).cloned());
+                    let price_usd = r.price_usd.clone();
                     let balance = wl_balance.get(&r.token_id).cloned();
                     let decimals = r.decimals.unwrap_or(18);
                     let balance_usd = match (&balance, &price_usd) {
@@ -1339,19 +1329,17 @@ mod tests {
     const WL_FEED: &str = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn whitelist_balance_and_usd_from_rpc_and_pyth(pool: PgPool) {
+    async fn whitelist_balance_from_rpc_and_usd_from_price_usd_table(pool: PgPool) {
         seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
+        // latest price_usd row → $1.5 (no external price source)
+        sqlx::query("INSERT INTO price_usd (token_id, block_number, price, created_at) VALUES ($1, 1, 1.5, 0)")
+            .bind(WL_A).execute(&pool).await.unwrap();
         let mut bal = FakeBalance::default();
         bal.balances.insert(
             (WL_A.to_string(), ACCOUNT.to_string()),
-            BigDecimal::from_str("2000000000000000000").unwrap(), // 2 USDC (18dp)
+            BigDecimal::from_str("2000000000000000000").unwrap(), // 2 tokens (18dp)
         );
-        let mut price = FakePrice::default();
-        price.prices.insert(
-            WL_A.to_lowercase(),
-            BigDecimal::from_str("1.5").unwrap(), // $1.5
-        );
-        let c = controller_with(pool, bal, price);
+        let c = controller_with(pool, bal, FakePrice::default());
         let resp = c.list_tokens(&DexTokenListQuery {
             account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
         }).await.unwrap();
@@ -1359,7 +1347,7 @@ mod tests {
         assert_eq!(t.balance.as_deref(), Some("2000000000000000000"), "RPC 잔액 노출");
         // normalized() strips trailing zeros: 3.0 → "3". Compare as BigDecimal for canonical equality.
         let usd: BigDecimal = t.balance_usd.as_deref().unwrap().parse().unwrap();
-        assert_eq!(usd, BigDecimal::from_str("3.0").unwrap(), "2 × $1.5 = $3");
+        assert_eq!(usd, BigDecimal::from_str("3.0").unwrap(), "2 × $1.5 = $3 (price from price_usd table)");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -1527,19 +1515,16 @@ mod tests {
         .execute(pool).await.unwrap();
     }
 
-    /// whitelist price_usd comes from Pyth and must be present even with NO account
-    /// (price is account-independent), truncated to 8 decimals.
+    /// whitelist price_usd comes from the price_usd table and must be present even with
+    /// NO account (price is account-independent), truncated to 8 decimals.
     #[sqlx::test(migrations = "./migrations-test")]
     async fn price_usd_for_whitelist_without_account(pool: PgPool) {
         const FEED: &str = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         seed_whitelist_with_feed(&pool, WL_A, 1, FEED).await;
-        let mut price = FakePrice::default();
-        // Pyth → 2.123456789 USD; 8dp truncate → "2.12345678"
-        price.prices.insert(
-            WL_A.to_lowercase(),
-            "2.123456789".parse().unwrap(),
-        );
-        let controller = controller_with(pool, FakeBalance::default(), price);
+        // price_usd table → 2.123456789 USD; 8dp truncate → "2.12345678"
+        sqlx::query("INSERT INTO price_usd (token_id, block_number, price, created_at) VALUES ($1, 1, 2.123456789, 0)")
+            .bind(WL_A).execute(&pool).await.unwrap();
+        let controller = controller_with(pool, FakeBalance::default(), FakePrice::default());
 
         // No ?account= — price_usd must still be populated.
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
@@ -1549,7 +1534,7 @@ mod tests {
         assert_eq!(
             wl.price_usd.as_deref(),
             Some("2.12345678"),
-            "whitelist price_usd = Pyth price, account-independent, 8dp truncated"
+            "whitelist price_usd from price_usd table, account-independent, 8dp truncated"
         );
     }
 
