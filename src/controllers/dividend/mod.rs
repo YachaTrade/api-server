@@ -115,7 +115,7 @@ enriched AS (
         COALESCE(wl.name, t.name, qt.name)                     AS name,
         COALESCE(wl.decimals, qt.decimals, 18)                 AS decimals,
         COALESCE(wl.image_uri, t.image_uri, qt.image_uri)      AS image_uri,
-        COALESCE(dtp.price_usd, m.price * lp.price, wlp.price) AS price_usd,
+        COALESCE(dtp.price_usd, m.price * lp.price, pu.price) AS price_usd,
         (m.price
             * (t.total_supply / POWER(10, COALESCE(qt.decimals, 18))::numeric)
             * lp.price)                                                 AS market_cap_usd
@@ -129,9 +129,9 @@ enriched AS (
         ORDER BY block_number DESC LIMIT 1
     ) lp ON true
     LEFT JOIN LATERAL (
-        SELECT price FROM price WHERE quote_id = c.token_id
+        SELECT price FROM price_usd WHERE token_id = c.token_id
         ORDER BY block_number DESC LIMIT 1
-    ) wlp ON true
+    ) pu ON true
     LEFT JOIN dex_token_price dtp ON dtp.token_id = c.token_id
 )
 "#;
