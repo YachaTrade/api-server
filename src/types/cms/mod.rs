@@ -125,8 +125,6 @@ pub struct WhitelistTokenEntry {
     #[schema(nullable = true)]
     pub image_uri: Option<String>,
     #[schema(nullable = true)]
-    pub price_feed_id: Option<String>,
-    #[schema(nullable = true)]
     pub decimals: Option<i32>,
     pub sort_order: i32,
     pub enabled: bool,
