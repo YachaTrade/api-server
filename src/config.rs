@@ -147,6 +147,11 @@ lazy_static! {
         .expect("V2_BONDING_CURVE must be set");
     pub static ref V2_TOKEN_IMPL: String = env::var("V2_TOKEN_IMPL")
         .expect("V2_TOKEN_IMPL must be set");
+    // Singleton DividendVault address. Identifies the dividend fee-split
+    // allocation (v2_creator_fee_allocation.vault_id) for the "Dividend %" card.
+    // Optional: empty -> dividend_bps reports 0 (feature degrades gracefully).
+    pub static ref V2_DIVIDEND_VAULT: String = env::var("V2_DIVIDEND_VAULT")
+        .unwrap_or_default();
     pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")
         .expect("METRICS_REPORT_INTERVAL must be set")
         .parse::<u64>()

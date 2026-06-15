@@ -2,7 +2,7 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, chester, cms, dex, health, hype, leaderboard,
+        self, account, agent, api_key, auth, chester, cms, dex, dividend, health, hype, leaderboard,
         metadata, metrics, new_event, order, profile, quote_token, raffle, search, terminal, token,
         trade, trend, vault,
     },
@@ -72,6 +72,12 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------Vault----------------
         router::vault::handler::get_token_vaults,
+
+        // ----------------Dividend----------------
+        router::dividend::handler::get_dividend_vault,
+        router::dividend::handler::get_dividend_holders,
+        router::dividend::handler::get_profile_dividends,
+        router::dividend::handler::get_dividend_tokens,
 
         // ----------------Dex----------------
         router::dex::positions::get_positions,
@@ -227,6 +233,16 @@ use utoipa_swagger_ui::SwaggerUi;
             types::vault::GiftStats,
             types::vault::EmptyStats,
 
+            // Dividend
+            types::dividend::DividendTokensResponse,
+            types::dividend::DividendTokenInfo,
+            types::dividend::DividendReward,
+            types::dividend::DividendHoldersResponse,
+            types::dividend::DividendRatioInfo,
+            types::dividend::DividendHolderInfo,
+            types::dividend::DividendVaultResponse,
+            types::dividend::DividendStatInfo,
+
             // Dex
             types::dex::position::LpPositionsResponse,
             types::dex::position::LpPositionEntry,
@@ -381,6 +397,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="Follow",description="Follow management endpoints"),
         (name="Token",description="Token management endpoints"),
         (name="Vault",description="V2 token fee vault endpoints (Buyback & Burn / LP / Creator / Gift)"),
+        (name="Dividend",description="V2 token dividend endpoints (profile claimable / holder ranking / vault summary)"),
         (name="Dex", description="V2 DEX LP positions, pools, and token list"),
         (name="QuoteToken",description="Quote token endpoints"),
         (name="Profile",description="Profile management endpoints"),
@@ -484,6 +501,7 @@ async fn main() -> Result<()> {
         .merge(raffle::router(app_state.clone()))
         .merge(token::router())
         .merge(vault::router())
+        .merge(dividend::router())
         .merge(dex::router())
         .merge(quote_token::router())
         .merge(search::router())
