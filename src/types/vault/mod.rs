@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::types::common::info::QuoteInfo;
+
 /// Vault classification — mirrors `v2_vault_metadata.vault_type` CHECK constraint.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, sqlx::Type, PartialEq, Eq)]
 #[sqlx(type_name = "VARCHAR")]
@@ -20,6 +22,9 @@ pub enum VaultType {
     #[serde(rename = "CUSTOM")]
     #[sqlx(rename = "CUSTOM")]
     Custom,
+    #[serde(rename = "DIVIDEND")]
+    #[sqlx(rename = "DIVIDEND")]
+    Dividend,
 }
 
 /// Top-level response for `GET /vault/{token_id}`.
@@ -88,6 +93,39 @@ pub enum VaultStats {
     /// `vault_id` / `bps` / `name` from `VaultEntry`.
     #[serde(rename = "CUSTOM")]
     Custom(EmptyStats),
+    /// Dividend vault — routes trading fees to holders in dividend tokens.
+    /// Detail sourced from the dividend schema (v2_dividend_setups / _vault_stats
+    /// + balance for eligibility). `bps` / `name` live on the parent `VaultEntry`.
+    #[serde(rename = "DIVIDEND")]
+    Dividend(DividendStats),
+}
+
+/// Dividend vault stats — per-token dividend distribution config + totals.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DividendStats {
+    /// Σ(total_deposited + total_pending_deposited) across dividend tokens (quote raw).
+    pub allocated_volume: String,
+    /// Σ(total_deposited_usd + total_pending_deposited_usd).
+    pub total_dividends_usd: String,
+    /// Minimum source-token holding required to receive dividends (raw).
+    /// Eligibility label = `min_balance` + parent token symbol.
+    pub min_balance: String,
+    /// Eligible holders (balance >= min_balance).
+    pub recipient_count: i64,
+    /// Per dividend-token breakdown (ratio + cumulative amount).
+    pub dividend_tokens: Vec<DividendVaultTokenStat>,
+}
+
+/// One dividend token within a `DividendStats` breakdown.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DividendVaultTokenStat {
+    pub dividend_token_info: QuoteInfo,
+    /// Distribution ratio in BPS (2500 = 25%).
+    pub ratio_bps: i32,
+    /// Cumulative dividend balance in the dividend token's raw units.
+    pub amount: String,
+    /// USD value deposited toward this dividend token.
+    pub amount_usd: String,
 }
 
 /// Buyback & Burn vault — `v2_burn_vault_stats`.

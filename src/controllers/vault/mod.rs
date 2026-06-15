@@ -6,9 +6,10 @@ use sqlx::types::BigDecimal;
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
+    types::common::info::QuoteInfo,
     types::vault::{
-        BurnStats, CreatorFeeStats, EmptyStats, GiftStats, LpStats, TokenVaultsResponse,
-        VaultEntry, VaultStats, VaultType,
+        BurnStats, CreatorFeeStats, DividendStats, DividendVaultTokenStat, EmptyStats, GiftStats,
+        LpStats, TokenVaultsResponse, VaultEntry, VaultStats, VaultType,
     },
 };
 
@@ -215,7 +216,18 @@ impl VaultController {
             .find_map(|r| r.market_quote_id.clone())
             .unwrap_or_default();
 
-        let vaults: Vec<VaultEntry> = rows.into_iter().map(map_row).collect();
+        // Dividend vault detail isn't in the per-vault stat tables; fetch it from
+        // the dividend schema once (at most one DIVIDEND vault per token).
+        let dividend = if rows.iter().any(|r| r.vault_type == VaultType::Dividend) {
+            Some(self.fetch_dividend_vault_stats(token_id).await?)
+        } else {
+            None
+        };
+
+        let vaults: Vec<VaultEntry> = rows
+            .into_iter()
+            .map(|r| map_row(r, &dividend))
+            .collect();
 
         Ok(TokenVaultsResponse {
             token_id: token_id.to_string(),
@@ -225,9 +237,118 @@ impl VaultController {
             vaults,
         })
     }
+
+    /// Dividend-vault detail from the dividend schema (per-token breakdown,
+    /// eligibility, recipients). Returns (last_executed_at, stats); the vault's
+    /// `bps` / `name` come from the parent `VaultEntry`.
+    async fn fetch_dividend_vault_stats(&self, token_id: &str) -> Result<(i64, DividendStats)> {
+        #[derive(Debug, sqlx::FromRow)]
+        struct StatRow {
+            dividend_token: String,
+            ratio: i32,
+            min_balance: BigDecimal,
+            amount: BigDecimal,
+            deposited: BigDecimal,
+            deposited_usd: BigDecimal,
+            dt_name: String,
+            dt_symbol: String,
+            dt_decimals: i32,
+            dt_image_uri: String,
+        }
+
+        let rows = measure_postgres!(
+            "vault.fetch_dividend_breakdown",
+            sqlx::query_as::<_, StatRow>(
+                r#"
+                SELECT
+                    s.dividend_token,
+                    s.ratio,
+                    s.min_balance,
+                    COALESCE(st.dividend_balance, 0) AS amount,
+                    COALESCE(st.total_deposited, 0) + COALESCE(st.total_pending_deposited, 0) AS deposited,
+                    COALESCE(st.total_deposited_usd, 0) + COALESCE(st.total_pending_deposited_usd, 0) AS deposited_usd,
+                    COALESCE(qt.name, tk.name, '') AS dt_name,
+                    COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
+                    COALESCE(qt.decimals, 18) AS dt_decimals,
+                    COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri
+                FROM v2_dividend_setups s
+                LEFT JOIN v2_dividend_vault_stats st
+                    ON st.source_token = s.source_token AND st.dividend_token = s.dividend_token
+                LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
+                LEFT JOIN token tk ON tk.token_id = s.dividend_token
+                WHERE s.source_token = $1
+                ORDER BY s.entry_index
+                "#,
+            )
+            .bind(token_id)
+            .fetch_all(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch dividend breakdown: {}", err))?;
+
+        let mut allocated_volume = BigDecimal::from(0);
+        let mut total_dividends_usd = BigDecimal::from(0);
+        let min_balance = rows
+            .first()
+            .map(|r| r.min_balance.clone())
+            .unwrap_or_else(|| BigDecimal::from(0));
+
+        let dividend_tokens: Vec<DividendVaultTokenStat> = rows
+            .into_iter()
+            .map(|r| {
+                allocated_volume = allocated_volume.clone() + r.deposited.clone();
+                total_dividends_usd = total_dividends_usd.clone() + r.deposited_usd.clone();
+                DividendVaultTokenStat {
+                    dividend_token_info: QuoteInfo {
+                        quote_id: r.dividend_token,
+                        name: r.dt_name,
+                        symbol: r.dt_symbol,
+                        decimals: r.dt_decimals.max(0) as u32,
+                        image_uri: r.dt_image_uri,
+                    },
+                    ratio_bps: r.ratio,
+                    amount: r.amount.normalized().to_plain_string(),
+                    amount_usd: r.deposited_usd.normalized().to_plain_string(),
+                }
+            })
+            .collect();
+
+        #[derive(Debug, sqlx::FromRow)]
+        struct ScalarRow {
+            recipient_count: i64,
+            last_executed_at: i64,
+        }
+
+        let scalars = measure_postgres!(
+            "vault.fetch_dividend_scalars",
+            sqlx::query_as::<_, ScalarRow>(
+                r#"
+                SELECT
+                    COALESCE((SELECT COUNT(*) FROM balance
+                              WHERE token_id = $1 AND balance >= $2), 0)::bigint AS recipient_count,
+                    COALESCE((SELECT MAX(updated_at) FROM dividend_pair_state
+                              WHERE source_token = $1), 0)::bigint AS last_executed_at
+                "#,
+            )
+            .bind(token_id)
+            .bind(&min_balance)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch dividend scalars: {}", err))?;
+
+        Ok((
+            scalars.last_executed_at,
+            DividendStats {
+                allocated_volume: allocated_volume.normalized().to_plain_string(),
+                total_dividends_usd: total_dividends_usd.normalized().to_plain_string(),
+                min_balance: min_balance.normalized().to_plain_string(),
+                recipient_count: scalars.recipient_count,
+                dividend_tokens,
+            },
+        ))
+    }
 }
 
-fn map_row(row: VaultRow) -> VaultEntry {
+fn map_row(row: VaultRow, dividend: &Option<(i64, DividendStats)>) -> VaultEntry {
     let (last_executed_at, stats) = match row.vault_type {
         VaultType::Burn => (
             row.burn_updated_at.unwrap_or(0),
@@ -295,6 +416,19 @@ fn map_row(row: VaultRow) -> VaultEntry {
             }),
         ),
         VaultType::Custom => (0, VaultStats::Custom(EmptyStats {})),
+        VaultType::Dividend => match dividend.clone() {
+            Some((last, stats)) => (last, VaultStats::Dividend(stats)),
+            None => (
+                0,
+                VaultStats::Dividend(DividendStats {
+                    allocated_volume: "0".to_string(),
+                    total_dividends_usd: "0".to_string(),
+                    min_balance: "0".to_string(),
+                    recipient_count: 0,
+                    dividend_tokens: vec![],
+                }),
+            ),
+        },
     };
 
     VaultEntry {
@@ -320,5 +454,51 @@ fn format_pool_pair(token_symbol: Option<&str>, quote_symbol: Option<&str>) -> S
         (Some(t), Some(q)) => format!("{}/{}", t, q),
         (Some(t), None) => t.to_string(),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::PgPool;
+
+    const TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
+    const QUOTE: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"; // MON (seeded)
+    const DIV2: &str = "0x000000000000000000000000000000000000Cc01";
+    const HOLDER: &str = "0x000000000000000000000000000000000000Aa01";
+    const HOLDER2: &str = "0x000000000000000000000000000000000000Aa02";
+
+    fn ctrl(pool: PgPool) -> VaultController {
+        VaultController::new(Arc::new(crate::db::postgres::PostgresDatabase {
+            write_pool: pool.clone(),
+            read_pool: pool,
+        }))
+    }
+
+    // DIVIDEND vault stats: per-token breakdown + allocated volume + USD total +
+    // eligibility recipient count + last executed.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn dividend_vault_stats(pool: PgPool) {
+        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,2500,10,0,'0xs1',1,1,0,0)"#)
+            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,7500,10,1,'0xs1',1,1,0,1)"#)
+            .bind(TOKEN).bind(DIV2).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO v2_dividend_vault_stats (source_token,dividend_token,total_deposited,total_deposited_usd,total_pending_deposited,total_pending_deposited_usd,dividend_balance,updated_at) VALUES ($1,$2,400,800,100,200,1000,50)"#)
+            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,20,0)")
+            .bind(HOLDER).bind(TOKEN).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,5,0)")
+            .bind(HOLDER2).bind(TOKEN).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO dividend_pair_state (source_token,dividend_token,last_allocated_balance,last_snapshot_block,updated_at) VALUES ($1,$2,0,5,50)")
+            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+
+        let (last_executed, stats) = ctrl(pool).fetch_dividend_vault_stats(TOKEN).await.unwrap();
+
+        assert_eq!(last_executed, 50);
+        assert_eq!(stats.allocated_volume, "500"); // (400+100) + (0+0)
+        assert_eq!(stats.total_dividends_usd, "1000"); // (800+200) + 0
+        assert_eq!(stats.min_balance, "10");
+        assert_eq!(stats.recipient_count, 1); // only balance >= 10
+        assert_eq!(stats.dividend_tokens.len(), 2);
     }
 }
