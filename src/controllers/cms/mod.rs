@@ -16,7 +16,6 @@ struct WhitelistRow {
     symbol: Option<String>,
     name: Option<String>,
     image_uri: Option<String>,
-    price_feed_id: Option<String>,
     decimals: Option<i32>,
     sort_order: i32,
     enabled: bool,
@@ -315,7 +314,7 @@ impl CmsController {
             "cms.list_whitelist_tokens",
             sqlx::query_as::<_, WhitelistRow>(
                 r#"
-                SELECT token_id, symbol, name, image_uri, price_feed_id, decimals, sort_order, enabled
+                SELECT token_id, symbol, name, image_uri, decimals, sort_order, enabled
                 FROM whitelist_token
                 ORDER BY sort_order ASC, token_id ASC
                 "#
@@ -331,7 +330,6 @@ impl CmsController {
                 symbol: r.symbol,
                 name: r.name,
                 image_uri: r.image_uri,
-                price_feed_id: r.price_feed_id,
                 decimals: r.decimals,
                 sort_order: r.sort_order,
                 enabled: r.enabled,
@@ -610,7 +608,6 @@ mod tests {
         // Alpha(2) second
         assert_eq!(rows[1].token_id, DEX_TOKEN);
         assert_eq!(rows[1].symbol.as_deref(), Some("ALPH"));
-        assert_eq!(rows[1].price_feed_id.as_deref(), Some("0xfeed1"));
         assert_eq!(rows[1].decimals, Some(18));
     }
 

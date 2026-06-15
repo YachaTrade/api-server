@@ -8,8 +8,8 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     services::pricing::{
-        balance::RpcBalanceSource, compute_balance_usd, defillama::DefiLlamaPriceSource,
-        meta::RpcMetaSource, BalanceSource, PriceSource, TokenMetaSource,
+        balance::RpcBalanceSource, compute_balance_usd, meta::RpcMetaSource, BalanceSource,
+        TokenMetaSource,
     },
     types::dex::tokens::{DexTokenEntry, DexTokenListQuery, DexTokenListResponse},
 };
@@ -24,30 +24,24 @@ struct TokenRow {
     image_uri: Option<String>,
     balance: Option<BigDecimal>,
     balance_usd: Option<BigDecimal>,
-    /// USD unit price from SQL (market.price × quote→USD). NULL for whitelist
-    /// (no market row) — filled from Pyth in enrich().
+    /// USD unit price from SQL: dex_token_price → market.price × quote→USD →
+    /// price_usd table (DefiLlama; covers whitelist which has no market row).
     price_usd: Option<BigDecimal>,
-    price_feed_id: Option<String>,
 }
 
 pub struct TokensController {
     db: Arc<PostgresDatabase>,
     balance_source: Arc<dyn BalanceSource>,
-    /// Retained for source injection in tests; production pricing now reads the
-    /// `price_usd` table via SQL (no external price source calls in this controller).
-    #[allow(dead_code)]
-    price_source: Arc<dyn PriceSource>,
     /// full-CA 미발견 시 온체인 메타 fallback. None이면 fallback 없음(미발견 → 빈 결과).
     meta_source: Option<Arc<dyn TokenMetaSource>>,
 }
 
 impl TokensController {
-    /// 운영용 — 실제 RPC/Pyth 소스.
+    /// 운영용 — 실제 RPC 소스. 가격은 SQL(price_usd 테이블)에서 읽음.
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         Self {
             db,
             balance_source: Arc::new(RpcBalanceSource::new()),
-            price_source: Arc::new(DefiLlamaPriceSource::new()),
             meta_source: Some(Arc::new(RpcMetaSource::new())),
         }
     }
@@ -56,9 +50,8 @@ impl TokensController {
     pub fn with_sources(
         db: Arc<PostgresDatabase>,
         balance_source: Arc<dyn BalanceSource>,
-        price_source: Arc<dyn PriceSource>,
     ) -> Self {
-        Self { db, balance_source, price_source, meta_source: None }
+        Self { db, balance_source, meta_source: None }
     }
 
     /// 테스트용 — full-CA 미발견 시 외부 토큰 메타 fallback 주입.
@@ -383,7 +376,7 @@ impl TokensController {
 /// `enriched_cte_with` between wl_rpc and enriched; must end with `candidates AS (…),`.
 const DEFAULT_CANDIDATES_CTES: &str = r#"
 wl AS (
-    SELECT token_id, sort_order, price_feed_id, name, symbol, image_uri, decimals FROM whitelist_token WHERE enabled
+    SELECT token_id, sort_order, name, symbol, image_uri, decimals FROM whitelist_token WHERE enabled
 ),
 v2 AS (
     SELECT t.token_id
@@ -397,9 +390,9 @@ v2 AS (
       AND t.token_id NOT IN (SELECT token_id FROM wl)
 ),
 candidates AS (
-    SELECT token_id, 'whitelist'::text AS token_type, sort_order, price_feed_id, name, symbol, image_uri, decimals FROM wl
+    SELECT token_id, 'whitelist'::text AS token_type, sort_order, name, symbol, image_uri, decimals FROM wl
     UNION ALL
-    SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order, NULL::varchar AS price_feed_id,
+    SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order,
            NULL::varchar AS name, NULL::varchar AS symbol, NULL::varchar AS image_uri, NULL::int AS decimals FROM v2
 ),
 "#;
@@ -442,7 +435,7 @@ candidates AS (
                 WHEN t.version = 'V2'        THEN 'nadfun_v2'
                 WHEN t.version = 'V1'        THEN 'nadfun_v1'
                 ELSE 'external' END::text AS token_type,
-           wl.sort_order, wl.price_feed_id, wl.name, wl.symbol, wl.image_uri, wl.decimals
+           wl.sort_order, wl.name, wl.symbol, wl.image_uri, wl.decimals
     FROM matched m
     LEFT JOIN whitelist_token wl ON wl.token_id = m.token_id AND wl.enabled
     LEFT JOIN token           t  ON t.token_id  = m.token_id
@@ -467,7 +460,6 @@ enriched AS (
         c.token_id,
         c.token_type,
         c.sort_order,
-        c.price_feed_id,
         COALESCE(c.symbol,    t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
         COALESCE(c.name,      t.name,      dt.name,      qt.name)      AS name,
         COALESCE(c.decimals,  dt.decimals, qt.decimals)   AS decimals,
@@ -517,7 +509,7 @@ enriched AS (
 }
 
 const ENRICHED_COLS: &str = r#"SELECT token_id, token_type, symbol, name, decimals, image_uri,
-       balance, balance_usd, price_usd, price_feed_id
+       balance, balance_usd, price_usd
 FROM enriched
 "#;
 
@@ -558,8 +550,7 @@ SELECT
         wl_rpc.balance_usd,
         (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * COALESCE(dtp.price_usd, m.price * lp.price, pu.price))
     ) AS balance_usd,
-    COALESCE(dtp.price_usd, m.price * lp.price, pu.price) AS price_usd,
-    wl.price_feed_id AS price_feed_id
+    COALESCE(dtp.price_usd, m.price * lp.price, pu.price) AS price_usd
 FROM target tg
 LEFT JOIN whitelist_token wl ON wl.token_id = tg.token_id AND wl.enabled
 LEFT JOIN wl_rpc              ON wl_rpc.token_id = tg.token_id
@@ -688,29 +679,6 @@ mod tests {
         }
     }
 
-    struct FakePrice {
-        prices: HashMap<String, BigDecimal>, // normalized feed_id → usd
-    }
-
-    impl Default for FakePrice {
-        fn default() -> Self {
-            Self { prices: HashMap::new() }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl PriceSource for FakePrice {
-        async fn prices_usd(&self, ids: &[String]) -> HashMap<String, BigDecimal> {
-            // DefiLlama 소스처럼 토큰 주소(소문자)로 키.
-            ids.iter()
-                .filter_map(|id| {
-                    let k = id.to_lowercase();
-                    self.prices.get(&k).map(|v| (k, v.clone()))
-                })
-                .collect()
-        }
-    }
-
     #[derive(Default)]
     struct FakeMeta {
         metas: HashMap<String, TokenMeta>, // token_id → on-chain meta
@@ -732,16 +700,14 @@ mod tests {
         TokensController::with_sources(
             std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
             std::sync::Arc::new(FakeBalance::default()),
-            std::sync::Arc::new(FakePrice::default()),
         )
     }
 
-    fn controller_with(pool: PgPool, bal: FakeBalance, price: FakePrice) -> TokensController {
+    fn controller_with(pool: PgPool, bal: FakeBalance) -> TokensController {
         use crate::db::postgres::PostgresDatabase;
         TokensController::with_sources(
             std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
             std::sync::Arc::new(bal),
-            std::sync::Arc::new(price),
         )
     }
 
@@ -1303,7 +1269,6 @@ mod tests {
             balance: balance.map(BigDecimal::from),
             balance_usd: balance_usd.map(BigDecimal::from),
             price_usd: None,
-            price_feed_id: None,
         }
     }
 
@@ -1339,7 +1304,7 @@ mod tests {
             (WL_A.to_string(), ACCOUNT.to_string()),
             BigDecimal::from_str("2000000000000000000").unwrap(), // 2 tokens (18dp)
         );
-        let c = controller_with(pool, bal, FakePrice::default());
+        let c = controller_with(pool, bal);
         let resp = c.list_tokens(&DexTokenListQuery {
             account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
         }).await.unwrap();
@@ -1354,8 +1319,7 @@ mod tests {
     async fn whitelist_unheld_has_null_balance_and_no_price_call(pool: PgPool) {
         seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
         let bal = FakeBalance::default(); // 잔액 없음 → 미보유
-        let price = FakePrice::default();
-        let c = controller_with(pool, bal, price);
+        let c = controller_with(pool, bal);
         let resp = c.list_tokens(&DexTokenListQuery {
             account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
         }).await.unwrap();
@@ -1373,7 +1337,6 @@ mod tests {
             TokensController::with_sources(
                 std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
                 bal.clone(),
-                std::sync::Arc::new(FakePrice::default()),
             )
         };
         let _ = c.list_tokens(&empty_query()).await.unwrap();
@@ -1464,13 +1427,7 @@ mod tests {
             (WL_A.to_string(), ACCOUNT.to_string()),
             BigDecimal::from_str("5000000000000000000").unwrap(), // 5 tokens (18dp)
         );
-        let mut price = FakePrice::default();
-        price.prices.insert(
-            WL_FEED.trim_start_matches("0x").to_string(),
-            BigDecimal::from_str("2.0").unwrap(), // $2 each → $10 USD
-        );
-
-        let c = controller_with(pool, bal, price);
+        let c = controller_with(pool, bal);
         let resp = c.list_tokens(&DexTokenListQuery {
             account: Some(ACCOUNT.to_string()),
             q: None,
@@ -1524,7 +1481,7 @@ mod tests {
         // price_usd table → 2.123456789 USD; 8dp truncate → "2.12345678"
         sqlx::query("INSERT INTO price_usd (token_id, block_number, price, created_at) VALUES ($1, 1, 2.123456789, 0)")
             .bind(WL_A).execute(&pool).await.unwrap();
-        let controller = controller_with(pool, FakeBalance::default(), FakePrice::default());
+        let controller = controller_with(pool, FakeBalance::default());
 
         // No ?account= — price_usd must still be populated.
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
