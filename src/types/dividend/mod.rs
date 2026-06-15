@@ -87,38 +87,3 @@ pub struct DividendHolderInfo {
     pub total_value_usd: String,
     pub last_received_at: i64,
 }
-
-// ============================================================================
-// ③ Vault Dividend — GET /dividend/:token_id
-// ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct DividendVaultResponse {
-    pub token_info: TokenInfo,
-    pub market_info: MarketInfo,
-    /// Dividend allocation of trading fees, BPS (8000 = 80%). 0 when unconfigured.
-    pub dividend_bps: i32,
-    /// Σ(total_deposited + total_pending_deposited) across dividend tokens (quote raw).
-    pub allocated_volume: String,
-    /// Σ(total_deposited_usd + total_pending_deposited_usd).
-    pub total_dividends_usd: String,
-    /// Minimum source-token holding required to receive dividends (raw).
-    /// Eligibility label = `min_balance` + `token_info.symbol`.
-    pub min_balance: String,
-    /// Eligible holders (balance >= min_balance).
-    pub recipient_count: i64,
-    /// Last distribution execution time (epoch secs).
-    pub last_executed_at: i64,
-    pub dividend_tokens: Vec<DividendStatInfo>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct DividendStatInfo {
-    pub dividend_token_info: QuoteInfo,
-    /// Distribution ratio in BPS (2500 = 25%).
-    pub ratio_bps: i32,
-    /// Cumulative dividend balance in the dividend token's raw units.
-    pub amount: String,
-    /// USD value deposited toward this dividend token.
-    pub amount_usd: String,
-}

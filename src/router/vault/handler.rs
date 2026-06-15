@@ -18,7 +18,7 @@ use crate::{
     get,
     path = VaultPath::GetTokenVaults.docs_str(),
     params(
-        ("token_id" = String, Path, description = "Token address")
+        ("token_id" = String, Path, description = "Token address", example = "0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c")
     ),
     responses(
         (status = 200, description = "Token vault list fetched successfully", body = TokenVaultsResponse),

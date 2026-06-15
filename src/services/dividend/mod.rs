@@ -9,10 +9,7 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         dex::tokens::DexTokenListResponse,
-        dividend::{
-            DividendHoldersResponse, DividendTokenQuery, DividendTokensResponse,
-            DividendVaultResponse,
-        },
+        dividend::{DividendHoldersResponse, DividendTokenQuery, DividendTokensResponse},
     },
 };
 
@@ -57,24 +54,6 @@ impl DividendService {
             .map_err(|err| {
                 error!(
                     "Failed to get dividend holders: token_id: {}, error: {}",
-                    token_id, err
-                );
-                AppError::InternalError(err.to_string())
-            })
-    }
-
-    /// ③ Vault Dividend — dividend config/summary card for a token.
-    pub async fn get_dividend_vault(
-        &self,
-        token_id: &str,
-    ) -> Result<DividendVaultResponse, AppError> {
-        let controller = DividendController::new(self.postgres.clone());
-        controller
-            .get_dividend_vault(token_id)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to get dividend vault: token_id: {}, error: {}",
                     token_id, err
                 );
                 AppError::InternalError(err.to_string())
