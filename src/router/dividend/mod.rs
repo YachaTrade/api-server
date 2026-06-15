@@ -18,10 +18,6 @@ pub fn router() -> Router<AppState> {
             get(handler::get_dividend_holders),
         )
         .route(
-            DividendPath::GetVault.as_str(),
-            get(handler::get_dividend_vault),
-        )
-        .route(
             DividendPath::GetProfile.as_str(),
             get(handler::get_profile_dividends),
         )

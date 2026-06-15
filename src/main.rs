@@ -74,7 +74,6 @@ use utoipa_swagger_ui::SwaggerUi;
         router::vault::handler::get_token_vaults,
 
         // ----------------Dividend----------------
-        router::dividend::handler::get_dividend_vault,
         router::dividend::handler::get_dividend_holders,
         router::dividend::handler::get_profile_dividends,
         router::dividend::handler::get_dividend_tokens,
@@ -240,8 +239,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::dividend::DividendHoldersResponse,
             types::dividend::DividendRatioInfo,
             types::dividend::DividendHolderInfo,
-            types::dividend::DividendVaultResponse,
-            types::dividend::DividendStatInfo,
 
             // Dex
             types::dex::position::LpPositionsResponse,

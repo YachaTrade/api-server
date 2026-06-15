@@ -6,7 +6,7 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::{V2_DIVIDEND_VAULT, V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
@@ -21,8 +21,7 @@ use crate::{
         dex::tokens::{DexTokenEntry, DexTokenListResponse},
         dividend::{
             DividendHolderInfo, DividendHoldersResponse, DividendRatioInfo, DividendReward,
-            DividendStatInfo, DividendTokenInfo, DividendTokenQuery, DividendTokensResponse,
-            DividendVaultResponse,
+            DividendTokenInfo, DividendTokenQuery, DividendTokensResponse,
         },
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -275,15 +274,11 @@ fn build_market_info(row: &TokenMarketRow) -> MarketInfo {
     }
 }
 
-// Per dividend-token setup + cumulative stats + dividend-token metadata.
+// Per dividend-token ratio (BPS) + dividend-token display metadata.
 #[derive(Debug, sqlx::FromRow)]
 struct DividendStatRow {
     dividend_token: String,
     ratio: i32,
-    min_balance: BigDecimal,
-    amount: BigDecimal,
-    deposited: BigDecimal,
-    deposited_usd: BigDecimal,
     dt_name: String,
     dt_symbol: String,
     dt_decimals: i32,
@@ -336,7 +331,8 @@ impl DividendController {
         Ok(row)
     }
 
-    /// Per dividend-token ratio + cumulative stats + metadata for a source token.
+    /// Per dividend-token ratio (BPS) + display metadata for a source token
+    /// (Trade Dividend breakdown header).
     async fn fetch_dividend_stats(&self, source_token: &str) -> Result<Vec<DividendStatRow>> {
         let rows = measure_postgres!(
             "dividend.fetch_dividend_stats",
@@ -345,17 +341,11 @@ impl DividendController {
                 SELECT
                     s.dividend_token,
                     s.ratio,
-                    s.min_balance,
-                    COALESCE(st.dividend_balance, 0) AS amount,
-                    COALESCE(st.total_deposited, 0) + COALESCE(st.total_pending_deposited, 0) AS deposited,
-                    COALESCE(st.total_deposited_usd, 0) + COALESCE(st.total_pending_deposited_usd, 0) AS deposited_usd,
                     COALESCE(qt.name, dx.name, tk.name, '') AS dt_name,
                     COALESCE(qt.symbol, dx.symbol, tk.symbol, '') AS dt_symbol,
                     COALESCE(qt.decimals, dx.decimals, 18) AS dt_decimals,
                     COALESCE(qt.image_uri, dx.image_uri, tk.image_uri, '') AS dt_image_uri
                 FROM v2_dividend_setups s
-                LEFT JOIN v2_dividend_vault_stats st
-                    ON st.source_token = s.source_token AND st.dividend_token = s.dividend_token
                 LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
                 LEFT JOIN dex_token dx ON dx.token_id = s.dividend_token
                 LEFT JOIN token tk ON tk.token_id = s.dividend_token
@@ -728,98 +718,6 @@ impl DividendController {
     }
 
     // ------------------------------------------------------------------
-    // ③ Vault Dividend — GET /dividend/:token_id
-    // ------------------------------------------------------------------
-
-    pub async fn get_dividend_vault(&self, token_id: &str) -> Result<DividendVaultResponse> {
-        let key = cache_key!("dividend_vault", token_id);
-        with_cache(&GLOBAL_CACHE.cache, &key, || {
-            let db = self.db.clone();
-            let token_id = token_id.to_string();
-            async move {
-                DividendController::new(db)
-                    .fetch_dividend_vault(&token_id)
-                    .await
-            }
-        })
-        .await
-    }
-
-    async fn fetch_dividend_vault(&self, token_id: &str) -> Result<DividendVaultResponse> {
-        let token_market = self.fetch_token_market(token_id).await?;
-        let token_info = build_token_info(&token_market);
-        let market_info = build_market_info(&token_market);
-
-        let stat_rows = self.fetch_dividend_stats(token_id).await?;
-
-        let mut allocated_volume = BigDecimal::from(0);
-        let mut total_dividends_usd = BigDecimal::from(0);
-        let min_balance = stat_rows
-            .first()
-            .map(|s| s.min_balance.clone())
-            .unwrap_or_else(|| BigDecimal::from(0));
-
-        let dividend_tokens: Vec<DividendStatInfo> = stat_rows
-            .into_iter()
-            .map(|s| {
-                allocated_volume = allocated_volume.clone() + s.deposited.clone();
-                total_dividends_usd = total_dividends_usd.clone() + s.deposited_usd.clone();
-                DividendStatInfo {
-                    dividend_token_info: dividend_quote_info(
-                        &s.dividend_token,
-                        &s.dt_name,
-                        &s.dt_symbol,
-                        s.dt_decimals,
-                        &s.dt_image_uri,
-                    ),
-                    ratio_bps: s.ratio,
-                    amount: s.amount.normalized().to_plain_string(),
-                    amount_usd: s.deposited_usd.normalized().to_plain_string(),
-                }
-            })
-            .collect();
-
-        #[derive(Debug, sqlx::FromRow)]
-        struct VaultScalarsRow {
-            dividend_bps: i32,
-            recipient_count: i64,
-            last_executed_at: i64,
-        }
-
-        let scalars = measure_postgres!(
-            "dividend.fetch_vault_scalars",
-            sqlx::query_as::<_, VaultScalarsRow>(
-                r#"
-                SELECT
-                    COALESCE((SELECT bps FROM v2_creator_fee_allocation
-                              WHERE token_id = $1 AND vault_id = $2), 0)::int AS dividend_bps,
-                    COALESCE((SELECT COUNT(*) FROM balance
-                              WHERE token_id = $1 AND balance >= $3), 0)::bigint AS recipient_count,
-                    COALESCE((SELECT MAX(updated_at) FROM dividend_pair_state
-                              WHERE source_token = $1), 0)::bigint AS last_executed_at
-                "#,
-            )
-            .bind(token_id)
-            .bind(V2_DIVIDEND_VAULT.as_str())
-            .bind(&min_balance)
-            .fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|err| anyhow!("Failed to fetch dividend vault scalars: {}", err))?;
-
-        Ok(DividendVaultResponse {
-            token_info,
-            market_info,
-            dividend_bps: scalars.dividend_bps,
-            allocated_volume: allocated_volume.normalized().to_plain_string(),
-            total_dividends_usd: total_dividends_usd.normalized().to_plain_string(),
-            min_balance: min_balance.normalized().to_plain_string(),
-            recipient_count: scalars.recipient_count,
-            last_executed_at: scalars.last_executed_at,
-            dividend_tokens,
-        })
-    }
-
-    // ------------------------------------------------------------------
     // Dividend token search — GET /dividend/tokens
     //   candidates: whitelist(enabled) ∪ V1(graduated) ∪ V2(all)
     // ------------------------------------------------------------------
@@ -923,7 +821,6 @@ mod tests {
     const HOLDER2: &str = "0x000000000000000000000000000000000000Aa02";
     const TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
     const QUOTE: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"; // MON (seeded)
-    const DIV2: &str = "0x000000000000000000000000000000000000Cc01";
 
     fn ctrl(pool: PgPool) -> DividendController {
         DividendController::new(Arc::new(crate::db::postgres::PostgresDatabase {
@@ -1009,41 +906,6 @@ mod tests {
         assert_eq!(resp.holders[0].last_received_at, 100);
         assert_eq!(resp.holders[1].holder.account_id, HOLDER2);
         assert_eq!(resp.holders[1].total_value_usd, "10");
-    }
-
-    // ③ Vault Dividend: bps, allocated volume, USD total, recipients, last executed.
-    #[sqlx::test(migrations = "./migrations-test")]
-    async fn vault_dividend_summary(pool: PgPool) {
-        seed_base(&pool).await;
-        // two setups (MON + DIV2); only MON has stats.
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,2500,10,0,'0xs1',1,1,0,0)"#)
-            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,7500,10,1,'0xs1',1,1,0,1)"#)
-            .bind(TOKEN).bind(DIV2).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_vault_stats (source_token,dividend_token,total_deposited,total_deposited_usd,total_pending_deposited,total_pending_deposited_usd,dividend_balance,updated_at) VALUES ($1,$2,400,800,100,200,1000,50)"#)
-            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
-        // dividend vault fee allocation (vault_id matches the configured address).
-        let vault = V2_DIVIDEND_VAULT.as_str();
-        sqlx::query("INSERT INTO v2_creator_fee_allocation (token_id,vault_id,bps,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,8000,'0xa1',1,1,0,0)")
-            .bind(TOKEN).bind(vault).execute(&pool).await.unwrap();
-        // balances: one eligible (>=10), one not (<10).
-        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,20,0)")
-            .bind(HOLDER).bind(TOKEN).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,5,0)")
-            .bind(HOLDER2).bind(TOKEN).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO dividend_pair_state (source_token,dividend_token,last_allocated_balance,last_snapshot_block,updated_at) VALUES ($1,$2,0,5,50)")
-            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
-
-        let resp = ctrl(pool).fetch_dividend_vault(TOKEN).await.unwrap();
-
-        assert_eq!(resp.token_info.token_id, TOKEN);
-        assert_eq!(resp.dividend_bps, 8000);
-        assert_eq!(resp.allocated_volume, "500"); // (400+100) + (0+0)
-        assert_eq!(resp.total_dividends_usd, "1000"); // (800+200) + 0
-        assert_eq!(resp.min_balance, "10");
-        assert_eq!(resp.recipient_count, 1); // only the balance >= 10
-        assert_eq!(resp.last_executed_at, 50);
-        assert_eq!(resp.dividend_tokens.len(), 2);
     }
 
     const WLTOKEN: &str = "0x000000000000000000000000000000000000Dd01";

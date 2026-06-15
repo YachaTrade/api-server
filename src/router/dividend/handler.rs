@@ -12,40 +12,10 @@ use crate::{
     types::{
         common::pagination::PaginationParams,
         dex::tokens::DexTokenListResponse,
-        dividend::{
-            DividendHoldersResponse, DividendTokenQuery, DividendTokensResponse,
-            DividendVaultResponse,
-        },
+        dividend::{DividendHoldersResponse, DividendTokenQuery, DividendTokensResponse},
     },
     utils::{valid_account_id, valid_existing_token_id},
 };
-
-/// ③ Vault Dividend — dividend config/summary card for a token.
-#[utoipa::path(
-    get,
-    path = DividendPath::GetVault.docs_str(),
-    params(
-        ("token_id" = String, Path, description = "Source token address")
-    ),
-    responses(
-        (status = 200, description = "Dividend vault summary fetched successfully", body = DividendVaultResponse),
-        (status = 400, description = "Bad request"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Dividend"
-)]
-#[instrument(skip(state))]
-pub async fn get_dividend_vault(
-    State(state): State<AppState>,
-    Path(token_id): Path<String>,
-) -> AppJsonResult<DividendVaultResponse> {
-    let token_id = valid_existing_token_id(&state, &token_id).await?;
-
-    let service = DividendService::new(state.postgres.clone());
-    let response = service.get_dividend_vault(&token_id).await?;
-
-    Ok(Json(response))
-}
 
 /// ② Trade Dividend — holder ranking by cumulative accrued value for a token.
 #[utoipa::path(

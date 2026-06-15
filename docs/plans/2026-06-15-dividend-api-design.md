@@ -122,9 +122,10 @@ GROUP BY a.holder, a.dividend_token, a.accrued;
 | # | 화면 | Method · Path | 비고 |
 |---|---|---|---|
 | ① | Profile Dividend | `GET /profile/dividend/:account_id` | `/profile/hold-token/:account_id` 컨벤션 |
-| ② | Trade Dividend | `GET /dividend/holders/:token_id` | 페이지네이션 |
-| ③ | Vault Dividend | `GET /dividend/:token_id` | `/vault/:token_id` 미러 |
-| ④ | Dividend token search | `GET /dividend/tokens?q=&page=&limit=` | 배당토큰 후보 = whitelist(enabled) ∪ V1(졸업) ∪ V2(전체). `DexTokenEntry`/`DexTokenListResponse` 재사용(balance 제외, price_usd 포함). q=name/symbol/CA substring. 정적 라우트라 `/dividend/:token_id`와 충돌 없음(matchit static 우선, /profile 선례) |
+| ② | Trade Dividend | `GET /trade/dividend/:token_id` | `/trade/<x>/:token_id` 컨벤션, 페이지네이션 |
+| ④ | Dividend token search | `GET /dividend/tokens?q=&page=&limit=` | 배당토큰 후보 = whitelist(enabled) ∪ V1(졸업) ∪ V2(전체). `DexTokenEntry`/`DexTokenListResponse` 재사용(balance 제외, price_usd 포함). q=name/symbol/CA substring |
+
+> ③ Vault Dividend(`GET /dividend/:token_id`)는 **제거**. dividend vault의 분배율(bps)은 기존 `/vault/:token_id`에 나오고, 카드 상세(배당토큰별 금액·Recipients·Eligibility·Allocated Volume·Total Dividends USD·Last Executed)는 FE 연동 시점에 `/vault` 확장 또는 별도 엔드포인트로 재도입(코드는 git 이력에 보존). 관련 타입 `DividendVaultResponse`/`DividendStatInfo` 및 `V2_DIVIDEND_VAULT` 소비처도 함께 제거(config/env 정의는 향후 재사용 위해 유지).
 
 ### 5.2 응답 타입 (`src/types/dividend/mod.rs`)
 ```rust
