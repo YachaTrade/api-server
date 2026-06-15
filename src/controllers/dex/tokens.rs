@@ -329,11 +329,11 @@ impl TokensController {
     /// The tier/ordering is already correct from SQL (wl_rpc CTE). Double RPC calls are
     /// acceptable here (curated set is small); a cache layer can be added later if needed.
     async fn enrich(&self, rows: Vec<TokenRow>, account: Option<&str>) -> Vec<DexTokenEntry> {
-        // price_usd is account-independent: always resolve Pyth prices for ALL
-        // enabled whitelist tokens (they have no market row → SQL price_usd is NULL).
+        // price_usd now comes from the price_usd table (DefiLlama) via SQL. Pyth is
+        // only a fallback for whitelist tokens that have no price_usd row yet.
         let wl_addrs: Vec<String> = rows
             .iter()
-            .filter(|r| r.token_type == "whitelist")
+            .filter(|r| r.token_type == "whitelist" && r.price_usd.is_none())
             .map(|r| r.token_id.clone())
             .collect();
         let prices = if wl_addrs.is_empty() {
@@ -357,7 +357,10 @@ impl TokensController {
         rows.into_iter()
             .map(|r| {
                 if r.token_type == "whitelist" {
-                    let price_usd = prices.get(&r.token_id.to_lowercase()).cloned();
+                    let price_usd = r
+                        .price_usd
+                        .clone()
+                        .or_else(|| prices.get(&r.token_id.to_lowercase()).cloned());
                     let balance = wl_balance.get(&r.token_id).cloned();
                     let decimals = r.decimals.unwrap_or(18);
                     let balance_usd = match (&balance, &price_usd) {
@@ -483,15 +486,15 @@ enriched AS (
         COALESCE(
             wl_rpc.balance_usd,
             (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC
-                * COALESCE(dtp.price_usd, m.price * lp.price))
+                * COALESCE(dtp.price_usd, m.price * lp.price, pu.price))
         ) AS balance_usd,
         (m.price * (t.total_supply / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC)
             * lp.price) AS market_cap_usd,
-        -- per-token USD unit price (V2/external). Pool view (deepest-TVL pool's
-        -- per-token USD, observer-set) first, legacy market.price × quote→USD as
-        -- fallback. whitelist has no market/pool row → NULL here, filled from Pyth
-        -- in enrich(). account-independent.
-        COALESCE(dtp.price_usd, m.price * lp.price) AS price_usd,
+        -- per-token USD unit price. Pool view (deepest-TVL pool's per-token USD)
+        -- first, legacy market.price × quote→USD next, then the price_usd table
+        -- (DefiLlama; covers whitelist which has no market/pool row).
+        -- account-independent.
+        COALESCE(dtp.price_usd, m.price * lp.price, pu.price) AS price_usd,
         CASE
           WHEN $1 IS NOT NULL AND wl_rpc.token_id IS NOT NULL AND c.token_type='whitelist' THEN 1
           -- held (balance > 0) non-whitelist floats up: nadfun_v2/v1 and external
@@ -514,6 +517,10 @@ enriched AS (
     ) lp ON true
     LEFT JOIN wl_rpc      ON wl_rpc.token_id = c.token_id
     LEFT JOIN dex_token_price dtp ON dtp.token_id = c.token_id
+    LEFT JOIN LATERAL (
+        SELECT price FROM price_usd WHERE token_id = c.token_id
+        ORDER BY block_number DESC LIMIT 1
+    ) pu ON true
 )
 "#
     )
@@ -559,9 +566,9 @@ SELECT
     b.balance AS balance,
     COALESCE(
         wl_rpc.balance_usd,
-        (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * COALESCE(dtp.price_usd, m.price * lp.price))
+        (b.balance / POWER(10, COALESCE(dt.decimals, qt.decimals, 18))::NUMERIC * COALESCE(dtp.price_usd, m.price * lp.price, pu.price))
     ) AS balance_usd,
-    COALESCE(dtp.price_usd, m.price * lp.price) AS price_usd,
+    COALESCE(dtp.price_usd, m.price * lp.price, pu.price) AS price_usd,
     wl.price_feed_id AS price_feed_id
 FROM target tg
 LEFT JOIN whitelist_token wl ON wl.token_id = tg.token_id AND wl.enabled
@@ -573,6 +580,7 @@ LEFT JOIN balance     b  ON b.token_id  = tg.token_id AND b.account_id = COALESC
 LEFT JOIN market      m  ON m.token_id  = tg.token_id
 LEFT JOIN LATERAL (SELECT price FROM price WHERE quote_id=m.quote_id ORDER BY block_number DESC LIMIT 1) lp ON true
 LEFT JOIN dex_token_price dtp ON dtp.token_id = tg.token_id
+LEFT JOIN LATERAL (SELECT price FROM price_usd WHERE token_id = tg.token_id ORDER BY block_number DESC LIMIT 1) pu ON true
 WHERE (t.token_id IS NOT NULL OR dt.token_id IS NOT NULL OR qt.quote_id IS NOT NULL OR wl.token_id IS NOT NULL)
 "#
     )
