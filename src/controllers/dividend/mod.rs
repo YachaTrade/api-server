@@ -440,6 +440,7 @@ impl DividendController {
             proof: Vec<String>,
             claimed_amount: BigDecimal,
             claimed_usd: BigDecimal,
+            claimable_usd: BigDecimal,
             last_claimed_at: Option<i64>,
             dt_name: String,
             dt_symbol: String,
@@ -481,7 +482,19 @@ impl DividendController {
                         COALESCE(qt.name, tk.name, '')      AS dt_name,
                         COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
                         COALESCE(qt.decimals, 18)       AS dt_decimals,
-                        COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri
+                        COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri,
+                        GREATEST(COALESCE(d.accrued_leaf, 0) - COALESCE(c.claimed_amount, 0), 0)
+                          / POWER(10, COALESCE(qt.decimals, 18))::numeric
+                          * COALESCE(
+                              (SELECT pu.price FROM price_usd pu
+                                 WHERE pu.token_id = COALESCE(d.dividend_token, c.dividend_token)
+                                 ORDER BY pu.block_number DESC LIMIT 1),
+                              (SELECT dtp.price_usd FROM dex_token_price dtp
+                                 WHERE dtp.token_id = COALESCE(d.dividend_token, c.dividend_token)),
+                              (SELECT pr.price FROM price pr
+                                 WHERE pr.quote_id = COALESCE(d.dividend_token, c.dividend_token)
+                                 ORDER BY pr.block_number DESC LIMIT 1),
+                              0) AS claimable_usd
                     FROM dist d
                     FULL OUTER JOIN claimed c USING (source_token, dividend_token)
                     LEFT JOIN quote_token qt ON qt.quote_id = COALESCE(d.dividend_token, c.dividend_token)
@@ -499,6 +512,7 @@ impl DividendController {
         let mut rewards_by_source: HashMap<String, Vec<DividendReward>> = HashMap::new();
         let mut last_claimed_by_source: HashMap<String, i64> = HashMap::new();
         let mut claimed_usd_by_source: HashMap<String, BigDecimal> = HashMap::new();
+        let mut claimable_usd_by_source: HashMap<String, BigDecimal> = HashMap::new();
         for r in reward_rows {
             if let Some(ts) = r.last_claimed_at {
                 let slot = last_claimed_by_source.entry(r.source_token.clone()).or_insert(ts);
@@ -506,11 +520,15 @@ impl DividendController {
                     *slot = ts;
                 }
             }
-            // Accumulate the token-row claimed-USD total (Σ over dividend tokens).
+            // Accumulate the token-row claimed-/claimable-USD totals (Σ over dividend tokens).
             let usd_slot = claimed_usd_by_source
                 .entry(r.source_token.clone())
                 .or_insert_with(|| BigDecimal::from(0));
             *usd_slot = usd_slot.clone() + r.claimed_usd.clone();
+            let claimable_slot = claimable_usd_by_source
+                .entry(r.source_token.clone())
+                .or_insert_with(|| BigDecimal::from(0));
+            *claimable_slot = claimable_slot.clone() + r.claimable_usd.clone();
             let claimable = r.accrued_leaf > r.claimed_amount;
             let reward = DividendReward {
                 dividend_token_info: dividend_quote_info(
@@ -527,6 +545,7 @@ impl DividendController {
                     claimable,
                 },
                 claimed_usd: r.claimed_usd.normalized().to_plain_string(),
+                claimable_usd: r.claimable_usd.normalized().to_plain_string(),
             };
             rewards_by_source
                 .entry(r.source_token)
@@ -543,12 +562,17 @@ impl DividendController {
                     .get(&row.token_id)
                     .map(|v| v.normalized().to_plain_string())
                     .unwrap_or_else(|| "0".to_string());
+                let claimable_usd = claimable_usd_by_source
+                    .get(&row.token_id)
+                    .map(|v| v.normalized().to_plain_string())
+                    .unwrap_or_else(|| "0".to_string());
                 DividendTokenInfo {
                     token_info: build_token_info(&row),
                     market_info: build_market_info(&row),
                     rewards,
                     last_claimed_at,
                     claimed_usd,
+                    claimable_usd,
                 }
             })
             .collect();
@@ -656,6 +680,9 @@ impl DividendController {
                                h.accrued
                                / POWER(10, COALESCE(qt.decimals, 18))::numeric
                                * COALESCE(
+                                   (SELECT pu.price FROM price_usd pu
+                                      WHERE pu.token_id = h.dividend_token
+                                      ORDER BY pu.block_number DESC LIMIT 1),
                                    (SELECT pr.price FROM price pr
                                       WHERE pr.quote_id = h.dividend_token
                                       ORDER BY pr.block_number DESC LIMIT 1),
@@ -858,6 +885,9 @@ mod tests {
             .bind(TOKEN).bind(HOLDER).bind(QUOTE).execute(&pool).await.unwrap();
         sqlx::query(r#"INSERT INTO v2_dividend_claims (holder,source_token,dividend_token,amount,merkle_root,entry_index,transaction_hash,block_number,created_at,log_index,tx_index,usd_value) VALUES ($1,$2,$3,30,'0xroot',0,'0xc1',1,20,0,0,25)"#)
             .bind(HOLDER).bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        // price_usd inflated by 10^18 to offset 18-dec scaling so raw amounts (100-30) give a clean USD figure (70)
+        sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,5,1000000000000000000,0)")
+            .bind(QUOTE).execute(&pool).await.unwrap();
 
         let resp = ctrl(pool).fetch_profile_dividends(HOLDER, &page()).await.unwrap();
 
@@ -867,12 +897,14 @@ mod tests {
         assert_eq!(t.token_info.token_id, TOKEN);
         assert_eq!(t.last_claimed_at, Some(20));
         assert_eq!(t.claimed_usd, "25"); // token-row total = Σ rewards[].claimed_usd
+        assert_eq!(t.claimable_usd, "70"); // (100-30)/1e18 × price_usd 1e18
         assert_eq!(t.rewards.len(), 1);
         let r = &t.rewards[0];
         assert_eq!(r.dividend_token_info.symbol, "MON");
         assert_eq!(r.reward_info.amount, "100");
         assert_eq!(r.reward_info.claimed_amount, "30");
         assert_eq!(r.claimed_usd, "25"); // per dividend token claimed USD
+        assert_eq!(r.claimable_usd, "70"); // (100-30)/1e18 × price_usd 1e18
         assert!(r.reward_info.claimable); // 100 > 30
         assert_eq!(r.reward_info.proof, vec!["0xa".to_string(), "0xb".to_string()]);
     }
@@ -892,6 +924,9 @@ mod tests {
             .bind(TOKEN).bind(HOLDER).bind(QUOTE).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,5000000000000000000,90)")
             .bind(TOKEN).bind(HOLDER2).bind(QUOTE).execute(&pool).await.unwrap();
+        // price_usd table takes precedence over the legacy `price` table (seed_base seeds MON=2 there)
+        sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,10,3,0)")
+            .bind(QUOTE).execute(&pool).await.unwrap();
 
         let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
 
@@ -900,13 +935,13 @@ mod tests {
         assert_eq!(resp.dividend_tokens[0].ratio_bps, 10000);
         assert_eq!(resp.total_count, 2);
         assert_eq!(resp.holders.len(), 2);
-        // alice (10 * 2 = 20) ranks above bob (5 * 2 = 10).
+        // price_usd (MON=3) used over legacy price (2): alice 10*3=30 ranks above bob 5*3=15.
         assert_eq!(resp.holders[0].holder.account_id, HOLDER);
         assert_eq!(resp.holders[0].holder.nickname, "alice");
-        assert_eq!(resp.holders[0].total_value_usd, "20");
+        assert_eq!(resp.holders[0].total_value_usd, "30");
         assert_eq!(resp.holders[0].last_received_at, 100);
         assert_eq!(resp.holders[1].holder.account_id, HOLDER2);
-        assert_eq!(resp.holders[1].total_value_usd, "10");
+        assert_eq!(resp.holders[1].total_value_usd, "15");
     }
 
     const WLTOKEN: &str = "0x000000000000000000000000000000000000Dd01";

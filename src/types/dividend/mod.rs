@@ -46,6 +46,8 @@ pub struct DividendTokenInfo {
     pub last_claimed_at: Option<i64>,
     /// Token-row claimed-USD total = Σ rewards[].claimed_usd (the "Claimed Dividend" column).
     pub claimed_usd: String,
+    /// Token-row claimable-USD total = Σ rewards[].claimable_usd (the "Claimable Dividend" column).
+    pub claimable_usd: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -58,6 +60,9 @@ pub struct DividendReward {
     /// Cumulative claimed value in USD for this dividend token
     /// (Σ v2_dividend_claims.usd_value; 0 when the token is unpriceable).
     pub claimed_usd: String,
+    /// Claimable value in USD = max(amount - claimed_amount, 0)/10^decimals ×
+    /// latest dividend-token USD price (price_usd → dex_token_price → price → 0).
+    pub claimable_usd: String,
 }
 
 // ============================================================================
