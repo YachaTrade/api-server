@@ -267,13 +267,14 @@ impl VaultController {
                     COALESCE(st.dividend_balance, 0) AS amount,
                     COALESCE(st.total_deposited, 0) + COALESCE(st.total_pending_deposited, 0) AS deposited,
                     COALESCE(st.total_deposited_usd, 0) + COALESCE(st.total_pending_deposited_usd, 0) AS deposited_usd,
-                    COALESCE(qt.name, tk.name, '') AS dt_name,
-                    COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
-                    COALESCE(qt.decimals, 18) AS dt_decimals,
-                    COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri
+                    COALESCE(wl.name, qt.name, tk.name, '') AS dt_name,
+                    COALESCE(wl.symbol, qt.symbol, tk.symbol, '') AS dt_symbol,
+                    COALESCE(wl.decimals, qt.decimals, 18) AS dt_decimals,
+                    COALESCE(wl.image_uri, qt.image_uri, tk.image_uri, '') AS dt_image_uri
                 FROM v2_dividend_setups s
                 LEFT JOIN v2_dividend_vault_stats st
                     ON st.source_token = s.source_token AND st.dividend_token = s.dividend_token
+                LEFT JOIN whitelist_token wl ON wl.token_id = s.dividend_token AND wl.enabled
                 LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
                 LEFT JOIN token tk ON tk.token_id = s.dividend_token
                 WHERE s.source_token = $1
