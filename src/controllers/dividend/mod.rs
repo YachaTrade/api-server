@@ -345,11 +345,12 @@ impl DividendController {
                 SELECT
                     s.dividend_token,
                     s.ratio,
-                    COALESCE(qt.name, tk.name, '') AS dt_name,
-                    COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
-                    COALESCE(qt.decimals, 18) AS dt_decimals,
-                    COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri
+                    COALESCE(wl.name, qt.name, tk.name, '') AS dt_name,
+                    COALESCE(wl.symbol, qt.symbol, tk.symbol, '') AS dt_symbol,
+                    COALESCE(wl.decimals, qt.decimals, 18) AS dt_decimals,
+                    COALESCE(wl.image_uri, qt.image_uri, tk.image_uri, '') AS dt_image_uri
                 FROM v2_dividend_setups s
+                LEFT JOIN whitelist_token wl ON wl.token_id = s.dividend_token AND wl.enabled
                 LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
                 LEFT JOIN token tk ON tk.token_id = s.dividend_token
                 WHERE s.source_token = $1
@@ -479,12 +480,12 @@ impl DividendController {
                         COALESCE(c.claimed_amount, 0)               AS claimed_amount,
                         COALESCE(c.claimed_usd, 0)                  AS claimed_usd,
                         c.last_claimed_at,
-                        COALESCE(qt.name, tk.name, '')      AS dt_name,
-                        COALESCE(qt.symbol, tk.symbol, '') AS dt_symbol,
-                        COALESCE(qt.decimals, 18)       AS dt_decimals,
-                        COALESCE(qt.image_uri, tk.image_uri, '') AS dt_image_uri,
+                        COALESCE(wl.name, qt.name, tk.name, '')      AS dt_name,
+                        COALESCE(wl.symbol, qt.symbol, tk.symbol, '') AS dt_symbol,
+                        COALESCE(wl.decimals, qt.decimals, 18)       AS dt_decimals,
+                        COALESCE(wl.image_uri, qt.image_uri, tk.image_uri, '') AS dt_image_uri,
                         GREATEST(COALESCE(d.accrued_leaf, 0) - COALESCE(c.claimed_amount, 0), 0)
-                          / POWER(10, COALESCE(qt.decimals, 18))::numeric
+                          / POWER(10, COALESCE(wl.decimals, qt.decimals, 18))::numeric
                           * COALESCE(
                               (SELECT pu.price FROM price_usd pu
                                  WHERE pu.token_id = COALESCE(d.dividend_token, c.dividend_token)
@@ -497,6 +498,7 @@ impl DividendController {
                               0) AS claimable_usd
                     FROM dist d
                     FULL OUTER JOIN claimed c USING (source_token, dividend_token)
+                    LEFT JOIN whitelist_token wl ON wl.token_id = COALESCE(d.dividend_token, c.dividend_token) AND wl.enabled
                     LEFT JOIN quote_token qt ON qt.quote_id = COALESCE(d.dividend_token, c.dividend_token)
                     LEFT JOIN token tk ON tk.token_id = COALESCE(d.dividend_token, c.dividend_token)
                     "#,
