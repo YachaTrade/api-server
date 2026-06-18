@@ -680,19 +680,27 @@ impl DividendController {
                            MAX(h.updated_at) AS last_received_at,
                            COALESCE(SUM(
                                h.accrued
-                               / POWER(10, COALESCE(qt.decimals, 18))::numeric
+                               -- decimals: whitelist first, then quote_token, then 18.
+                               -- Whitelist-only dividend tokens (e.g. 6-dec USDT) are
+                               -- absent from quote_token; without wl the divisor would
+                               -- fall back to 10^18 and undercount USD by 10^(18-dec).
+                               / POWER(10, COALESCE(wl.decimals, qt.decimals, 18))::numeric
+                               -- price source: price_usd → dex_token_price → price,
+                               -- matching the profile/vault views and the documented
+                               -- DividendRewardInfo contract.
                                * COALESCE(
                                    (SELECT pu.price FROM price_usd pu
                                       WHERE pu.token_id = h.dividend_token
                                       ORDER BY pu.block_number DESC LIMIT 1),
+                                   (SELECT dtp.price_usd FROM dex_token_price dtp
+                                      WHERE dtp.token_id = h.dividend_token),
                                    (SELECT pr.price FROM price pr
                                       WHERE pr.quote_id = h.dividend_token
                                       ORDER BY pr.block_number DESC LIMIT 1),
-                                   (SELECT dtp.price_usd FROM dex_token_price dtp
-                                      WHERE dtp.token_id = h.dividend_token),
                                    0)
                            ), 0) AS total_value_usd
                     FROM acc h
+                    LEFT JOIN whitelist_token wl ON wl.token_id = h.dividend_token AND wl.enabled
                     LEFT JOIN quote_token qt ON qt.quote_id = h.dividend_token
                     GROUP BY h.holder
                 )
@@ -944,6 +952,56 @@ mod tests {
         assert_eq!(resp.holders[0].last_received_at, 100);
         assert_eq!(resp.holders[1].holder.account_id, HOLDER2);
         assert_eq!(resp.holders[1].total_value_usd, "15");
+    }
+
+    // ② Trade Dividend: a dividend token that lives only in whitelist_token (not
+    // quote_token) must use the whitelist decimals for USD scaling. Regression for
+    // the 10^(18-decimals) undercount when qt.decimals fell back to 18.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn trade_dividend_holder_whitelist_decimals(pool: PgPool) {
+        seed_base(&pool).await;
+        sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'alice','','') ON CONFLICT DO NOTHING")
+            .bind(HOLDER).execute(&pool).await.unwrap();
+        // 6-decimal whitelist dividend token (USDC-like); absent from quote_token.
+        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol,decimals) VALUES ($1,1,true,'USD Coin','USDC',6) ON CONFLICT DO NOTHING")
+            .bind(WLTOKEN).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+            .bind(TOKEN).bind(WLTOKEN).execute(&pool).await.unwrap();
+        // 10 USDC accrued in raw 6-decimal units.
+        sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,10000000,100)")
+            .bind(TOKEN).bind(HOLDER).bind(WLTOKEN).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,10,3,0)")
+            .bind(WLTOKEN).execute(&pool).await.unwrap();
+
+        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+
+        assert_eq!(resp.holders.len(), 1);
+        // 10_000_000 raw / 10^6 (whitelist decimals) * price 3 = 30.
+        // Pre-fix the divisor fell back to 10^18 -> ~3e-11.
+        assert_eq!(resp.holders[0].total_value_usd, "30");
+    }
+
+    // ② Trade Dividend: with no price_usd row, dex_token_price (pool view) must win
+    // over the legacy `price` table — same precedence as the profile/vault views.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn trade_dividend_holder_price_source_precedence(pool: PgPool) {
+        seed_base(&pool).await;
+        sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'alice','','') ON CONFLICT DO NOTHING")
+            .bind(HOLDER).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        // 1 token (18-dec) accrued; no price_usd row exists for QUOTE.
+        sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,1000000000000000000,100)")
+            .bind(TOKEN).bind(HOLDER).bind(QUOTE).execute(&pool).await.unwrap();
+        // dex_token_price view: pool with QUOTE priced at 7 USD; legacy price=2 (seed_base).
+        sqlx::query(r#"INSERT INTO pool (pool_id,token0,token1,token0_price_usd,value,latest_trade_at,created_at,block_number,tx_hash) VALUES ('0x00000000000000000000000000000000000000F1',$1,'0x000000000000000000000000000000000000FFFF',7,1000,0,0,1,'0xtx')"#)
+            .bind(QUOTE).execute(&pool).await.unwrap();
+
+        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+
+        assert_eq!(resp.holders.len(), 1);
+        // 1 * dex_token_price 7 = 7 (NOT legacy price 2).
+        assert_eq!(resp.holders[0].total_value_usd, "7");
     }
 
     const WLTOKEN: &str = "0x000000000000000000000000000000000000Dd01";
