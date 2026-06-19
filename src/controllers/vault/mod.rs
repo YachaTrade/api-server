@@ -322,20 +322,30 @@ impl VaultController {
         // recipient_count = currently eligible holders: source-token holders whose
         // balance meets the contract's min_balance. Counted from `balance` (not the
         // published distribution) so it is populated even before the first merkle
-        // snapshot, when dividend_distribution is still empty.
+        // snapshot, when dividend_distribution is still empty. System holders are
+        // excluded: protocol contracts + burn sinks ($3 blacklist), the token's own
+        // contract ($1), and its DEX pool (market.pool_id) — none are real holders.
         let scalars = measure_postgres!(
             "vault.fetch_dividend_scalars",
             sqlx::query_as::<_, ScalarRow>(
                 r#"
                 SELECT
-                    COALESCE((SELECT COUNT(*) FROM balance
-                              WHERE token_id = $1 AND balance >= $2), 0)::bigint AS recipient_count,
+                    COALESCE((SELECT COUNT(*) FROM balance b
+                              WHERE b.token_id = $1
+                                AND b.balance >= $2
+                                AND b.account_id <> ALL($3::varchar[])
+                                AND b.account_id <> $1
+                                AND b.account_id NOT IN (
+                                    SELECT pool_id FROM market
+                                    WHERE token_id = $1 AND pool_id IS NOT NULL
+                                )), 0)::bigint AS recipient_count,
                     COALESCE((SELECT MAX(updated_at) FROM dividend_pair_state
                               WHERE source_token = $1), 0)::bigint AS last_executed_at
                 "#,
             )
             .bind(token_id)
             .bind(&min_balance)
+            .bind(&*crate::config::DIVIDEND_RECIPIENT_BLACKLIST)
             .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch dividend scalars: {}", err))?;
@@ -508,5 +518,30 @@ mod tests {
         assert_eq!(stats.min_balance, "10");
         assert_eq!(stats.recipient_count, 1); // only balance >= 10
         assert_eq!(stats.dividend_tokens.len(), 2);
+    }
+
+    // recipient_count excludes system holders: the token contract itself, its DEX
+    // pool (market.pool_id), and the null/dead burn sinks (DIVIDEND_RECIPIENT_BLACKLIST
+    // always carries zero + dead). Only real eligible holders are counted.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn dividend_recipient_count_excludes_system_holders(pool: PgPool) {
+        const POOL: &str = "0x00000000000000000000000000000000000000F1";
+        const ZERO: &str = "0x0000000000000000000000000000000000000000";
+        const DEAD: &str = "0x000000000000000000000000000000000000dEaD";
+
+        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,10,0,'0xs1',1,1,0,0)"#)
+            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        // DEX pool of the token — its pair holds reserves, not a real recipient.
+        sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,$2,0,0,1,$3,0,0,0,0,0)"#)
+            .bind(TOKEN).bind(POOL).bind(QUOTE).execute(&pool).await.unwrap();
+        // All hold >= min_balance (10), but only HOLDER is a real recipient.
+        for acct in [HOLDER, TOKEN, POOL, ZERO, DEAD] {
+            sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,100,0)")
+                .bind(acct).bind(TOKEN).execute(&pool).await.unwrap();
+        }
+
+        let (_, stats) = ctrl(pool).fetch_dividend_vault_stats(TOKEN).await.unwrap();
+
+        assert_eq!(stats.recipient_count, 1); // token/pool/zero/dead excluded → HOLDER only
     }
 }

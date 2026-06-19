@@ -674,6 +674,14 @@ impl DividendController {
                     SELECT a.holder, a.dividend_token, a.accrued, a.updated_at
                     FROM dividend_accrual a
                     WHERE a.source_token = $1 AND a.accrued > 0
+                      -- exclude system holders: protocol contracts + burn sinks
+                      -- ($4), the token's own contract ($1), and its DEX pool.
+                      AND a.holder <> ALL($4::varchar[])
+                      AND a.holder <> $1
+                      AND a.holder NOT IN (
+                          SELECT pool_id FROM market
+                          WHERE token_id = $1 AND pool_id IS NOT NULL
+                      )
                 ),
                 valued AS (
                     SELECT h.holder,
@@ -715,6 +723,7 @@ impl DividendController {
             .bind(token_id)
             .bind(pagination.limit)
             .bind(offset)
+            .bind(&*crate::config::DIVIDEND_RECIPIENT_BLACKLIST)
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch dividend holders: {}", err))?;
@@ -740,9 +749,18 @@ impl DividendController {
                 SELECT COUNT(DISTINCT holder)::bigint AS count
                 FROM dividend_accrual
                 WHERE source_token = $1 AND accrued > 0
+                  -- mirror the ranking query's system-holder exclusion so the
+                  -- paginated total stays consistent with the listed rows.
+                  AND holder <> ALL($2::varchar[])
+                  AND holder <> $1
+                  AND holder NOT IN (
+                      SELECT pool_id FROM market
+                      WHERE token_id = $1 AND pool_id IS NOT NULL
+                  )
                 "#,
             )
             .bind(token_id)
+            .bind(&*crate::config::DIVIDEND_RECIPIENT_BLACKLIST)
             .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch dividend holders count: {}", err))?;
@@ -1002,6 +1020,31 @@ mod tests {
         assert_eq!(resp.holders.len(), 1);
         // 1 * dex_token_price 7 = 7 (NOT legacy price 2).
         assert_eq!(resp.holders[0].total_value_usd, "7");
+    }
+
+    // ② Trade Dividend: system holders (token contract itself, its DEX pool, and
+    // the dead burn sink) are excluded from both the ranking and total_count.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn trade_dividend_holders_exclude_system(pool: PgPool) {
+        const POOL: &str = "0x00000000000000000000000000000000000000F1";
+        const DEAD: &str = "0x000000000000000000000000000000000000dEaD";
+        seed_base(&pool).await;
+        // give the token a DEX pool so the pool-exclusion path is exercised.
+        sqlx::query("UPDATE market SET pool_id = $2 WHERE token_id = $1")
+            .bind(TOKEN).bind(POOL).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+            .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        // HOLDER is a real recipient; TOKEN/POOL/DEAD are system holders.
+        for acct in [HOLDER, TOKEN, POOL, DEAD] {
+            sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,1000000,100)")
+                .bind(TOKEN).bind(acct).bind(QUOTE).execute(&pool).await.unwrap();
+        }
+
+        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+
+        assert_eq!(resp.total_count, 1);
+        assert_eq!(resp.holders.len(), 1);
+        assert_eq!(resp.holders[0].holder.account_id, HOLDER);
     }
 
     const WLTOKEN: &str = "0x000000000000000000000000000000000000Dd01";
