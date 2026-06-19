@@ -239,8 +239,8 @@ impl VaultController {
     }
 
     /// Dividend-vault detail from the dividend schema (per-token breakdown,
-    /// recipients from the published distribution). Returns (last_executed_at,
-    /// stats); the vault's `bps` / `name` come from the parent `VaultEntry`.
+    /// eligibility recipient count). Returns (last_executed_at, stats); the
+    /// vault's `bps` / `name` come from the parent `VaultEntry`.
     async fn fetch_dividend_vault_stats(&self, token_id: &str) -> Result<(i64, DividendStats)> {
         #[derive(Debug, sqlx::FromRow)]
         struct StatRow {
@@ -319,23 +319,23 @@ impl VaultController {
             last_executed_at: i64,
         }
 
-        // recipient_count = holders carrying a leaf in the current published merkle
-        // root (dividend_distribution is latest-only, one row per (source, holder,
-        // dividend)), counted DISTINCT across dividend tokens. This is the actual
-        // distribution set — NOT balance-eligibility — so it matches the profile
-        // view's claimable basis.
+        // recipient_count = currently eligible holders: source-token holders whose
+        // balance meets the contract's min_balance. Counted from `balance` (not the
+        // published distribution) so it is populated even before the first merkle
+        // snapshot, when dividend_distribution is still empty.
         let scalars = measure_postgres!(
             "vault.fetch_dividend_scalars",
             sqlx::query_as::<_, ScalarRow>(
                 r#"
                 SELECT
-                    COALESCE((SELECT COUNT(DISTINCT holder) FROM dividend_distribution
-                              WHERE source_token = $1), 0)::bigint AS recipient_count,
+                    COALESCE((SELECT COUNT(*) FROM balance
+                              WHERE token_id = $1 AND balance >= $2), 0)::bigint AS recipient_count,
                     COALESCE((SELECT MAX(updated_at) FROM dividend_pair_state
                               WHERE source_token = $1), 0)::bigint AS last_executed_at
                 "#,
             )
             .bind(token_id)
+            .bind(&min_balance)
             .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch dividend scalars: {}", err))?;
@@ -481,7 +481,7 @@ mod tests {
     }
 
     // DIVIDEND vault stats: per-token breakdown + allocated volume + USD total +
-    // distribution recipient count (DISTINCT holders) + last executed.
+    // eligibility recipient count (balance >= contract min_balance) + last executed.
     #[sqlx::test(migrations = "./migrations-test")]
     async fn dividend_vault_stats(pool: PgPool) {
         sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,2500,10,0,'0xs1',1,1,0,0)"#)
@@ -490,14 +490,13 @@ mod tests {
             .bind(TOKEN).bind(DIV2).execute(&pool).await.unwrap();
         sqlx::query(r#"INSERT INTO v2_dividend_vault_stats (source_token,dividend_token,total_deposited,total_deposited_usd,total_pending_deposited,total_pending_deposited_usd,dividend_balance,updated_at) VALUES ($1,$2,400,800,100,200,1000,50)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
-        // Distribution leaves: HOLDER carries a leaf for both dividend tokens
-        // (must still count as ONE recipient), HOLDER2 for one → DISTINCT = 2.
-        sqlx::query(r#"INSERT INTO dividend_distribution (source_token,holder,dividend_token,merkle_root,amount,proof,status,created_at) VALUES ($1,$2,$3,'0xroot',100,ARRAY['0xa'],'AWAITING',10)"#)
-            .bind(TOKEN).bind(HOLDER).bind(QUOTE).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO dividend_distribution (source_token,holder,dividend_token,merkle_root,amount,proof,status,created_at) VALUES ($1,$2,$3,'0xroot',50,ARRAY['0xb'],'AWAITING',10)"#)
-            .bind(TOKEN).bind(HOLDER).bind(DIV2).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO dividend_distribution (source_token,holder,dividend_token,merkle_root,amount,proof,status,created_at) VALUES ($1,$2,$3,'0xroot',30,ARRAY['0xc'],'AWAITING',10)"#)
-            .bind(TOKEN).bind(HOLDER2).bind(QUOTE).execute(&pool).await.unwrap();
+        // Eligibility is read from `balance`, not the published distribution, so it
+        // is populated before any merkle snapshot. HOLDER (20 >= 10) qualifies,
+        // HOLDER2 (5 < 10) does not → recipient_count = 1.
+        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,20,0)")
+            .bind(HOLDER).bind(TOKEN).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,5,0)")
+            .bind(HOLDER2).bind(TOKEN).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO dividend_pair_state (source_token,dividend_token,last_allocated_balance,last_snapshot_block,updated_at) VALUES ($1,$2,0,5,50)")
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
 
@@ -507,7 +506,7 @@ mod tests {
         assert_eq!(stats.allocated_volume, "500"); // (400+100) + (0+0)
         assert_eq!(stats.total_dividends_usd, "1000"); // (800+200) + 0
         assert_eq!(stats.min_balance, "10");
-        assert_eq!(stats.recipient_count, 2); // DISTINCT holders in distribution (HOLDER counted once)
+        assert_eq!(stats.recipient_count, 1); // only balance >= 10
         assert_eq!(stats.dividend_tokens.len(), 2);
     }
 }
