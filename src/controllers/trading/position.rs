@@ -53,10 +53,14 @@ impl PositionController {
                 ) h
                 JOIN account a ON a.account_id = h.account_id
                 WHERE LOWER(a.account_id) <> '0x000000000000000000000000000000000000dead'
+                  -- mirror the holder list's DividendVault exclusion so the count
+                  -- matches the listed rows. Empty $3 (env unset) is a no-op.
+                  AND a.account_id <> $3
                 "#,
             )
             .bind(token_id)
             .bind(v1_owners)
+            .bind(crate::config::V2_DIVIDEND_VAULT.as_str())
             .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to get token holder count: {}", err))?;
@@ -158,6 +162,9 @@ impl PositionController {
                     ORDER BY p.block_number DESC LIMIT 1
                 ) lp ON true
                 WHERE LOWER(a.account_id) <> '0x000000000000000000000000000000000000dead'
+                  -- hide the singleton DividendVault (it holds source tokens as
+                  -- dividends, not a real holder). Empty $6 (env unset) is a no-op.
+                  AND a.account_id <> $6
                 ORDER BY total_balance DESC, a.account_id ASC
                 OFFSET $2 LIMIT $3
                 "#,
@@ -167,6 +174,7 @@ impl PositionController {
             .bind(pagination.limit)
             .bind(&v1_owners)
             .bind(&v1_amts)
+            .bind(crate::config::V2_DIVIDEND_VAULT.as_str())
             .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch token holders: {}", err))?;
