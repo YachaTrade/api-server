@@ -152,6 +152,34 @@ lazy_static! {
     // Optional: empty -> dividend_bps reports 0 (feature degrades gracefully).
     pub static ref V2_DIVIDEND_VAULT: String = env::var("V2_DIVIDEND_VAULT")
         .unwrap_or_default();
+    /// Source-token holders to exclude from dividend `recipient_count`: protocol
+    /// contracts (vaults, curve, router, factory, managers, …) plus the null and
+    /// dead burn sinks. The per-token contract itself and its DEX pool are NOT
+    /// fixed addresses, so they are excluded directly in the query. Missing env
+    /// vars are skipped, so a partially-configured env (e.g. testnet without
+    /// FEE_TO / FOUNDATION_TREASURY) still works.
+    pub static ref DIVIDEND_RECIPIENT_BLACKLIST: Vec<String> = {
+        const ENV_KEYS: &[&str] = &[
+            "V2_TOKEN_IMPL", "V2_PROTOCOL_MANAGER", "V2_TOKEN_REGISTRY", "V2_LP_MANAGER",
+            "V2_BONDING_CURVE", "V2_CREATOR_FEE_PROCESSOR", "V2_FEE_COLLECTOR",
+            "V2_NAD_FUN_PAIR_IMPL", "V2_NAD_FUN_FACTORY", "V2_NAD_SWAP_ADAPTER",
+            "V2_VAULT_REGISTRY", "V2_BURN_VAULT", "V2_LP_VAULT", "V2_CREATOR_FEE_VAULT",
+            "V2_GIFT_VAULT", "V2_NAD_FUN_ROUTER", "V2_FEE_TO", "V2_FOUNDATION_TREASURY",
+            "V2_DIVIDEND_VAULT",
+        ];
+        let mut v: Vec<String> = ENV_KEYS
+            .iter()
+            .filter_map(|k| env::var(k).ok())
+            .filter(|s| !s.is_empty())
+            .collect();
+        // Null + dead burn sinks. Dead is added in both checksum and lowercase
+        // forms so exact match works regardless of how the indexer stored it,
+        // keeping LOWER() out of the count query.
+        v.push("0x0000000000000000000000000000000000000000".to_string());
+        v.push("0x000000000000000000000000000000000000dEaD".to_string());
+        v.push("0x000000000000000000000000000000000000dead".to_string());
+        v
+    };
     pub static ref METRICS_REPORT_INTERVAL: u64 = env::var("METRICS_REPORT_INTERVAL")
         .expect("METRICS_REPORT_INTERVAL must be set")
         .parse::<u64>()
