@@ -141,6 +141,7 @@ SELECT token_id, token_type, symbol, name, decimals, image_uri, price_usd
 FROM enriched
 WHERE ($1::varchar IS NULL OR symbol ILIKE $1 OR name ILIKE $1 OR token_id ILIKE $1)
   AND token_id <> '0x0000000000000000000000000000000000000000'
+  AND token_id <> ALL($4::varchar[])   -- curated blacklist (DIVIDEND_TOKEN_BLACKLIST)
 ORDER BY
     CASE WHEN token_type = 'whitelist' THEN 0 ELSE 1 END,
     sort_order ASC NULLS LAST,
@@ -155,7 +156,13 @@ SELECT COUNT(*)::bigint AS count
 FROM enriched
 WHERE ($1::varchar IS NULL OR symbol ILIKE $1 OR name ILIKE $1 OR token_id ILIKE $1)
   AND token_id <> '0x0000000000000000000000000000000000000000'
+  AND token_id <> ALL($2::varchar[])   -- curated blacklist (DIVIDEND_TOKEN_BLACKLIST)
 "#;
+
+/// Curated dividend-token exclusions: tokens that pass the candidate filters but
+/// must never appear in /dividend/tokens (full list or `q` search). Add EIP-55
+/// checksummed addresses here; applied to both the list and count tails.
+const DIVIDEND_TOKEN_BLACKLIST: &[&str] = &["0x81A224F8A62f52BdE942dBF23A56df77A10b7777"];
 
 #[derive(Debug, sqlx::FromRow)]
 struct TokenMarketRow {
@@ -824,6 +831,8 @@ impl DividendController {
             price_usd: Option<BigDecimal>,
         }
 
+        let blacklist: Vec<String> = DIVIDEND_TOKEN_BLACKLIST.iter().map(|s| s.to_string()).collect();
+
         let list_sql = format!("{}{}", DIVIDEND_TOKEN_CTE, DIVIDEND_TOKEN_LIST_TAIL);
         let rows = measure_postgres!(
             "dividend.fetch_dividend_tokens",
@@ -831,6 +840,7 @@ impl DividendController {
                 .bind(&pattern)
                 .bind(query.limit)
                 .bind(offset)
+                .bind(&blacklist)
                 .fetch_all(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to fetch dividend tokens: {}", err))?;
@@ -840,6 +850,7 @@ impl DividendController {
             "dividend.fetch_dividend_tokens_count",
             sqlx::query_as::<_, CountRow>(&count_sql)
                 .bind(&pattern)
+                .bind(&blacklist)
                 .fetch_one(self.db.get_read_pool())
         )
         .map_err(|err| anyhow!("Failed to count dividend tokens: {}", err))?;
@@ -1114,5 +1125,37 @@ mod tests {
         assert_eq!(found.total_count, 1);
         assert_eq!(found.tokens.len(), 1);
         assert_eq!(found.tokens[0].token_id, WLTOKEN);
+    }
+
+    // Curated DIVIDEND_TOKEN_BLACKLIST entries are excluded from both the full
+    // list and `q` search, even though they pass the V2 candidate filter.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn dividend_token_blacklist_excludes(pool: PgPool) {
+        seed_base(&pool).await;
+        // A blacklisted V2 token (matches DIVIDEND_TOKEN_BLACKLIST[0]).
+        const BANNED: &str = "0x81A224F8A62f52BdE942dBF23A56df77A10b7777";
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'emonad','emo','',$2,NULL,false,true,false,60,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#)
+            .bind(BANNED).bind(CREATOR).execute(&pool).await.unwrap();
+
+        let c = ctrl(pool);
+
+        let all = c
+            .fetch_dividend_tokens(&DividendTokenQuery { q: None, page: 1, limit: 50 })
+            .await
+            .unwrap();
+        assert!(
+            !all.tokens.iter().any(|t| t.token_id == BANNED),
+            "blacklisted token absent from full list"
+        );
+
+        let found = c
+            .fetch_dividend_tokens(&DividendTokenQuery { q: Some("emo".into()), page: 1, limit: 50 })
+            .await
+            .unwrap();
+        assert!(
+            !found.tokens.iter().any(|t| t.token_id == BANNED),
+            "blacklisted token absent from q results"
+        );
+        assert_eq!(found.total_count, 0, "blacklisted token not counted");
     }
 }
