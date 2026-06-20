@@ -52,10 +52,10 @@ impl PositionController {
                     SELECT account_id FROM unnest($2::varchar[]) AS u(account_id)
                 ) h
                 JOIN account a ON a.account_id = h.account_id
-                WHERE LOWER(a.account_id) <> '0x000000000000000000000000000000000000dead'
-                  -- mirror the holder list's DividendVault exclusion so the count
-                  -- matches the listed rows. Empty $3 (env unset) is a no-op.
-                  AND a.account_id <> $3
+                -- dead burn address is INCLUDED (mirrors the holder list); only the
+                -- DividendVault is excluded so the count matches the listed rows.
+                -- Empty $3 (env unset) is a no-op.
+                WHERE a.account_id <> $3
                 "#,
             )
             .bind(token_id)
@@ -161,10 +161,11 @@ impl PositionController {
                     SELECT p.price FROM price p WHERE p.quote_id = m.quote_id
                     ORDER BY p.block_number DESC LIMIT 1
                 ) lp ON true
-                WHERE LOWER(a.account_id) <> '0x000000000000000000000000000000000000dead'
-                  -- hide the singleton DividendVault (it holds source tokens as
-                  -- dividends, not a real holder). Empty $6 (env unset) is a no-op.
-                  AND a.account_id <> $6
+                -- The dead burn address is intentionally INCLUDED (shown as a
+                -- holder so burned supply surfaces). Only the singleton DividendVault
+                -- is hidden (holds source tokens as dividends, not a real holder).
+                -- Empty $6 (env unset) is a no-op.
+                WHERE a.account_id <> $6
                 ORDER BY total_balance DESC, a.account_id ASC
                 OFFSET $2 LIMIT $3
                 "#,
@@ -930,10 +931,10 @@ mod tests {
         );
     }
 
-    /// The burn address (0x…dEaD) must be excluded from the holder list and count,
-    /// even when it holds the token (it shows up via the wallet/LP union otherwise).
+    /// The burn address (0x…dEaD) is INCLUDED in the holder list and count so that
+    /// burned supply surfaces as a holder. (Only the DividendVault is hidden.)
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn holder_excludes_burn_address(pool: PgPool) {
+    async fn holder_includes_burn_address(pool: PgPool) {
         seed_v2_dex(&pool).await; // ACCOUNT is a holder (balance + lp)
         let dead = "0x000000000000000000000000000000000000dEaD";
         sqlx::query(
@@ -963,10 +964,10 @@ mod tests {
         assert!(
             resp.holders
                 .iter()
-                .all(|h| h.account_info.account_id != dead),
-            "burn address must be excluded from holder list"
+                .any(|h| h.account_info.account_id == dead),
+            "burn address must appear in holder list"
         );
-        // only ACCOUNT remains in the union after excluding the burn address
-        assert_eq!(resp.total_count, 1, "total_count must exclude burn address");
+        // ACCOUNT + burn address
+        assert_eq!(resp.total_count, 2, "total_count must include burn address");
     }
 }
