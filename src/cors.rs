@@ -7,10 +7,11 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 
 /// Exact-match allowed origins (apex domains).
-const STATIC_ORIGINS: [&str; 3] = [
+const STATIC_ORIGINS: [&str; 4] = [
     "https://nad.fun",
     "https://nadapp.net",
     "https://symphony.io",
+    "https://mm-dashboard-six.vercel.app",
 ];
 
 /// Whether a request `Origin` is allowed. Exact apex match, allowed suffixes
@@ -72,6 +73,7 @@ mod tests {
             ("https://nad.fun", true),
             ("https://nadapp.net", true),
             ("https://symphony.io", true),
+            ("https://mm-dashboard-six.vercel.app", true),
             // allowed subdomains
             ("https://app.nad.fun", true),
             ("https://x.symphony.io", true),
