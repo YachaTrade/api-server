@@ -503,12 +503,22 @@ impl DividendController {
                               (SELECT pr.price FROM price pr
                                  WHERE pr.quote_id = COALESCE(d.dividend_token, c.dividend_token)
                                  ORDER BY pr.block_number DESC LIMIT 1),
+                              -- last resort: market's live quote-per-token price ×
+                              -- that quote's own USD price (mirrors observer's
+                              -- compose_dividend_claim_usd chain_ref tier, so pre-
+                              -- graduation/no-pool dividend tokens don't silently
+                              -- price at $0 here while still pricing correctly at
+                              -- claim time).
+                              (mk.price * (SELECT pr2.price FROM price pr2
+                                             WHERE pr2.quote_id = mk.quote_id
+                                             ORDER BY pr2.block_number DESC LIMIT 1)),
                               0) AS claimable_usd
                     FROM dist d
                     FULL OUTER JOIN claimed c USING (source_token, dividend_token)
                     LEFT JOIN whitelist_token wl ON wl.token_id = COALESCE(d.dividend_token, c.dividend_token) AND wl.enabled
                     LEFT JOIN quote_token qt ON qt.quote_id = COALESCE(d.dividend_token, c.dividend_token)
                     LEFT JOIN token tk ON tk.token_id = COALESCE(d.dividend_token, c.dividend_token)
+                    LEFT JOIN market mk ON mk.token_id = COALESCE(d.dividend_token, c.dividend_token)
                     "#,
                 )
                 .bind(account_id)
@@ -703,9 +713,13 @@ impl DividendController {
                                -- absent from quote_token; without wl the divisor would
                                -- fall back to 10^18 and undercount USD by 10^(18-dec).
                                / POWER(10, COALESCE(wl.decimals, qt.decimals, 18))::numeric
-                               -- price source: price_usd → dex_token_price → price,
-                               -- matching the profile/vault views and the documented
-                               -- DividendRewardInfo contract.
+                               -- price source: price_usd → dex_token_price → price →
+                               -- market.price×quote price, matching the profile/vault
+                               -- views and the documented DividendRewardInfo contract.
+                               -- The last tier mirrors observer's
+                               -- compose_dividend_claim_usd chain_ref fallback so
+                               -- pre-graduation/no-pool dividend tokens aren't
+                               -- silently priced at $0 here.
                                * COALESCE(
                                    (SELECT pu.price FROM price_usd pu
                                       WHERE pu.token_id = h.dividend_token
@@ -715,11 +729,15 @@ impl DividendController {
                                    (SELECT pr.price FROM price pr
                                       WHERE pr.quote_id = h.dividend_token
                                       ORDER BY pr.block_number DESC LIMIT 1),
+                                   (mk.price * (SELECT pr2.price FROM price pr2
+                                                  WHERE pr2.quote_id = mk.quote_id
+                                                  ORDER BY pr2.block_number DESC LIMIT 1)),
                                    0)
                            ), 0) AS total_value_usd
                     FROM acc h
                     LEFT JOIN whitelist_token wl ON wl.token_id = h.dividend_token AND wl.enabled
                     LEFT JOIN quote_token qt ON qt.quote_id = h.dividend_token
+                    LEFT JOIN market mk ON mk.token_id = h.dividend_token
                     GROUP BY h.holder
                 )
                 SELECT v.holder, v.total_value_usd, v.last_received_at,
@@ -958,6 +976,41 @@ mod tests {
             r.reward_info.proof,
             vec!["0xa".to_string(), "0xb".to_string()]
         );
+    }
+
+    // ① Profile Dividend: when a dividend token has no price_usd/dex_token_price/
+    // quote row (pre-graduation, no DEX pool yet), claimable_usd falls back to
+    // market's live quote-per-token price × that quote's USD price (price),
+    // mirroring observer's compose_dividend_claim_usd chain_ref tier instead of
+    // silently pricing at $0.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn profile_dividend_claimable_market_price_fallback(pool: PgPool) {
+        seed_base(&pool).await;
+        const DIV_TOKEN: &str = "0x000000000000000000000000000000000000Cc01";
+
+        // DIV_TOKEN: not whitelisted, not a quote_token, and (unlike TOKEN in
+        // seed_base) no `pool` row — only a market row (quote-per-token price +
+        // quote_id link to QUOTE) is available.
+        // market.price 5 (quote-per-token) × price 2e17 (USD per QUOTE, at a later
+        // block than seed_base's QUOTE row so it wins ORDER BY block_number DESC) =
+        // 1e18, offsetting the 18-dec divisor for a clean assertion.
+        sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,NULL,0,0,5,$2,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#)
+            .bind(DIV_TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO price (quote_id,block_number,price) VALUES ($1,2,200000000000000000)")
+            .bind(QUOTE).execute(&pool).await.unwrap();
+
+        sqlx::query("INSERT INTO dividend_distribution (merkle_root,source_token,holder,dividend_token,amount,proof,status,created_at) VALUES ('0xroot',$1,$2,$3,100,ARRAY[]::text[],'AWAITING',10)")
+            .bind(TOKEN).bind(HOLDER).bind(DIV_TOKEN).execute(&pool).await.unwrap();
+
+        let resp = ctrl(pool).fetch_profile_dividends(HOLDER, &page()).await.unwrap();
+
+        assert_eq!(resp.tokens.len(), 1);
+        let t = &resp.tokens[0];
+        assert_eq!(t.claimable_usd, "100"); // 100/1e18 × (market.price 5 × price 2e17)
+        assert_eq!(t.rewards.len(), 1);
+        let r = &t.rewards[0];
+        assert_eq!(r.claimable_usd, "100");
+        assert!(r.reward_info.claimable);
     }
 
     // ② Trade Dividend: holders ranked by cumulative accrued USD.
