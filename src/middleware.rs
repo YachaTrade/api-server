@@ -117,6 +117,7 @@ pub async fn api_key_gate(
         || path.starts_with("/dev-sw")
         || path.starts_with("/api-key")  // API Key 관리 엔드포인트 (세션 인증 사용)
         || path.starts_with("/auth/")    // 인증 엔드포인트
+        || path == "/x/oauth/callback"    // X redirects here (no Origin / API key)
         // Terminal (GeckoTerminal) 엔드포인트 - API Key 불필요
         || path == "/latest-block"
         || path == "/asset"
@@ -209,10 +210,7 @@ pub async fn api_key_gate(
 
     // 6. Rate Limit 확인
     match check_and_increment(&state.redis, &rate_limit_id, rate_limit).await? {
-        RateLimitResult::Exceeded {
-            retry_after,
-            limit,
-        } => {
+        RateLimitResult::Exceeded { retry_after, limit } => {
             warn!(
                 "[RATE_LIMIT_BLOCKED] path={}, client_ip={}, identifier={}, limit={}, retry_after={}s, has_api_key={}",
                 path, client_ip, rate_limit_id, limit, retry_after, has_api_key

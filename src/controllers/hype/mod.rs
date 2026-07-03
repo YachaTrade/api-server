@@ -229,6 +229,7 @@ impl HypeController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
@@ -352,6 +353,7 @@ impl HypeController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
@@ -502,6 +504,7 @@ impl HypeController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 hype_info: HypeInfo {
                     vote: row.vote.normalized().to_plain_string(),
@@ -770,6 +773,7 @@ impl HypeController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 vote_amount: row.vote_amount.normalized().to_plain_string(),
                 reward_amount: row
@@ -1240,6 +1244,7 @@ impl HypeController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 amount: row.amount.normalized().to_plain_string(),
                 total_amount: row.total_amount.normalized().to_plain_string(),

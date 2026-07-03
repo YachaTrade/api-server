@@ -2,6 +2,7 @@ pub mod create_token;
 pub mod metadata;
 pub mod order;
 pub mod salt;
+pub mod x_verification;
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

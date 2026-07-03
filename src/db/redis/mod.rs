@@ -12,14 +12,13 @@ use crate::{
     config::{
         GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
         GET_GIFT_FEE_RESPONSE_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-        GET_QUOTE_TOKENS_RESPONSE_EXPIRATION,
-        GET_REWARD_ADD_HISTORY_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION,
-        GET_TOKEN_RESPONSE_EXPIRATION, GET_TOKEN_VAULTS_RESPONSE_EXPIRATION,
-        GET_TOTAL_HYPE_POINT_EXPIRATION, GET_TREND_TOKEN_RESPONSE_EXPIRATION,
-        HYPE_LEADERBOARD_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
-        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, PNL_LEADERBOARD_RESPONSE_EXPIRATION,
-        REDIS_KEY_PREFIX, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION,
-        TOKEN_TRADE_EXPIRATION,
+        GET_QUOTE_TOKENS_RESPONSE_EXPIRATION, GET_REWARD_ADD_HISTORY_EXPIRATION,
+        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
+        GET_TOKEN_VAULTS_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION,
+        GET_TREND_TOKEN_RESPONSE_EXPIRATION, HYPE_LEADERBOARD_RESPONSE_EXPIRATION,
+        MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION,
+        PNL_LEADERBOARD_RESPONSE_EXPIRATION, REDIS_KEY_PREFIX, SEARCH_EXPIRATION,
+        TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
@@ -32,7 +31,9 @@ use crate::{
         metadata::TerminalMetadataResponse,
         new_event::NewEventResponse,
         profile::PointHistoryResponse,
-        profile::{CreatedTokensResponse, GiftFeeTokensResponse, HoldTokenResponse, SwapHistoryResponse},
+        profile::{
+            CreatedTokensResponse, GiftFeeTokensResponse, HoldTokenResponse, SwapHistoryResponse,
+        },
         quote_token::QuoteTokensResponse,
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
         token::{
@@ -116,10 +117,7 @@ impl RedisDatabase {
                 .query_async(&mut conn)
                 .await?;
             if !keys.is_empty() {
-                let n: u64 = redis::cmd("DEL")
-                    .arg(&keys)
-                    .query_async(&mut conn)
-                    .await?;
+                let n: u64 = redis::cmd("DEL").arg(&keys).query_async(&mut conn).await?;
                 deleted += n;
             }
             if next == 0 {
@@ -397,7 +395,11 @@ impl RedisDatabase {
                 params.direction,
                 is_nsfw
             )),
-            None => with_prefix(format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw)),
+            None => with_prefix(format!(
+                "order:{}:response:nsfw:{}",
+                order_type.as_str(),
+                is_nsfw
+            )),
         };
 
         let response_json = serde_json::to_string(response)?;
@@ -434,7 +436,11 @@ impl RedisDatabase {
                 params.direction,
                 is_nsfw
             )),
-            None => with_prefix(format!("order:{}:response:nsfw:{}", order_type.as_str(), is_nsfw)),
+            None => with_prefix(format!(
+                "order:{}:response:nsfw:{}",
+                order_type.as_str(),
+                is_nsfw
+            )),
         };
 
         let response_json: String =
@@ -585,10 +591,8 @@ impl RedisDatabase {
             "gift_fee:{}:page:{}:limit:{}",
             address, pagination.page, pagination.limit
         ));
-        let response_json: String = measure_redis!(
-            "redis.get_account_gift_fee",
-            conn.get::<_, String>(key)
-        )?;
+        let response_json: String =
+            measure_redis!("redis.get_account_gift_fee", conn.get::<_, String>(key))?;
         let response: GiftFeeTokensResponse = serde_json::from_str(&response_json)?;
 
         let elapsed = start_time.elapsed();
@@ -1160,7 +1164,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("token:{}:swap_history:query:{:?}", token_id, swap_query));
+        let key = with_prefix(format!(
+            "token:{}:swap_history:query:{:?}",
+            token_id, swap_query
+        ));
         let history_json = serde_json::to_string(response)?;
         //pset is miliseconds
         measure_redis!(
@@ -1182,7 +1189,10 @@ impl RedisDatabase {
     ) -> Result<TokenSwapResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("token:{}:swap_history:query:{:?}", token_id, swap_query));
+        let key = with_prefix(format!(
+            "token:{}:swap_history:query:{:?}",
+            token_id, swap_query
+        ));
         let history_json: String =
             measure_redis!("redis.get_token_swap_history", conn.get::<_, String>(key))?;
         let history: TokenSwapResponse = serde_json::from_str(&history_json)?;
@@ -1608,7 +1618,10 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("leaderboard:hype_point:page:{}:limit:{}", page, limit));
+        let key = with_prefix(format!(
+            "leaderboard:hype_point:page:{}:limit:{}",
+            page, limit
+        ));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_hype_point_leaderboard_response",
@@ -1630,7 +1643,10 @@ impl RedisDatabase {
     ) -> Result<HypePointLeaderboardResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("leaderboard:hype_point:page:{}:limit:{}", page, limit));
+        let key = with_prefix(format!(
+            "leaderboard:hype_point:page:{}:limit:{}",
+            page, limit
+        ));
         let response_json: String = measure_redis!(
             "redis.get_hype_point_leaderboard_response",
             conn.get::<_, String>(key)
@@ -1780,7 +1796,10 @@ impl RedisDatabase {
         response: &crate::types::profile::SwapHistoryResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:swap_history:{}:{}:{}", account_id, page, limit));
+        let key = with_prefix(format!(
+            "chester:swap_history:{}:{}:{}",
+            account_id, page, limit
+        ));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_swap_history",
@@ -1796,7 +1815,10 @@ impl RedisDatabase {
         limit: i64,
     ) -> Result<Option<crate::types::profile::SwapHistoryResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:swap_history:{}:{}:{}", account_id, page, limit));
+        let key = with_prefix(format!(
+            "chester:swap_history:{}:{}:{}",
+            account_id, page, limit
+        ));
         let json: Option<String> = measure_redis!(
             "redis.get_chester_swap_history",
             conn.get::<_, Option<String>>(key)
@@ -1848,7 +1870,10 @@ impl RedisDatabase {
         response: &crate::types::chester::ChesterRewardHistoryResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:reward_history:{}:{}:{}", account_id, page, limit));
+        let key = with_prefix(format!(
+            "chester:reward_history:{}:{}:{}",
+            account_id, page, limit
+        ));
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_chester_reward_history",
@@ -1864,7 +1889,10 @@ impl RedisDatabase {
         limit: i64,
     ) -> Result<Option<crate::types::chester::ChesterRewardHistoryResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:reward_history:{}:{}:{}", account_id, page, limit));
+        let key = with_prefix(format!(
+            "chester:reward_history:{}:{}:{}",
+            account_id, page, limit
+        ));
         let json: Option<String> = measure_redis!(
             "redis.get_chester_reward_history",
             conn.get::<_, Option<String>>(key)
@@ -2096,10 +2124,80 @@ impl RedisDatabase {
     pub async fn get_token_exists(&self, token_id: &str) -> Result<bool> {
         let mut conn = self.conn.as_ref().clone();
         let key = with_prefix(format!("token_exists:{}", token_id));
-        let value: Option<String> = redis::cmd("GET")
-            .arg(&key)
-            .query_async(&mut conn)
-            .await?;
+        let value: Option<String> = redis::cmd("GET").arg(&key).query_async(&mut conn).await?;
         Ok(value.as_deref() == Some("1"))
+    }
+}
+
+// X (Twitter) verification: PKCE state + pending signals
+impl RedisDatabase {
+    pub async fn set_x_oauth_state(
+        &self,
+        state: &str,
+        payload: &crate::types::x_verification::XOAuthState,
+        ttl_ms: u64,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("x_oauth:state:{}", state));
+        let json = serde_json::to_string(payload)?;
+        measure_redis!(
+            "redis.set_x_oauth_state",
+            conn.pset_ex::<String, String, ()>(key, json, ttl_ms)
+        )?;
+        Ok(())
+    }
+
+    /// Atomically fetch + delete the PKCE state (one-time consume; anti-replay).
+    pub async fn get_and_delete_x_oauth_state(
+        &self,
+        state: &str,
+    ) -> Result<crate::types::x_verification::XOAuthState> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("x_oauth:state:{}", state));
+        let json: Option<String> = measure_redis!(
+            "redis.get_and_delete_x_oauth_state",
+            redis::cmd("GETDEL").arg(&key).query_async(&mut conn)
+        )?;
+        match json {
+            Some(j) => Ok(serde_json::from_str(&j)?),
+            None => Err(anyhow::anyhow!("state not found or already used")),
+        }
+    }
+
+    pub async fn set_x_pending(
+        &self,
+        account_id: &str,
+        pending: &crate::types::x_verification::XPending,
+        ttl_ms: u64,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("x_pending:{}", account_id));
+        let json = serde_json::to_string(pending)?;
+        measure_redis!(
+            "redis.set_x_pending",
+            conn.pset_ex::<String, String, ()>(key, json, ttl_ms)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_x_pending(
+        &self,
+        account_id: &str,
+    ) -> Result<Option<crate::types::x_verification::XPending>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("x_pending:{}", account_id));
+        let json: Option<String> =
+            measure_redis!("redis.get_x_pending", conn.get::<_, Option<String>>(key))?;
+        match json {
+            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn delete_x_pending(&self, account_id: &str) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("x_pending:{}", account_id));
+        measure_redis!("redis.delete_x_pending", conn.del::<String, ()>(key))?;
+        Ok(())
     }
 }

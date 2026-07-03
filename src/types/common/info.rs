@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
+use crate::types::token::x_verification::TokenXVerification;
+
 // ==================== Core Info Structs ====================
 
 /// Token version enum matching DB CHECK constraint
@@ -33,6 +35,12 @@ pub struct TokenInfo {
     pub creator: AccountInfo,
     pub is_cto: bool,
     pub version: TokenVersion,
+    /// Per-coin X verification signals. `None` (⇒ JSON null) when unverified.
+    /// NOTE: `TokenInfo` derives `FromRow`; this field is NOT a DB column, so
+    /// it must be excluded from row mapping.
+    #[serde(default)]
+    #[sqlx(default)]
+    pub x_verification: Option<TokenXVerification>,
 }
 
 /// Account information

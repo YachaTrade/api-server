@@ -8,7 +8,9 @@ use crate::{
     config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
     db::postgres::PostgresDatabase,
     types::{
-        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
+        common::info::{
+            AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
+        },
         search::{
             AccountSearchResponse, AccountSearchResult, SearchResponse, TokenSearchResponse,
             TokenSearchResult,
@@ -123,6 +125,7 @@ impl SearchController {
                         },
                         is_cto: row.is_cto,
                         version: row.version.clone(),
+                        x_verification: None,
                     },
                     market_info: MarketInfo {
                         market_type: match row.market_type.as_str() {

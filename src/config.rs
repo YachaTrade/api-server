@@ -231,4 +231,41 @@ lazy_static! {
             format!("{}:", trimmed)
         }
     };
+
+    // ---- X (Twitter) hidden-creator verification ----
+    pub static ref X_CLIENT_ID: String =
+        env::var("X_CLIENT_ID").expect("X_CLIENT_ID must be set");
+    /// Confidential (Web App) client → HTTP Basic auth on token exchange.
+    /// Empty string ⇒ public (Native) client (PKCE only, no secret).
+    pub static ref X_CLIENT_SECRET: String =
+        env::var("X_CLIENT_SECRET").unwrap_or_default();
+    /// Must EXACTLY match a Callback URI registered in the X app.
+    pub static ref X_REDIRECT_URI: String =
+        env::var("X_REDIRECT_URI").expect("X_REDIRECT_URI must be set");
+    /// Fixed front-end URL to redirect to after a successful callback.
+    /// Server-controlled (open-redirect prevention) — never client-supplied.
+    pub static ref X_OAUTH_REDIRECT_SUCCESS_URL: String =
+        env::var("X_OAUTH_REDIRECT_SUCCESS_URL").expect("X_OAUTH_REDIRECT_SUCCESS_URL must be set");
+    /// Fixed front-end URL to redirect to on callback failure.
+    pub static ref X_OAUTH_REDIRECT_FAILURE_URL: String =
+        env::var("X_OAUTH_REDIRECT_FAILURE_URL").expect("X_OAUTH_REDIRECT_FAILURE_URL must be set");
+    /// PKCE state / code_verifier lifetime in Redis (ms). Default 10 min.
+    pub static ref X_OAUTH_STATE_TTL_MS: u64 = env::var("X_OAUTH_STATE_TTL_MS")
+        .ok().and_then(|v| v.parse().ok()).unwrap_or(600_000);
+    /// Pending verification lifetime in Redis (ms). Default 30 min.
+    pub static ref X_PENDING_TTL_MS: u64 = env::var("X_PENDING_TTL_MS")
+        .ok().and_then(|v| v.parse().ok()).unwrap_or(1_800_000);
+    /// Max number of followed-by handles per pending verification. Default 3.
+    pub static ref X_FOLLOWED_BY_MAX: usize = env::var("X_FOLLOWED_BY_MAX")
+        .ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::*;
+    #[test]
+    fn followed_by_max_defaults_to_three() {
+        // X_FOLLOWED_BY_MAX is unset in the test env → default 3.
+        assert_eq!(*X_FOLLOWED_BY_MAX, 3);
+    }
 }

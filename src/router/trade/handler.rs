@@ -24,6 +24,7 @@ use crate::{
             metrics::{MetricsBatchResponse, TimeFrame},
             position::TokenHolderResponse,
             swap_history::{SwapQuery, TokenSwapResponse},
+            xinfo::XInfoResponse,
         },
     },
     utils::valid_existing_token_id,
@@ -127,6 +128,37 @@ pub async fn get_market(
     let response = market_service.get_market(&token_id).await?;
 
     Ok(Json(response))
+}
+
+///Get X (Twitter) hidden-creator verification info for a token
+#[utoipa::path(
+    get,
+    path = TradePath::GetXInfo.docs_str(),
+    responses(
+        (status = 200, description = "Success (x_verification is null if unverified)", body = XInfoResponse),
+        (status = 400, description = "Invalid token ID"),
+        (status = 500, description = "Internal server error")
+    ),
+    params(
+        ("token_id" = String, Path, description = "Token ID")
+    ),
+    tag = "Trade"
+)]
+#[instrument(skip(state))]
+pub async fn get_xinfo(
+    Path(token_id): Path<String>,
+    State(state): State<AppState>,
+) -> AppJsonResult<XInfoResponse> {
+    let token_id = crate::utils::valid_account_id(&token_id)
+        .ok_or_else(|| AppError::BadRequest("invalid token_id".into()))?;
+
+    let service = crate::services::x_verification::XVerificationService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+    );
+    let x_verification = service.get_xinfo(&token_id).await?;
+
+    Ok(Json(XInfoResponse { x_verification }))
 }
 
 ///Get Chart for a token

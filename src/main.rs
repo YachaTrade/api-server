@@ -2,9 +2,9 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, chester, cms, dex, dividend, health, hype, leaderboard,
-        metadata, metrics, new_event, order, profile, quote_token, raffle, search, terminal, token,
-        trade, trend, vault,
+        self, account, agent, api_key, auth, chester, cms, dex, dividend, health, hype,
+        leaderboard, metadata, metrics, new_event, order, profile, quote_token, raffle, search,
+        terminal, token, trade, trend, vault, x_verification,
     },
     state::AppState,
     types,
@@ -53,6 +53,15 @@ use utoipa_swagger_ui::SwaggerUi;
         router::account::handler::upload_image,
         router::account::handler::register_wallet,
         router::account::handler::get_wallet,
+
+        // ----------------X Verification----------------
+        router::x_verification::handler::oauth_login,
+        router::x_verification::handler::oauth_callback,
+        router::x_verification::handler::add_followed_by,
+        router::x_verification::handler::delete_followed_by,
+        router::x_verification::handler::get_pending,
+        router::x_verification::handler::reserve,
+        router::x_verification::handler::finalize,
 
         // ----------------Profile----------------
         router::profile::handler::get_profile,
@@ -104,6 +113,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::trade::handler::get_prices,
         router::trade::handler::get_holder,
         router::trade::handler::get_metrics,
+        router::trade::handler::get_xinfo,
 
         // ----------------Search----------------
         router::search::handler::search,
@@ -193,6 +203,8 @@ use utoipa_swagger_ui::SwaggerUi;
             types::common::info::TokenWithBalanceInfo,
             types::common::info::TokenSwapInfo,
             types::common::info::TokenCreatedInfo,
+            types::token::x_verification::TokenXVerification,
+            types::token::x_verification::XFollowedByEntry,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
             // Auth
@@ -209,6 +221,16 @@ use utoipa_swagger_ui::SwaggerUi;
             types::account::UploadImageResponse,
             types::account::RegisterWalletRequest,
             types::account::GetWalletResponse,
+
+            // X Verification
+            types::x_verification::OAuthLoginResponse,
+            types::x_verification::FollowedByRequest,
+            types::x_verification::FollowedByResponse,
+            types::x_verification::PendingResponse,
+            types::x_verification::ReserveRequest,
+            types::x_verification::ReserveResponse,
+            types::x_verification::FinalizeRequest,
+            types::x_verification::FinalizeResponse,
 
             // Token
             types::token::TokenResponse,
@@ -310,6 +332,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::trading::metrics::MakerCount,
             types::trading::metrics::MetricItem,
             types::trading::metrics::MetricsBatchResponse,
+            types::trading::xinfo::XInfoResponse,
 
             //Profile
             types::profile::ProfileResponse,
@@ -497,6 +520,7 @@ async fn main() -> Result<()> {
         .merge(health::router())
         .merge(auth::router(app_state.clone()))
         .merge(account::router(app_state.clone()))
+        .merge(x_verification::router(app_state.clone()))
         .merge(raffle::router(app_state.clone()))
         .merge(token::router())
         .merge(vault::router())
@@ -595,7 +619,10 @@ mod openapi_tests {
         let spec = ApiDoc::openapi();
         let json = serde_json::to_value(&spec).unwrap();
         let schema = &json["components"]["schemas"]["DexTokenType"];
-        assert!(!schema.is_null(), "DexTokenType schema가 OpenAPI components에 등록돼야 함");
+        assert!(
+            !schema.is_null(),
+            "DexTokenType schema가 OpenAPI components에 등록돼야 함"
+        );
         let vals: Vec<&str> = schema["enum"]
             .as_array()
             .expect("DexTokenType는 string enum이어야 함")

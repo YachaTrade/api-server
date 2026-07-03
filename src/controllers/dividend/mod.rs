@@ -227,6 +227,7 @@ fn build_token_info(row: &TokenMarketRow) -> TokenInfo {
         },
         is_cto: row.is_cto,
         version: row.version.clone(),
+        x_verification: None,
     }
 }
 
@@ -524,7 +525,9 @@ impl DividendController {
         let mut claimable_usd_by_source: HashMap<String, BigDecimal> = HashMap::new();
         for r in reward_rows {
             if let Some(ts) = r.last_claimed_at {
-                let slot = last_claimed_by_source.entry(r.source_token.clone()).or_insert(ts);
+                let slot = last_claimed_by_source
+                    .entry(r.source_token.clone())
+                    .or_insert(ts);
                 if ts > *slot {
                     *slot = ts;
                 }
@@ -831,7 +834,10 @@ impl DividendController {
             price_usd: Option<BigDecimal>,
         }
 
-        let blacklist: Vec<String> = DIVIDEND_TOKEN_BLACKLIST.iter().map(|s| s.to_string()).collect();
+        let blacklist: Vec<String> = DIVIDEND_TOKEN_BLACKLIST
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
 
         let list_sql = format!("{}{}", DIVIDEND_TOKEN_CTE, DIVIDEND_TOKEN_LIST_TAIL);
         let rows = measure_postgres!(
@@ -928,7 +934,10 @@ mod tests {
         sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,5,1000000000000000000,0)")
             .bind(QUOTE).execute(&pool).await.unwrap();
 
-        let resp = ctrl(pool).fetch_profile_dividends(HOLDER, &page()).await.unwrap();
+        let resp = ctrl(pool)
+            .fetch_profile_dividends(HOLDER, &page())
+            .await
+            .unwrap();
 
         assert_eq!(resp.total_count, 1);
         assert_eq!(resp.tokens.len(), 1);
@@ -945,7 +954,10 @@ mod tests {
         assert_eq!(r.claimed_usd, "25"); // per dividend token claimed USD
         assert_eq!(r.claimable_usd, "70"); // (100-30)/1e18 × price_usd 1e18
         assert!(r.reward_info.claimable); // 100 > 30
-        assert_eq!(r.reward_info.proof, vec!["0xa".to_string(), "0xb".to_string()]);
+        assert_eq!(
+            r.reward_info.proof,
+            vec!["0xa".to_string(), "0xb".to_string()]
+        );
     }
 
     // ② Trade Dividend: holders ranked by cumulative accrued USD.
@@ -964,10 +976,18 @@ mod tests {
         sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,5000000000000000000,90)")
             .bind(TOKEN).bind(HOLDER2).bind(QUOTE).execute(&pool).await.unwrap();
         // price_usd table takes precedence over the legacy `price` table (seed_base seeds MON=2 there)
-        sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,10,3,0)")
-            .bind(QUOTE).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,10,3,0)",
+        )
+        .bind(QUOTE)
+        .execute(&pool)
+        .await
+        .unwrap();
 
-        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+        let resp = ctrl(pool)
+            .fetch_dividend_holders(TOKEN, &page())
+            .await
+            .unwrap();
 
         assert_eq!(resp.token_info.token_id, TOKEN);
         assert_eq!(resp.dividend_tokens.len(), 1);
@@ -999,10 +1019,18 @@ mod tests {
         // 10 USDC accrued in raw 6-decimal units.
         sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,10000000,100)")
             .bind(TOKEN).bind(HOLDER).bind(WLTOKEN).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,10,3,0)")
-            .bind(WLTOKEN).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,10,3,0)",
+        )
+        .bind(WLTOKEN)
+        .execute(&pool)
+        .await
+        .unwrap();
 
-        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+        let resp = ctrl(pool)
+            .fetch_dividend_holders(TOKEN, &page())
+            .await
+            .unwrap();
 
         assert_eq!(resp.holders.len(), 1);
         // 10_000_000 raw / 10^6 (whitelist decimals) * price 3 = 30.
@@ -1026,7 +1054,10 @@ mod tests {
         sqlx::query(r#"INSERT INTO pool (pool_id,token0,token1,token0_price_usd,value,latest_trade_at,created_at,block_number,tx_hash) VALUES ('0x00000000000000000000000000000000000000F1',$1,'0x000000000000000000000000000000000000FFFF',7,1000,0,0,1,'0xtx')"#)
             .bind(QUOTE).execute(&pool).await.unwrap();
 
-        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+        let resp = ctrl(pool)
+            .fetch_dividend_holders(TOKEN, &page())
+            .await
+            .unwrap();
 
         assert_eq!(resp.holders.len(), 1);
         // 1 * dex_token_price 7 = 7 (NOT legacy price 2).
@@ -1042,7 +1073,11 @@ mod tests {
         seed_base(&pool).await;
         // give the token a DEX pool so the pool-exclusion path is exercised.
         sqlx::query("UPDATE market SET pool_id = $2 WHERE token_id = $1")
-            .bind(TOKEN).bind(POOL).execute(&pool).await.unwrap();
+            .bind(TOKEN)
+            .bind(POOL)
+            .execute(&pool)
+            .await
+            .unwrap();
         sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // HOLDER is a real recipient; TOKEN/POOL/DEAD are system holders.
@@ -1051,7 +1086,10 @@ mod tests {
                 .bind(TOKEN).bind(acct).bind(QUOTE).execute(&pool).await.unwrap();
         }
 
-        let resp = ctrl(pool).fetch_dividend_holders(TOKEN, &page()).await.unwrap();
+        let resp = ctrl(pool)
+            .fetch_dividend_holders(TOKEN, &page())
+            .await
+            .unwrap();
 
         assert_eq!(resp.total_count, 1);
         assert_eq!(resp.holders.len(), 1);
@@ -1084,7 +1122,11 @@ mod tests {
 
         // full candidate list
         let all = c
-            .fetch_dividend_tokens(&DividendTokenQuery { q: None, page: 1, limit: 50 })
+            .fetch_dividend_tokens(&DividendTokenQuery {
+                q: None,
+                page: 1,
+                limit: 50,
+            })
             .await
             .unwrap();
         let ids: Vec<&str> = all.tokens.iter().map(|t| t.token_id.as_str()).collect();
@@ -1101,15 +1143,27 @@ mod tests {
             "non-eligible whitelist (WETH) excluded by symbol allowlist"
         );
         assert_eq!(
-            all.tokens.iter().find(|t| t.token_id == WLTOKEN).unwrap().token_type,
+            all.tokens
+                .iter()
+                .find(|t| t.token_id == WLTOKEN)
+                .unwrap()
+                .token_type,
             "whitelist"
         );
         assert_eq!(
-            all.tokens.iter().find(|t| t.token_id == V1TOKEN).unwrap().token_type,
+            all.tokens
+                .iter()
+                .find(|t| t.token_id == V1TOKEN)
+                .unwrap()
+                .token_type,
             "nadfun_v1"
         );
         assert_eq!(
-            all.tokens.iter().find(|t| t.token_id == TOKEN).unwrap().token_type,
+            all.tokens
+                .iter()
+                .find(|t| t.token_id == TOKEN)
+                .unwrap()
+                .token_type,
             "nadfun_v2"
         );
 
@@ -1140,7 +1194,11 @@ mod tests {
         let c = ctrl(pool);
 
         let all = c
-            .fetch_dividend_tokens(&DividendTokenQuery { q: None, page: 1, limit: 50 })
+            .fetch_dividend_tokens(&DividendTokenQuery {
+                q: None,
+                page: 1,
+                limit: 50,
+            })
             .await
             .unwrap();
         assert!(
@@ -1149,7 +1207,11 @@ mod tests {
         );
 
         let found = c
-            .fetch_dividend_tokens(&DividendTokenQuery { q: Some("emo".into()), page: 1, limit: 50 })
+            .fetch_dividend_tokens(&DividendTokenQuery {
+                q: Some("emo".into()),
+                page: 1,
+                limit: 50,
+            })
             .await
             .unwrap();
         assert!(

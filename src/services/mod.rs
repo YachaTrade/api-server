@@ -1,7 +1,7 @@
 pub mod account;
 pub mod api_key;
-pub mod capricorn;
 pub mod auth;
+pub mod capricorn;
 pub mod chester;
 pub mod cms;
 pub mod dex;
@@ -19,3 +19,5 @@ pub mod token;
 pub mod trading;
 pub mod trend;
 pub mod vault;
+pub mod x_oauth;
+pub mod x_verification;
