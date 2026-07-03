@@ -84,6 +84,17 @@ impl SaltService {
         self.process_result(result, &config.suffix, mining_time)
     }
 
+    /// Recompute the deterministic CREATE2 token address for a known salt +
+    /// version. Used by finalize to verify a client-supplied `token_id` (§7.1).
+    pub fn compute_token_address(version: TokenVersion, salt: B256) -> Result<Address, AppError> {
+        let config = MiningConfig::load(version)?;
+        Ok(Self::compute_create2_address(
+            config.deployer,
+            config.implementation,
+            salt,
+        ))
+    }
+
     /// 요청 데이터 검증
     ///
     /// creator 주소가 올바른 EVM 주소 형식인지 확인
@@ -230,7 +241,11 @@ impl SaltService {
     /// - salt를 바꾸면 주소가 달라짐
     /// - deployer, implementation이 같으면 salt만으로 주소 결정
     /// - 배포 전에 주소를 미리 계산할 수 있음!
-    fn compute_create2_address(deployer: Address, implementation: Address, salt: B256) -> Address {
+    pub(crate) fn compute_create2_address(
+        deployer: Address,
+        implementation: Address,
+        salt: B256,
+    ) -> Address {
         // EIP-1167 minimal proxy bytecode 구성 (총 55바이트)
         let mut init_code = Vec::with_capacity(55);
 

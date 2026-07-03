@@ -212,6 +212,7 @@ impl SwapController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 swap_info: SwapInfo {
                     event_type: if row.is_buy {

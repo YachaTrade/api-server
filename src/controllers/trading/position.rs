@@ -426,6 +426,7 @@ impl PositionController {
                         },
                         is_cto: row.is_cto,
                         version: row.version.clone(),
+                        x_verification: None,
                     },
                     balance_info: BalanceInfo {
                         balance: row.balance.normalized().to_plain_string(),

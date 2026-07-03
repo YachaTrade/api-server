@@ -8,7 +8,9 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
+        common::info::{
+            AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
+        },
         trend::{TrendActionResponse, TrendRequest, TrendResponse, TrendToken},
     },
     utils::{
@@ -288,6 +290,7 @@ impl From<TrendTokenRow> for TrendToken {
                 },
                 is_cto: row.is_cto,
                 version: row.version.clone(),
+                x_verification: None,
             },
             market_info: MarketInfo {
                 market_type: match row.market_type.as_str() {

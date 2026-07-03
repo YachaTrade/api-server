@@ -180,6 +180,7 @@ impl NewEventController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,
@@ -262,6 +263,7 @@ impl NewEventController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,
@@ -338,6 +340,7 @@ impl NewEventController {
                     },
                     is_cto: row.is_cto,
                     version: row.version.clone(),
+                    x_verification: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,

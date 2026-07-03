@@ -28,3 +28,4 @@ pub mod quote_token;
 pub mod raffle;
 pub mod trend;
 pub mod vault;
+pub mod x_verification;

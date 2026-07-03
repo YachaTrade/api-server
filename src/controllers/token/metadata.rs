@@ -9,7 +9,9 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion},
+        common::info::{
+            AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
+        },
         token::metadata::TokenMetadataResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -167,6 +169,7 @@ impl TokenMetadataController {
             },
             is_cto: row.is_cto,
             version: row.version.clone(),
+            x_verification: None,
         };
 
         let mut market_id = row.market_id;

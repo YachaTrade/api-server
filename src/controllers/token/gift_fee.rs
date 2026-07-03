@@ -318,6 +318,7 @@ impl GiftFeeController {
                         },
                         is_cto: row.is_cto,
                         version: row.version.clone(),
+                        x_verification: None,
                     },
                     market_info: MarketInfo {
                         market_type: match row.market_type.as_str() {

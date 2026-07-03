@@ -21,9 +21,12 @@ pub enum AppError {
     Unauthorized(String),
     AuthError(String),
     BadRequest(String),
+    Forbidden(String),
+    Gone(String),
     NotFound(String),
     InternalError(String),
-    Conflict,
+    Conflict(String),
+    ServiceUnavailable(String),
     TooManyRequests { retry_after: u64 },
 }
 
@@ -57,9 +60,12 @@ impl IntoResponse for AppError {
                     "Internal server error".to_string(),
                 )
             }
-            AppError::Conflict => (StatusCode::CONFLICT, "Conflict".into()),
+            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg),
+            AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg),
             AppError::AuthError(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
+            AppError::Gone(msg) => (StatusCode::GONE, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::InternalError(msg) => {
                 error!("Internal error: {}", msg);
@@ -88,5 +94,44 @@ impl IntoResponse for AppError {
         }));
 
         (status, body).into_response()
+    }
+}
+
+#[cfg(test)]
+mod error_status_tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    #[test]
+    fn forbidden_and_gone_map_to_403_and_410() {
+        assert_eq!(
+            AppError::Forbidden("creator_mismatch".into())
+                .into_response()
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            AppError::Gone("verification_expired".into())
+                .into_response()
+                .status(),
+            StatusCode::GONE
+        );
+    }
+
+    #[test]
+    fn conflict_and_service_unavailable_map_to_409_and_503() {
+        assert_eq!(
+            AppError::Conflict("already_deployed".into())
+                .into_response()
+                .status(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            AppError::ServiceUnavailable("onchain_check_unavailable".into())
+                .into_response()
+                .status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
     }
 }
