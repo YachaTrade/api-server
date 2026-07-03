@@ -22,6 +22,7 @@ use tracing::{error, info, warn};
 fn is_allowed_origin(origin: &str) -> bool {
     origin == "https://nad.fun"
         || origin == "https://nadapp.net"
+        || origin == "https://mm-dashboard-six.vercel.app"
         || origin.ends_with(".nad.fun")
         || origin.ends_with(".symphony.io")
         || origin.ends_with(".cloudfront.net")
@@ -260,6 +261,7 @@ mod tests {
         assert!(is_allowed_origin("https://app.nad.fun"));
         assert!(is_allowed_origin("https://x.symphony.io"));
         assert!(is_allowed_origin("http://localhost:3000"));
+        assert!(is_allowed_origin("https://mm-dashboard-six.vercel.app"));
         // rejected
         assert!(!is_allowed_origin("https://evil.com"));
         assert!(!is_allowed_origin("https://cloudfront.net")); // apex, no subdomain
