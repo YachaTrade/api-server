@@ -4,7 +4,7 @@ pub enum XVerificationPath {
     OauthCallback,
     FollowedBy,
     FollowedByDelete,
-    Pending,
+    Status,
     Reserve,
     Finalize,
 }
@@ -16,7 +16,7 @@ impl XVerificationPath {
             XVerificationPath::OauthCallback => "/x/oauth/callback",
             XVerificationPath::FollowedBy => "/x/followed-by",
             XVerificationPath::FollowedByDelete => "/x/followed-by/:handle",
-            XVerificationPath::Pending => "/x/verification/pending",
+            XVerificationPath::Status => "/x/verification/status",
             XVerificationPath::Reserve => "/x/verification/reserve",
             XVerificationPath::Finalize => "/x/verification/finalize",
         }
@@ -27,7 +27,7 @@ impl XVerificationPath {
             XVerificationPath::OauthCallback => "/x/oauth/callback",
             XVerificationPath::FollowedBy => "/x/followed-by",
             XVerificationPath::FollowedByDelete => "/x/followed-by/{handle}",
-            XVerificationPath::Pending => "/x/verification/pending",
+            XVerificationPath::Status => "/x/verification/status",
             XVerificationPath::Reserve => "/x/verification/reserve",
             XVerificationPath::Finalize => "/x/verification/finalize",
         }

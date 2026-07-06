@@ -39,8 +39,8 @@ pub fn router(app_state: AppState) -> Router<AppState> {
             delete(handler::delete_followed_by).layer(auth_layer.clone()),
         )
         .route(
-            XVerificationPath::Pending.as_str(),
-            get(handler::get_pending).layer(auth_layer.clone()),
+            XVerificationPath::Status.as_str(),
+            get(handler::get_status).layer(auth_layer.clone()),
         )
         .route(
             XVerificationPath::Reserve.as_str(),

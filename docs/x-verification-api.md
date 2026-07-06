@@ -55,7 +55,7 @@ X Verification API는 코인 창작자가 자신의 X(Twitter) 계정을 OAuth2�
 4. [프론트] followed_by 핸들 입력(최대 3개, 반복 가능)
    → POST /x/followed-by {handle}
    → 서버: X API로 팔로우 여부 확인 → 팔로우 중이면 pending.followed_by에 추가
-5. [프론트] GET /x/verification/pending → 현재 상태 렌더링
+5. [프론트] GET /x/verification/status → 현재 상태 렌더링
 6. [프론트] Coin Detail 입력 완료 → 이미지/메타데이터 업로드 → POST /token/salt
    (docs/token-creation.md 참고, 여기서 token_id(CREATE2 주소)가 결정됨)
 7. [프론트] salt 응답 직후, 아직 온체인 배포 전에 → POST /x/verification/reserve
@@ -111,6 +111,27 @@ X가 `?code=...&state=...` (실패 시 `?error=...`)로 리다이렉트합니다
 
 프론트는 `X_OAUTH_REDIRECT_FAILURE_URL` 페이지에서 `location.search`의 `x_verify_error`를 읽어 에러 배너를 띄우면 됩니다.
 
+#### 프론트에서 성공/실패 구분하기
+
+운영 환경에서는 보통 `X_OAUTH_REDIRECT_SUCCESS_URL`과 `X_OAUTH_REDIRECT_FAILURE_URL`을 **같은 페이지**(예: 코인 생성 페이지)로 설정합니다 — 성공 시엔 그 URL에 이미 담긴 쿼리(예: `?x_verified=1`)만 그대로 오고, 실패 시엔 서버가 `?x_verify_error=<code>`(또는 `&x_verify_error=<code>`, base URL에 이미 `?`가 있으면)를 붙여서 옵니다. 즉 **같은 라우트로 성공/실패 둘 다 리다이렉트되므로, 프론트는 반드시 쿼리 파라미터로 분기**해야 합니다.
+
+X 로그인 화면까지 실제로 브라우저가 이동했다 돌아오는 흐름이라 리액트 state는 이미 날아간 상태입니다. 그래서 성공 신호(`x_verified=1`)를 받으면 그 자체엔 실제 데이터(팔로워 수 등)가 없으므로, 곧바로 `GET /x/verification/status`를 호출해서 서버에 저장된 실제 결과를 다시 받아와야 합니다.
+
+```tsx
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('x_verified') === '1') {
+    fetchVerificationStatus(); // GET /x/verification/status 호출해서 실제 데이터 채움
+  } else if (params.has('x_verify_error')) {
+    showErrorBanner(params.get('x_verify_error')); // denied / bad_request / state_expired / x_error
+  }
+  // 새로고침 시 같은 처리가 반복되지 않도록 쿼리스트링 제거
+  window.history.replaceState({}, '', window.location.pathname);
+}, []);
+```
+
+`test-harness/xverify.html`도 동일한 패턴(리다이렉트 후 쿼리 파싱 → 배너 표시)으로 구현돼 있습니다.
+
 ---
 
 ### 3. Followed-by 추가 (`POST /x/followed-by`)
@@ -151,11 +172,11 @@ X가 `?code=...&state=...` (실패 시 `?error=...`)로 리다이렉트합니다
 
 **인증**: 세션 필요
 
-응답은 `PendingResponse`(아래) 전체 — 제거 후 최신 상태를 그대로 돌려줍니다.
+응답은 `StatusResponse`(아래) 전체 — 제거 후 최신 상태를 그대로 돌려줍니다.
 
 ---
 
-### 5. Pending 상태 조회 (`GET /x/verification/pending`)
+### 5. Status 조회 (`GET /x/verification/status`)
 
 **인증**: 세션 필요
 
@@ -331,8 +352,8 @@ interface FollowedByResponse {
   entry?: XFollowedByEntry;  // is_following === false면 없음
 }
 
-// GET /x/verification/pending, DELETE /x/followed-by/:handle
-interface PendingResponse {
+// GET /x/verification/status, DELETE /x/followed-by/:handle
+interface StatusResponse {
   followers_count?: number;   // pending 없으면 undefined
   followed_by: XFollowedByEntry[];
 }
@@ -395,6 +416,6 @@ NextAuth Provider로 바꾸면 PKCE code exchange가 Next.js 서버(route handle
 권장: 지금처럼 api-server가 OAuth state/token을 전담하게 두고, 프론트는 다음만 하면 됩니다.
 1. `POST /x/oauth/login` 호출 → 받은 `authorize_url`로 리다이렉트
 2. `X_OAUTH_REDIRECT_SUCCESS_URL`/`FAILURE_URL` 페이지에서 쿼리 파싱해 결과 표시
-3. 나머지(`followed-by`, `pending`, `reserve`, `finalize`)는 이 문서의 REST 엔드포인트를 직접 호출
+3. 나머지(`followed-by`, `status`, `reserve`, `finalize`)는 이 문서의 REST 엔드포인트를 직접 호출
 
 즉, X 로그인 부분에 한해서는 **"OAuth 프로바이더 추상화"보다 "이미 검증된 보안 경계를 그대로 유지"가 우선**입니다.

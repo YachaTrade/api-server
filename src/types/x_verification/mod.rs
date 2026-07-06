@@ -53,9 +53,9 @@ pub struct FollowedByResponse {
     pub entry: Option<XFollowedByEntry>,
 }
 
-/// Public pending view — the creator's own handle / user-id are intentionally absent.
+/// Public verification-progress view — the creator's own handle / user-id are intentionally absent.
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct PendingResponse {
+pub struct StatusResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub followers_count: Option<i64>,
     pub followed_by: Vec<XFollowedByEntry>,

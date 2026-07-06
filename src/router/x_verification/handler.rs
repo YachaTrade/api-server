@@ -17,7 +17,7 @@ use crate::{
     state::AppState,
     types::x_verification::{
         FinalizeRequest, FinalizeResponse, FollowedByRequest, FollowedByResponse,
-        OAuthCallbackQuery, OAuthLoginResponse, PendingResponse, ReserveRequest, ReserveResponse,
+        OAuthCallbackQuery, OAuthLoginResponse, ReserveRequest, ReserveResponse, StatusResponse,
         validate_handle,
     },
     utils::valid_account_id,
@@ -124,7 +124,7 @@ pub async fn add_followed_by(
 #[utoipa::path(
     delete, path = XVerificationPath::FollowedByDelete.docs_str(),
     params(("handle" = String, Path, description = "X handle to remove")),
-    responses((status = 200, body = PendingResponse)),
+    responses((status = 200, body = StatusResponse)),
     tag = "XVerification"
 )]
 #[instrument(skip(state, session_address))]
@@ -132,7 +132,7 @@ pub async fn delete_followed_by(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
     Path(handle): Path<String>,
-) -> AppJsonResult<PendingResponse> {
+) -> AppJsonResult<StatusResponse> {
     let account_id = valid_account_id(&session_address)
         .ok_or_else(|| AppError::BadRequest("invalid session address".into()))?;
     let resp = service(&state)
@@ -141,20 +141,20 @@ pub async fn delete_followed_by(
     Ok(Json(resp))
 }
 
-/// GET /x/verification/pending — current pending signals (no creator handle).
+/// GET /x/verification/status — current verification-progress signals (no creator handle).
 #[utoipa::path(
-    get, path = XVerificationPath::Pending.docs_str(),
-    responses((status = 200, body = PendingResponse)),
+    get, path = XVerificationPath::Status.docs_str(),
+    responses((status = 200, body = StatusResponse)),
     tag = "XVerification"
 )]
 #[instrument(skip(state, session_address))]
-pub async fn get_pending(
+pub async fn get_status(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-) -> AppJsonResult<PendingResponse> {
+) -> AppJsonResult<StatusResponse> {
     let account_id = valid_account_id(&session_address)
         .ok_or_else(|| AppError::BadRequest("invalid session address".into()))?;
-    let resp = service(&state).get_pending(&account_id).await?;
+    let resp = service(&state).get_status(&account_id).await?;
     Ok(Json(resp))
 }
 
