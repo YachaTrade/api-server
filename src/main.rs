@@ -59,7 +59,7 @@ use utoipa_swagger_ui::SwaggerUi;
         router::x_verification::handler::oauth_callback,
         router::x_verification::handler::add_followed_by,
         router::x_verification::handler::delete_followed_by,
-        router::x_verification::handler::get_pending,
+        router::x_verification::handler::get_status,
         router::x_verification::handler::reserve,
         router::x_verification::handler::finalize,
 
@@ -226,7 +226,7 @@ use utoipa_swagger_ui::SwaggerUi;
             types::x_verification::OAuthLoginResponse,
             types::x_verification::FollowedByRequest,
             types::x_verification::FollowedByResponse,
-            types::x_verification::PendingResponse,
+            types::x_verification::StatusResponse,
             types::x_verification::ReserveRequest,
             types::x_verification::ReserveResponse,
             types::x_verification::FinalizeRequest,

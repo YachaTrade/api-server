@@ -29,7 +29,7 @@ use crate::services::token::salt::SaltService;
 use crate::services::x_oauth::client;
 use crate::types::token::x_verification::XFollowedByEntry;
 use crate::types::x_verification::{
-    FinalizeRequest, FollowedByResponse, OAuthLoginResponse, PendingResponse, ReserveRequest,
+    FinalizeRequest, FollowedByResponse, OAuthLoginResponse, ReserveRequest, StatusResponse,
     XOAuthState, XPending, append_followed_by,
 };
 use crate::utils::valid_account_id;
@@ -184,7 +184,7 @@ impl XVerificationService {
         &self,
         account_id: &str,
         handle: &str,
-    ) -> Result<PendingResponse, AppError> {
+    ) -> Result<StatusResponse, AppError> {
         let mut pending = self
             .redis
             .get_x_pending(account_id)
@@ -198,25 +198,25 @@ impl XVerificationService {
             .set_x_pending(account_id, &pending, *X_PENDING_TTL_MS)
             .await
             .map_err(|e| AppError::InternalError(format!("save pending: {e}")))?;
-        Ok(PendingResponse {
+        Ok(StatusResponse {
             followers_count: Some(pending.followers_count),
             followed_by: pending.followed_by,
         })
     }
 
-    /// Public pending view — omits the creator's own handle / user-id.
-    pub async fn get_pending(&self, account_id: &str) -> Result<PendingResponse, AppError> {
+    /// Public verification-progress view — omits the creator's own handle / user-id.
+    pub async fn get_status(&self, account_id: &str) -> Result<StatusResponse, AppError> {
         match self
             .redis
             .get_x_pending(account_id)
             .await
             .map_err(|e| AppError::InternalError(format!("read pending: {e}")))?
         {
-            Some(p) => Ok(PendingResponse {
+            Some(p) => Ok(StatusResponse {
                 followers_count: Some(p.followers_count),
                 followed_by: p.followed_by,
             }),
-            None => Ok(PendingResponse {
+            None => Ok(StatusResponse {
                 followers_count: None,
                 followed_by: vec![],
             }),
