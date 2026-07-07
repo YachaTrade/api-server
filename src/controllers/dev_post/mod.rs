@@ -115,7 +115,7 @@ impl DevPostController {
         post_id: i64,
         author: &str,
         req: &EditDevPostRequest,
-    ) -> Result<(), AppError> {
+    ) -> Result<String, AppError> {
         let pool = self.db.get_write_pool();
         let mut tx = pool
             .begin()
@@ -126,22 +126,24 @@ impl DevPostController {
             return Err(AppError::Forbidden("Not the post author".into()));
         }
 
-        if let Some(body) = &req.body {
-            sqlx::query(
-                "UPDATE dev_post SET body=$2, updated_at=NOW(), edited_at=NOW() WHERE id=$1",
+        let token_id: String = if let Some(body) = &req.body {
+            sqlx::query_scalar(
+                "UPDATE dev_post SET body=$2, updated_at=NOW(), edited_at=NOW() WHERE id=$1 RETURNING token_id",
             )
             .bind(post_id)
             .bind(body)
-            .execute(&mut *tx)
+            .fetch_one(&mut *tx)
             .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            .map_err(|e| AppError::InternalError(e.to_string()))?
         } else {
-            sqlx::query("UPDATE dev_post SET updated_at=NOW(), edited_at=NOW() WHERE id=$1")
-                .bind(post_id)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-        }
+            sqlx::query_scalar(
+                "UPDATE dev_post SET updated_at=NOW(), edited_at=NOW() WHERE id=$1 RETURNING token_id",
+            )
+            .bind(post_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+        };
         if let Some(imgs) = &req.image_uris {
             // full replacement
             sqlx::query("DELETE FROM dev_post_image WHERE post_id=$1")
@@ -164,21 +166,23 @@ impl DevPostController {
         tx.commit()
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
-        Ok(())
+        Ok(token_id)
     }
 
-    pub async fn delete_post(&self, post_id: i64, author: &str) -> Result<(), AppError> {
+    pub async fn delete_post(&self, post_id: i64, author: &str) -> Result<String, AppError> {
         let pool = self.db.get_write_pool();
         let existing = Self::require_author(pool, post_id).await?;
         if existing != author {
             return Err(AppError::Forbidden("Not the post author".into()));
         }
-        sqlx::query("UPDATE dev_post SET deleted_at=NOW() WHERE id=$1")
-            .bind(post_id)
-            .execute(pool)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-        Ok(())
+        let token_id: String = sqlx::query_scalar(
+            "UPDATE dev_post SET deleted_at=NOW() WHERE id=$1 RETURNING token_id",
+        )
+        .bind(post_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Ok(token_id)
     }
 
     pub async fn like(&self, post_id: i64, account_id: &str) -> Result<i64, AppError> {
@@ -286,15 +290,17 @@ impl DevPostController {
 
     // ---- reads ----
 
-    /// Batch-loads images, like counts, poll+options+vote-counts, and viewer
-    /// personalization (liked / voted) for a page of `dev_post` ids, then assembles
-    /// `DevPostResponse`s preserving the given id order. Batches via `= ANY($1)`
-    /// instead of a query per post to avoid N+1.
-    async fn hydrate(
+    /// Batch-loads images, like counts, and poll+options+vote-counts for a page
+    /// of `dev_post` ids, then assembles `DevPostResponse`s preserving the given
+    /// id order. Batches via `= ANY($1)` instead of a query per post to avoid
+    /// N+1. Viewer-agnostic: `liked_by_me` is always `false` and poll
+    /// `my_vote_option` is always `None` — callers needing personalization
+    /// layer it on with `apply_personalization`. This split lets the base
+    /// response be cached and shared across viewers.
+    async fn hydrate_base(
         &self,
         pool: &sqlx::PgPool,
         ids: &[i64],
-        viewer: Option<&str>,
     ) -> Result<Vec<DevPostResponse>, AppError> {
         if ids.is_empty() {
             return Ok(Vec::new());
@@ -360,20 +366,6 @@ impl DevPostController {
         .map_err(|e| AppError::InternalError(e.to_string()))?;
         let like_counts: HashMap<i64, i64> = like_count_rows.into_iter().collect();
 
-        let liked_by_me: HashSet<i64> = if let Some(viewer) = viewer {
-            let rows: Vec<i64> = sqlx::query_scalar(
-                "SELECT post_id FROM dev_post_like WHERE post_id = ANY($1) AND account_id = $2",
-            )
-            .bind(ids)
-            .bind(viewer)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-            rows.into_iter().collect()
-        } else {
-            HashSet::new()
-        };
-
         let poll_rows: Vec<(i64, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as("SELECT post_id, closes_at FROM dev_post_poll WHERE post_id = ANY($1)")
                 .bind(ids)
@@ -414,20 +406,6 @@ impl DevPostController {
                 });
         }
 
-        let my_votes: HashMap<i64, i16> = if let Some(viewer) = viewer {
-            let rows: Vec<(i64, i16)> = sqlx::query_as(
-                "SELECT post_id, option_position FROM dev_post_poll_vote WHERE post_id = ANY($1) AND account_id = $2",
-            )
-            .bind(ids)
-            .bind(viewer)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-            rows.into_iter().collect()
-        } else {
-            HashMap::new()
-        };
-
         let now = chrono::Utc::now();
         let mut posts = Vec::with_capacity(ids.len());
         for &id in ids {
@@ -444,7 +422,7 @@ impl DevPostController {
                     is_closed: *closes_at <= now,
                     total_votes,
                     options,
-                    my_vote_option: my_votes.get(&id).copied(),
+                    my_vote_option: None,
                 }
             });
             posts.push(DevPostResponse {
@@ -466,7 +444,7 @@ impl DevPostController {
                 images: images_by_post.remove(&id).unwrap_or_default(),
                 poll,
                 like_count: *like_counts.get(&id).unwrap_or(&0),
-                liked_by_me: liked_by_me.contains(&id),
+                liked_by_me: false,
                 is_edited: core.edited_at.is_some(),
                 created_at: core.created_at,
                 updated_at: core.updated_at,
@@ -475,12 +453,104 @@ impl DevPostController {
         Ok(posts)
     }
 
-    pub async fn get_feed(
+    /// Overlays viewer-specific personalization (`liked_by_me`, poll
+    /// `my_vote_option`) onto already-hydrated base responses, in place, on
+    /// the given pool.
+    async fn apply_personalization_on(
+        &self,
+        pool: &sqlx::Pool<sqlx::Postgres>,
+        posts: &mut [DevPostResponse],
+        viewer: &str,
+    ) -> Result<(), AppError> {
+        if posts.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<i64> = posts
+            .iter()
+            .map(|p| {
+                p.id.parse()
+                    .expect("DevPostResponse.id is always a valid i64")
+            })
+            .collect();
+
+        let liked_by_me: HashSet<i64> = {
+            let rows: Vec<i64> = sqlx::query_scalar(
+                "SELECT post_id FROM dev_post_like WHERE post_id = ANY($1) AND account_id = $2",
+            )
+            .bind(&ids)
+            .bind(viewer)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            rows.into_iter().collect()
+        };
+
+        let my_votes: HashMap<i64, i16> = {
+            let rows: Vec<(i64, i16)> = sqlx::query_as(
+                "SELECT post_id, option_position FROM dev_post_poll_vote WHERE post_id = ANY($1) AND account_id = $2",
+            )
+            .bind(&ids)
+            .bind(viewer)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            rows.into_iter().collect()
+        };
+
+        for post in posts.iter_mut() {
+            let id: i64 = post
+                .id
+                .parse()
+                .expect("DevPostResponse.id is always a valid i64");
+            post.liked_by_me = liked_by_me.contains(&id);
+            if let Some(poll) = post.poll.as_mut() {
+                poll.my_vote_option = my_votes.get(&id).copied();
+            }
+        }
+        Ok(())
+    }
+
+    /// Overlays viewer-specific personalization (`liked_by_me`, poll
+    /// `my_vote_option`) onto already-hydrated base responses, in place.
+    /// Always reads `self.db.get_read_pool()` internally so callers — notably
+    /// the cache layer applying this to a cached base — don't need to thread
+    /// a pool handle through.
+    pub async fn apply_personalization(
+        &self,
+        posts: &mut [DevPostResponse],
+        viewer: &str,
+    ) -> Result<(), AppError> {
+        self.apply_personalization_on(self.db.get_read_pool(), posts, viewer)
+            .await
+    }
+
+    /// `hydrate_base` plus, when a viewer is present, personalization on the
+    /// SAME pool `hydrate_base` used. This matters for the read-after-write
+    /// path (`get_post_on` → `get_post_rw`): a vote just written on the write
+    /// pool must be read back from that same pool, not the (possibly
+    /// lagging) read replica — otherwise a vote can commit and then
+    /// immediately read back as `my_vote_option: null`.
+    async fn hydrate(
+        &self,
+        pool: &sqlx::PgPool,
+        ids: &[i64],
+        viewer: Option<&str>,
+    ) -> Result<Vec<DevPostResponse>, AppError> {
+        let mut posts = self.hydrate_base(pool, ids).await?;
+        if let Some(viewer) = viewer {
+            self.apply_personalization_on(pool, &mut posts, viewer)
+                .await?;
+        }
+        Ok(posts)
+    }
+
+    /// Viewer-agnostic feed page — cacheable. See `get_feed` for the
+    /// personalized variant.
+    pub async fn get_feed_base(
         &self,
         token_id: Option<&str>,
         page: i64,
         limit: i64,
-        viewer: Option<&str>,
     ) -> Result<(Vec<DevPostResponse>, i64), AppError> {
         let pool = self.db.get_read_pool();
         let offset = (page - 1) * limit;
@@ -502,7 +572,21 @@ impl DevPostController {
         .fetch_one(pool)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let posts = self.hydrate(pool, &ids, viewer).await?;
+        let posts = self.hydrate_base(pool, &ids).await?;
+        Ok((posts, total))
+    }
+
+    pub async fn get_feed(
+        &self,
+        token_id: Option<&str>,
+        page: i64,
+        limit: i64,
+        viewer: Option<&str>,
+    ) -> Result<(Vec<DevPostResponse>, i64), AppError> {
+        let (mut posts, total) = self.get_feed_base(token_id, page, limit).await?;
+        if let Some(viewer) = viewer {
+            self.apply_personalization(&mut posts, viewer).await?;
+        }
         Ok((posts, total))
     }
 
@@ -529,13 +613,36 @@ impl DevPostController {
             .ok_or_else(|| AppError::NotFound("Post not found".into()))
     }
 
+    /// Viewer-agnostic single-post fetch — cacheable. See `get_post` for the
+    /// personalized variant.
+    pub async fn get_post_base(&self, post_id: i64) -> Result<DevPostResponse, AppError> {
+        let pool = self.db.get_read_pool();
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM dev_post WHERE id = $1 AND deleted_at IS NULL")
+                .bind(post_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        if exists.is_none() {
+            return Err(AppError::NotFound("Post not found".into()));
+        }
+        self.hydrate_base(pool, &[post_id])
+            .await?
+            .pop()
+            .ok_or_else(|| AppError::NotFound("Post not found".into()))
+    }
+
     pub async fn get_post(
         &self,
         post_id: i64,
         viewer: Option<&str>,
     ) -> Result<DevPostResponse, AppError> {
-        self.get_post_on(self.db.get_read_pool(), post_id, viewer)
-            .await
+        let mut post = self.get_post_base(post_id).await?;
+        if let Some(viewer) = viewer {
+            self.apply_personalization(std::slice::from_mut(&mut post), viewer)
+                .await?;
+        }
+        Ok(post)
     }
 
     /// Reads the just-written post back from the write pool instead of the
@@ -550,10 +657,9 @@ impl DevPostController {
             .await
     }
 
-    pub async fn get_trending(
-        &self,
-        viewer: Option<&str>,
-    ) -> Result<Vec<DevPostResponse>, AppError> {
+    /// Viewer-agnostic trending posts (top 3 by 7-day likes) — cacheable. See
+    /// `get_trending` for the personalized variant.
+    pub async fn get_trending_base(&self) -> Result<Vec<DevPostResponse>, AppError> {
         let pool = self.db.get_read_pool();
         let ids: Vec<i64> = sqlx::query_scalar(
             "SELECT l.post_id FROM dev_post_like l JOIN dev_post p ON p.id = l.post_id
@@ -563,7 +669,18 @@ impl DevPostController {
         .fetch_all(pool)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
-        self.hydrate(pool, &ids, viewer).await
+        self.hydrate_base(pool, &ids).await
+    }
+
+    pub async fn get_trending(
+        &self,
+        viewer: Option<&str>,
+    ) -> Result<Vec<DevPostResponse>, AppError> {
+        let mut posts = self.get_trending_base().await?;
+        if let Some(viewer) = viewer {
+            self.apply_personalization(&mut posts, viewer).await?;
+        }
+        Ok(posts)
     }
 
     pub async fn get_ranking(
@@ -1030,9 +1147,10 @@ mod write_tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn get_post_rw_hydrates_from_write_pool(pool: sqlx::PgPool) {
         // Single test pool can't simulate replica lag, so this only proves
-        // get_post_rw hydrates correctly on the write pool; the create/edit/vote
-        // pool-selection fix is otherwise correct by construction (get_post_on
-        // is parameterized on the pool, and get_post_rw passes get_write_pool()).
+        // get_post_rw hydrates correctly on the write pool. The read-after-write
+        // guarantee itself comes from get_post_on/hydrate personalizing on the
+        // same pool arg they base-hydrate on, so get_post_rw's write-pool choice
+        // flows through to apply_personalization_on too (not just hydrate_base).
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
         let id = c
@@ -1093,5 +1211,71 @@ mod write_tests {
         let trending = c.get_trending(None).await.unwrap();
         assert_eq!(trending.len(), 1);
         assert_eq!(trending[0].id, p.to_string());
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn hydrate_base_has_no_personalization(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = create_poll_post(&c).await;
+        c.like(id, "0xU").await.unwrap();
+        c.vote(id, "0xU", 2).await.unwrap();
+        let base = c.hydrate_base(c.db.get_read_pool(), &[id]).await.unwrap();
+        assert!(!base[0].liked_by_me);
+        assert_eq!(base[0].poll.as_ref().unwrap().my_vote_option, None);
+        assert_eq!(base[0].like_count, 1); // counts ARE in base
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn apply_personalization_overlays_viewer(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = create_poll_post(&c).await;
+        c.like(id, "0xU").await.unwrap();
+        c.vote(id, "0xU", 2).await.unwrap();
+
+        let mut base = vec![c.get_post_base(id).await.unwrap()];
+        c.apply_personalization(&mut base, "0xU").await.unwrap();
+        assert!(base[0].liked_by_me);
+        assert_eq!(base[0].poll.as_ref().unwrap().my_vote_option, Some(2));
+
+        // a different viewer sees nothing
+        let mut base2 = vec![c.get_post_base(id).await.unwrap()];
+        c.apply_personalization(&mut base2, "0xOther")
+            .await
+            .unwrap();
+        assert!(!base2[0].liked_by_me);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn edit_and_delete_return_token_id(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool);
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("b".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            c.edit_post(
+                id,
+                "0xCreator",
+                &EditDevPostRequest {
+                    body: Some("b2".into()),
+                    image_uris: None,
+                },
+            )
+            .await
+            .unwrap(),
+            "0xToken"
+        );
+        assert_eq!(c.delete_post(id, "0xCreator").await.unwrap(), "0xToken");
     }
 }

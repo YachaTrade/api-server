@@ -10,7 +10,8 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
+        DEVPOST_DETAIL_EXPIRATION, DEVPOST_FEED_EXPIRATION, DEVPOST_RANKING_EXPIRATION,
+        DEVPOST_TRENDING_EXPIRATION, GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
         GET_GIFT_FEE_RESPONSE_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
         GET_QUOTE_TOKENS_RESPONSE_EXPIRATION, GET_REWARD_ADD_HISTORY_EXPIRATION,
         GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
@@ -23,6 +24,7 @@ use crate::{
     measure_redis,
     types::{
         common::{info::AccountInfo, pagination::PaginationParams},
+        dev_post::{DevPostResponse, FeedBase, RankingResponse},
         hype::{
             AmountResponse, HypeEpochResponse, HypePointResponse, HypeRewardAddHistoryResponse,
             HypeTokenResponse, HypeVoteHistoryResponse,
@@ -2198,6 +2200,116 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let key = with_prefix(format!("x_pending:{}", account_id));
         measure_redis!("redis.delete_x_pending", conn.del::<String, ()>(key))?;
+        Ok(())
+    }
+}
+
+// Dev Post caching
+impl RedisDatabase {
+    pub async fn set_devpost_ranking_response(
+        &self,
+        page: i64,
+        limit: i64,
+        resp: &RankingResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:ranking:{}:{}", page, limit));
+        let json = serde_json::to_string(resp)?;
+        measure_redis!(
+            "redis.set_devpost_ranking_response",
+            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_RANKING_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_devpost_ranking_response(
+        &self,
+        page: i64,
+        limit: i64,
+    ) -> Result<RankingResponse> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:ranking:{}:{}", page, limit));
+        let json: String = measure_redis!(
+            "redis.get_devpost_ranking_response",
+            conn.get::<_, String>(key)
+        )?;
+        Ok(serde_json::from_str(&json)?)
+    }
+
+    pub async fn set_devpost_trending_base(&self, base: &Vec<DevPostResponse>) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix("devpost:trending".to_string());
+        let json = serde_json::to_string(base)?;
+        measure_redis!(
+            "redis.set_devpost_trending_base",
+            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_TRENDING_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_devpost_trending_base(&self) -> Result<Vec<DevPostResponse>> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix("devpost:trending".to_string());
+        let json: String = measure_redis!(
+            "redis.get_devpost_trending_base",
+            conn.get::<_, String>(key)
+        )?;
+        Ok(serde_json::from_str(&json)?)
+    }
+
+    pub async fn set_devpost_feed_base(&self, scope: &str, base: &FeedBase) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:feed:{}", scope));
+        let json = serde_json::to_string(base)?;
+        measure_redis!(
+            "redis.set_devpost_feed_base",
+            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_FEED_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_devpost_feed_base(&self, scope: &str) -> Result<FeedBase> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:feed:{}", scope));
+        let json: String =
+            measure_redis!("redis.get_devpost_feed_base", conn.get::<_, String>(key))?;
+        Ok(serde_json::from_str(&json)?)
+    }
+
+    pub async fn delete_devpost_feed(&self, scope: &str) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:feed:{}", scope));
+        measure_redis!("redis.delete_devpost_feed", conn.del::<String, ()>(key))?;
+        Ok(())
+    }
+
+    pub async fn set_devpost_detail_base(
+        &self,
+        post_id: i64,
+        base: &DevPostResponse,
+    ) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:detail:{}", post_id));
+        let json = serde_json::to_string(base)?;
+        measure_redis!(
+            "redis.set_devpost_detail_base",
+            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_DETAIL_EXPIRATION)
+        )?;
+        Ok(())
+    }
+
+    pub async fn get_devpost_detail_base(&self, post_id: i64) -> Result<DevPostResponse> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:detail:{}", post_id));
+        let json: String =
+            measure_redis!("redis.get_devpost_detail_base", conn.get::<_, String>(key))?;
+        Ok(serde_json::from_str(&json)?)
+    }
+
+    pub async fn delete_devpost_detail(&self, post_id: i64) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(format!("devpost:detail:{}", post_id));
+        measure_redis!("redis.delete_devpost_detail", conn.del::<String, ()>(key))?;
         Ok(())
     }
 }

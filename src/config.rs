@@ -125,6 +125,16 @@ lazy_static! {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(10000);
 
+    // Dev Post cache expirations (default: 60 seconds = 60000ms)
+    pub static ref DEVPOST_RANKING_EXPIRATION: u64 = env::var("DEVPOST_RANKING_EXPIRATION")
+        .ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(60_000);
+    pub static ref DEVPOST_TRENDING_EXPIRATION: u64 = env::var("DEVPOST_TRENDING_EXPIRATION")
+        .ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(60_000);
+    pub static ref DEVPOST_FEED_EXPIRATION: u64 = env::var("DEVPOST_FEED_EXPIRATION")
+        .ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(60_000);
+    pub static ref DEVPOST_DETAIL_EXPIRATION: u64 = env::var("DEVPOST_DETAIL_EXPIRATION")
+        .ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(60_000);
+
     // Contract Addresses
     pub static ref COMMUNITY_TREASURY: String = env::var("V1_COMMUNITY_TREASURY")
         .expect("V1_COMMUNITY_TREASURY must be set");

@@ -75,7 +75,7 @@ pub async fn get_feed(
     };
     let viewer = optional_session_address(&state, &cookies).await;
 
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let (posts, total_count) = service
         .get_feed(
             token_id.as_deref(),
@@ -109,7 +109,7 @@ pub async fn get_detail(
     Path(post_id): Path<i64>,
 ) -> AppJsonResult<DevPostResponse> {
     let viewer = optional_session_address(&state, &cookies).await;
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_post(post_id, viewer.as_deref()).await?;
 
     Ok(Json(response))
@@ -131,7 +131,7 @@ pub async fn get_trending(
     cookies: Cookies,
 ) -> AppJsonResult<TrendingResponse> {
     let viewer = optional_session_address(&state, &cookies).await;
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let posts = service.get_trending(viewer.as_deref()).await?;
 
     Ok(Json(TrendingResponse { posts }))
@@ -156,7 +156,7 @@ pub async fn get_ranking(
     State(state): State<AppState>,
     Query(p): Query<PaginationParams>,
 ) -> AppJsonResult<RankingResponse> {
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let (rankings, total_count) = service.get_ranking(p.page, p.limit).await?;
 
     Ok(Json(RankingResponse {
@@ -251,7 +251,7 @@ pub async fn create_post(
     payload.validate().map_err(AppError::BadRequest)?;
     payload.token_id = valid_existing_token_id(&state, &payload.token_id).await?;
 
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let id = service.create_post(&session_address, &payload).await?;
 
     Ok(Json(service.get_post_rw(id, Some(&session_address)).await?))
@@ -283,7 +283,7 @@ pub async fn edit_post(
 ) -> AppJsonResult<DevPostResponse> {
     payload.validate().map_err(AppError::BadRequest)?;
 
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     service
         .edit_post(post_id, &session_address, &payload)
         .await?;
@@ -314,7 +314,7 @@ pub async fn delete_post(
     Extension(session_address): Extension<String>,
     Path(post_id): Path<i64>,
 ) -> AppJsonResult<serde_json::Value> {
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     service.delete_post(post_id, &session_address).await?;
 
     Ok(Json(serde_json::json!({ "deleted": true })))
@@ -340,7 +340,7 @@ pub async fn like(
     Extension(session_address): Extension<String>,
     Path(post_id): Path<i64>,
 ) -> AppJsonResult<LikeResponse> {
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let like_count = service.like(post_id, &session_address).await?;
 
     Ok(Json(LikeResponse {
@@ -369,7 +369,7 @@ pub async fn unlike(
     Extension(session_address): Extension<String>,
     Path(post_id): Path<i64>,
 ) -> AppJsonResult<LikeResponse> {
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     let like_count = service.unlike(post_id, &session_address).await?;
 
     Ok(Json(LikeResponse {
@@ -401,7 +401,7 @@ pub async fn vote(
     Path(post_id): Path<i64>,
     Json(payload): Json<VoteRequest>,
 ) -> AppJsonResult<VoteResponse> {
-    let service = DevPostService::new(state.postgres.clone());
+    let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
     service
         .vote(post_id, &session_address, payload.option_position)
         .await?;
