@@ -93,7 +93,7 @@ pub struct VoteRequest {
 }
 
 // ---- responses ----
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TokenSummary {
     pub token_id: String,
     pub name: String,
@@ -101,20 +101,20 @@ pub struct TokenSummary {
     pub image_uri: Option<String>,
     pub market_cap: Option<String>,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AuthorSummary {
     pub account_id: String,
     pub nickname: Option<String>,
     pub image_uri: Option<String>,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PollOptionResponse {
     pub position: i16,
     pub label: String,
     pub image_uri: Option<String>,
     pub vote_count: i64,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PollResponse {
     pub closes_at: chrono::DateTime<chrono::Utc>,
     pub is_closed: bool,
@@ -122,7 +122,7 @@ pub struct PollResponse {
     pub options: Vec<PollOptionResponse>,
     pub my_vote_option: Option<i16>,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DevPostResponse {
     pub id: String, // BIGINT as string
     pub token: TokenSummary,
@@ -142,11 +142,16 @@ pub struct DevPostListResponse {
     pub posts: Vec<DevPostResponse>,
     pub total_count: i64,
 }
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct FeedBase {
+    pub posts: Vec<DevPostResponse>,
+    pub total_count: i64,
+}
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TrendingResponse {
     pub posts: Vec<DevPostResponse>,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RankingRow {
     pub rank: i64,
     pub token: TokenSummary,
@@ -154,7 +159,7 @@ pub struct RankingRow {
     pub post_count: i64,
     pub last_posted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RankingResponse {
     pub rankings: Vec<RankingRow>,
     pub total_count: i64,
@@ -296,5 +301,47 @@ mod tests {
             Some("https://x.com/a/status/1".into())
         );
         assert_eq!(parse_tweet_url("no link"), None);
+    }
+
+    #[test]
+    fn devpost_response_serde_round_trips() {
+        let r = DevPostResponse {
+            id: "1".into(),
+            token: TokenSummary {
+                token_id: "0xT".into(),
+                name: "n".into(),
+                symbol: "s".into(),
+                image_uri: None,
+                market_cap: None,
+            },
+            author: AuthorSummary {
+                account_id: "0xA".into(),
+                nickname: None,
+                image_uri: None,
+            },
+            body: "b".into(),
+            tweet_url: None,
+            images: vec![],
+            poll: None,
+            like_count: 3,
+            liked_by_me: true,
+            is_edited: false,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        let j = serde_json::to_string(&r).unwrap();
+        let back: DevPostResponse = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.id, "1");
+        assert_eq!(back.like_count, 3);
+    }
+
+    #[test]
+    fn feed_base_round_trips() {
+        let b = FeedBase {
+            posts: vec![],
+            total_count: 7,
+        };
+        let back: FeedBase = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
+        assert_eq!(back.total_count, 7);
     }
 }
