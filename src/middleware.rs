@@ -36,33 +36,12 @@ pub struct SessionInfo {
     pub address: String,
 }
 
-pub async fn authenticate_user(
-    State(state): State<AppState>,
-    cookies: Cookies,
-    mut req: Request<Body>, // 구체적인 Body 타입 사용
-    next: Next,             // Body 타입 명시
-) -> Result<Response<Body>, AppError> {
-    info!(
-        "[AUTH] authenticate_user called, path: {}",
-        req.uri().path()
-    );
-
-    // Origin 헤더 검증 (CSRF 방어)
-    if let Some(origin) = req.headers().get(ORIGIN) {
-        let origin_str = origin.to_str().map_err(|_| {
-            error!("[AUTH] Invalid Origin header: {:?}", origin);
-            AppError::AuthError("Invalid Origin header".to_string())
-        })?;
-        info!("[AUTH] Origin header: {}", origin_str);
-        if !is_allowed_origin(origin_str) {
-            error!("[AUTH] Origin not allowed: {}", origin_str);
-            return Err(AppError::AuthError("Origin not allowed".to_string()));
-        }
-        info!("[AUTH] Origin allowed: {}", origin_str);
-    } else {
-        info!("[AUTH] No Origin header present");
-    }
-
+/// 쿠키 → 세션 키 → 주소 해석 (Redis 우선, Postgres 폴백 + 재캐싱).
+/// CSRF Origin 검증은 포함하지 않음 — 호출자가 필요에 따라 별도로 수행한다.
+pub async fn resolve_session_address(
+    state: &AppState,
+    cookies: &Cookies,
+) -> Result<(String, String), AppError> {
     let cookie_name =
         env::var("COOKIE_NAME").expect("COOKIE_NAME environment variable must be set");
     let session_key = match cookies.get(&cookie_name) {
@@ -90,6 +69,47 @@ pub async fn authenticate_user(
             address
         }
     };
+
+    Ok((session_key, session_address))
+}
+
+/// 세션 쿠키가 있으면 주소를 반환, 없거나 유효하지 않으면 `None`.
+/// CSRF Origin 검증 없이 공개 GET 핸들러의 선택적 개인화(`liked_by_me` 등)에 사용.
+pub async fn optional_session_address(state: &AppState, cookies: &Cookies) -> Option<String> {
+    resolve_session_address(state, cookies)
+        .await
+        .ok()
+        .map(|(_, address)| address)
+}
+
+pub async fn authenticate_user(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    mut req: Request<Body>, // 구체적인 Body 타입 사용
+    next: Next,             // Body 타입 명시
+) -> Result<Response<Body>, AppError> {
+    info!(
+        "[AUTH] authenticate_user called, path: {}",
+        req.uri().path()
+    );
+
+    // Origin 헤더 검증 (CSRF 방어)
+    if let Some(origin) = req.headers().get(ORIGIN) {
+        let origin_str = origin.to_str().map_err(|_| {
+            error!("[AUTH] Invalid Origin header: {:?}", origin);
+            AppError::AuthError("Invalid Origin header".to_string())
+        })?;
+        info!("[AUTH] Origin header: {}", origin_str);
+        if !is_allowed_origin(origin_str) {
+            error!("[AUTH] Origin not allowed: {}", origin_str);
+            return Err(AppError::AuthError("Origin not allowed".to_string()));
+        }
+        info!("[AUTH] Origin allowed: {}", origin_str);
+    } else {
+        info!("[AUTH] No Origin header present");
+    }
+
+    let (session_key, session_address) = resolve_session_address(&state, &cookies).await?;
 
     let session_info = SessionInfo {
         session_id: session_key,

@@ -1,0 +1,1097 @@
+//! Dev Post controller: create/edit/delete (writes) with creator authorization.
+
+use crate::db::postgres::PostgresDatabase;
+use crate::result::AppError;
+use crate::types::dev_post::{
+    AuthorSummary, CreateDevPostRequest, DevPostResponse, EditDevPostRequest, POLL_DURATION_DAYS,
+    PollOptionResponse, PollResponse, RankingRow, TokenSummary, parse_tweet_url,
+};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+pub struct DevPostController {
+    db: Arc<PostgresDatabase>,
+}
+
+impl DevPostController {
+    pub fn new(db: Arc<PostgresDatabase>) -> Self {
+        Self { db }
+    }
+
+    pub async fn create_post(
+        &self,
+        author: &str,
+        req: &CreateDevPostRequest,
+    ) -> Result<i64, AppError> {
+        let pool = self.db.get_write_pool();
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        // creator authorization on the write pool (avoid replica lag)
+        let creator: Option<String> =
+            sqlx::query_scalar("SELECT creator FROM token WHERE token_id = $1")
+                .bind(&req.token_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        match creator {
+            None => return Err(AppError::NotFound("Token not found".into())),
+            Some(c) if c != author => {
+                return Err(AppError::Forbidden("Only the coin creator can post".into()));
+            }
+            _ => {}
+        }
+
+        let id: i64 = sqlx::query_scalar(
+            "INSERT INTO dev_post (token_id, author, body) VALUES ($1,$2,$3) RETURNING id",
+        )
+        .bind(&req.token_id)
+        .bind(author)
+        .bind(req.body.clone().unwrap_or_default())
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        if let Some(imgs) = &req.image_uris {
+            for (i, uri) in imgs.iter().enumerate() {
+                sqlx::query(
+                    "INSERT INTO dev_post_image (post_id, position, image_uri) VALUES ($1,$2,$3)",
+                )
+                .bind(id)
+                .bind(i as i16)
+                .bind(uri)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+            }
+        }
+        if let Some(poll) = &req.poll {
+            sqlx::query(
+                "INSERT INTO dev_post_poll (post_id, closes_at)
+                 SELECT id, created_at + ($2 || ' days')::interval FROM dev_post WHERE id = $1",
+            )
+            .bind(id)
+            .bind(POLL_DURATION_DAYS.to_string())
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            for (i, opt) in poll.options.iter().enumerate() {
+                sqlx::query(
+                    "INSERT INTO dev_post_poll_option (post_id, position, label, image_uri) VALUES ($1,$2,$3,$4)",
+                )
+                .bind(id)
+                .bind((i + 1) as i16)
+                .bind(&opt.label)
+                .bind(&opt.image_uri)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+            }
+        }
+        tx.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Ok(id)
+    }
+
+    /// Returns the author if the post exists and is not deleted, else NotFound.
+    async fn require_author<'e, E>(exec: E, post_id: i64) -> Result<String, AppError>
+    where
+        E: sqlx::PgExecutor<'e>,
+    {
+        let row: Option<String> =
+            sqlx::query_scalar("SELECT author FROM dev_post WHERE id = $1 AND deleted_at IS NULL")
+                .bind(post_id)
+                .fetch_optional(exec)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        row.ok_or_else(|| AppError::NotFound("Post not found".into()))
+    }
+
+    pub async fn edit_post(
+        &self,
+        post_id: i64,
+        author: &str,
+        req: &EditDevPostRequest,
+    ) -> Result<(), AppError> {
+        let pool = self.db.get_write_pool();
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let existing = Self::require_author(&mut *tx, post_id).await?;
+        if existing != author {
+            return Err(AppError::Forbidden("Not the post author".into()));
+        }
+
+        if let Some(body) = &req.body {
+            sqlx::query(
+                "UPDATE dev_post SET body=$2, updated_at=NOW(), edited_at=NOW() WHERE id=$1",
+            )
+            .bind(post_id)
+            .bind(body)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        } else {
+            sqlx::query("UPDATE dev_post SET updated_at=NOW(), edited_at=NOW() WHERE id=$1")
+                .bind(post_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        }
+        if let Some(imgs) = &req.image_uris {
+            // full replacement
+            sqlx::query("DELETE FROM dev_post_image WHERE post_id=$1")
+                .bind(post_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+            for (i, uri) in imgs.iter().enumerate() {
+                sqlx::query(
+                    "INSERT INTO dev_post_image (post_id, position, image_uri) VALUES ($1,$2,$3)",
+                )
+                .bind(post_id)
+                .bind(i as i16)
+                .bind(uri)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+            }
+        }
+        tx.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn delete_post(&self, post_id: i64, author: &str) -> Result<(), AppError> {
+        let pool = self.db.get_write_pool();
+        let existing = Self::require_author(pool, post_id).await?;
+        if existing != author {
+            return Err(AppError::Forbidden("Not the post author".into()));
+        }
+        sqlx::query("UPDATE dev_post SET deleted_at=NOW() WHERE id=$1")
+            .bind(post_id)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn like(&self, post_id: i64, account_id: &str) -> Result<i64, AppError> {
+        let pool = self.db.get_write_pool();
+        // guard: post exists & not deleted (FK would allow liking a deleted post otherwise)
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM dev_post WHERE id=$1 AND deleted_at IS NULL")
+                .bind(post_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        if exists.is_none() {
+            return Err(AppError::NotFound("Post not found".into()));
+        }
+        sqlx::query(
+            "INSERT INTO dev_post_like (post_id, account_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+        )
+        .bind(post_id)
+        .bind(account_id)
+        .execute(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Self::count_likes(pool, post_id).await
+    }
+
+    pub async fn unlike(&self, post_id: i64, account_id: &str) -> Result<i64, AppError> {
+        let pool = self.db.get_write_pool();
+        sqlx::query("DELETE FROM dev_post_like WHERE post_id=$1 AND account_id=$2")
+            .bind(post_id)
+            .bind(account_id)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Self::count_likes(pool, post_id).await
+    }
+
+    pub async fn like_count(&self, post_id: i64) -> Result<i64, AppError> {
+        Self::count_likes(self.db.get_read_pool(), post_id).await
+    }
+
+    async fn count_likes<'e, E>(exec: E, post_id: i64) -> Result<i64, AppError>
+    where
+        E: sqlx::PgExecutor<'e>,
+    {
+        sqlx::query_scalar("SELECT count(*) FROM dev_post_like WHERE post_id=$1")
+            .bind(post_id)
+            .fetch_one(exec)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))
+    }
+
+    pub async fn vote(
+        &self,
+        post_id: i64,
+        account_id: &str,
+        option_position: i16,
+    ) -> Result<(), AppError> {
+        let pool = self.db.get_write_pool();
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let closes_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            "SELECT poll.closes_at FROM dev_post_poll poll JOIN dev_post p ON p.id = poll.post_id
+             WHERE poll.post_id = $1 AND p.deleted_at IS NULL",
+        )
+        .bind(post_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let closes_at = closes_at.ok_or_else(|| AppError::NotFound("Poll not found".into()))?;
+        if closes_at <= chrono::Utc::now() {
+            return Err(AppError::Conflict("Poll is closed".into()));
+        }
+
+        let opt_exists: Option<i16> = sqlx::query_scalar(
+            "SELECT position FROM dev_post_poll_option WHERE post_id=$1 AND position=$2",
+        )
+        .bind(post_id)
+        .bind(option_position)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        if opt_exists.is_none() {
+            return Err(AppError::BadRequest("Invalid option_position".into()));
+        }
+
+        sqlx::query(
+            "INSERT INTO dev_post_poll_vote (post_id, account_id, option_position) VALUES ($1,$2,$3)
+             ON CONFLICT (post_id, account_id)
+             DO UPDATE SET option_position = EXCLUDED.option_position, updated_at = NOW()",
+        )
+        .bind(post_id)
+        .bind(account_id)
+        .bind(option_position)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Ok(())
+    }
+
+    // ---- reads ----
+
+    /// Batch-loads images, like counts, poll+options+vote-counts, and viewer
+    /// personalization (liked / voted) for a page of `dev_post` ids, then assembles
+    /// `DevPostResponse`s preserving the given id order. Batches via `= ANY($1)`
+    /// instead of a query per post to avoid N+1.
+    async fn hydrate(
+        &self,
+        pool: &sqlx::PgPool,
+        ids: &[i64],
+        viewer: Option<&str>,
+    ) -> Result<Vec<DevPostResponse>, AppError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        #[derive(sqlx::FromRow)]
+        struct CoreRow {
+            id: i64,
+            token_id: String,
+            author: String,
+            body: String,
+            created_at: chrono::DateTime<chrono::Utc>,
+            updated_at: chrono::DateTime<chrono::Utc>,
+            edited_at: Option<chrono::DateTime<chrono::Utc>>,
+            token_name: String,
+            token_symbol: String,
+            token_image: String,
+            author_nickname: Option<String>,
+            author_image: Option<String>,
+        }
+        let core_rows: Vec<CoreRow> = sqlx::query_as(
+            "SELECT dp.id, dp.token_id, dp.author, dp.body, dp.created_at, dp.updated_at, dp.edited_at,
+                    t.name AS token_name, t.symbol AS token_symbol, t.image_uri AS token_image,
+                    a.nickname AS author_nickname, a.image_uri AS author_image
+             FROM dev_post dp
+             JOIN token t ON t.token_id = dp.token_id
+             LEFT JOIN account a ON a.account_id = dp.author
+             WHERE dp.id = ANY($1)",
+        )
+        .bind(ids)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let mut core_by_id: HashMap<i64, CoreRow> =
+            core_rows.into_iter().map(|r| (r.id, r)).collect();
+
+        #[derive(sqlx::FromRow)]
+        struct ImageRow {
+            post_id: i64,
+            image_uri: String,
+        }
+        let image_rows: Vec<ImageRow> = sqlx::query_as(
+            "SELECT post_id, image_uri FROM dev_post_image WHERE post_id = ANY($1) ORDER BY post_id, position",
+        )
+        .bind(ids)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let mut images_by_post: HashMap<i64, Vec<String>> = HashMap::new();
+        for row in image_rows {
+            images_by_post
+                .entry(row.post_id)
+                .or_default()
+                .push(row.image_uri);
+        }
+
+        let like_count_rows: Vec<(i64, i64)> = sqlx::query_as(
+            "SELECT post_id, count(*) FROM dev_post_like WHERE post_id = ANY($1) GROUP BY post_id",
+        )
+        .bind(ids)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let like_counts: HashMap<i64, i64> = like_count_rows.into_iter().collect();
+
+        let liked_by_me: HashSet<i64> = if let Some(viewer) = viewer {
+            let rows: Vec<i64> = sqlx::query_scalar(
+                "SELECT post_id FROM dev_post_like WHERE post_id = ANY($1) AND account_id = $2",
+            )
+            .bind(ids)
+            .bind(viewer)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            rows.into_iter().collect()
+        } else {
+            HashSet::new()
+        };
+
+        let poll_rows: Vec<(i64, chrono::DateTime<chrono::Utc>)> =
+            sqlx::query_as("SELECT post_id, closes_at FROM dev_post_poll WHERE post_id = ANY($1)")
+                .bind(ids)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let poll_closes: HashMap<i64, chrono::DateTime<chrono::Utc>> =
+            poll_rows.into_iter().collect();
+
+        #[derive(sqlx::FromRow)]
+        struct OptionRow {
+            post_id: i64,
+            position: i16,
+            label: String,
+            image_uri: Option<String>,
+            votes: i64,
+        }
+        let option_rows: Vec<OptionRow> = sqlx::query_as(
+            "SELECT o.post_id, o.position, o.label, o.image_uri, COUNT(v.account_id) AS votes
+             FROM dev_post_poll_option o
+             LEFT JOIN dev_post_poll_vote v ON v.post_id = o.post_id AND v.option_position = o.position
+             WHERE o.post_id = ANY($1) GROUP BY o.post_id, o.position, o.label, o.image_uri ORDER BY o.post_id, o.position",
+        )
+        .bind(ids)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let mut options_by_post: HashMap<i64, Vec<PollOptionResponse>> = HashMap::new();
+        for row in option_rows {
+            options_by_post
+                .entry(row.post_id)
+                .or_default()
+                .push(PollOptionResponse {
+                    position: row.position,
+                    label: row.label,
+                    image_uri: row.image_uri,
+                    vote_count: row.votes,
+                });
+        }
+
+        let my_votes: HashMap<i64, i16> = if let Some(viewer) = viewer {
+            let rows: Vec<(i64, i16)> = sqlx::query_as(
+                "SELECT post_id, option_position FROM dev_post_poll_vote WHERE post_id = ANY($1) AND account_id = $2",
+            )
+            .bind(ids)
+            .bind(viewer)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            rows.into_iter().collect()
+        } else {
+            HashMap::new()
+        };
+
+        let now = chrono::Utc::now();
+        let mut posts = Vec::with_capacity(ids.len());
+        for &id in ids {
+            // ids are pre-filtered by each caller's query; a missing core row here
+            // would mean the post vanished between queries, so just skip it.
+            let Some(core) = core_by_id.remove(&id) else {
+                continue;
+            };
+            let poll = poll_closes.get(&id).map(|closes_at| {
+                let options = options_by_post.remove(&id).unwrap_or_default();
+                let total_votes = options.iter().map(|o| o.vote_count).sum();
+                PollResponse {
+                    closes_at: *closes_at,
+                    is_closed: *closes_at <= now,
+                    total_votes,
+                    options,
+                    my_vote_option: my_votes.get(&id).copied(),
+                }
+            });
+            posts.push(DevPostResponse {
+                id: id.to_string(),
+                token: TokenSummary {
+                    token_id: core.token_id,
+                    name: core.token_name,
+                    symbol: core.token_symbol,
+                    image_uri: Some(core.token_image),
+                    market_cap: None,
+                },
+                author: AuthorSummary {
+                    account_id: core.author,
+                    nickname: core.author_nickname,
+                    image_uri: core.author_image,
+                },
+                tweet_url: parse_tweet_url(&core.body),
+                body: core.body,
+                images: images_by_post.remove(&id).unwrap_or_default(),
+                poll,
+                like_count: *like_counts.get(&id).unwrap_or(&0),
+                liked_by_me: liked_by_me.contains(&id),
+                is_edited: core.edited_at.is_some(),
+                created_at: core.created_at,
+                updated_at: core.updated_at,
+            });
+        }
+        Ok(posts)
+    }
+
+    pub async fn get_feed(
+        &self,
+        token_id: Option<&str>,
+        page: i64,
+        limit: i64,
+        viewer: Option<&str>,
+    ) -> Result<(Vec<DevPostResponse>, i64), AppError> {
+        let pool = self.db.get_read_pool();
+        let offset = (page - 1) * limit;
+        let ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT id FROM dev_post
+             WHERE deleted_at IS NULL AND ($1::varchar IS NULL OR token_id = $1)
+             ORDER BY id DESC LIMIT $2 OFFSET $3",
+        )
+        .bind(token_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let total: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM dev_post WHERE deleted_at IS NULL AND ($1::varchar IS NULL OR token_id = $1)",
+        )
+        .bind(token_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let posts = self.hydrate(pool, &ids, viewer).await?;
+        Ok((posts, total))
+    }
+
+    /// Shared hydrate-a-single-post path, parameterized on the pool so callers
+    /// can choose read-after-write consistency (see `get_post_rw`).
+    async fn get_post_on(
+        &self,
+        pool: &sqlx::PgPool,
+        post_id: i64,
+        viewer: Option<&str>,
+    ) -> Result<DevPostResponse, AppError> {
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM dev_post WHERE id = $1 AND deleted_at IS NULL")
+                .bind(post_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        if exists.is_none() {
+            return Err(AppError::NotFound("Post not found".into()));
+        }
+        self.hydrate(pool, &[post_id], viewer)
+            .await?
+            .pop()
+            .ok_or_else(|| AppError::NotFound("Post not found".into()))
+    }
+
+    pub async fn get_post(
+        &self,
+        post_id: i64,
+        viewer: Option<&str>,
+    ) -> Result<DevPostResponse, AppError> {
+        self.get_post_on(self.db.get_read_pool(), post_id, viewer)
+            .await
+    }
+
+    /// Reads the just-written post back from the write pool instead of the
+    /// (possibly lagging) replica — for create/edit/vote response hydration,
+    /// where a replica read can 404 a request that just committed.
+    pub async fn get_post_rw(
+        &self,
+        post_id: i64,
+        viewer: Option<&str>,
+    ) -> Result<DevPostResponse, AppError> {
+        self.get_post_on(self.db.get_write_pool(), post_id, viewer)
+            .await
+    }
+
+    pub async fn get_trending(
+        &self,
+        viewer: Option<&str>,
+    ) -> Result<Vec<DevPostResponse>, AppError> {
+        let pool = self.db.get_read_pool();
+        let ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT l.post_id FROM dev_post_like l JOIN dev_post p ON p.id = l.post_id
+             WHERE p.deleted_at IS NULL AND l.created_at >= NOW() - INTERVAL '7 days'
+             GROUP BY l.post_id ORDER BY count(*) DESC, l.post_id DESC LIMIT 3",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        self.hydrate(pool, &ids, viewer).await
+    }
+
+    pub async fn get_ranking(
+        &self,
+        page: i64,
+        limit: i64,
+    ) -> Result<(Vec<RankingRow>, i64), AppError> {
+        let pool = self.db.get_read_pool();
+        let offset = (page - 1) * limit;
+
+        // token joined directly here (rather than a second batch hydrate step) since
+        // ranking rows are per-coin already, so it's a single indexed query either way.
+        #[derive(sqlx::FromRow)]
+        struct RankRow {
+            token_id: String,
+            token_name: String,
+            token_symbol: String,
+            token_image: String,
+            total_likes: i64,
+            post_count: i64,
+            last_posted_at: Option<chrono::DateTime<chrono::Utc>>,
+        }
+        let rows: Vec<RankRow> = sqlx::query_as(
+            "SELECT p.token_id, t.name AS token_name, t.symbol AS token_symbol, t.image_uri AS token_image,
+                    COUNT(l.account_id) AS total_likes,
+                    COUNT(DISTINCT p.id) AS post_count,
+                    MAX(p.created_at) AS last_posted_at
+             FROM dev_post p
+             JOIN token t ON t.token_id = p.token_id
+             LEFT JOIN dev_post_like l ON l.post_id = p.id
+             WHERE p.deleted_at IS NULL
+             GROUP BY p.token_id, t.name, t.symbol, t.image_uri
+             ORDER BY total_likes DESC, last_posted_at DESC
+             LIMIT $1 OFFSET $2",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let total: i64 = sqlx::query_scalar(
+            "SELECT count(DISTINCT token_id) FROM dev_post WHERE deleted_at IS NULL",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let rankings = rows
+            .into_iter()
+            .enumerate()
+            .map(|(i, r)| RankingRow {
+                rank: offset + i as i64 + 1,
+                token: TokenSummary {
+                    token_id: r.token_id,
+                    name: r.token_name,
+                    symbol: r.token_symbol,
+                    image_uri: Some(r.token_image),
+                    market_cap: None,
+                },
+                total_likes: r.total_likes,
+                post_count: r.post_count,
+                last_posted_at: r.last_posted_at,
+            })
+            .collect();
+
+        Ok((rankings, total))
+    }
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+    use crate::types::dev_post::*;
+    use std::sync::Arc;
+
+    async fn seed_token(pool: &sqlx::PgPool, token_id: &str, creator: &str) {
+        sqlx::query(
+            "INSERT INTO token (token_id, name, symbol, image_uri, creator, created_at, transaction_hash, total_supply)
+             VALUES ($1,'T','TKN','img',$2,0,'0xhash',0) ON CONFLICT (token_id) DO NOTHING",
+        )
+        .bind(token_id)
+        .bind(creator)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    fn ctl(pool: sqlx::PgPool) -> DevPostController {
+        DevPostController::new(Arc::new(crate::db::postgres::PostgresDatabase {
+            write_pool: pool.clone(),
+            read_pool: pool,
+        }))
+    }
+
+    async fn create_poll_post(c: &DevPostController) -> i64 {
+        c.create_post(
+            "0xCreator",
+            &CreateDevPostRequest {
+                token_id: "0xToken".into(),
+                body: None,
+                image_uris: None,
+                poll: Some(CreatePollRequest {
+                    options: vec![
+                        CreatePollOptionRequest {
+                            label: "A".into(),
+                            image_uri: None,
+                        },
+                        CreatePollOptionRequest {
+                            label: "B".into(),
+                            image_uri: None,
+                        },
+                    ],
+                }),
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn create_rejects_non_creator(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool);
+        let req = CreateDevPostRequest {
+            token_id: "0xToken".into(),
+            body: Some("hi".into()),
+            image_uris: None,
+            poll: None,
+        };
+        let err = c.create_post("0xNotCreator", &req).await.unwrap_err();
+        assert!(matches!(err, AppError::Forbidden(_)));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn create_rejects_missing_token(pool: sqlx::PgPool) {
+        let c = ctl(pool);
+        let req = CreateDevPostRequest {
+            token_id: "0xMissing".into(),
+            body: Some("hi".into()),
+            image_uris: None,
+            poll: None,
+        };
+        let err = c.create_post("0xWhoever", &req).await.unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn create_with_images_and_poll(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let req = CreateDevPostRequest {
+            token_id: "0xToken".into(),
+            body: Some("gm https://x.com/a/status/1".into()),
+            image_uris: Some(vec!["u1".into(), "u2".into()]),
+            poll: Some(CreatePollRequest {
+                options: vec![
+                    CreatePollOptionRequest {
+                        label: "A".into(),
+                        image_uri: None,
+                    },
+                    CreatePollOptionRequest {
+                        label: "B".into(),
+                        image_uri: Some("ib".into()),
+                    },
+                ],
+            }),
+        };
+        let id = c.create_post("0xCreator", &req).await.unwrap();
+        let imgs: i64 = sqlx::query_scalar("SELECT count(*) FROM dev_post_image WHERE post_id=$1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let opts: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM dev_post_poll_option WHERE post_id=$1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let closes: (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
+            "SELECT p.created_at, poll.closes_at FROM dev_post p JOIN dev_post_poll poll ON poll.post_id=p.id WHERE p.id=$1",
+        )
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(imgs, 2);
+        assert_eq!(opts, 2);
+        assert_eq!((closes.1 - closes.0).num_days(), 14);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn edit_by_non_author_forbidden(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool);
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let err = c
+            .edit_post(
+                id,
+                "0xSomeoneElse",
+                &EditDevPostRequest {
+                    body: Some("y".into()),
+                    image_uris: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Forbidden(_)));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn edit_updates_body_and_replaces_images(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("x".into()),
+                    image_uris: Some(vec!["old".into()]),
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        c.edit_post(
+            id,
+            "0xCreator",
+            &EditDevPostRequest {
+                body: Some("new body".into()),
+                image_uris: Some(vec!["new1".into(), "new2".into()]),
+            },
+        )
+        .await
+        .unwrap();
+        let (body,): (String,) = sqlx::query_as("SELECT body FROM dev_post WHERE id=$1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(body, "new body");
+        let imgs: Vec<String> = sqlx::query_scalar(
+            "SELECT image_uri FROM dev_post_image WHERE post_id=$1 ORDER BY position",
+        )
+        .bind(id)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(imgs, vec!["new1".to_string(), "new2".to_string()]);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn edit_missing_post_not_found(pool: sqlx::PgPool) {
+        let c = ctl(pool);
+        let err = c
+            .edit_post(
+                999,
+                "0xCreator",
+                &EditDevPostRequest {
+                    body: Some("y".into()),
+                    image_uris: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn delete_soft_hides_post(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        c.delete_post(id, "0xCreator").await.unwrap();
+        let deleted: Option<chrono::DateTime<chrono::Utc>> =
+            sqlx::query_scalar("SELECT deleted_at FROM dev_post WHERE id=$1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(deleted.is_some());
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn delete_by_non_author_forbidden(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool);
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let err = c.delete_post(id, "0xSomeoneElse").await.unwrap_err();
+        assert!(matches!(err, AppError::Forbidden(_)));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn delete_missing_post_not_found(pool: sqlx::PgPool) {
+        let c = ctl(pool);
+        let err = c.delete_post(999, "0xCreator").await.unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn like_is_idempotent_toggle(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(c.like(id, "0xUser").await.unwrap(), 1);
+        assert_eq!(c.like(id, "0xUser").await.unwrap(), 1); // idempotent, still 1
+        assert_eq!(c.like(id, "0xUser2").await.unwrap(), 2);
+        assert_eq!(c.unlike(id, "0xUser").await.unwrap(), 1);
+        assert_eq!(c.unlike(id, "0xUser").await.unwrap(), 1); // idempotent
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn like_deleted_post_404(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        c.delete_post(id, "0xCreator").await.unwrap();
+        assert!(matches!(
+            c.like(id, "0xUser").await.unwrap_err(),
+            AppError::NotFound(_)
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn vote_then_change(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = create_poll_post(&c).await;
+        c.vote(id, "0xUser", 1).await.unwrap();
+        c.vote(id, "0xUser", 2).await.unwrap(); // change
+        let (opt, n): (i16, i64) = sqlx::query_as(
+            "SELECT option_position, count(*) OVER () FROM dev_post_poll_vote WHERE post_id=$1 AND account_id=$2",
+        )
+        .bind(id)
+        .bind("0xUser")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(opt, 2);
+        assert_eq!(n, 1); // still exactly one vote row
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn vote_bad_option_400(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = create_poll_post(&c).await;
+        assert!(matches!(
+            c.vote(id, "0xUser", 9).await.unwrap_err(),
+            AppError::BadRequest(_)
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn vote_closed_poll_409(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = create_poll_post(&c).await;
+        sqlx::query(
+            "UPDATE dev_post_poll SET closes_at = NOW() - INTERVAL '1 day' WHERE post_id=$1",
+        )
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(matches!(
+            c.vote(id, "0xUser", 1).await.unwrap_err(),
+            AppError::Conflict(_)
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn feed_excludes_deleted_and_orders_newest_first(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let a = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("a".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let b = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("b".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        c.delete_post(a, "0xCreator").await.unwrap();
+        let (posts, total) = c.get_feed(Some("0xToken"), 1, 10, None).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(posts[0].id, b.to_string());
+        assert!(!posts[0].liked_by_me);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn get_post_rw_hydrates_from_write_pool(pool: sqlx::PgPool) {
+        // Single test pool can't simulate replica lag, so this only proves
+        // get_post_rw hydrates correctly on the write pool; the create/edit/vote
+        // pool-selection fix is otherwise correct by construction (get_post_on
+        // is parameterized on the pool, and get_post_rw passes get_write_pool()).
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("gm from write pool".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let r = c.get_post_rw(id, None).await.unwrap();
+        assert_eq!(r.id, id.to_string());
+        assert_eq!(r.body, "gm from write pool");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn detail_personalization_and_poll(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let id = create_poll_post(&c).await;
+        c.like(id, "0xU").await.unwrap();
+        c.vote(id, "0xU", 2).await.unwrap();
+        let r = c.get_post(id, Some("0xU")).await.unwrap();
+        assert!(r.liked_by_me);
+        assert_eq!(r.like_count, 1);
+        let poll = r.poll.unwrap();
+        assert_eq!(poll.my_vote_option, Some(2));
+        assert_eq!(poll.total_votes, 1);
+        assert!(!poll.is_closed);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn ranking_and_trending_by_likes(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let p = c
+            .create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id: "0xToken".into(),
+                    body: Some("p".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        c.like(p, "0xU1").await.unwrap();
+        c.like(p, "0xU2").await.unwrap();
+        let (rank, total) = c.get_ranking(1, 10).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(rank[0].total_likes, 2);
+        assert_eq!(rank[0].post_count, 1);
+        let trending = c.get_trending(None).await.unwrap();
+        assert_eq!(trending.len(), 1);
+        assert_eq!(trending[0].id, p.to_string());
+    }
+}

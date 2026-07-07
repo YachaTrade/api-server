@@ -699,3 +699,38 @@ GeckoTerminal 호환 Terminal 엔드포인트(`GET /pair`, `GET /events`)가 V2(
 | `feeBps` | V2 fee-config 파생 (V2_DEX는 +25 LP). fee_config 없으면 생략 |
 | swap `pairId` | 이벤트별 `market_type` 기준 산정 |
 | 응답 타입 (`Pair`/`Event`) | **변경 없음** (값/동작만 변경) |
+
+---
+
+## Dev Post API (신규)
+
+코인의 온체인 creator가 자신의 코인에 글(텍스트 + 이미지 + 선택적 poll)을 올리는 신규 기능. 전체 피드,
+Trending(최근 7일 좋아요 상위 3), 코인별 누적 좋아요 랭킹 세 가지 집계 뷰를 제공. 상세 스펙은
+[`dev-post-api.md`](./dev-post-api.md) 참고.
+
+### 신규 엔드포인트
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/dev-post` | optional-auth | 피드 (전체 또는 `token_id` 필터) |
+| GET | `/dev-post/trending` | optional-auth | 최근 7일 좋아요 상위 3개 |
+| GET | `/dev-post/ranking` | X | 코인별 누적 좋아요 랭킹 |
+| GET | `/dev-post/{post_id}` | optional-auth | 게시물 상세 |
+| POST | `/dev-post/image` | O | 이미지 업로드 (raw body → R2, 5MB 제한) |
+| POST | `/dev-post` | O (creator only) | 게시물 생성 |
+| PATCH | `/dev-post/{post_id}` | O (author only) | 게시물 수정 (본문/이미지, poll은 불변) |
+| DELETE | `/dev-post/{post_id}` | O (author only) | 소프트 삭제 |
+| POST/DELETE | `/dev-post/{post_id}/like` | O | 좋아요 토글 |
+| POST | `/dev-post/{post_id}/vote` | O | 투표 (마감 전까지 변경 가능) |
+
+`DevPostResponse.id`는 BIGINT를 문자열로 직렬화(JS 2^53 정밀도 손실 방지). `poll.is_closed`는 읽기
+시점에 `closes_at <= now()`로 계산(별도 배치 없음).
+
+### 요약표
+
+| 타입/엔드포인트 | 변경 |
+|---|---|
+| `GET/POST/PATCH/DELETE /dev-post*` (11개 엔드포인트) | **신규** — Dev Post 기능 전체 |
+| `DevPostResponse`, `TokenSummary`, `AuthorSummary`, `PollResponse`, `PollOptionResponse`, `RankingRow`, `LikeResponse`, `VoteResponse`, `UploadImageResponse` 등 | **신규 타입** |
+| `token.market_cap` (Dev Post 응답 내) | 현재 항상 `null` — 소스 연동은 후속 작업 |
+| Trending/Ranking Redis 캐싱 | 아직 미적용 — 매 요청 라이브 쿼리 (성능 후속 작업) |

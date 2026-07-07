@@ -4,6 +4,7 @@ pub mod auth;
 pub mod capricorn;
 pub mod chester;
 pub mod cms;
+pub mod dev_post;
 pub mod dex;
 pub mod dividend;
 pub mod hype;

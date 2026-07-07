@@ -238,4 +238,52 @@ impl R2Client {
             }
         }
     }
+
+    // Uploads dev post image to R2 and returns the CDN URL
+    // Parameters:
+    // - image_id: Unique identifier (UUID) for the image
+    // - body: Image file contents
+    // - content_type: MIME type of the image
+    pub async fn upload_devpost_image_file(
+        &self,
+        image_id: &str,
+        body: &Bytes,
+        content_type: &str,
+    ) -> Result<String> {
+        let key = format!("devpost/{}", image_id);
+        info!(
+            "Uploading devpost image to R2: key={}, content_type={}",
+            key, content_type
+        );
+
+        let result = self
+            .client
+            .put_object()
+            .bucket(&self.bucket_name)
+            .key(&key)
+            .body(ByteStream::from(body.clone()))
+            .content_type(content_type)
+            .send()
+            .await;
+
+        match result {
+            Ok(output) => {
+                info!(
+                    "Successfully uploaded devpost image to R2: key={}, output={:?}",
+                    key, output
+                );
+
+                // R2 Custom Domain URL
+                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                Ok(r2_url)
+            }
+            Err(err) => {
+                error!(
+                    "Failed to upload devpost image to R2: key={}, error={:?}",
+                    key, err
+                );
+                Err(anyhow!("Upload devpost image failed. Error: {}", err))
+            }
+        }
+    }
 }
