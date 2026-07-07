@@ -2,7 +2,7 @@ use api_server::{
     config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, chester, cms, dex, dividend, health, hype,
+        self, account, agent, api_key, auth, chester, cms, dev_post, dex, dividend, health, hype,
         leaderboard, metadata, metrics, new_event, order, profile, quote_token, raffle, search,
         terminal, token, trade, trend, vault, x_verification,
     },
@@ -186,6 +186,19 @@ use utoipa_swagger_ui::SwaggerUi;
         router::agent::handler::upload_metadata,
         router::agent::handler::get_tokens_created,
         router::agent::handler::salt,
+
+        // ----------------DevPost----------------
+        router::dev_post::handler::get_feed,
+        router::dev_post::handler::get_detail,
+        router::dev_post::handler::get_trending,
+        router::dev_post::handler::get_ranking,
+        router::dev_post::handler::upload_image,
+        router::dev_post::handler::create_post,
+        router::dev_post::handler::edit_post,
+        router::dev_post::handler::delete_post,
+        router::dev_post::handler::like,
+        router::dev_post::handler::unlike,
+        router::dev_post::handler::vote,
 
     ),
     components(
@@ -412,6 +425,25 @@ use utoipa_swagger_ui::SwaggerUi;
             types::cms::analytics::ChesterRetentionResponse,
             types::cms::analytics::CreatorFeeResponse,
 
+            // DevPost
+            types::dev_post::CreateDevPostRequest,
+            types::dev_post::CreatePollRequest,
+            types::dev_post::CreatePollOptionRequest,
+            types::dev_post::EditDevPostRequest,
+            types::dev_post::VoteRequest,
+            types::dev_post::DevPostResponse,
+            types::dev_post::TokenSummary,
+            types::dev_post::AuthorSummary,
+            types::dev_post::PollResponse,
+            types::dev_post::PollOptionResponse,
+            types::dev_post::DevPostListResponse,
+            types::dev_post::TrendingResponse,
+            types::dev_post::RankingRow,
+            types::dev_post::RankingResponse,
+            types::dev_post::LikeResponse,
+            types::dev_post::VoteResponse,
+            types::dev_post::UploadImageResponse,
+
         )
     ),
     tags(
@@ -437,6 +469,7 @@ use utoipa_swagger_ui::SwaggerUi;
         (name="CMS",description="CMS admin endpoints"),
         (name="CMS Analytics",description="CMS analytics dashboard endpoints"),
         (name="Agent",description="Agent API endpoints for AI integrations"),
+        (name="DevPost",description="Dev post feed, trending, ranking, likes, and polls"),
     ),
     security(
         ("session_cookie" = [])
@@ -531,6 +564,7 @@ async fn main() -> Result<()> {
         .merge(search::router())
         .merge(trade::router())
         .merge(profile::router(app_state.clone()))
+        .merge(dev_post::router(app_state.clone()))
         .merge(order::router())
         .merge(hype::router(app_state.clone()))
         // .merge(bot::router()) // bot 모듈이 존재하지 않음

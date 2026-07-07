@@ -1,0 +1,551 @@
+# Dev Post API 문서
+
+## 개요
+
+Dev Post는 코인의 온체인 **creator**가 자신의 코인에 글을 올리는 기능입니다. 글(post)은 텍스트 본문 +
+선택적 이미지(최대 4장) + 선택적 임베드 트윗(본문에서 파싱) + 선택적 **투표(poll)**(2~3개 옵션, 생성 14일
+후 자동 마감)로 구성됩니다. 지갑이 연결된 아무 사용자나 게시물을 **좋아요(토글)** 하거나 **투표**(마감
+전까지 변경 가능)할 수 있습니다.
+
+세 가지 집계 뷰를 제공합니다.
+- **전체 피드**: 모든 코인의 Dev Post를 최신순으로 (또는 `token_id`로 특정 코인만 필터)
+- **Trending**: 최근 7일 좋아요 수 기준 상위 3개 게시물
+- **Ranking**: 코인별 누적 좋아요 수 기준 "Top Active Dev" 랭킹
+
+전체 설계 배경은 `docs/plans/2026-07-07-dev-post-api-design.md` 참고. 이 문서는 **구현된 API의
+레퍼런스**입니다.
+
+### 용어
+- **Dev / creator**: 코인의 현재 `token.creator`(EIP-55). 해당 코인의 Dev Post 생성/수정/삭제는
+  creator만 가능. `token.creator`는 변경될 수 있으며(`set_creator_history`), 인가는 항상 **현재** 값 기준.
+- **author**: 게시물 작성 당시의 creator 주소. 이후 코인 creator가 바뀌어도 과거 게시물의 author는
+  그대로 유지됨(작성 당시 실제 작성자 보존).
+- **Post**: `dev_post` 한 row (본문 + 이미지 0장 이상 + 선택적 poll). 정확히 하나의 `token_id`에 속함.
+- **Poll**: 게시물당 최대 1개. 옵션 2~3개, 생성 14일 후 마감.
+
+---
+
+## 인증 개요
+
+| 구분 | 엔드포인트 | 인증 |
+|---|---|---|
+| 공개 (optional-auth) | `GET /dev-post`, `GET /dev-post/trending`, `GET /dev-post/ranking`(개인화 없음), `GET /dev-post/{post_id}` | 불필요. 세션 쿠키가 있으면 `liked_by_me`/`my_vote_option`을 채움 |
+| 보호 (세션 필수) | `POST /dev-post/image`, `POST /dev-post`, `PATCH /dev-post/{post_id}`, `DELETE /dev-post/{post_id}`, `POST`/`DELETE /dev-post/{post_id}/like`, `POST /dev-post/{post_id}/vote` | 필수 (지갑 로그인 세션 쿠키, `authenticate_user` 미들웨어) |
+
+공개 GET들은 세션 쿠키가 있으면 `optional_session_address` 헬퍼로 주소를 읽어 개인화 필드를 채우고,
+없거나 무효해도 **401을 반환하지 않고** `liked_by_me: false` / `my_vote_option: null`로 응답합니다.
+`GET /dev-post/ranking`은 코인 단위 집계라 개인화 필드 자체가 없습니다.
+
+모든 요청의 EVM 주소(`token_id` 등)는 핸들러 진입 시 `valid_account_id`/`valid_existing_token_id`로
+EIP-55 체크섬 정규화됩니다.
+
+---
+
+## API 엔드포인트
+
+### 1. 피드 조회 (`GET /dev-post`)
+
+전체 Dev Post 피드. `token_id`를 지정하면 해당 코인의 게시물만 (코인 상세 페이지 "Learn More" 용도).
+`token_id` 없이 호출하면 전체 "All Dev Posts" 피드. 최신순(`id DESC`) 정렬.
+
+#### 요청
+- **Method**: `GET`
+- **인증**: 불필요 (optional-auth)
+
+#### Query Parameters
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `token_id` | string | X | 특정 코인으로 필터 (EIP-55 정규화, 존재하는 토큰이어야 함) |
+| `page` | integer | X | 페이지 번호, 기본 1, 최소 1 |
+| `limit` | integer | X | 페이지당 개수, 기본 10, 1~100 |
+
+> `direction` 파라미터도 파싱은 되지만(하우스 공통 `PaginationParams`를 재사용하기 때문) 피드 정렬에는
+> 반영되지 않습니다 — 항상 최신순(`id DESC`) 고정입니다.
+
+#### 응답
+```json
+{
+  "posts": [
+    {
+      "id": "123456789",
+      "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": null },
+      "author": { "account_id": "0x…", "nickname": "creator.eth", "image_uri": "https://…" },
+      "body": "gm holders, check this out",
+      "tweet_url": null,
+      "images": ["https://storage.nadapp.net/devpost/…"],
+      "poll": null,
+      "like_count": 12,
+      "liked_by_me": false,
+      "is_edited": false,
+      "created_at": "2026-07-07T00:00:00Z",
+      "updated_at": "2026-07-07T00:00:00Z"
+    }
+  ],
+  "total_count": 240
+}
+```
+
+#### 에러 응답
+- `400`: `token_id` 형식이 잘못됨, 또는 `page`/`limit` 범위 오류
+- `404`: `token_id`로 지정한 토큰이 존재하지 않음
+- `500`: 내부 서버 에러
+
+---
+
+### 2. Trending 조회 (`GET /dev-post/trending`)
+
+"Trending Dev Posts": 최근 7일 좋아요 수 기준 상위 3개 게시물 (고정 크기, 페이지네이션 없음).
+
+#### 요청
+- **Method**: `GET`
+- **인증**: 불필요 (optional-auth)
+
+#### 응답
+```json
+{
+  "posts": [ /* DevPostResponse, 최대 3개, 최근 7일 좋아요 수 내림차순 */ ]
+}
+```
+
+#### 에러 응답
+- `500`: 내부 서버 에러
+
+---
+
+### 3. Ranking 조회 (`GET /dev-post/ranking`)
+
+"Top Active Dev Ranking": 코인별 (삭제되지 않은 게시물의) 누적 좋아요 수 기준 랭킹.
+
+#### 요청
+- **Method**: `GET`
+- **인증**: 불필요 (개인화 필드 없음)
+
+#### Query Parameters
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `page` | integer | X | 페이지 번호, 기본 1, 최소 1 |
+| `limit` | integer | X | 페이지당 개수, 기본 10, 1~100 |
+
+> 피드와 마찬가지로 `direction`은 정렬에 영향 없음 — 항상 `total_likes DESC, last_posted_at DESC` 고정.
+
+#### 응답
+```json
+{
+  "rankings": [
+    {
+      "rank": 1,
+      "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": null },
+      "total_likes": 900,
+      "post_count": 12,
+      "last_posted_at": "2026-07-07T00:00:00Z"
+    }
+  ],
+  "total_count": 37
+}
+```
+
+#### 에러 응답
+- `400`: `page`/`limit` 범위 오류
+- `500`: 내부 서버 에러
+
+---
+
+### 4. 게시물 상세 조회 (`GET /dev-post/{post_id}`)
+
+#### 요청
+- **Method**: `GET`
+- **인증**: 불필요 (optional-auth)
+
+#### Path Parameters
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `post_id` | string (BIGINT) | 게시물 ID |
+
+#### 응답
+`DevPostResponse` 단일 객체 (모양은 [응답 타입](#typescript-interfaces) 참고).
+
+#### 에러 응답
+- `404`: 게시물이 없거나 삭제됨
+- `500`: 내부 서버 에러
+
+---
+
+### 5. 이미지 업로드 (`POST /dev-post/image`)
+
+본문/poll 옵션에 붙일 이미지를 R2에 업로드하고 URL을 돌려받습니다. 멀티파트가 아니라 **raw 바이너리
+body + `Content-Type` 헤더** 방식입니다. 생성/수정 API를 호출하기 전에 먼저 이 엔드포인트로 이미지를
+올리고, 반환된 `image_uri`를 `image_uris`/`poll.options[].image_uri`에 담아 보내는 2단계 흐름입니다.
+
+#### 요청
+- **Method**: `POST`
+- **Content-Type**: `image/jpeg` | `image/png` | `image/webp` | `image/svg+xml` 중 하나
+- **인증**: 필수 (세션이 있는 아무 지갑 — creator 여부 검사 없음)
+- **Body**: 이미지 원본 바이너리, 최대 5MB (프레임워크 레벨 `DefaultBodyLimit` 5,000,000바이트로
+  1차 컷, 핸들러 내부에서 5×1024×1024바이트로 2차 체크 — 실질적으로 프레임워크 리밋이 먼저 걸림)
+
+#### 응답
+```json
+{ "image_uri": "https://storage.nadapp.net/devpost/{uuid}" }
+```
+
+#### 에러 응답
+- `400`: `Content-Type` 헤더 누락, 허용되지 않은 이미지 타입
+- `413`: 5MB 초과 (프레임워크 body limit)
+- `500`: R2 업로드 실패
+
+---
+
+### 6. 게시물 생성 (`POST /dev-post`)
+
+**creator 전용.** `token_id`의 현재 `token.creator`가 세션 주소와 같아야 하며, 이 확인은 **write
+pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
+
+#### 요청
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **인증**: 필수, `session_address == token.creator`
+
+#### Request Body
+```json
+{
+  "token_id": "0x…",
+  "body": "gm holders …",
+  "image_uris": ["https://storage.nadapp.net/devpost/…"],
+  "poll": {
+    "options": [
+      { "label": "Option A", "image_uri": "https://…" },
+      { "label": "Option B" }
+    ]
+  }
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `token_id` | string | O | 대상 코인 (EIP-55, 존재+creator==caller 확인) |
+| `body` | string | X | 본문. `x.com`/`twitter.com` 링크가 있으면 응답에서 `tweet_url`로 파싱됨 |
+| `image_uris` | string[] | X | `POST /dev-post/image`에서 받은 URL, 0~4개 |
+| `poll` | object | X | 옵션 2~3개. 각 옵션 `label`(필수, 공백만은 불가) + `image_uri`(선택) |
+
+**최소 1개 규칙**: `body`(공백 제외 비어있지 않음) / `image_uris`(1개 이상) / `poll` 중 **최소 하나**는
+있어야 합니다. 셋 다 없으면 400.
+
+#### 응답
+`DevPostResponse` (생성 직후 상태 그대로 조회해 반환).
+
+#### 에러 응답
+- `400`: 유효성 검증 실패 (완전히 빈 post, 이미지 5개 이상, poll 옵션 개수/라벨 오류, 잘못된 `token_id` 형식)
+- `401`: 세션 없음
+- `403`: 호출자가 해당 코인의 creator가 아님
+- `404`: `token_id`가 존재하지 않음
+- `500`: 내부 서버 에러
+
+---
+
+### 7. 게시물 수정 (`PATCH /dev-post/{post_id}`)
+
+**author 전용.** 본문/이미지만 수정 가능 — **poll은 생성 후 불변**(투표 무결성 보호).
+
+#### 요청
+- **Method**: `PATCH`
+- **인증**: 필수, `dev_post.author == session_address`
+
+#### Request Body
+```json
+{ "body": "업데이트된 본문", "image_uris": ["https://…", "https://…"] }
+```
+- `body`/`image_uris` 각각 생략 가능 — 생략한 필드는 변경 안 됨. 단, 최소 하나는 있어야 함(둘 다
+  생략 시 400).
+- `image_uris`를 보내면 **전체 교체**(기존 이미지 목록을 지우고 새로 삽입)입니다. 부분 추가/삭제가 아닙니다.
+- 성공 시 `edited_at = now()` 설정 → 응답의 `is_edited: true`.
+
+#### 응답
+`DevPostResponse` (수정 후 최신 상태).
+
+#### 에러 응답
+- `400`: 유효성 검증 실패 (body/image_uris 둘 다 없음, 이미지 5개 이상)
+- `401`: 세션 없음
+- `403`: 세션 주소가 게시물 author가 아님
+- `404`: 게시물이 없거나 이미 삭제됨
+- `500`: 내부 서버 에러
+
+---
+
+### 8. 게시물 삭제 (`DELETE /dev-post/{post_id}`)
+
+**author 전용.** 소프트 삭제(`deleted_at = now()`) — 이후 피드/상세/trending/ranking/좋아요·투표 집계
+어디에도 나타나지 않습니다. 이미 삭제된 게시물을 다시 삭제 요청하면 404.
+
+#### 요청
+- **Method**: `DELETE`
+- **인증**: 필수, `dev_post.author == session_address`
+
+#### 응답
+```json
+{ "deleted": true }
+```
+
+#### 에러 응답
+- `401`: 세션 없음
+- `403`: 세션 주소가 게시물 author가 아님
+- `404`: 게시물이 없거나 이미 삭제됨
+- `500`: 내부 서버 에러
+
+---
+
+### 9. 좋아요 (`POST /dev-post/{post_id}/like`)
+
+토글의 "on" 쪽. 아무 지갑이나 가능. `(post_id, account_id)` 유니크 — 이미 좋아요한 상태에서 다시
+호출해도 멱등(`INSERT ... ON CONFLICT DO NOTHING`).
+
+#### 요청
+- **Method**: `POST`
+- **인증**: 필수 (creator 여부 무관, 아무 지갑)
+
+#### 응답
+```json
+{ "like_count": 129, "liked_by_me": true }
+```
+
+#### 에러 응답
+- `401`: 세션 없음
+- `404`: 게시물이 없거나 삭제됨 — 존재/미삭제 여부를 먼저 확인한 뒤 좋아요를 기록함
+- `500`: 내부 서버 에러
+
+---
+
+### 10. 좋아요 취소 (`DELETE /dev-post/{post_id}/like`)
+
+토글의 "off" 쪽. `DELETE FROM dev_post_like WHERE post_id=… AND account_id=…` — 멱등.
+
+#### 요청
+- **Method**: `DELETE`
+- **인증**: 필수
+
+#### 응답
+```json
+{ "like_count": 128, "liked_by_me": false }
+```
+
+> **좋아요와의 비대칭**: 좋아요(`POST`)는 대상 게시물이 존재/미삭제인지 먼저 확인해 404를 낼 수
+> 있지만, 좋아요 취소(`DELETE`)는 게시물 존재 여부를 확인하지 않습니다 — 존재하지 않거나 이미 삭제된
+> `post_id`를 넘겨도 그냥 삭제(no-op)가 성공하고 그 시점의 `like_count`를 돌려줍니다. 404가 나지 않습니다.
+
+#### 에러 응답
+- `401`: 세션 없음
+- `500`: 내부 서버 에러
+
+---
+
+### 11. 투표 (`POST /dev-post/{post_id}/vote`)
+
+`(post_id, account_id)`당 한 표, **마감 전까지 변경 가능**(upsert). 아무 지갑이나 가능.
+
+#### 요청
+- **Method**: `POST`
+- **인증**: 필수
+
+#### Request Body
+```json
+{ "option_position": 2 }
+```
+
+#### 처리
+1. 해당 게시물의 poll `closes_at` 조회 (게시물이 삭제됐거나 poll이 없으면 실패)
+2. `closes_at <= now()` 면 마감된 것으로 거부
+3. `option_position`이 그 poll의 실제 옵션인지 확인
+4. `(post_id, account_id)` PK로 upsert — 이미 투표했으면 옵션 변경, 처음이면 신규 삽입
+
+#### 응답
+```json
+{
+  "total_votes": 43,
+  "options": [
+    { "position": 1, "label": "Option A", "image_uri": "https://…", "vote_count": 30 },
+    { "position": 2, "label": "Option B", "image_uri": null, "vote_count": 13 }
+  ],
+  "my_vote_option": 2
+}
+```
+
+#### 에러 응답
+- `400`: `option_position`이 그 poll에 존재하지 않는 옵션
+- `401`: 세션 없음
+- `404`: 게시물에 poll이 없음, 게시물이 삭제됨, 또는 게시물 자체가 없음 (셋 다 "Poll not found"로 동일하게 처리)
+- `409`: poll이 이미 마감됨 (`closes_at <= now()`)
+- `500`: 내부 서버 에러
+
+---
+
+## 응답 필드 설명 (`DevPostResponse`)
+
+| 필드 | 설명 |
+|---|---|
+| `id` | BIGINT를 **문자열로 직렬화** (snowflake id가 JS `Number` 2^53 정밀도를 초과하므로) |
+| `token` | 코인 요약 (`token_id`/`name`/`symbol`/`image_uri`/`market_cap`) — `market_cap`은 [현재 제한사항](#현재-제한사항--후속-작업) 참고 |
+| `author` | 게시물 작성자 요약 (작성 당시 creator, 이후 creator가 바뀌어도 유지) |
+| `body` | 본문 원문 (트윗 링크 포함 가능) |
+| `tweet_url` | 본문에서 파싱한 첫 `https://x.com/…` 또는 `https://twitter.com/…` URL, 없으면 `null`. 네트워크 조회 없음 — 프론트가 fxtwitter 등으로 렌더링 |
+| `images` | 이미지 URL 배열, 0~4개, 저장 순서(`position`) 그대로 |
+| `poll` | 없으면 `null`. `closes_at`(생성 + 14일), `is_closed`(읽기 시점에 `closes_at <= now()`로 계산 — 별도 cron/배치 없음), `total_votes`, `options[]`, `my_vote_option`(비로그인/미투표 시 `null`) |
+| `like_count` | `dev_post_like` derived COUNT(*) |
+| `liked_by_me` | 비로그인 시 `false` |
+| `is_edited` | `edited_at IS NOT NULL` |
+
+---
+
+## 현재 제한사항 / 후속 작업
+
+- **`token.market_cap`은 항상 `null`**입니다 (`DevPostResponse.token.market_cap`, `RankingRow.token.market_cap`
+  둘 다). 마켓캡 소스 연동은 후속 작업으로 남아있습니다 — 응답 필드 자체는 이미 존재하므로 프론트는
+  `null` 처리만 하면 됩니다.
+- **Trending / Ranking은 아직 Redis 캐싱되지 않습니다.** 설계 문서(§9)는 짧은 TTL 캐싱 + 좋아요/생성/삭제
+  시 무효화를 계획했지만, 현재는 매 요청마다 라이브 쿼리로 집계합니다(정확성 문제는 없음, 성능 최적화만
+  후속).
+- `GET /dev-post`, `GET /dev-post/ranking`의 `direction` 쿼리 파라미터는 파싱되지만 정렬에 반영되지
+  않습니다(피드는 항상 최신순, 랭킹은 항상 좋아요 내림차순).
+- 좋아요 취소(`DELETE .../like`)는 게시물 존재 여부를 검증하지 않아 좋아요(`POST`)와 404 동작이
+  비대칭입니다 (위 [10번 항목](#10-좋아요-취소-delete-dev-postpost_idlike) 참고).
+
+---
+
+## TypeScript Interfaces
+
+```typescript
+// GET /dev-post
+interface FeedQuery {
+  token_id?: string;
+  page?: number;   // default: 1, min: 1
+  limit?: number;  // default: 10, min: 1, max: 100
+}
+
+// GET /dev-post/ranking
+interface PaginationParams {
+  page?: number;   // default: 1, min: 1
+  limit?: number;  // default: 10, min: 1, max: 100
+}
+
+// POST /dev-post
+interface CreatePollOptionRequest {
+  label: string;
+  image_uri?: string;
+}
+interface CreatePollRequest {
+  options: CreatePollOptionRequest[];  // 2..=3
+}
+interface CreateDevPostRequest {
+  token_id: string;
+  body?: string;
+  image_uris?: string[];   // 0..=4
+  poll?: CreatePollRequest;
+}
+
+// PATCH /dev-post/{post_id}
+interface EditDevPostRequest {
+  body?: string;
+  image_uris?: string[];   // full replace
+}
+
+// POST /dev-post/{post_id}/vote
+interface VoteRequest {
+  option_position: number;  // i16
+}
+
+// ---- 응답 ----
+interface TokenSummary {
+  token_id: string;
+  name: string;
+  symbol: string;
+  image_uri: string | null;
+  market_cap: string | null;  // 현재 항상 null
+}
+interface AuthorSummary {
+  account_id: string;
+  nickname: string | null;
+  image_uri: string | null;
+}
+interface PollOptionResponse {
+  position: number;   // 1..=3
+  label: string;
+  image_uri: string | null;
+  vote_count: number;
+}
+interface PollResponse {
+  closes_at: string;         // ISO8601, created_at + 14d
+  is_closed: boolean;        // 읽기 시점 계산
+  total_votes: number;
+  options: PollOptionResponse[];
+  my_vote_option: number | null;
+}
+interface DevPostResponse {
+  id: string;                 // BIGINT as string
+  token: TokenSummary;
+  author: AuthorSummary;
+  body: string;
+  tweet_url: string | null;
+  images: string[];
+  poll: PollResponse | null;
+  like_count: number;
+  liked_by_me: boolean;
+  is_edited: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// GET /dev-post
+interface DevPostListResponse {
+  posts: DevPostResponse[];
+  total_count: number;
+}
+// GET /dev-post/trending
+interface TrendingResponse {
+  posts: DevPostResponse[];   // <= 3
+}
+// GET /dev-post/ranking
+interface RankingRow {
+  rank: number;
+  token: TokenSummary;
+  total_likes: number;
+  post_count: number;
+  last_posted_at: string | null;
+}
+interface RankingResponse {
+  rankings: RankingRow[];
+  total_count: number;
+}
+// POST /dev-post/image
+interface UploadImageResponse {
+  image_uri: string;
+}
+// like/unlike
+interface LikeResponse {
+  like_count: number;
+  liked_by_me: boolean;
+}
+// vote
+interface VoteResponse {
+  total_votes: number;
+  options: PollOptionResponse[];
+  my_vote_option: number | null;
+}
+```
+
+---
+
+## API 엔드포인트 요약
+
+| Method | Path | 인증 | 설명 |
+|--------|------|------|------|
+| GET | `/dev-post` | optional-auth | 피드 (전체 또는 `token_id` 필터) |
+| GET | `/dev-post/trending` | optional-auth | 최근 7일 좋아요 상위 3개 |
+| GET | `/dev-post/ranking` | X | 코인별 누적 좋아요 랭킹 |
+| GET | `/dev-post/{post_id}` | optional-auth | 게시물 상세 |
+| POST | `/dev-post/image` | O | 이미지 업로드 (raw body → R2) |
+| POST | `/dev-post` | O (creator only) | 게시물 생성 |
+| PATCH | `/dev-post/{post_id}` | O (author only) | 게시물 수정 (본문/이미지) |
+| DELETE | `/dev-post/{post_id}` | O (author only) | 소프트 삭제 |
+| POST | `/dev-post/{post_id}/like` | O | 좋아요 |
+| DELETE | `/dev-post/{post_id}/like` | O | 좋아요 취소 |
+| POST | `/dev-post/{post_id}/vote` | O | 투표 (변경 가능, 마감 전까지) |

@@ -8,6 +8,7 @@ pub mod account;
 pub mod new_event;
 
 pub mod cms;
+pub mod dev_post;
 pub mod dex;
 pub mod dividend;
 pub mod hype;
