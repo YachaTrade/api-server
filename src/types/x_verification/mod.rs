@@ -92,6 +92,13 @@ pub struct FinalizeResponse {
     pub ok: bool,
 }
 
+/// Logout clears the current session's pending X-OAuth login (the Redis
+/// `x_pending` entry). Idempotent: returns `ok` whether or not a login existed.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct LogoutResponse {
+    pub ok: bool,
+}
+
 // ---- Pure helpers ----
 
 /// X handle rule: 1-15 chars of [A-Za-z0-9_].

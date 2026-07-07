@@ -56,6 +56,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
         // ----------------X Verification----------------
         router::x_verification::handler::oauth_login,
+        router::x_verification::handler::oauth_logout,
         router::x_verification::handler::oauth_callback,
         router::x_verification::handler::add_followed_by,
         router::x_verification::handler::delete_followed_by,

@@ -16,7 +16,7 @@ use crate::{
     services::x_verification::XVerificationService,
     state::AppState,
     types::x_verification::{
-        FinalizeRequest, FinalizeResponse, FollowedByRequest, FollowedByResponse,
+        FinalizeRequest, FinalizeResponse, FollowedByRequest, FollowedByResponse, LogoutResponse,
         OAuthCallbackQuery, OAuthLoginResponse, ReserveRequest, ReserveResponse, StatusResponse,
         validate_handle,
     },
@@ -61,6 +61,24 @@ pub async fn oauth_login(
         .ok_or_else(|| AppError::BadRequest("invalid session address".into()))?;
     let resp = service(&state).start_login(&account_id).await?;
     Ok(Json(resp))
+}
+
+/// POST /x/oauth/logout — clear the current session's pending X-OAuth login.
+/// Idempotent: succeeds whether or not the session is currently logged in.
+#[utoipa::path(
+    post, path = XVerificationPath::OauthLogout.docs_str(),
+    responses((status = 200, body = LogoutResponse)),
+    tag = "XVerification"
+)]
+#[instrument(skip(state, session_address))]
+pub async fn oauth_logout(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+) -> AppJsonResult<LogoutResponse> {
+    let account_id = valid_account_id(&session_address)
+        .ok_or_else(|| AppError::BadRequest("invalid session address".into()))?;
+    service(&state).logout(&account_id).await?;
+    Ok(Json(LogoutResponse { ok: true }))
 }
 
 /// GET /x/oauth/callback — PUBLIC (X redirects here). Always redirects the

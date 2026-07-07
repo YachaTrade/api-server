@@ -95,7 +95,27 @@ Body 없음.
 
 ---
 
-### 2. OAuth 콜백 (`GET /x/oauth/callback`)
+### 2. OAuth 로그아웃 (`POST /x/oauth/logout`)
+
+**인증**: 세션 필요 (지갑 로그인 쿠키)
+
+현재 세션의 X OAuth pending 로그인(Redis `x_pending`)을 삭제합니다. `finalize`가 성공 후 자동으로 지우는 것과 동일한 상태를, 검증을 끝내지 않고 취소/재시작하려는 사용자가 명시적으로 지울 수 있게 하는 엔드포인트입니다. 짧은 TTL(`X_PENDING_TTL_MS`) 만료로도 결국 사라지지만, 즉시 로그아웃/계정 전환 UX가 필요할 때 사용합니다.
+
+#### 요청
+Body 없음.
+
+#### 응답
+```json
+{ "ok": true }
+```
+
+**멱등**: 로그인 상태가 아니어도(pending이 없어도) `200 { "ok": true }`를 반환합니다 — Redis `DEL`이 없는 키에 no-op이기 때문입니다.
+
+> 참고: PKCE `state`(리다이렉트 핸드셰이크용 단기 값)는 여기서 건드리지 않습니다. 사용자가 인지하는 "로그인된" 상태는 `x_pending`뿐이며, `state`는 콜백에서 1회 소비되거나 TTL로 자동 만료됩니다.
+
+---
+
+### 3. OAuth 콜백 (`GET /x/oauth/callback`)
 
 **인증**: 불필요 (X가 리다이렉트하는 공개 엔드포인트, Origin 헤더 검증도 안 함)
 
@@ -134,7 +154,7 @@ useEffect(() => {
 
 ---
 
-### 3. Followed-by 추가 (`POST /x/followed-by`)
+### 4. Followed-by 추가 (`POST /x/followed-by`)
 
 **인증**: 세션 필요
 **Rate limit**: 5 req/min per account (`X_FOLLOWED_BY_RATE_LIMIT`, X API 호출 전에 최대 개수 컷으로 먼저 절약)
@@ -168,7 +188,7 @@ useEffect(() => {
 
 ---
 
-### 4. Followed-by 제거 (`DELETE /x/followed-by/:handle`)
+### 5. Followed-by 제거 (`DELETE /x/followed-by/:handle`)
 
 **인증**: 세션 필요
 
@@ -176,7 +196,7 @@ useEffect(() => {
 
 ---
 
-### 5. Status 조회 (`GET /x/verification/status`)
+### 6. Status 조회 (`GET /x/verification/status`)
 
 **인증**: 세션 필요
 
@@ -195,7 +215,7 @@ useEffect(() => {
 
 ---
 
-### 6. 예약 (`POST /x/verification/reserve`)
+### 7. 예약 (`POST /x/verification/reserve`)
 
 **인증**: 세션 필요
 **Rate limit**: 5 req/min per account (`X_RESERVE_RATE_LIMIT` — 매 호출이 on-chain RPC(`eth_getCode`)를 하므로 낮게 설정)
@@ -233,7 +253,7 @@ useEffect(() => {
 
 ---
 
-### 7. 확정 (`POST /x/verification/finalize`)
+### 8. 확정 (`POST /x/verification/finalize`)
 
 **인증**: 세션 필요
 
@@ -262,7 +282,7 @@ useEffect(() => {
 
 ---
 
-### 8. 공개 조회 (`GET /trade/xinfo/:token_id`)
+### 9. 공개 조회 (`GET /trade/xinfo/:token_id`)
 
 **인증**: 불필요 (완전 공개)
 
@@ -287,7 +307,7 @@ useEffect(() => {
 | 데이터 | 저장 위치 | TTL/영속성 | 클라이언트 노출 |
 |--------|-----------|-----------|-----------------|
 | PKCE `code_verifier` + `state` | Redis `x_oauth:state:{state}` | 10분(`X_OAUTH_STATE_TTL_MS`), 1회 `GETDEL` | 안 됨 |
-| X `access_token` | Redis `x_pending:{account_id}` | 30분(`X_PENDING_TTL_MS`), finalize 후 즉시 삭제 | **절대 안 됨** — 서버 내부에서 `check_follows_me` 호출용으로만 재사용 |
+| X `access_token` | Redis `x_pending:{account_id}` | 30분(`X_PENDING_TTL_MS`), finalize 또는 `/x/oauth/logout` 후 즉시 삭제 | **절대 안 됨** — 서버 내부에서 `check_follows_me` 호출용으로만 재사용 |
 | X `refresh_token` | **저장 안 함** | — | 응답 구조체(`XTokenResponse`)엔 있지만 즉시 폐기 — `offline.access` scope 요청이 사실상 낭비되고 있음 |
 | X `x_user_id` | Postgres `token_x_verification.x_user_id` | 영구 | **절대 안 됨** — 내부 식별자, API 응답에 없음 |
 | `followers_count`, `followed_by[]` | Postgres | 영구 | 공개(누구나 `/trade/xinfo`로 조회 가능) — 이게 이 기능이 노출하려는 유일한 정보 |

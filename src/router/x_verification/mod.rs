@@ -31,6 +31,10 @@ pub fn router(app_state: AppState) -> Router<AppState> {
             post(handler::oauth_login).layer(auth_layer.clone()),
         )
         .route(
+            XVerificationPath::OauthLogout.as_str(),
+            post(handler::oauth_logout).layer(auth_layer.clone()),
+        )
+        .route(
             XVerificationPath::FollowedBy.as_str(),
             post(handler::add_followed_by).layer(auth_layer.clone()),
         )
