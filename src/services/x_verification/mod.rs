@@ -107,6 +107,16 @@ impl XVerificationService {
         })
     }
 
+    /// Log out: drop the pending X-OAuth login for this session (Redis
+    /// `x_pending`). Idempotent — deleting a non-existent key is a no-op, so
+    /// callers get `ok` regardless of prior login state.
+    pub async fn logout(&self, account_id: &str) -> Result<(), AppError> {
+        self.redis
+            .delete_x_pending(account_id)
+            .await
+            .map_err(|e| AppError::InternalError(format!("clear pending: {e}")))
+    }
+
     /// Handle the OAuth callback: consume state, exchange code, fetch followers,
     /// stash pending. Returns the account_id the pending was stored under.
     pub async fn complete_callback(&self, code: &str, state: &str) -> Result<String, AppError> {
