@@ -24,6 +24,7 @@ fn is_allowed_origin(origin: &str) -> bool {
         || origin == "https://nadapp.net"
         || origin == "https://mm-dashboard-six.vercel.app"
         || origin.ends_with(".nad.fun")
+        || origin.ends_with(".nadapp.net")
         || origin.ends_with(".symphony.io")
         || origin.ends_with(".cloudfront.net")
         || origin.starts_with("http://localhost:")

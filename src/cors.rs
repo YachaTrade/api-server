@@ -22,6 +22,7 @@ const STATIC_ORIGINS: [&str; 4] = [
 fn is_origin_allowed(origin: &str) -> bool {
     STATIC_ORIGINS.contains(&origin)
         || origin.ends_with(".nad.fun")
+        || origin.ends_with(".nadapp.net")
         || origin.ends_with(".symphony.io")
         || origin.ends_with(".cloudfront.net")
         || origin.starts_with("http://localhost:")
@@ -77,6 +78,8 @@ mod tests {
             // allowed subdomains
             ("https://app.nad.fun", true),
             ("https://x.symphony.io", true),
+            ("https://dev-api.nadapp.net", true),
+            ("https://www.nadapp.net", true),
             // CloudFront distributions (newly allowed)
             ("https://d111abcdef8.cloudfront.net", true),
             ("https://assets.d111.cloudfront.net", true),
