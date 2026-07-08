@@ -220,6 +220,7 @@ pub async fn reserve(
     responses(
         (status = 200, body = FinalizeResponse),
         (status = 403, description = "not_reserved"),
+        (status = 409, description = "x_account_mismatch"),
         (status = 410, description = "verification_expired")
     ),
     tag = "XVerification"

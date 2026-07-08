@@ -67,6 +67,10 @@ X Verification API는 코인 창작자가 자신의 X(Twitter) 계정을 OAuth2�
    → 서버: 예약 소유자==세션 확인 → pending 데이터를 token_id에 영구 저장(Postgres)
    → pending Redis 키 삭제
 10. [누구나] GET /trade/xinfo/:token_id → 공개 조회 (미검증이면 x_verification: null)
+11. [프론트, 배포 후 언제든] 검증 정보 업데이트(팔로워 수 갱신 / followed_by 추가·삭제)
+    → 다시 POST /x/oauth/login(반드시 최초 검증과 같은 X 계정) → 콜백(새 pending) → (필요시 POST /x/followed-by) → 다시 POST /x/verification/finalize {token_id}
+    → reserve 재호출 불필요(이미 배포돼 already_deployed로 거부됨). 권한은 배포 전에 찍힌 예약 row로 판단
+    → 예약 소유자==세션이므로 원 창작자만 갱신 가능. upsert라 followers_count/followed_by는 교체되지만 x_user_id(X 계정)는 최초값에 잠금 — 다른 X 계정이면 409 x_account_mismatch로 거부
 ```
 
 ---
@@ -262,6 +266,8 @@ useEffect(() => {
 
 **Reservation-only**입니다 — CREATE2/creator/salt 재검증은 전부 `reserve`가 이미 끝냈으므로, finalize는 오직 "이 `token_id`의 예약자가 지금 세션과 같은가"만 확인합니다.
 
+> 이 엔드포인트는 **재호출 가능**하며, 재호출이 곧 검증 정보 **업데이트**입니다(예약 소유자만, 배포 후에도 동작, 단 최초와 같은 X 계정에 한함). 자세한 절차는 [§8-bis 검증 정보 업데이트](#8-bis-검증-정보-업데이트-배포-후-재검증) 참고.
+
 #### 요청
 ```json
 { "token_id": "0x..." }
@@ -271,7 +277,7 @@ useEffect(() => {
 1. `token_x_reservation`에서 `token_id`의 소유자 조회 → 없으면 `403 not_reserved`
 2. 소유자 ≠ 현재 세션 → `403 not_reserved`
 3. `x_pending:{account_id}` 존재 확인 → 없으면 `410 verification_expired`
-4. Postgres에 `token_x_verification` + `token_x_followed_by` **upsert**(idempotent — 재-finalize 가능, 예약 row는 삭제 안 됨)
+4. Postgres에 `token_x_verification` + `token_x_followed_by` **upsert**(idempotent — 재-finalize 가능, 예약 row는 삭제 안 됨). **X 계정은 최초 finalize 때의 `x_user_id`에 고정(lock)**된다 — 같은 X 계정으로 재-finalize하면 정상 갱신되지만, **다른** X 계정으로 재-finalize하면 `409 x_account_mismatch`로 거부되고 기존 row(followed_by 포함)는 전혀 바뀌지 않는다
 5. `x_pending:{account_id}` Redis 키 삭제
 
 #### 응답
@@ -281,7 +287,44 @@ useEffect(() => {
 
 #### 에러
 - `403`: `not_reserved`
+- `409`: `x_account_mismatch` (이미 다른 X 계정으로 검증된 토큰에 다른 `x_user_id`로 재-finalize 시도 — 기존 데이터 변경 없음)
 - `410`: `verification_expired`
+
+---
+
+### 8-bis. 검증 정보 업데이트 (배포 후 재검증)
+
+**별도 엔드포인트가 없습니다.** 이미 배포·확정된 코인의 X 검증 정보를 갱신하는 것은 **`finalize`를 다시 호출**하는 것으로 처리합니다 — `finalize`의 저장이 `ON CONFLICT (token_id) DO UPDATE` upsert라, 재호출하면 `followers_count` / `followed_by`가 새 값으로 교체됩니다.
+
+**단, 업데이트는 반드시 최초 검증에 쓴 것과 같은 X 계정으로 로그인해야 합니다.** 예약 소유자==세션이라는 지갑 단위 권한 체크와 별개로, `x_user_id`는 최초 finalize 시점에 잠기며 절대 바뀌지 않습니다 — 다른 X 계정으로 재-finalize를 시도하면 `409 x_account_mismatch`로 거부되고 기존 값(`followed_by` 포함)은 그대로 유지됩니다. (핸들 개명은 허용 — 비교는 불변 식별자 `x_user_id` 기준이지 `x_handle`이 아님.)
+
+#### 왜 이게 안전한가 (그리고 왜 `reserve`를 다시 안 하는가)
+
+배포 후에는 salt가 온체인에 공개되므로 `reserve`를 다시 부를 수도, 부를 필요도 없습니다:
+
+- `reserve`는 이미 배포된 토큰을 `409 already_deployed`로 거부합니다(의도된 fail-closed).
+- 대신 **업데이트 권한은 배포 전에 first-writer-wins로 찍어둔 `token_x_reservation` row**로 판단합니다. `finalize`는 그 예약 소유자와 현재 세션이 같은지만 확인하므로(`reservation_owner == 세션`), **원 창작자 지갑만** 갱신할 수 있습니다. 예약 row는 `finalize` 후에도 **삭제하지 않습니다** — 바로 이 재검증을 위해 유지합니다.
+- 즉 "온체인에 공개된 salt를 아는 사람"이 아니라 "배포 전에 정당하게 예약한 지갑"만 통과하므로, C1 취약점(§보안 모델 요약)의 재발이 없습니다.
+
+#### 업데이트 절차 (프론트)
+
+첫 `finalize`가 성공하면 `x_pending` Redis 키가 삭제되므로, 업데이트는 **반드시 X OAuth부터 다시** 시작해야 합니다:
+
+1. `POST /x/oauth/login` → `authorize_url`로 리다이렉트 (이미 앱을 승인한 계정이면 X가 대개 즉시 되돌려줌 — 무마찰)
+2. 콜백 완료 → 새 `x_pending`(최신 `followers_count` 포함) 생성
+3. (선택) `POST /x/followed-by` / `DELETE /x/followed-by/:handle`로 followed_by 목록 재구성
+4. `POST /x/verification/finalize {token_id}` → 예약 소유자==세션 + 같은 X 계정 확인 후 Postgres upsert
+5. `GET /trade/xinfo/:token_id`에 즉시 새 값 반영
+
+> **주의 — followed_by는 replace입니다.** 새 OAuth로 만든 pending은 `followed_by: []`로 시작하고, finalize의 저장은 기존 `token_x_followed_by`를 전부 지우고 새 목록으로 덮어씁니다. 유지하고 싶은 핸들은 3단계에서 다시 등록해야 합니다(이때 실제 팔로우 여부도 새 토큰으로 재검증 → 그사이 언팔했으면 자동으로 빠짐). `followers_count`는 새 `get_me`로 자동 최신화됩니다.
+
+#### 흔한 실패
+
+- OAuth 재로그인 없이 곧바로 `finalize`만 재호출 → `x_pending`이 없어 `410 verification_expired`. 반드시 1~2단계부터.
+- 원 창작자가 아닌 세션이 호출 → `403 not_reserved`.
+- 원 창작자 세션은 맞지만 **다른 X 계정**으로 로그인 후 `finalize` 호출 → `409 x_account_mismatch`. 최초 검증에 쓴 X 계정으로 다시 로그인해야 함.
+
+> 참고: X `access_token`/`refresh_token`을 서버에 영구 저장하지 않는 설계(§토큰 라이프사이클)라, OAuth 없이 저장된 검증 정보만 부분 편집하는 경로는 제공하지 않습니다. 특히 followed_by 재검증은 X API `connection_status`(팔로우 관계 필드)가 **user-context 전용**이라 창작자 access_token이 반드시 필요합니다(app-only 불가). 모든 갱신은 위처럼 짧은 재-OAuth를 거칩니다.
 
 ---
 
