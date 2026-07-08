@@ -134,7 +134,7 @@ impl XVerificationService {
         let pending = XPending {
             x_user_id: me.id,
             access_token: token.access_token,
-            followers_count: floor_followers(me.followers_count),
+            followers_count: me.followers_count,
             followed_by: vec![],
             x_handle: me.username,
         };
@@ -217,7 +217,7 @@ impl XVerificationService {
             .await
             .map_err(|e| AppError::InternalError(format!("save pending: {e}")))?;
         Ok(StatusResponse {
-            followers_count: Some(pending.followers_count),
+            followers_count: Some(floor_followers(pending.followers_count)),
             followed_by: pending.followed_by,
         })
     }
@@ -231,7 +231,7 @@ impl XVerificationService {
             .map_err(|e| AppError::InternalError(format!("read pending: {e}")))?
         {
             Some(p) => Ok(StatusResponse {
-                followers_count: Some(p.followers_count),
+                followers_count: Some(floor_followers(p.followers_count)),
                 followed_by: p.followed_by,
             }),
             None => Ok(StatusResponse {

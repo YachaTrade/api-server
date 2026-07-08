@@ -18,6 +18,7 @@ use crate::{
             x_verification::{TokenXVerification, XFollowedByEntry},
         },
     },
+    types::x_verification::floor_followers,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
@@ -128,7 +129,7 @@ impl TokenController {
                 .map_err(|err| anyhow!("Failed to get followed_by: {}", err))?;
 
                 Some(TokenXVerification {
-                    followers_count,
+                    followers_count: floor_followers(followers_count),
                     followed_by: rows
                         .into_iter()
                         .map(|r| XFollowedByEntry {
@@ -210,13 +211,14 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn verified_token_returns_nested_signals(pool: PgPool) {
         seed_token(&pool, TOKEN_VERIFIED, CREATOR_VERIFIED).await;
-        sqlx::query("INSERT INTO token_x_verification (token_id,account_id,x_user_id,followers_count) VALUES ($1,$2,'9',128000)")
+        sqlx::query("INSERT INTO token_x_verification (token_id,account_id,x_user_id,followers_count) VALUES ($1,$2,'9',128500)")
             .bind(TOKEN_VERIFIED).bind(CREATOR_VERIFIED).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO token_x_followed_by (token_id,x_handle,x_image_uri,x_followers_count,is_x_verified) VALUES ($1,'elonmusk','https://img',200000000,true)")
             .bind(TOKEN_VERIFIED).execute(&pool).await.unwrap();
 
         let resp = ctrl(pool).get_token(TOKEN_VERIFIED).await.unwrap();
         let xv = resp.token_info.x_verification.expect("verified");
+        // DB stores the raw 128500; the embed floors it to 128000 at output.
         assert_eq!(xv.followers_count, 128000);
         assert_eq!(xv.followed_by.len(), 1);
         assert_eq!(xv.followed_by[0].x_handle, "elonmusk");

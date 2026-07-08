@@ -10,6 +10,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 
 use crate::{db::postgres::PostgresDatabase, types::token::x_verification::XFollowedByEntry};
+use crate::types::x_verification::floor_followers;
 
 pub struct XVerificationController {
     db: Arc<PostgresDatabase>,
@@ -165,7 +166,7 @@ impl XVerificationController {
 
         Ok(Some(
             crate::types::token::x_verification::TokenXVerification {
-                followers_count,
+                followers_count: floor_followers(followers_count),
                 followed_by: followed_by_rows
                     .into_iter()
                     .map(|r| crate::types::token::x_verification::XFollowedByEntry {
@@ -206,7 +207,7 @@ mod tests {
             is_x_verified: true,
         }];
         ctrl(pool.clone())
-            .finalize(TOKEN, ACCOUNT, "999", "creatorhandle", 128_000, &fb)
+            .finalize(TOKEN, ACCOUNT, "999", "creatorhandle", 128_500, &fb)
             .await
             .unwrap();
 
@@ -216,7 +217,9 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(fc, 128_000);
+        // The DB keeps the EXACT (raw, non-round) value — flooring happens
+        // only at the API response boundary (get_verification), not here.
+        assert_eq!(fc, 128_500);
 
         let (creator_handle,): (Option<String>,) =
             sqlx::query_as("SELECT x_handle FROM token_x_verification WHERE token_id = $1")
@@ -415,10 +418,12 @@ mod tests {
             x_followers_count: 200_000_000,
             is_x_verified: true,
         }];
-        c.finalize(TOKEN, ACCOUNT, "9", "creatorhandle", 128_000, &fb)
+        c.finalize(TOKEN, ACCOUNT, "9", "creatorhandle", 128_500, &fb)
             .await
             .unwrap();
 
+        // DB stores the raw 128_500, but get_verification floors it to
+        // 128_000 at the output boundary — this asserts that flooring.
         let result = c.get_verification(TOKEN).await.unwrap();
         assert_eq!(
             result,

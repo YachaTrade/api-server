@@ -6,7 +6,7 @@
 
 ## X Verification — Followed-by 최소 팔로워 수 + 팔로워 수 반올림 (신규)
 
-`POST /x/followed-by`가 창작자를 팔로우하는 핸들이라도 팔로워 수가 `X_FOLLOWED_BY_MIN_FOLLOWERS`(기본값 1000) 미만이면 `400 insufficient_followers`로 거부. **창작자 본인의 `followers_count`만** 저장 시점에 1,000 단위로 내림(0–999 → 0, 1000–1999 → 1000, …) — `followed_by[].x_followers_count`(제3자, 이미 공개)는 **원본 유지**. `is_x_verified`는 레거시 `verified`뿐 아니라 **`verified_type`(X Premium/Blue·business·government)**도 반영해 판정(구 필드만 보면 최신 인증 계정이 전부 false로 나오던 버그 수정). 상세는 [`x-verification-api.md`](./x-verification-api.md) 참고.
+`POST /x/followed-by`가 창작자를 팔로우하는 핸들이라도 팔로워 수가 `X_FOLLOWED_BY_MIN_FOLLOWERS`(기본값 1000) 미만이면 `400 insufficient_followers`로 거부. **창작자 본인의 `followers_count`만** **API 반환 시점에** 1,000 단위로 내림(0–999 → 0, 1000–1999 → 1000, …) — **DB엔 정확한 원본 저장**, status/xinfo/token embed 응답에서만 내림. `followed_by[].x_followers_count`(제3자, 이미 공개)는 **원본 유지**. `is_x_verified`는 레거시 `verified`뿐 아니라 **`verified_type`(X Premium/Blue·business·government)**도 반영해 판정(구 필드만 보면 최신 인증 계정이 전부 false로 나오던 버그 수정). 상세는 [`x-verification-api.md`](./x-verification-api.md) 참고.
 
 ---
 
