@@ -16,12 +16,25 @@ pub struct XVerificationController {
     db: Arc<PostgresDatabase>,
 }
 
+/// Outcome of a `finalize` persist attempt.
+#[derive(Debug, PartialEq, Eq)]
+pub enum FinalizeOutcome {
+    /// Row inserted (first finalize) or refreshed (same X account).
+    Persisted,
+    /// A verification already exists for this token bound to a DIFFERENT
+    /// x_user_id; nothing was changed.
+    XAccountMismatch,
+}
+
 impl XVerificationController {
     pub fn new(db: Arc<PostgresDatabase>) -> Self {
         Self { db }
     }
 
     /// Idempotent upsert of a verification + its followed_by rows (transaction).
+    /// The X account (`x_user_id`) is locked on first finalize: a re-finalize
+    /// bound to a different X account is rejected (`XAccountMismatch`) and
+    /// leaves the existing row untouched; the same X account refreshes normally.
     pub async fn finalize(
         &self,
         token_id: &str,
@@ -30,7 +43,7 @@ impl XVerificationController {
         x_handle: &str,
         followers_count: i64,
         followed_by: &[XFollowedByEntry],
-    ) -> Result<()> {
+    ) -> Result<FinalizeOutcome> {
         let mut tx = self
             .db
             .get_write_pool()
@@ -38,16 +51,22 @@ impl XVerificationController {
             .await
             .map_err(|e| anyhow!("begin tx: {e}"))?;
 
-        sqlx::query(
+        // Guarded upsert: x_user_id is deliberately NOT in the SET list — the WHERE
+        // guarantees it already equals the incoming value, so it can never be
+        // mutated. No existing row → INSERT → RETURNING Some. Existing row, same
+        // x_user_id → DO UPDATE (WHERE true) → RETURNING Some. Existing row,
+        // different x_user_id → WHERE false → 0 rows → RETURNING None.
+        let persisted: Option<(String,)> = sqlx::query_as(
             r#"
             INSERT INTO token_x_verification (token_id, account_id, x_user_id, x_handle, followers_count)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (token_id) DO UPDATE
               SET account_id = EXCLUDED.account_id,
-                  x_user_id = EXCLUDED.x_user_id,
                   x_handle = EXCLUDED.x_handle,
                   followers_count = EXCLUDED.followers_count,
                   verified_at = NOW()
+              WHERE token_x_verification.x_user_id = EXCLUDED.x_user_id
+            RETURNING token_id
             "#,
         )
         .bind(token_id)
@@ -55,9 +74,15 @@ impl XVerificationController {
         .bind(x_user_id)
         .bind(x_handle)
         .bind(followers_count)
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| anyhow!("upsert verification: {e}"))?;
+
+        if persisted.is_none() {
+            // Existing row bound to a different x_user_id → reject WITHOUT touching
+            // followed_by. Dropping `tx` rolls back (the guarded upsert changed nothing).
+            return Ok(FinalizeOutcome::XAccountMismatch);
+        }
 
         sqlx::query("DELETE FROM token_x_followed_by WHERE token_id = $1")
             .bind(token_id)
@@ -85,7 +110,7 @@ impl XVerificationController {
         }
 
         tx.commit().await.map_err(|e| anyhow!("commit: {e}"))?;
-        Ok(())
+        Ok(FinalizeOutcome::Persisted)
     }
 
     /// Atomic first-writer-wins reservation. Returns the SURVIVING owner:
@@ -326,7 +351,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn finalize_refreshes_account_and_user_id_on_conflict(pool: PgPool) {
+    async fn finalize_rejects_different_x_account(pool: PgPool) {
         let fb = vec![XFollowedByEntry {
             x_handle: "a".into(),
             x_image_uri: "u".into(),
@@ -334,37 +359,65 @@ mod tests {
             is_x_verified: false,
         }];
         let c = ctrl(pool.clone());
-        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb)
-            .await
-            .unwrap();
-        let (verified_at_1,): (chrono::DateTime<chrono::Utc>,) =
-            sqlx::query_as("SELECT verified_at FROM token_x_verification WHERE token_id = $1")
-                .bind(TOKEN)
-                .fetch_one(&pool)
+        assert_eq!(
+            c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb)
                 .await
-                .unwrap();
-
-        c.finalize(TOKEN, ACCOUNT2, "2", "creatorhandle2", 10, &fb)
-            .await
-            .unwrap(); // re-run with a different account/user
-
-        let (account_id, x_user_id, verified_at_2): (
-            String,
-            String,
-            chrono::DateTime<chrono::Utc>,
-        ) = sqlx::query_as(
-            "SELECT account_id, x_user_id, verified_at FROM token_x_verification WHERE token_id = $1",
+                .unwrap(),
+            FinalizeOutcome::Persisted
+        );
+        // re-finalize with a DIFFERENT x_user_id → rejected, nothing changes
+        assert_eq!(
+            c.finalize(TOKEN, ACCOUNT2, "2", "creatorhandle2", 20, &fb)
+                .await
+                .unwrap(),
+            FinalizeOutcome::XAccountMismatch
+        );
+        let (account_id, x_user_id, x_handle, fc): (String, String, String, i64) = sqlx::query_as(
+            "SELECT account_id, x_user_id, x_handle, followers_count FROM token_x_verification WHERE token_id = $1",
         )
         .bind(TOKEN)
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(account_id, ACCOUNT2, "account_id refreshed on re-finalize");
-        assert_eq!(x_user_id, "2", "x_user_id refreshed on re-finalize");
-        assert!(
-            verified_at_2 > verified_at_1,
-            "verified_at should advance on re-finalize"
+        assert_eq!(x_user_id, "1", "x_user_id stays locked to the first X account");
+        assert_eq!(x_handle, "creatorhandle", "x_handle unchanged on rejected re-finalize");
+        assert_eq!(account_id, ACCOUNT, "account_id unchanged on rejected re-finalize");
+        assert_eq!(fc, 10, "followers_count unchanged on rejected re-finalize");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn finalize_rejects_mismatch_without_wiping_followed_by(pool: PgPool) {
+        let fb_a = vec![XFollowedByEntry {
+            x_handle: "a".into(),
+            x_image_uri: "u".into(),
+            x_followers_count: 1,
+            is_x_verified: false,
+        }];
+        let c = ctrl(pool.clone());
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb_a)
+            .await
+            .unwrap();
+        // different X account, even with an empty followed_by list → must NOT delete "a"
+        assert_eq!(
+            c.finalize(TOKEN, ACCOUNT2, "2", "creatorhandle2", 10, &[])
+                .await
+                .unwrap(),
+            FinalizeOutcome::XAccountMismatch
         );
+        let (n,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM token_x_followed_by WHERE token_id = $1")
+                .bind(TOKEN)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(n, 1, "followed_by preserved when re-finalize is rejected");
+        let (h,): (String,) =
+            sqlx::query_as("SELECT x_handle FROM token_x_followed_by WHERE token_id = $1")
+                .bind(TOKEN)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(h, "a");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]

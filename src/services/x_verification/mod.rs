@@ -22,7 +22,7 @@ use alloy::primitives::{Address, B256};
 use tracing::error;
 
 use crate::config::{X_FOLLOWED_BY_MAX, X_FOLLOWED_BY_MIN_FOLLOWERS, X_PENDING_TTL_MS};
-use crate::controllers::x_verification::XVerificationController;
+use crate::controllers::x_verification::{FinalizeOutcome, XVerificationController};
 use crate::db::{postgres::PostgresDatabase, redis::RedisDatabase};
 use crate::result::AppError;
 use crate::services::token::salt::SaltService;
@@ -316,7 +316,9 @@ impl XVerificationService {
             .ok_or_else(|| AppError::Gone("verification_expired".into()))?;
 
         // 3. persist (idempotent upsert) — canonical checksummed ids only.
-        controller
+        //    The X account is locked on first finalize: a different x_user_id
+        //    is rejected without touching the existing row or clearing pending.
+        match controller
             .finalize(
                 &token_id_cs,
                 &account_id_cs,
@@ -329,7 +331,12 @@ impl XVerificationService {
             .map_err(|e| {
                 error!("finalize persist failed: {e}");
                 AppError::InternalError("finalize failed".into())
-            })?;
+            })? {
+            FinalizeOutcome::Persisted => {}
+            FinalizeOutcome::XAccountMismatch => {
+                return Err(AppError::Conflict("x_account_mismatch".into()));
+            }
+        }
 
         // 4. clear pending (reservation row intentionally kept).
         let _ = self.redis.delete_x_pending(session_address).await;
