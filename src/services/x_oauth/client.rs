@@ -34,6 +34,7 @@ pub struct XTokenResponse {
 #[derive(Debug, Clone, PartialEq)]
 pub struct XUserInfo {
     pub id: String,
+    pub username: String,
     pub followers_count: i64,
 }
 
@@ -81,6 +82,7 @@ pub(crate) fn parse_me(body: &str) -> Option<XUserInfo> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
     let data = v.get("data")?;
     let id = data.get("id")?.as_str()?.to_string();
+    let username = data.get("username")?.as_str()?.to_string();
     let followers_count = data
         .get("public_metrics")
         .and_then(|m| m.get("followers_count"))
@@ -88,6 +90,7 @@ pub(crate) fn parse_me(body: &str) -> Option<XUserInfo> {
         .unwrap_or(0);
     Some(XUserInfo {
         id,
+        username,
         followers_count,
     })
 }
@@ -196,16 +199,18 @@ mod tests {
 
     #[test]
     fn parse_me_extracts_id_and_followers() {
-        let body = r#"{"data":{"id":"123","username":"creator",
+        let body = r#"{"data":{"id":"123","username":"somehandle",
             "public_metrics":{"followers_count":128000,"following_count":10}}}"#;
         let me = parse_me(body).unwrap();
         assert_eq!(
             me,
             XUserInfo {
                 id: "123".into(),
+                username: "somehandle".into(),
                 followers_count: 128000
             }
         );
+        assert_eq!(me.username, "somehandle");
     }
 
     #[test]

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use alloy::primitives::{Address, B256};
 use tracing::error;
 
-use crate::config::{X_FOLLOWED_BY_MAX, X_PENDING_TTL_MS};
+use crate::config::{X_FOLLOWED_BY_MAX, X_FOLLOWED_BY_MIN_FOLLOWERS, X_PENDING_TTL_MS};
 use crate::controllers::x_verification::XVerificationController;
 use crate::db::{postgres::PostgresDatabase, redis::RedisDatabase};
 use crate::result::AppError;
@@ -30,7 +30,7 @@ use crate::services::x_oauth::client;
 use crate::types::token::x_verification::XFollowedByEntry;
 use crate::types::x_verification::{
     FinalizeRequest, FollowedByResponse, OAuthLoginResponse, ReserveRequest, StatusResponse,
-    XOAuthState, XPending, append_followed_by,
+    XOAuthState, XPending, append_followed_by, floor_followers,
 };
 use crate::utils::valid_account_id;
 
@@ -134,8 +134,9 @@ impl XVerificationService {
         let pending = XPending {
             x_user_id: me.id,
             access_token: token.access_token,
-            followers_count: me.followers_count,
+            followers_count: floor_followers(me.followers_count),
             followed_by: vec![],
+            x_handle: me.username,
         };
         self.redis
             .set_x_pending(&st.account_id, &pending, *X_PENDING_TTL_MS)
@@ -172,10 +173,14 @@ impl XVerificationService {
             });
         }
 
+        if check.x_followers_count < *X_FOLLOWED_BY_MIN_FOLLOWERS {
+            return Err(AppError::BadRequest("insufficient_followers".into()));
+        }
+
         let entry = XFollowedByEntry {
             x_handle: check.x_handle,
             x_image_uri: check.x_image_uri,
-            x_followers_count: check.x_followers_count,
+            x_followers_count: floor_followers(check.x_followers_count),
             is_x_verified: check.is_x_verified,
         };
         append_followed_by(&mut pending.followed_by, entry.clone(), *X_FOLLOWED_BY_MAX)
@@ -313,6 +318,7 @@ impl XVerificationService {
                 &token_id_cs,
                 &account_id_cs,
                 &pending.x_user_id,
+                &pending.x_handle,
                 pending.followers_count,
                 &pending.followed_by,
             )

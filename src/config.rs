@@ -268,6 +268,10 @@ lazy_static! {
     /// Max number of followed-by handles per pending verification. Default 3.
     pub static ref X_FOLLOWED_BY_MAX: usize = env::var("X_FOLLOWED_BY_MAX")
         .ok().and_then(|v| v.parse().ok()).unwrap_or(3);
+    /// Minimum follower count required for a followed-by handle to be added;
+    /// accounts below this are rejected (`insufficient_followers`). Default 1000.
+    pub static ref X_FOLLOWED_BY_MIN_FOLLOWERS: i64 = env::var("X_FOLLOWED_BY_MIN_FOLLOWERS")
+        .ok().and_then(|v| v.parse().ok()).unwrap_or(1000);
 }
 
 #[cfg(test)]
@@ -277,5 +281,10 @@ mod config_tests {
     fn followed_by_max_defaults_to_three() {
         // X_FOLLOWED_BY_MAX is unset in the test env → default 3.
         assert_eq!(*X_FOLLOWED_BY_MAX, 3);
+    }
+
+    #[test]
+    fn followed_by_min_followers_defaults_to_1000() {
+        assert_eq!(*X_FOLLOWED_BY_MIN_FOLLOWERS, 1000);
     }
 }

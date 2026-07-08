@@ -22,6 +22,11 @@ pub struct XPending {
     pub followers_count: i64,
     #[serde(default)]
     pub followed_by: Vec<XFollowedByEntry>,
+    /// The creator's own X handle (server-only; never exposed by the API).
+    /// `#[serde(default)]` so pending entries already in Redis (written
+    /// before this field existed) still deserialize.
+    #[serde(default)]
+    pub x_handle: String,
 }
 
 // ---- Request / response DTOs ----
@@ -110,6 +115,13 @@ pub fn validate_handle(handle: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// Round a follower count DOWN to the nearest 1,000 for public display
+/// (0–999 → 0, 1000–1999 → 1000, …). Coarse buckets avoid exposing exact
+/// counts. Negatives (never expected) clamp to 0.
+pub fn floor_followers(n: i64) -> i64 {
+    if n <= 0 { 0 } else { (n / 1000) * 1000 }
+}
+
 /// Append with case-insensitive de-dup by handle; enforce `max`.
 /// Err("max_followed_by_reached") when already at capacity with a new handle.
 pub fn append_followed_by(
@@ -142,6 +154,16 @@ mod tests {
             x_followers_count: 1,
             is_x_verified: false,
         }
+    }
+
+    #[test]
+    fn floor_followers_buckets() {
+        assert_eq!(floor_followers(0), 0);
+        assert_eq!(floor_followers(999), 0);
+        assert_eq!(floor_followers(1000), 1000);
+        assert_eq!(floor_followers(1999), 1000);
+        assert_eq!(floor_followers(1_234_567), 1_234_000);
+        assert_eq!(floor_followers(-5), 0);
     }
 
     #[test]

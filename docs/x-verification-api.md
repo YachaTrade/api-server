@@ -180,9 +180,12 @@ useEffect(() => {
 - 팔로우하지 않는 경우 `is_following: false`, `entry` 없음 (저장도 안 함).
 - 같은 핸들을 다시 등록하면 대소문자 무시 dedup으로 기존 항목을 새 스냅샷으로 갱신.
 - 이미 3개(`X_FOLLOWED_BY_MAX`, 기본값 3) 차 있으면 X API 호출 전에 `400 max_followed_by_reached`.
+- 핸들이 창작자를 팔로우하고 있어도 팔로워 수가 `X_FOLLOWED_BY_MIN_FOLLOWERS`(기본값 1000) 미만이면 `400 insufficient_followers`로 거부되고 저장되지 않음.
+
+> **팔로워 수 반올림**: 응답에 노출되는 모든 팔로워 수(`followers_count`, `x_followers_count`)는 저장 시점에 1,000 단위로 **내림** 처리됩니다 (0–999 → 0, 1000–1999 → 1000, …). `/x/followed-by`, `/x/verification/status`, 공개 xinfo(`/trade/xinfo/:token_id`) 응답 전부 동일하게 적용됩니다. 정확한 수치를 노출하지 않기 위한 의도적인 버킷화이며, `insufficient_followers` 판정 자체는 반올림 전 원본 값으로 이뤄집니다.
 
 #### 에러
-- `400`: `invalid_handle` | `max_followed_by_reached`
+- `400`: `invalid_handle` | `max_followed_by_reached` | `insufficient_followers`
 - `410`: `verification_expired` (pending TTL 만료 — 처음부터 다시 `/x/oauth/login`)
 - `429`: rate limit 초과
 
@@ -345,6 +348,7 @@ X_OAUTH_REDIRECT_FAILURE_URL=https://nadapp.net/create
 X_OAUTH_STATE_TTL_MS=600000     # PKCE state 수명, 기본 10분
 X_PENDING_TTL_MS=1800000        # pending 검증 수명, 기본 30분
 X_FOLLOWED_BY_MAX=3             # 계정당 최대 followed-by 핸들 수, 기본 3
+X_FOLLOWED_BY_MIN_FOLLOWERS=1000 # followed-by 핸들의 최소 팔로워 수, 기본 1000 (미만이면 400 insufficient_followers)
 ```
 
 ---
