@@ -1,1 +1,0 @@
-../migrations/0038_token_x_verification_creator_handle.sql
