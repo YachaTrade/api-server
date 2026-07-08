@@ -182,7 +182,7 @@ useEffect(() => {
 - 이미 3개(`X_FOLLOWED_BY_MAX`, 기본값 3) 차 있으면 X API 호출 전에 `400 max_followed_by_reached`.
 - 핸들이 창작자를 팔로우하고 있어도 팔로워 수가 `X_FOLLOWED_BY_MIN_FOLLOWERS`(기본값 1000) 미만이면 `400 insufficient_followers`로 거부되고 저장되지 않음.
 
-> **팔로워 수 반올림**: 응답에 노출되는 모든 팔로워 수(`followers_count`, `x_followers_count`)는 저장 시점에 1,000 단위로 **내림** 처리됩니다 (0–999 → 0, 1000–1999 → 1000, …). `/x/followed-by`, `/x/verification/status`, 공개 xinfo(`/trade/xinfo/:token_id`) 응답 전부 동일하게 적용됩니다. 정확한 수치를 노출하지 않기 위한 의도적인 버킷화이며, `insufficient_followers` 판정 자체는 반올림 전 원본 값으로 이뤄집니다.
+> **팔로워 수 반올림**: **창작자 본인의 `followers_count`만** 저장 시점에 1,000 단위로 **내림**됩니다 (0–999 → 0, 1000–1999 → 1000, …) — 숨겨진 창작자의 정확한 규모 노출 방지. `/x/verification/status`·공개 xinfo(`/trade/xinfo/:token_id`)의 `followers_count`에 적용. 반면 **`followed_by[].x_followers_count`(제3자 계정 수)는 원본 그대로** 저장·반환됩니다 — 이미 공개된 계정이라 버킷화 이득이 없기 때문. `insufficient_followers` 판정은 원본 값 기준입니다.
 
 #### 에러
 - `400`: `invalid_handle` | `max_followed_by_reached` | `insufficient_followers`

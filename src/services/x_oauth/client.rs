@@ -114,10 +114,18 @@ pub(crate) fn parse_follow_check(body: &str) -> Option<XFollowCheck> {
         .and_then(|m| m.get("followers_count"))
         .and_then(|n| n.as_i64())
         .unwrap_or(0);
+    // X Premium (Blue) accounts have `verified: false` but `verified_type: "blue"`
+    // — reading the legacy `verified` field alone misses every modern checkmark.
+    // Verified if legacy-verified OR any verified_type (blue/business/government).
     let is_x_verified = data
         .get("verified")
         .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+        .unwrap_or(false)
+        || data
+            .get("verified_type")
+            .and_then(|v| v.as_str())
+            .map(|t| t != "none")
+            .unwrap_or(false);
     Some(XFollowCheck {
         is_following,
         x_handle,
@@ -168,7 +176,7 @@ pub async fn get_me(access_token: &str) -> Result<XUserInfo> {
 
 pub async fn check_follows_me(access_token: &str, target_handle: &str) -> Result<XFollowCheck> {
     let url = format!(
-        "{API_BASE}/users/by/username/{}?user.fields=connection_status,profile_image_url,public_metrics,verified",
+        "{API_BASE}/users/by/username/{}?user.fields=connection_status,profile_image_url,public_metrics,verified,verified_type",
         urlencoding::encode(target_handle)
     );
     let resp = HTTP
@@ -225,6 +233,26 @@ mod tests {
         assert_eq!(c.x_image_uri, "https://pbs.twimg.com/x_400x400.jpg");
         assert_eq!(c.x_followers_count, 5000);
         assert_eq!(c.is_x_verified, true);
+    }
+
+    #[test]
+    fn parse_follow_check_verified_via_verified_type_blue() {
+        // X Premium (Blue): legacy `verified` is false but `verified_type` is
+        // "blue" — must still resolve to is_x_verified = true (the real-world bug).
+        let body = r#"{"data":{"connection_status":["followed_by"],"id":"1",
+            "username":"bakbar8519","profile_image_url":"u_normal.jpg",
+            "public_metrics":{"followers_count":5000},"verified":false,"verified_type":"blue"}}"#;
+        let c = parse_follow_check(body).unwrap();
+        assert_eq!(c.is_x_verified, true);
+    }
+
+    #[test]
+    fn parse_follow_check_verified_type_none_is_false() {
+        let body = r#"{"data":{"connection_status":["followed_by"],"id":"1",
+            "username":"x","profile_image_url":"u_normal.jpg",
+            "public_metrics":{"followers_count":5000},"verified":false,"verified_type":"none"}}"#;
+        let c = parse_follow_check(body).unwrap();
+        assert_eq!(c.is_x_verified, false);
     }
 
     #[test]

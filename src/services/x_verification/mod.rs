@@ -180,7 +180,10 @@ impl XVerificationService {
         let entry = XFollowedByEntry {
             x_handle: check.x_handle,
             x_image_uri: check.x_image_uri,
-            x_followers_count: floor_followers(check.x_followers_count),
+            // Public third-party accounts — their exact follower count is already
+            // public, so store it raw (only the hidden creator's own count is
+            // floored, in complete_callback).
+            x_followers_count: check.x_followers_count,
             is_x_verified: check.is_x_verified,
         };
         append_followed_by(&mut pending.followed_by, entry.clone(), *X_FOLLOWED_BY_MAX)
