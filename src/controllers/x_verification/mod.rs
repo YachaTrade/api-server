@@ -26,6 +26,7 @@ impl XVerificationController {
         token_id: &str,
         account_id: &str,
         x_user_id: &str,
+        x_handle: &str,
         followers_count: i64,
         followed_by: &[XFollowedByEntry],
     ) -> Result<()> {
@@ -38,11 +39,12 @@ impl XVerificationController {
 
         sqlx::query(
             r#"
-            INSERT INTO token_x_verification (token_id, account_id, x_user_id, followers_count)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO token_x_verification (token_id, account_id, x_user_id, x_handle, followers_count)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (token_id) DO UPDATE
               SET account_id = EXCLUDED.account_id,
                   x_user_id = EXCLUDED.x_user_id,
+                  x_handle = EXCLUDED.x_handle,
                   followers_count = EXCLUDED.followers_count,
                   verified_at = NOW()
             "#,
@@ -50,6 +52,7 @@ impl XVerificationController {
         .bind(token_id)
         .bind(account_id)
         .bind(x_user_id)
+        .bind(x_handle)
         .bind(followers_count)
         .execute(&mut *tx)
         .await
@@ -203,7 +206,7 @@ mod tests {
             is_x_verified: true,
         }];
         ctrl(pool.clone())
-            .finalize(TOKEN, ACCOUNT, "999", 128_000, &fb)
+            .finalize(TOKEN, ACCOUNT, "999", "creatorhandle", 128_000, &fb)
             .await
             .unwrap();
 
@@ -214,6 +217,14 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(fc, 128_000);
+
+        let (creator_handle,): (Option<String>,) =
+            sqlx::query_as("SELECT x_handle FROM token_x_verification WHERE token_id = $1")
+                .bind(TOKEN)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(creator_handle.as_deref(), Some("creatorhandle"));
 
         let (h,): (String,) =
             sqlx::query_as("SELECT x_handle FROM token_x_followed_by WHERE token_id = $1")
@@ -233,8 +244,12 @@ mod tests {
             is_x_verified: false,
         }];
         let c = ctrl(pool.clone());
-        c.finalize(TOKEN, ACCOUNT, "1", 10, &fb).await.unwrap();
-        c.finalize(TOKEN, ACCOUNT, "1", 20, &fb).await.unwrap(); // re-run
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb)
+            .await
+            .unwrap();
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 20, &fb)
+            .await
+            .unwrap(); // re-run
         let (n,): (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM token_x_followed_by WHERE token_id = $1")
                 .bind(TOKEN)
@@ -274,8 +289,12 @@ mod tests {
             is_x_verified: false,
         }];
         let c = ctrl(pool.clone());
-        c.finalize(TOKEN, ACCOUNT, "1", 10, &fb_ab).await.unwrap();
-        c.finalize(TOKEN, ACCOUNT, "1", 10, &fb_a).await.unwrap(); // "b" dropped from the list
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb_ab)
+            .await
+            .unwrap();
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb_a)
+            .await
+            .unwrap(); // "b" dropped from the list
 
         let (n,): (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM token_x_followed_by WHERE token_id = $1")
@@ -312,7 +331,9 @@ mod tests {
             is_x_verified: false,
         }];
         let c = ctrl(pool.clone());
-        c.finalize(TOKEN, ACCOUNT, "1", 10, &fb).await.unwrap();
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb)
+            .await
+            .unwrap();
         let (verified_at_1,): (chrono::DateTime<chrono::Utc>,) =
             sqlx::query_as("SELECT verified_at FROM token_x_verification WHERE token_id = $1")
                 .bind(TOKEN)
@@ -320,7 +341,9 @@ mod tests {
                 .await
                 .unwrap();
 
-        c.finalize(TOKEN, ACCOUNT2, "2", 10, &fb).await.unwrap(); // re-run with a different account/user
+        c.finalize(TOKEN, ACCOUNT2, "2", "creatorhandle2", 10, &fb)
+            .await
+            .unwrap(); // re-run with a different account/user
 
         let (account_id, x_user_id, verified_at_2): (
             String,
@@ -392,7 +415,9 @@ mod tests {
             x_followers_count: 200_000_000,
             is_x_verified: true,
         }];
-        c.finalize(TOKEN, ACCOUNT, "9", 128_000, &fb).await.unwrap();
+        c.finalize(TOKEN, ACCOUNT, "9", "creatorhandle", 128_000, &fb)
+            .await
+            .unwrap();
 
         let result = c.get_verification(TOKEN).await.unwrap();
         assert_eq!(

@@ -111,7 +111,10 @@ pub async fn oauth_callback(
 #[utoipa::path(
     post, path = XVerificationPath::FollowedBy.docs_str(),
     request_body = FollowedByRequest,
-    responses((status = 200, body = FollowedByResponse)),
+    responses(
+        (status = 200, body = FollowedByResponse),
+        (status = 400, description = "invalid_handle | insufficient_followers")
+    ),
     tag = "XVerification"
 )]
 #[instrument(skip(state, session_address))]
