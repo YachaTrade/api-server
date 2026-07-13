@@ -726,6 +726,8 @@ Trending(최근 7일 좋아요 상위 3, 부족하면 최신 게시물로 채움
 | POST | `/dev-post` | O (creator only) | 게시물 생성 |
 | PATCH | `/dev-post/{post_id}` | O (author only) | 게시물 수정 (본문/이미지, poll은 불변) |
 | DELETE | `/dev-post/{post_id}` | O (author only) | 소프트 삭제 |
+| PUT | `/dev-post/{post_id}/pin` | O (current creator + current-creator-authored live post) | 최초/반복/교체 pin, 빈 204 |
+| DELETE | `/dev-post/{post_id}/pin` | O (current creator only) | exact-post/반복 pin 해제, 빈 204 |
 | POST/DELETE | `/dev-post/{post_id}/like` | O | 좋아요 토글 |
 | POST | `/dev-post/{post_id}/vote` | O | 투표 (마감 전까지 변경 가능) |
 
@@ -736,7 +738,7 @@ Trending(최근 7일 좋아요 상위 3, 부족하면 최신 게시물로 채움
 
 | 타입/엔드포인트 | 변경 |
 |---|---|
-| `GET/POST/PATCH/DELETE /dev-post*` (11개 엔드포인트) | **신규** — Dev Post 기능 전체 |
+| `GET/POST/PUT/PATCH/DELETE /dev-post*` (13개 엔드포인트) | **신규** — Dev Post 기능 전체 |
 | `DevPostResponse`, `TokenSummary`, `AuthorSummary`, `PollResponse`, `PollOptionResponse`, `RankingRow`, `LikeResponse`, `VoteResponse`, `UploadImageResponse` 등 | **신규 타입** |
 | `token.market_cap` (Dev Post 응답 내) | 현재 항상 `null` — 소스 연동은 후속 작업 |
 | Trending/Ranking Redis 캐싱 | 아직 미적용 — 매 요청 라이브 쿼리 (성능 후속 작업) |

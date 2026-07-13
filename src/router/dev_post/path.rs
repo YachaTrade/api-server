@@ -7,6 +7,7 @@ pub enum DevPostPath {
     Detail,
     Like,
     Vote,
+    Pin,
 }
 
 impl DevPostPath {
@@ -21,6 +22,7 @@ impl DevPostPath {
             DevPostPath::Detail => "/dev-post/:post_id",
             DevPostPath::Like => "/dev-post/:post_id/like",
             DevPostPath::Vote => "/dev-post/:post_id/vote",
+            DevPostPath::Pin => "/dev-post/:post_id/pin",
         }
     }
     /// OpenAPI path-template syntax for utoipa — `{param}`, not `:param`.
@@ -33,6 +35,7 @@ impl DevPostPath {
             DevPostPath::Detail => "/dev-post/{post_id}",
             DevPostPath::Like => "/dev-post/{post_id}/like",
             DevPostPath::Vote => "/dev-post/{post_id}/vote",
+            DevPostPath::Pin => "/dev-post/{post_id}/pin",
         }
     }
 }
@@ -104,5 +107,39 @@ mod tests {
         assert_eq!(DevPostPath::Detail.docs_str(), "/dev-post/{post_id}");
         assert_eq!(DevPostPath::Like.docs_str(), "/dev-post/{post_id}/like");
         assert_eq!(DevPostPath::Vote.docs_str(), "/dev-post/{post_id}/vote");
+    }
+
+    #[tokio::test]
+    async fn pin_runtime_path_matches_put_and_delete() {
+        use axum::routing::put;
+
+        async fn no_content(Path(_post_id): Path<i64>) -> StatusCode {
+            StatusCode::NO_CONTENT
+        }
+
+        let app: Router<()> = Router::new().route(
+            DevPostPath::Pin.as_str(),
+            put(no_content).delete(no_content),
+        );
+        for method in [axum::http::Method::PUT, axum::http::Method::DELETE] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri("/dev-post/123/pin")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        }
+    }
+
+    #[test]
+    fn pin_docs_path_uses_openapi_braces() {
+        assert_eq!(DevPostPath::Pin.as_str(), "/dev-post/:post_id/pin");
+        assert_eq!(DevPostPath::Pin.docs_str(), "/dev-post/{post_id}/pin");
     }
 }

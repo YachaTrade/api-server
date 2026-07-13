@@ -30,7 +30,7 @@ Dev Post는 코인의 온체인 **creator**가 자신의 코인에 글을 올리
 | 구분 | 엔드포인트 | 인증 |
 |---|---|---|
 | 공개 (optional-auth) | `GET /dev-post`, `GET /dev-post/trending`, `GET /dev-post/ranking`(개인화 없음), `GET /dev-post/{post_id}` | 불필요. 세션 쿠키가 있으면 `liked_by_me`/`my_vote_option`을 채움 |
-| 보호 (세션 필수) | `POST /dev-post/image`, `POST /dev-post`, `PATCH /dev-post/{post_id}`, `DELETE /dev-post/{post_id}`, `POST`/`DELETE /dev-post/{post_id}/like`, `POST /dev-post/{post_id}/vote` | 필수 (지갑 로그인 세션 쿠키, `authenticate_user` 미들웨어) |
+| 보호 (세션 필수) | `POST /dev-post/image`, `POST /dev-post`, `PATCH`/`DELETE /dev-post/{post_id}`, `PUT`/`DELETE /dev-post/{post_id}/pin`, `POST`/`DELETE /dev-post/{post_id}/like`, `POST /dev-post/{post_id}/vote` | 필수 (지갑 로그인 세션 쿠키, `authenticate_user` 미들웨어) |
 
 공개 GET들은 세션 쿠키가 있으면 `optional_session_address` 헬퍼로 주소를 읽어 개인화 필드를 채우고,
 없거나 무효해도 **401을 반환하지 않고** `liked_by_me: false` / `my_vote_option: null`로 응답합니다.
@@ -66,6 +66,7 @@ EIP-55 체크섬 정규화됩니다.
 #### 응답
 ```json
 {
+  "pin": null,
   "posts": [
     {
       "id": "123456789",
@@ -85,6 +86,22 @@ EIP-55 체크섬 정규화됩니다.
   "total_count": 240
 }
 ```
+
+`token_id`가 있는 토큰 피드는 active pin을 일반 게시물과 별도로 반환합니다. 1페이지의 `pin`은
+`posts`의 `limit`개에 **추가**되는 항목이며, 2페이지부터는 `pin: null`입니다. 모든 토큰 페이지는 active
+pin을 `total_count` 계산과 `offset`/`limit` 적용보다 먼저 일반 게시물 집합에서 제외하므로, pin이 페이지
+사이에서 중복되거나 일반 페이지네이션을 밀어내지 않습니다. pin이 없는 토큰은 모든 페이지에서
+`pin: null`입니다.
+
+`token_id`가 없는 전체 피드는 항상 `pin: null`이며, pinned post도 일반 게시물과 똑같이 `posts`와
+`total_count`에 포함합니다.
+
+페이지 1이면서 기본 `limit=10`인 피드만 Redis cache-aside를 사용합니다. 캐시 payload는
+`liked_by_me`/`my_vote_option`을 넣지 않는 viewer-neutral base이고, 응답 직전에 요청 viewer의 개인화를
+적용하므로 사용자 간 상태가 섞이지 않습니다. 읽기/쓰기는 `devpost:feed:v2:*` v2 키를 사용합니다. 캐시는
+설정된 TTL 동안 eventually consistent이며 운영 설정은 최대 60초(`DEVPOST_FEED_EXPIRATION <= 60000`)로
+제한합니다. pin PUT/DELETE는 해당 token feed 키만 무효화하고 global feed, 다른 token, detail,
+trending/ranking 키는 건드리지 않습니다.
 
 #### 에러 응답
 - `400`: `token_id` 형식이 잘못됨, 또는 `page`/`limit` 범위 오류
@@ -322,7 +339,61 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 
 ---
 
-### 9. 좋아요 (`POST /dev-post/{post_id}/like`)
+### 9. 게시물 pin 설정 (`PUT /dev-post/{post_id}/pin`)
+
+현재 coin creator가 자신의 새 공지를 token feed 상단에 고정합니다. 호출자는 **현재**
+`token.creator`여야 하고, 대상은 같은 token에 속하면서 삭제되지 않았고 현재 creator가 직접 작성한 live
+post여야 합니다. 최초 pin, 동일 post 반복 PUT, 다른 적격 post로의 교체는 모두 빈 body의
+`204 No Content`를 반환합니다. token별 active pin은 정확히 하나입니다.
+
+creator가 이전되면 기존 pin mapping은 유지됩니다. 이전 creator는 더 이상 pin을 변경할 수 없고, 새
+creator는 기존 pin을 제거할 수 있습니다. 교체는 새 creator가 자신이 작성한 새 post로만 할 수 있으며,
+새 creator가 이전 creator의 과거 post를 다시 pin할 수는 없습니다.
+
+#### 요청
+- **Method**: `PUT`
+- **인증**: 필수, `session_address == token.creator == dev_post.author`
+
+#### 응답
+빈 body의 `204 No Content`.
+
+#### 에러 응답
+- `400`: `post_id` 형식이 잘못됨
+- `401`: 세션 없음
+- `403`: 호출자가 현재 creator가 아니거나 post author가 현재 creator가 아님
+- `404`: live post 또는 token이 존재하지 않음
+- `500`: 내부 서버 에러
+
+---
+
+### 10. 게시물 pin 해제 (`DELETE /dev-post/{post_id}/pin`)
+
+현재 coin creator만 호출할 수 있습니다. URL의 exact post가 현재 pin이면 제거하고, 이미 pin이 없거나
+다른 post가 현재 pin인 경우에는 no-op입니다. 대상 post가 live인 동안 exact-post 호출과 반복 호출은 모두
+빈 body의 `204 No Content`를 반환합니다. 이 동작은 오래된 클라이언트의 `DELETE A`가 이미 교체된 현재
+pin `B`를 지우지 않게 합니다.
+
+#### 요청
+- **Method**: `DELETE`
+- **인증**: 필수, `session_address == token.creator` (post author와 같을 필요 없음)
+
+#### 응답
+빈 body의 `204 No Content`.
+
+#### 에러 응답
+- `400`: `post_id` 형식이 잘못됨
+- `401`: 세션 없음
+- `403`: 호출자가 현재 creator가 아님
+- `404`: live post 또는 token이 존재하지 않음
+- `500`: 내부 서버 에러
+
+게시물을 소프트 삭제할 때는 pin mapping 제거와 `deleted_at` 갱신을 같은 DB transaction에서 처리합니다.
+즉 소프트 삭제와 pin 제거는 하나의 트랜잭션으로 atomic하게 commit되며, 삭제된 post가 pinned 상태로 남지
+않습니다.
+
+---
+
+### 11. 좋아요 (`POST /dev-post/{post_id}/like`)
 
 토글의 "on" 쪽. 아무 지갑이나 가능. `(post_id, account_id)` 유니크 — 이미 좋아요한 상태에서 다시
 호출해도 멱등(`INSERT ... ON CONFLICT DO NOTHING`).
@@ -343,7 +414,7 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 
 ---
 
-### 10. 좋아요 취소 (`DELETE /dev-post/{post_id}/like`)
+### 12. 좋아요 취소 (`DELETE /dev-post/{post_id}/like`)
 
 토글의 "off" 쪽. `DELETE FROM dev_post_like WHERE post_id=… AND account_id=…` — 멱등.
 
@@ -366,7 +437,7 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 
 ---
 
-### 11. 투표 (`POST /dev-post/{post_id}/vote`)
+### 13. 투표 (`POST /dev-post/{post_id}/vote`)
 
 `(post_id, account_id)`당 한 표, **마감 전까지 변경 가능**(upsert). 아무 지갑이나 가능.
 
@@ -434,7 +505,22 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 - `GET /dev-post`, `GET /dev-post/ranking`의 `direction` 쿼리 파라미터는 파싱되지만 정렬에 반영되지
   않습니다(피드는 항상 최신순, 랭킹은 항상 좋아요 내림차순).
 - 좋아요 취소(`DELETE .../like`)는 게시물 존재 여부를 검증하지 않아 좋아요(`POST`)와 404 동작이
-  비대칭입니다 (위 [10번 항목](#10-좋아요-취소-delete-dev-postpost_idlike) 참고).
+  비대칭입니다 (위 [12번 항목](#12-좋아요-취소-delete-dev-postpost_idlike) 참고).
+
+---
+
+## Pin 기능 롤아웃 및 롤백
+
+- API보다 먼저 additive migration의 migrations `v2` squash commit을 배포합니다.
+- 배포된 API의 `DEVPOST_FEED_EXPIRATION <= 60000`을 확인합니다.
+- 기존 API 노드가 모두 drain될 때까지 frontend pin action을 비활성 상태로 유지합니다.
+- 마지막 기존 노드가 drain된 뒤 mixed v2 feed state가 만료되도록 60초를 기다립니다. Redis 전체 purge를 하지 않는다.
+- frontend pin action을 활성화한 뒤 pin endpoint의 4xx/5xx 비율, primary/unique constraint error,
+  feed cache hit/miss, read-replica lag 징후를 모니터링합니다.
+- API 롤백이 필요하면 API binary만 롤백합니다. additive dev_post_pin 테이블과 mapping은 유지합니다.
+  기존 코드에 무해하며 이후 호환 배포에서 그대로 재사용할 수 있습니다.
+- 승인 후 API PR을 squash merge할 때 feature branch를 삭제하지 않습니다. 이어서
+  `git fetch origin v2:v2`를 실행하고 local `v2`와 `origin/v2`가 같은 commit인지 확인합니다.
 
 ---
 
@@ -523,6 +609,7 @@ interface DevPostResponse {
 
 // GET /dev-post
 interface DevPostListResponse {
+  pin: DevPostResponse | null;
   posts: DevPostResponse[];
   total_count: number;
 }
@@ -573,6 +660,8 @@ interface VoteResponse {
 | POST | `/dev-post` | O (creator only) | 게시물 생성 |
 | PATCH | `/dev-post/{post_id}` | O (author only) | 게시물 수정 (본문/이미지) |
 | DELETE | `/dev-post/{post_id}` | O (author only) | 소프트 삭제 |
+| PUT | `/dev-post/{post_id}/pin` | O (current creator + current-creator-authored live post) | 최초/반복/교체 pin, 빈 204 |
+| DELETE | `/dev-post/{post_id}/pin` | O (current creator only) | exact-post/반복 pin 해제, 빈 204 |
 | POST | `/dev-post/{post_id}/like` | O | 좋아요 |
 | DELETE | `/dev-post/{post_id}/like` | O | 좋아요 취소 |
 | POST | `/dev-post/{post_id}/vote` | O | 투표 (변경 가능, 마감 전까지) |

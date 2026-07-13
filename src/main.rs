@@ -199,6 +199,8 @@ use utoipa_swagger_ui::SwaggerUi;
         router::dev_post::handler::like,
         router::dev_post::handler::unlike,
         router::dev_post::handler::vote,
+        router::dev_post::handler::pin_post,
+        router::dev_post::handler::unpin_post,
 
     ),
     components(
@@ -684,5 +686,91 @@ mod openapi_tests {
             Some("#/components/schemas/DexTokenType"),
             "token_type 필드가 DexTokenType을 참조해야 함"
         );
+    }
+
+    #[test]
+    fn dev_post_pin_paths_and_nullable_feed_pin_are_documented() {
+        let json = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let pin_path = &json["paths"]["/dev-post/{post_id}/pin"];
+        assert!(pin_path["put"].is_object());
+        assert!(pin_path["delete"].is_object());
+        for unsupported in ["get", "post", "patch"] {
+            assert!(
+                pin_path[unsupported].is_null(),
+                "{unsupported} must not be documented on the pin route"
+            );
+        }
+        assert!(pin_path["put"]["responses"]["204"].is_object());
+        assert!(pin_path["delete"]["responses"]["204"].is_object());
+        for operation in ["put", "delete"] {
+            for error_status in ["400", "401", "403", "404", "500"] {
+                assert!(
+                    pin_path[operation]["responses"][error_status].is_object(),
+                    "{operation} must document {error_status}"
+                );
+            }
+        }
+        let pin_schema = &json["components"]["schemas"]["DevPostListResponse"]["properties"]["pin"];
+        assert!(!pin_schema.is_null());
+        assert_eq!(pin_schema["nullable"], true);
+        let required = json["components"]["schemas"]["DevPostListResponse"]["required"]
+            .as_array()
+            .unwrap();
+        assert!(required.iter().any(|field| field.as_str() == Some("pin")));
+    }
+
+    #[test]
+    fn dev_post_api_reference_documents_pin_contract() {
+        let docs = include_str!("../docs/dev-post-api.md");
+        for required in [
+            "pin: DevPostResponse | null;",
+            "`PUT /dev-post/{post_id}/pin`",
+            "`DELETE /dev-post/{post_id}/pin`",
+            "빈 body의 `204 No Content`",
+            "2페이지부터는 `pin: null`",
+            "전체 피드는 항상 `pin: null`",
+            "소프트 삭제와 pin 제거는 하나의 트랜잭션",
+            "viewer-neutral",
+            "v2 키",
+            "60초",
+        ] {
+            assert!(
+                docs.contains(required),
+                "missing Dev Post API contract: {required}"
+            );
+        }
+
+        let v2_changes = include_str!("../docs/V2_API_CHANGES.md");
+        for required in [
+            "| PUT | `/dev-post/{post_id}/pin` | O (current creator + current-creator-authored live post) | 최초/반복/교체 pin, 빈 204 |",
+            "| DELETE | `/dev-post/{post_id}/pin` | O (current creator only) | exact-post/반복 pin 해제, 빈 204 |",
+            "`GET/POST/PUT/PATCH/DELETE /dev-post*` (13개 엔드포인트)",
+        ] {
+            assert!(
+                v2_changes.contains(required),
+                "missing V2 API changes contract: {required}"
+            );
+        }
+    }
+
+    #[test]
+    fn dev_post_api_reference_documents_pin_rollout_and_rollback() {
+        let docs = include_str!("../docs/dev-post-api.md");
+        for required in [
+            "## Pin 기능 롤아웃 및 롤백",
+            "API보다 먼저 additive migration",
+            "`DEVPOST_FEED_EXPIRATION <= 60000`",
+            "기존 API 노드가 모두 drain",
+            "Redis 전체 purge를 하지 않는다",
+            "pin endpoint의 4xx/5xx 비율",
+            "API binary만 롤백",
+            "dev_post_pin 테이블과 mapping은 유지",
+            "git fetch origin v2:v2",
+        ] {
+            assert!(
+                docs.contains(required),
+                "missing Dev Post rollout contract: {required}"
+            );
+        }
     }
 }
