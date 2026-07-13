@@ -11,7 +11,7 @@ use super::path::DevPostPath;
 use crate::{
     middleware::optional_session_address,
     result::{AppError, AppJsonResult},
-    services::dev_post::DevPostService,
+    services::{dev_post::DevPostService, moderation::check_nsfw},
     state::AppState,
     types::{
         common::pagination::{
@@ -176,7 +176,7 @@ pub async fn get_ranking(
     ),
     responses(
         (status = 200, description = "Image uploaded successfully", body = UploadImageResponse),
-        (status = 400, description = "Bad request - Bytes are not a supported image format"),
+        (status = 400, description = "Bad request - Bytes are not a supported image format, or image was flagged as NSFW"),
         (status = 413, description = "Payload too large - Image exceeds 5MB limit"),
         (status = 500, description = "Internal server error - Upload failed")
     ),
@@ -200,6 +200,15 @@ pub async fn upload_image(
     // The request's Content-Type is ignored on purpose — it is client-controlled and
     // becomes the Content-Type R2 serves the object back with.
     let content_type = sniff_image_format(&body, &ALLOWED_IMAGE_TYPES)?;
+
+    // dev-post has no flagging path like /metadata/image — NSFW content is
+    // rejected outright, never uploaded.
+    if check_nsfw(&body, content_type).await? {
+        error!("Devpost image rejected: detected as NSFW");
+        return Err(AppError::BadRequest(
+            "Image rejected: detected as inappropriate (NSFW) content".to_string(),
+        ));
+    }
 
     let image_id = uuid::Uuid::new_v4().to_string();
 

@@ -10,6 +10,7 @@ pub mod dividend;
 pub mod hype;
 pub mod leaderboard;
 pub mod metadata;
+pub mod moderation;
 pub mod new_event;
 pub mod pricing;
 pub mod quote_token;
