@@ -261,15 +261,22 @@ impl R2Client {
             key, content_type
         );
 
-        let result = self
+        let mut request = self
             .client
             .put_object()
             .bucket(&self.bucket_name)
             .key(&key)
             .body(ByteStream::from(body.clone()))
-            .content_type(content_type)
-            .send()
-            .await;
+            .content_type(content_type);
+
+        // SVG can carry a <script>, which runs if the object is opened directly in a
+        // browser tab; attachment forces a download there instead. <img src> rendering
+        // in a post is unaffected by this header, so only SVG needs it.
+        if content_type == "image/svg+xml" {
+            request = request.content_disposition("attachment");
+        }
+
+        let result = request.send().await;
 
         match result {
             Ok(output) => {

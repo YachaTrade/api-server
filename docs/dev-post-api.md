@@ -194,6 +194,16 @@ body** 방식입니다. 생성/수정 API를 호출하기 전에 먼저 이 엔�
 > 되어 나중에 브라우저가 그 타입으로 해석합니다. 헤더를 신뢰하면 임의 바이트를 임의 타입으로 호스팅하는
 > 엔드포인트가 됩니다.
 
+**NSFW 검사**: 포맷 판별 직후 AWS Rekognition으로 성인물 여부를 검사하고, 판정되면 **R2에 올리지 않고
+400으로 거부**합니다. SVG도 PNG로 렌더링한 뒤 검사하므로, SVG로 감싸 넣은 사진도 그대로 잡힙니다.
+`/metadata/image`(토큰 이미지)는 거부하지 않고 `is_nsfw` 플래그만 달아 통과시키는데(프론트 블러 전제),
+dev-post는 게시물에 음란물을 아예 싣지 않는 정책이라 즉시 거부입니다. 그래서 dev-post 응답에는
+`is_nsfw` 필드가 없습니다.
+
+**SVG 저장 방식**: SVG는 `Content-Disposition: attachment`로 저장됩니다. SVG는 `<script>`를 품을 수
+있어서, 객체 URL을 브라우저에서 직접 열면 우리 도메인(`storage.nadapp.net`)에서 스크립트가 실행되기
+때문입니다. 이 헤더는 `<img src>` 렌더링에는 영향을 주지 않으므로 게시물 표시는 그대로입니다.
+
 #### 응답
 ```json
 { "image_uri": "https://storage.nadapp.net/devpost/{uuid}" }
@@ -201,9 +211,10 @@ body** 방식입니다. 생성/수정 API를 호출하기 전에 먼저 이 엔�
 
 #### 에러 응답
 - `400`: 바이트가 지원 이미지 포맷이 아님 (`Invalid image format` / `Unsupported image type: …` /
-  `File too small` / `Invalid SVG format`)
+  `File too small` / `Invalid SVG format`), 또는 NSFW 판정
+  (`Image rejected: detected as inappropriate (NSFW) content`)
 - `413`: 5MB 초과 (프레임워크 body limit)
-- `500`: R2 업로드 실패
+- `500`: R2 업로드 실패 (Rekognition 호출 실패 포함)
 
 ---
 
@@ -243,7 +254,9 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 있어야 합니다. 셋 다 없으면 400.
 
 **이미지 URI allowlist**: `image_uris[]`와 `poll.options[].image_uri`는 반드시
-`https://storage.nadapp.net/`로 시작해야 합니다. 외부 URL·`javascript:`·`data:` 스킴은 400입니다.
+`https://storage.nadapp.net/devpost/{uuid}` 형태여야 합니다 — 접두사뿐 아니라 뒤의 오브젝트 키까지
+`POST /dev-post/image`가 실제로 발급하는 형태(하이픈 UUID)와 정확히 일치해야 합니다. 외부 URL,
+`javascript:`/`data:` 스킴, 다른 경로(`/account/…` 등), 키에 임의 문자가 섞인 URL은 모두 400입니다.
 즉 이미지는 `POST /dev-post/image`를 거쳐야만 게시물에 붙일 수 있습니다.
 
 #### 응답
