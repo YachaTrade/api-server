@@ -1,7 +1,6 @@
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
-    http::HeaderMap,
 };
 use bytes::Bytes;
 use serde::Deserialize;
@@ -24,7 +23,7 @@ use crate::{
             VoteResponse,
         },
     },
-    utils::valid_existing_token_id,
+    utils::{image::sniff_image_format, valid_existing_token_id},
 };
 
 const ALLOWED_IMAGE_TYPES: [&str; 4] = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
@@ -171,21 +170,21 @@ pub async fn get_ranking(
     path = DevPostPath::UploadImage.docs_str(),
     request_body(
         content = Vec<u8>,
-        description = "Raw image binary data (supported formats: image/jpeg, image/png, image/webp, image/svg+xml)",
+        description = "Raw image binary data. The format is detected from the file's magic bytes \
+                       (image/jpeg, image/png, image/webp, image/svg+xml); the Content-Type header is ignored.",
         content_type = "image/png"
     ),
     responses(
         (status = 200, description = "Image uploaded successfully", body = UploadImageResponse),
-        (status = 400, description = "Bad request - Invalid image format or missing image"),
+        (status = 400, description = "Bad request - Bytes are not a supported image format"),
         (status = 413, description = "Payload too large - Image exceeds 5MB limit"),
         (status = 500, description = "Internal server error - Upload failed")
     ),
     tag = "DevPost"
 )]
-#[instrument(skip(state, headers, body))]
+#[instrument(skip(state, body))]
 pub async fn upload_image(
     State(state): State<AppState>,
-    headers: HeaderMap,
     body: Bytes,
 ) -> AppJsonResult<UploadImageResponse> {
     info!("Starting devpost image upload - Size: {} bytes", body.len());
@@ -198,21 +197,9 @@ pub async fn upload_image(
         )));
     }
 
-    let content_type = headers
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| {
-            error!("Missing content-type header");
-            AppError::BadRequest("Missing content-type header".to_string())
-        })?;
-
-    if !ALLOWED_IMAGE_TYPES.contains(&content_type) {
-        error!("Invalid content type: {}", content_type);
-        return Err(AppError::BadRequest(format!(
-            "Invalid image type. Allowed types: {:?}",
-            ALLOWED_IMAGE_TYPES
-        )));
-    }
+    // The request's Content-Type is ignored on purpose — it is client-controlled and
+    // becomes the Content-Type R2 serves the object back with.
+    let content_type = sniff_image_format(&body, &ALLOWED_IMAGE_TYPES)?;
 
     let image_id = uuid::Uuid::new_v4().to_string();
 

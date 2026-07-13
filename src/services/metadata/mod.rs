@@ -18,6 +18,7 @@ use crate::{
         TerminalMetadataResponse, TokenMetadata, UploadImageResponse, UploadMetadataRequest,
         UploadMetadataResponse,
     },
+    utils::image::sniff_image_format,
 };
 
 // 허용된 이미지 타입 상수 정의
@@ -48,40 +49,7 @@ impl MetadataService {
         data: &[u8],
         _content_type: &Option<String>,
     ) -> Result<String, AppError> {
-        // Check actual file format by magic bytes only
-        if data.len() < 4 {
-            return Err(AppError::BadRequest("File too small".to_string()));
-        }
-
-        let actual_format = if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
-            "image/jpeg"
-        } else if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-            "image/png"
-        } else if data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP" {
-            "image/webp"
-        } else if data.starts_with(b"<svg") || data.starts_with(b"<?xml") {
-            if let Ok(content) = std::str::from_utf8(data) {
-                if content.contains("<svg") {
-                    "image/svg+xml"
-                } else {
-                    return Err(AppError::BadRequest("Invalid SVG format".to_string()));
-                }
-            } else {
-                return Err(AppError::BadRequest("Invalid SVG encoding".to_string()));
-            }
-        } else {
-            return Err(AppError::BadRequest("Invalid image format".to_string()));
-        };
-
-        // Validate that the detected format is allowed
-        if !ALLOWED_IMAGE_TYPES.contains(&actual_format) {
-            return Err(AppError::BadRequest(format!(
-                "Unsupported image type: {}",
-                actual_format
-            )));
-        }
-
-        Ok(actual_format.to_string())
+        sniff_image_format(data, &ALLOWED_IMAGE_TYPES).map(str::to_string)
     }
 
     /// Convert SVG to PNG

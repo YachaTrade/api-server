@@ -128,7 +128,9 @@ EIP-55 체크섬 정규화됩니다.
 | `page` | integer | X | 페이지 번호, 기본 1, 최소 1 |
 | `limit` | integer | X | 페이지당 개수, 기본 10, 1~100 |
 
-> 피드와 마찬가지로 `direction`은 정렬에 영향 없음 — 항상 `total_likes DESC, last_posted_at DESC` 고정.
+> 피드와 마찬가지로 `direction`은 정렬에 영향 없음 — 항상 `total_likes DESC, last_posted_at DESC,
+> token_id ASC` 고정. 마지막 `token_id`는 유니크 타이브레이크로, 동점 코인이 페이지 경계에서 중복되거나
+> 누락되지 않도록 보장합니다.
 
 #### 응답
 ```json
@@ -175,15 +177,21 @@ EIP-55 체크섬 정규화됩니다.
 ### 5. 이미지 업로드 (`POST /dev-post/image`)
 
 본문/poll 옵션에 붙일 이미지를 R2에 업로드하고 URL을 돌려받습니다. 멀티파트가 아니라 **raw 바이너리
-body + `Content-Type` 헤더** 방식입니다. 생성/수정 API를 호출하기 전에 먼저 이 엔드포인트로 이미지를
-올리고, 반환된 `image_uri`를 `image_uris`/`poll.options[].image_uri`에 담아 보내는 2단계 흐름입니다.
+body** 방식입니다. 생성/수정 API를 호출하기 전에 먼저 이 엔드포인트로 이미지를 올리고, 반환된
+`image_uri`를 `image_uris`/`poll.options[].image_uri`에 담아 보내는 2단계 흐름입니다. 생성/수정 API는
+**이 엔드포인트가 돌려준 URL만 받습니다** (아래 도메인 allowlist 참고).
 
 #### 요청
 - **Method**: `POST`
-- **Content-Type**: `image/jpeg` | `image/png` | `image/webp` | `image/svg+xml` 중 하나
+- **Content-Type**: **무시됩니다.** 포맷은 파일의 매직 바이트로 판별하며(`/metadata/image`와 동일),
+  판별된 타입으로 R2에 저장됩니다. 허용: `image/jpeg` | `image/png` | `image/webp` | `image/svg+xml`
 - **인증**: 필수 (세션이 있는 아무 지갑 — creator 여부 검사 없음)
 - **Body**: 이미지 원본 바이너리, 최대 5MB (프레임워크 레벨 `DefaultBodyLimit` 5,000,000바이트로
   1차 컷, 핸들러 내부에서 5×1024×1024바이트로 2차 체크 — 실질적으로 프레임워크 리밋이 먼저 걸림)
+
+> 헤더를 믿지 않는 이유: `Content-Type`은 클라이언트가 정하는 값이고, 그대로 R2 객체의 `Content-Type`이
+> 되어 나중에 브라우저가 그 타입으로 해석합니다. 헤더를 신뢰하면 임의 바이트를 임의 타입으로 호스팅하는
+> 엔드포인트가 됩니다.
 
 #### 응답
 ```json
@@ -191,7 +199,8 @@ body + `Content-Type` 헤더** 방식입니다. 생성/수정 API를 호출하�
 ```
 
 #### 에러 응답
-- `400`: `Content-Type` 헤더 누락, 허용되지 않은 이미지 타입
+- `400`: 바이트가 지원 이미지 포맷이 아님 (`Invalid image format` / `Unsupported image type: …` /
+  `File too small` / `Invalid SVG format`)
 - `413`: 5MB 초과 (프레임워크 body limit)
 - `500`: R2 업로드 실패
 
@@ -231,6 +240,10 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 
 **최소 1개 규칙**: `body`(공백 제외 비어있지 않음) / `image_uris`(1개 이상) / `poll` 중 **최소 하나**는
 있어야 합니다. 셋 다 없으면 400.
+
+**이미지 URI allowlist**: `image_uris[]`와 `poll.options[].image_uri`는 반드시
+`https://storage.nadapp.net/`로 시작해야 합니다. 외부 URL·`javascript:`·`data:` 스킴은 400입니다.
+즉 이미지는 `POST /dev-post/image`를 거쳐야만 게시물에 붙일 수 있습니다.
 
 #### 응답
 `DevPostResponse` (생성 직후 상태 그대로 조회해 반환).
