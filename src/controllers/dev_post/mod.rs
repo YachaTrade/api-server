@@ -661,10 +661,16 @@ impl DevPostController {
     /// `get_trending` for the personalized variant.
     pub async fn get_trending_base(&self) -> Result<Vec<DevPostResponse>, AppError> {
         let pool = self.db.get_read_pool();
+        // LEFT JOIN (not INNER) so posts with zero likes still get a row with
+        // count 0 — they sort after liked posts but keep the section from
+        // going empty before any likes have accrued. `count(l.account_id)`,
+        // not `count(*)`: the latter counts the unmatched LEFT JOIN row itself.
         let ids: Vec<i64> = sqlx::query_scalar(
-            "SELECT l.post_id FROM dev_post_like l JOIN dev_post p ON p.id = l.post_id
-             WHERE p.deleted_at IS NULL AND l.created_at >= NOW() - INTERVAL '7 days'
-             GROUP BY l.post_id ORDER BY count(*) DESC, l.post_id DESC LIMIT 3",
+            "SELECT p.id FROM dev_post p
+             LEFT JOIN dev_post_like l ON l.post_id = p.id AND l.created_at >= NOW() - INTERVAL '7 days'
+             WHERE p.deleted_at IS NULL
+             GROUP BY p.id, p.created_at
+             ORDER BY count(l.account_id) DESC, p.created_at DESC, p.id DESC LIMIT 3",
         )
         .fetch_all(pool)
         .await
@@ -1257,6 +1263,32 @@ mod write_tests {
         let trending = c.get_trending(None).await.unwrap();
         assert_eq!(trending.len(), 1);
         assert_eq!(trending[0].id, p.to_string());
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn trending_falls_back_to_newest_when_no_likes(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        let mut ids = Vec::new();
+        for i in 0..4 {
+            let id = c
+                .create_post(
+                    "0xCreator",
+                    &CreateDevPostRequest {
+                        token_id: "0xToken".into(),
+                        body: Some(format!("post {i}")),
+                        image_uris: None,
+                        poll: None,
+                    },
+                )
+                .await
+                .unwrap();
+            ids.push(id);
+        }
+        let trending = c.get_trending(None).await.unwrap();
+        let want: Vec<String> = ids[1..].iter().rev().map(|id| id.to_string()).collect();
+        let got: Vec<String> = trending.into_iter().map(|p| p.id).collect();
+        assert_eq!(got, want);
     }
 
     #[sqlx::test(migrations = "./migrations-test")]

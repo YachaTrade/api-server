@@ -9,7 +9,7 @@ Dev Post는 코인의 온체인 **creator**가 자신의 코인에 글을 올리
 
 세 가지 집계 뷰를 제공합니다.
 - **전체 피드**: 모든 코인의 Dev Post를 최신순으로 (또는 `token_id`로 특정 코인만 필터)
-- **Trending**: 최근 7일 좋아요 수 기준 상위 3개 게시물
+- **Trending**: 최근 7일 좋아요 수 기준 상위 3개 게시물 (부족하면 최신 게시물로 채움)
 - **Ranking**: 코인별 누적 좋아요 수 기준 "Top Active Dev" 랭킹
 
 전체 설계 배경은 `docs/plans/2026-07-07-dev-post-api-design.md` 참고. 이 문서는 **구현된 API의
@@ -95,7 +95,8 @@ EIP-55 체크섬 정규화됩니다.
 
 ### 2. Trending 조회 (`GET /dev-post/trending`)
 
-"Trending Dev Posts": 최근 7일 좋아요 수 기준 상위 3개 게시물 (고정 크기, 페이지네이션 없음).
+"Trending Dev Posts": 최근 7일 좋아요 수 기준 상위 3개 게시물 (고정 크기, 페이지네이션 없음). 좋아요가
+부족해 3개를 못 채우면(초기 상태 등) 나머지는 최신 게시물로 채워 섹션이 비지 않도록 합니다.
 
 #### 요청
 - **Method**: `GET`
@@ -104,7 +105,7 @@ EIP-55 체크섬 정규화됩니다.
 #### 응답
 ```json
 {
-  "posts": [ /* DevPostResponse, 최대 3개, 최근 7일 좋아요 수 내림차순 */ ]
+  "posts": [ /* DevPostResponse, 최대 3개, 좋아요 수 내림차순 우선 + 부족분은 최신순 */ ]
 }
 ```
 
@@ -552,7 +553,7 @@ interface VoteResponse {
 | Method | Path | 인증 | 설명 |
 |--------|------|------|------|
 | GET | `/dev-post` | optional-auth | 피드 (전체 또는 `token_id` 필터) |
-| GET | `/dev-post/trending` | optional-auth | 최근 7일 좋아요 상위 3개 |
+| GET | `/dev-post/trending` | optional-auth | 최근 7일 좋아요 상위 3개 (부족분은 최신 게시물로 채움) |
 | GET | `/dev-post/ranking` | X | 코인별 누적 좋아요 랭킹 |
 | GET | `/dev-post/{post_id}` | optional-auth | 게시물 상세 |
 | POST | `/dev-post/image` | O | 이미지 업로드 (raw body → R2) |
