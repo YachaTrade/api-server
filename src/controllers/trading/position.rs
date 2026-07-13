@@ -318,8 +318,9 @@ impl PositionController {
                         WHERE lp.account_id = $1 AND lp.balance > 0
                     UNION
                     SELECT token_id FROM v1_lp
-                )
-                SELECT
+                ),
+                hold_token_rows AS (
+                    SELECT
                     t.token_id, t.name, t.symbol, t.image_uri, t.description,
                     t.twitter, t.telegram, t.website, t.is_graduated, t.is_nsfw, t.is_cto,
                     t.version, t.created_at, t.creator,
@@ -358,22 +359,25 @@ impl PositionController {
                                             ELSE 0 END), 0)
                       + COALESCE(v1.amt, 0)
                     ) AS total_balance
-                FROM held h
-                JOIN token t  ON t.token_id = h.token_id
-                JOIN market m ON m.token_id = t.token_id
-                JOIN quote_token qt ON m.quote_id = qt.quote_id
-                JOIN account a ON t.creator = a.account_id
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
-                LEFT JOIN fee_config fc ON t.token_id = fc.token_id
-                LEFT JOIN balance b ON b.token_id = t.token_id AND b.account_id = $1
-                LEFT JOIN pool ON pool.pool_id = m.pool_id
-                LEFT JOIN lp_position lp_pos ON lp_pos.pool_id = pool.pool_id AND lp_pos.account_id = $1
-                LEFT JOIN v1_lp v1 ON v1.token_id = t.token_id
-                LEFT JOIN LATERAL (
-                    SELECT p.price FROM price p WHERE p.quote_id = m.quote_id
-                    ORDER BY p.block_number DESC LIMIT 1
-                ) lp ON true
-                ORDER BY total_balance DESC, t.token_id ASC
+                    FROM held h
+                    JOIN token t  ON t.token_id = h.token_id
+                    JOIN market m ON m.token_id = t.token_id
+                    JOIN quote_token qt ON m.quote_id = qt.quote_id
+                    JOIN account a ON t.creator = a.account_id
+                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
+                    LEFT JOIN fee_config fc ON t.token_id = fc.token_id
+                    LEFT JOIN balance b ON b.token_id = t.token_id AND b.account_id = $1
+                    LEFT JOIN pool ON pool.pool_id = m.pool_id
+                    LEFT JOIN lp_position lp_pos ON lp_pos.pool_id = pool.pool_id AND lp_pos.account_id = $1
+                    LEFT JOIN v1_lp v1 ON v1.token_id = t.token_id
+                    LEFT JOIN LATERAL (
+                        SELECT p.price FROM price p WHERE p.quote_id = m.quote_id
+                        ORDER BY p.block_number DESC LIMIT 1
+                    ) lp ON true
+                )
+                SELECT *
+                FROM hold_token_rows
+                ORDER BY (total_balance * price_usd) DESC, token_id ASC
                 LIMIT $2 OFFSET $3
                 "#,
             )
@@ -502,8 +506,10 @@ mod tests {
     const ACCOUNT2: &str = "0x000000000000000000000000000000000000Aa02"; // no-LP holder
     const TOKEN_ID: &str = "0x000000000000000000000000000000000000Bb01";
     const TOKEN1_ID: &str = "0x000000000000000000000000000000000000Bb02"; // pool token1 (quote side)
+    const TOKEN2_ID: &str = "0x000000000000000000000000000000000000bB03";
     const POOL_ID: &str = "0x000000000000000000000000000000000000Cc01";
     const QUOTE_ID: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"; // default MON
+    const QUOTE2_ID: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
     fn make_controller(pool: PgPool) -> PositionController {
         PositionController::new(Arc::new(crate::db::postgres::PostgresDatabase {
@@ -601,6 +607,45 @@ mod tests {
         .unwrap();
     }
 
+    async fn seed_wallet_holding(
+        pool: &PgPool,
+        token_id: &str,
+        quote_id: &str,
+        balance: &str,
+        market_price: &str,
+    ) {
+        sqlx::query(
+            r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description, is_nsfw, is_graduated, is_cto, created_at, transaction_hash, total_supply, version)
+               VALUES ($1, 'WalletTok', 'WTK', '', $2, NULL, false, false, false, 0, $1, 1000000, 'V2')"#,
+        )
+        .bind(token_id)
+        .bind(ACCOUNT)
+        .execute(pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            r#"INSERT INTO market (market_type, token_id, reserve_token, reserve_quote, price, quote_id, latest_trade_at, created_at, volume, ath_price, ath_price_quote)
+               VALUES ('V2_CURVE', $1, 0, 0, $2::numeric, $3, 0, 0, 0, 0, 0)"#,
+        )
+        .bind(token_id)
+        .bind(market_price)
+        .bind(quote_id)
+        .execute(pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO balance (account_id, token_id, balance, created_at) VALUES ($1, $2, $3::numeric, 0)",
+        )
+        .bind(ACCOUNT)
+        .bind(token_id)
+        .bind(balance)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
     #[sqlx::test(migrations = "./migrations-test")]
     async fn lp_balance_v2_dex_computed_correctly(pool: PgPool) {
         seed_v2_dex(&pool).await;
@@ -679,7 +724,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn hold_token_sorts_by_total_balance_desc(pool: PgPool) {
+    async fn hold_token_computes_total_balance(pool: PgPool) {
         seed_v2_dex(&pool).await; // ACCOUNT: balance 500, lp_balance 1000 -> total 1500
         let ctrl = make_controller(pool);
         let p = PaginationParams {
@@ -695,6 +740,108 @@ mod tests {
         assert_eq!(tok.balance_info.balance, "500");
         assert_eq!(tok.balance_info.lp_balance, "1000");
         assert_eq!(tok.balance_info.total_balance, "1500");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn hold_token_sorts_by_usd_value_not_raw_balance(pool: PgPool) {
+        seed_v2_dex(&pool).await; // 1,500 tokens * $2 = $3,000
+        sqlx::query("UPDATE market SET price = 2 WHERE token_id = $1")
+            .bind(TOKEN_ID)
+            .execute(&pool)
+            .await
+            .unwrap();
+        seed_wallet_holding(&pool, TOKEN2_ID, QUOTE_ID, "2000", "0.5").await; // $1,000
+        sqlx::query("INSERT INTO price (quote_id, block_number, price) VALUES ($1, 999, 1)")
+            .bind(QUOTE_ID)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let resp = make_controller(pool)
+            .get_hold_token_by_account(
+                ACCOUNT,
+                &PaginationParams {
+                    page: 1,
+                    limit: 10,
+                    direction: "DESC".to_string(),
+                },
+                &[],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.tokens[0].token_info.token_id, TOKEN_ID);
+        assert_eq!(resp.tokens[1].token_info.token_id, TOKEN2_ID);
+        assert_eq!(resp.tokens[0].balance_info.total_balance, "1500");
+        assert_eq!(resp.tokens[1].balance_info.total_balance, "2000");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn hold_token_usd_value_ties_sort_by_token_id(pool: PgPool) {
+        seed_v2_dex(&pool).await; // 1,500 tokens * $2 = $3,000
+        sqlx::query("UPDATE market SET price = 2 WHERE token_id = $1")
+            .bind(TOKEN_ID)
+            .execute(&pool)
+            .await
+            .unwrap();
+        seed_wallet_holding(&pool, TOKEN2_ID, QUOTE_ID, "6000", "0.5").await; // $3,000
+        sqlx::query("INSERT INTO price (quote_id, block_number, price) VALUES ($1, 999, 1)")
+            .bind(QUOTE_ID)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let resp = make_controller(pool)
+            .get_hold_token_by_account(
+                ACCOUNT,
+                &PaginationParams {
+                    page: 1,
+                    limit: 10,
+                    direction: "DESC".to_string(),
+                },
+                &[],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.tokens[0].token_info.token_id, TOKEN_ID);
+        assert_eq!(resp.tokens[1].token_info.token_id, TOKEN2_ID);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn hold_token_missing_quote_price_has_zero_usd_value(pool: PgPool) {
+        seed_v2_dex(&pool).await;
+        sqlx::query("INSERT INTO price (quote_id, block_number, price) VALUES ($1, 999, 1)")
+            .bind(QUOTE_ID)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            r#"INSERT INTO quote_token (quote_id, name, symbol, decimals, pyth_feed_id, image_uri)
+               VALUES ($1, 'USD Coin', 'USDC', 6, 'test-feed', '')"#,
+        )
+        .bind(QUOTE2_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+        seed_wallet_holding(&pool, TOKEN2_ID, QUOTE2_ID, "999999999", "999").await;
+
+        let resp = make_controller(pool)
+            .get_hold_token_by_account(
+                ACCOUNT,
+                &PaginationParams {
+                    page: 1,
+                    limit: 10,
+                    direction: "DESC".to_string(),
+                },
+                &[],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.tokens[0].token_info.token_id, TOKEN_ID);
+        assert_eq!(resp.tokens[1].token_info.token_id, TOKEN2_ID);
+        assert_eq!(resp.tokens[1].balance_info.token_price, "0");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
