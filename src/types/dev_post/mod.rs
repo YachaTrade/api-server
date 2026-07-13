@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::db::r2::{DEVPOST_IMAGE_KEY_PREFIX, PUBLIC_BASE_URL};
+
 pub const MAX_IMAGES: usize = 4;
 pub const MIN_POLL_OPTIONS: usize = 2;
 pub const MAX_POLL_OPTIONS: usize = 3;
@@ -25,13 +27,38 @@ pub struct CreateDevPostRequest {
     pub poll: Option<CreatePollRequest>,
 }
 
+/// Image URIs are echoed back to every reader and rendered by the frontend, so they
+/// must come from our own upload endpoint rather than an arbitrary attacker-chosen
+/// origin. `POST /dev-post/image` is the only way to mint one.
+fn validate_image_uri(uri: &str) -> Result<(), String> {
+    if uri.trim().is_empty() {
+        return Err("Empty image_uri".into());
+    }
+
+    let expected_prefix = format!("{PUBLIC_BASE_URL}{DEVPOST_IMAGE_KEY_PREFIX}");
+    let parsed =
+        url::Url::parse(uri).map_err(|_| format!("image_uri must start with {expected_prefix}"))?;
+
+    // Checking both the raw prefix and the parsed path keeps the accepted form
+    // identical to upload_devpost_image_file's output and rejects URL parser
+    // normalization tricks such as `/devpost/../account/...`.
+    if !uri.starts_with(&expected_prefix)
+        || !parsed.path().starts_with("/devpost/")
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(format!("image_uri must start with {expected_prefix}"));
+    }
+    Ok(())
+}
+
 fn validate_images(image_uris: &Option<Vec<String>>) -> Result<(), String> {
     if let Some(imgs) = image_uris {
         if imgs.len() > MAX_IMAGES {
             return Err(format!("At most {MAX_IMAGES} images allowed"));
         }
-        if imgs.iter().any(|u| u.trim().is_empty()) {
-            return Err("Empty image_uri".into());
+        for uri in imgs {
+            validate_image_uri(uri)?;
         }
     }
     Ok(())
@@ -46,6 +73,9 @@ fn validate_poll(poll: &Option<CreatePollRequest>) -> Result<(), String> {
         }
         if p.options.iter().any(|o| o.label.trim().is_empty()) {
             return Err("Empty poll option label".into());
+        }
+        for uri in p.options.iter().filter_map(|o| o.image_uri.as_deref()) {
+            validate_image_uri(uri)?;
         }
     }
     Ok(())
@@ -286,6 +316,99 @@ mod tests {
         };
         assert!(r.validate().is_ok());
     }
+    fn with_images(uris: Vec<&str>) -> CreateDevPostRequest {
+        CreateDevPostRequest {
+            token_id: "0x0".into(),
+            body: Some("x".into()),
+            image_uris: Some(uris.into_iter().map(String::from).collect()),
+            poll: None,
+        }
+    }
+
+    #[test]
+    fn accepts_image_uri_from_devpost_storage_path() {
+        let r = with_images(vec!["https://storage.nadapp.net/devpost/abc"]);
+        assert!(r.validate().is_ok());
+    }
+
+    /// `POST /dev-post/image` must be the only source of image URIs — otherwise the
+    /// upload endpoint (and its format validation) can be bypassed entirely.
+    #[test]
+    fn rejects_image_uri_from_a_foreign_origin() {
+        for uri in [
+            "https://evil.com/x.svg",
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "http://storage.nadapp.net/devpost/abc", // not https
+            "https://storage.nadapp.net.evil.com/x",
+            "",
+        ] {
+            assert!(
+                with_images(vec![uri]).validate().is_err(),
+                "should have rejected image_uri {uri:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_image_uri_from_other_paths_on_our_storage_domain() {
+        for uri in [
+            "https://storage.nadapp.net/account/abc",
+            "https://storage.nadapp.net/coin/abc",
+            "https://storage.nadapp.net/metadata/abc.json",
+            "https://storage.nadapp.net/devpost-evil/abc",
+            "https://storage.nadapp.net/devpost",
+            "https://storage.nadapp.net/devpost/../account/abc",
+            "https://storage.nadapp.net/devpost/%2e%2e/account/abc",
+        ] {
+            assert!(
+                with_images(vec![uri]).validate().is_err(),
+                "should have rejected image_uri {uri:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_noncanonical_devpost_image_uri_suffixes() {
+        for uri in [
+            "https://storage.nadapp.net/devpost/abc?download=1",
+            "https://storage.nadapp.net/devpost/abc#fragment",
+        ] {
+            assert!(
+                with_images(vec![uri]).validate().is_err(),
+                "should have rejected image_uri {uri:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_poll_option_image_uri_from_a_foreign_origin() {
+        let r = CreateDevPostRequest {
+            token_id: "0x0".into(),
+            body: Some("x".into()),
+            image_uris: None,
+            poll: Some(CreatePollRequest {
+                options: vec![
+                    opt("A"),
+                    CreatePollOptionRequest {
+                        label: "B".into(),
+                        image_uri: Some("https://evil.com/b.svg".into()),
+                    },
+                ],
+            }),
+        };
+        assert!(r.validate().is_err());
+    }
+
+    #[test]
+    fn edit_rejects_image_uri_from_a_foreign_origin() {
+        let r = EditDevPostRequest {
+            body: None,
+            image_uris: Some(vec!["https://evil.com/x.png".into()]),
+        };
+        assert!(r.validate().is_err());
+    }
+
     #[test]
     fn edit_rejects_too_many_images() {
         let r = EditDevPostRequest {

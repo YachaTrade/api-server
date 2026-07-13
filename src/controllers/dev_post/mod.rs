@@ -693,6 +693,10 @@ impl DevPostController {
 
         // token joined directly here (rather than a second batch hydrate step) since
         // ranking rows are per-coin already, so it's a single indexed query either way.
+        //
+        // ORDER BY ends on token_id: neither total_likes nor last_posted_at is unique,
+        // and OFFSET paging over a non-strict order lets tied coins repeat on one page
+        // and vanish from another.
         #[derive(sqlx::FromRow)]
         struct RankRow {
             token_id: String,
@@ -713,7 +717,7 @@ impl DevPostController {
              LEFT JOIN dev_post_like l ON l.post_id = p.id
              WHERE p.deleted_at IS NULL
              GROUP BY p.token_id, t.name, t.symbol, t.image_uri
-             ORDER BY total_likes DESC, last_posted_at DESC
+             ORDER BY total_likes DESC, last_posted_at DESC, p.token_id ASC
              LIMIT $1 OFFSET $2",
         )
         .bind(limit)
@@ -1184,6 +1188,48 @@ mod write_tests {
         assert_eq!(poll.my_vote_option, Some(2));
         assert_eq!(poll.total_votes, 1);
         assert!(!poll.is_closed);
+    }
+
+    /// All coins tie on (total_likes=0, last_posted_at): without a unique final sort
+    /// key, OFFSET paging can repeat one coin across pages and drop another.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn ranking_pages_are_disjoint_when_sort_keys_tie(pool: sqlx::PgPool) {
+        let c = ctl(pool.clone());
+        for i in 0..6 {
+            let token_id = format!("0xTie{i}");
+            seed_token(&pool, &token_id, "0xCreator").await;
+            c.create_post(
+                "0xCreator",
+                &CreateDevPostRequest {
+                    token_id,
+                    body: Some("tie".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        // force an exact tie on last_posted_at too (creation order would otherwise break it)
+        sqlx::query("UPDATE dev_post SET created_at = TIMESTAMPTZ '2026-01-01 00:00:00Z'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let mut seen: Vec<String> = Vec::new();
+        for page in 1..=3 {
+            let (rows, total) = c.get_ranking(page, 2).await.unwrap();
+            assert_eq!(total, 6);
+            seen.extend(rows.into_iter().map(|r| r.token.token_id));
+        }
+        let mut unique = seen.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            6,
+            "pages overlapped or skipped coins: {seen:?}"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]

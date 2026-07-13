@@ -1,3 +1,4 @@
+pub mod image;
 pub mod single_flight;
 
 use std::str::FromStr;

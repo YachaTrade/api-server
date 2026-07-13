@@ -625,7 +625,8 @@ async fn method_based_timeout(
     let is_upload_endpoint = path.starts_with("/metadata/image")
         || path.starts_with("/metadata/metadata")
         || path.starts_with("/agent/token/image")
-        || path.starts_with("/cms/dex-token/image");
+        || path.starts_with("/cms/dex-token/image")
+        || path.starts_with("/dev-post/image");
 
     if is_upload_endpoint {
         // No timeout for upload endpoints

@@ -9,6 +9,11 @@ use bytes::Bytes;
 
 use tracing::{error, info};
 
+/// Public custom-domain base every object uploaded here is served from.
+/// `dev_post` validates submitted image URIs against this prefix.
+pub const PUBLIC_BASE_URL: &str = "https://storage.nadapp.net/";
+pub const DEVPOST_IMAGE_KEY_PREFIX: &str = "devpost/";
+
 // R2Client struct for managing AWS R2 and CloudFront operations
 // Handles file uploads, downloads, and CDN cache invalidation
 #[derive(Debug)]
@@ -82,7 +87,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
                 Ok(r2_url)
             }
             Err(err) => {
@@ -135,7 +140,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
                 Ok(r2_url)
             }
             Err(err) => {
@@ -178,7 +183,7 @@ impl R2Client {
                     "Successfully uploaded whitelist image to R2: key={}, output={:?}",
                     key, output
                 );
-                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
                 Ok(r2_url)
             }
             Err(err) => {
@@ -226,7 +231,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
                 Ok(r2_url)
             }
             Err(err) => {
@@ -250,7 +255,7 @@ impl R2Client {
         body: &Bytes,
         content_type: &str,
     ) -> Result<String> {
-        let key = format!("devpost/{}", image_id);
+        let key = format!("{DEVPOST_IMAGE_KEY_PREFIX}{image_id}");
         info!(
             "Uploading devpost image to R2: key={}, content_type={}",
             key, content_type
@@ -274,7 +279,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("https://storage.nadapp.net/{}", key);
+                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
                 Ok(r2_url)
             }
             Err(err) => {
