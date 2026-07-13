@@ -1,10 +1,15 @@
 //! Dev Post controller: create/edit/delete (writes) with creator authorization.
 
+mod pin;
+#[cfg(test)]
+mod pin_feed_tests;
+
 use crate::db::postgres::PostgresDatabase;
 use crate::result::AppError;
 use crate::types::dev_post::{
-    AuthorSummary, CreateDevPostRequest, DevPostResponse, EditDevPostRequest, POLL_DURATION_DAYS,
-    PollOptionResponse, PollResponse, RankingRow, TokenSummary, parse_tweet_url,
+    AuthorSummary, CreateDevPostRequest, DevPostResponse, EditDevPostRequest, FeedBase,
+    POLL_DURATION_DAYS, PollOptionResponse, PollResponse, RankingRow, TokenSummary,
+    parse_tweet_url,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -170,19 +175,30 @@ impl DevPostController {
     }
 
     pub async fn delete_post(&self, post_id: i64, author: &str) -> Result<String, AppError> {
-        let pool = self.db.get_write_pool();
-        let existing = Self::require_author(pool, post_id).await?;
-        if existing != author {
+        let mut tx = self
+            .db
+            .get_write_pool()
+            .begin()
+            .await
+            .map_err(|error| AppError::InternalError(error.to_string()))?;
+        let context = pin::lock_live_post_context(&mut tx, post_id).await?;
+        if context.author != author {
             return Err(AppError::Forbidden("Not the post author".into()));
         }
-        let token_id: String = sqlx::query_scalar(
-            "UPDATE dev_post SET deleted_at=NOW() WHERE id=$1 RETURNING token_id",
-        )
-        .bind(post_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
-        Ok(token_id)
+        sqlx::query("DELETE FROM dev_post_pin WHERE post_id = $1")
+            .bind(post_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| AppError::InternalError(error.to_string()))?;
+        sqlx::query("UPDATE dev_post SET deleted_at = NOW() WHERE id = $1")
+            .bind(post_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| AppError::InternalError(error.to_string()))?;
+        tx.commit()
+            .await
+            .map_err(|error| AppError::InternalError(error.to_string()))?;
+        Ok(context.token_id)
     }
 
     pub async fn like(&self, post_id: i64, account_id: &str) -> Result<i64, AppError> {
@@ -328,7 +344,7 @@ impl DevPostController {
              FROM dev_post dp
              JOIN token t ON t.token_id = dp.token_id
              LEFT JOIN account a ON a.account_id = dp.author
-             WHERE dp.id = ANY($1)",
+             WHERE dp.id = ANY($1) AND dp.deleted_at IS NULL",
         )
         .bind(ids)
         .fetch_all(pool)
@@ -524,6 +540,29 @@ impl DevPostController {
             .await
     }
 
+    pub async fn apply_feed_personalization(
+        &self,
+        feed: &mut FeedBase,
+        viewer: &str,
+    ) -> Result<(), AppError> {
+        let pin_id = feed.pin.as_ref().map(|post| post.id.clone());
+        let mut combined = Vec::with_capacity(feed.posts.len() + usize::from(feed.pin.is_some()));
+        if let Some(pin) = feed.pin.take() {
+            combined.push(pin);
+        }
+        combined.append(&mut feed.posts);
+        self.apply_personalization(&mut combined, viewer).await?;
+
+        feed.pin = pin_id.and_then(|id| {
+            combined
+                .iter()
+                .position(|post| post.id == id)
+                .map(|index| combined.remove(index))
+        });
+        feed.posts = combined;
+        Ok(())
+    }
+
     /// `hydrate_base` plus, when a viewer is present, personalization on the
     /// SAME pool `hydrate_base` used. This matters for the read-after-write
     /// path (`get_post_on` → `get_post_rw`): a vote just written on the write
@@ -551,29 +590,51 @@ impl DevPostController {
         token_id: Option<&str>,
         page: i64,
         limit: i64,
-    ) -> Result<(Vec<DevPostResponse>, i64), AppError> {
+    ) -> Result<FeedBase, AppError> {
         let pool = self.db.get_read_pool();
         let offset = (page - 1) * limit;
+        if let Some(token_id) = token_id {
+            let selection = pin::select_token_feed(pool, token_id, limit, offset).await?;
+            let emitted_pin_id = (page == 1).then_some(selection.active_pin_id).flatten();
+            let mut ids = Vec::with_capacity(
+                selection.page_ids.len() + usize::from(emitted_pin_id.is_some()),
+            );
+            ids.extend(emitted_pin_id);
+            ids.extend(selection.page_ids.iter().copied());
+            let mut hydrated = self.hydrate_base(pool, &ids).await?;
+            let pin = emitted_pin_id.and_then(|pin_id| {
+                let id = pin_id.to_string();
+                hydrated
+                    .iter()
+                    .position(|post| post.id == id)
+                    .map(|index| hydrated.remove(index))
+            });
+            return Ok(FeedBase {
+                pin,
+                posts: hydrated,
+                total_count: selection.total_count,
+            });
+        }
+
         let ids: Vec<i64> = sqlx::query_scalar(
-            "SELECT id FROM dev_post
-             WHERE deleted_at IS NULL AND ($1::varchar IS NULL OR token_id = $1)
-             ORDER BY id DESC LIMIT $2 OFFSET $3",
+            "SELECT id FROM dev_post WHERE deleted_at IS NULL \
+             ORDER BY id DESC LIMIT $1 OFFSET $2",
         )
-        .bind(token_id)
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let total: i64 = sqlx::query_scalar(
-            "SELECT count(*) FROM dev_post WHERE deleted_at IS NULL AND ($1::varchar IS NULL OR token_id = $1)",
-        )
-        .bind(token_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let posts = self.hydrate_base(pool, &ids).await?;
-        Ok((posts, total))
+        let total_count: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM dev_post WHERE deleted_at IS NULL")
+                .fetch_one(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        Ok(FeedBase {
+            pin: None,
+            posts: self.hydrate_base(pool, &ids).await?,
+            total_count,
+        })
     }
 
     pub async fn get_feed(
@@ -582,12 +643,12 @@ impl DevPostController {
         page: i64,
         limit: i64,
         viewer: Option<&str>,
-    ) -> Result<(Vec<DevPostResponse>, i64), AppError> {
-        let (mut posts, total) = self.get_feed_base(token_id, page, limit).await?;
+    ) -> Result<FeedBase, AppError> {
+        let mut feed = self.get_feed_base(token_id, page, limit).await?;
         if let Some(viewer) = viewer {
-            self.apply_personalization(&mut posts, viewer).await?;
+            self.apply_feed_personalization(&mut feed, viewer).await?;
         }
-        Ok((posts, total))
+        Ok(feed)
     }
 
     /// Shared hydrate-a-single-post path, parameterized on the pool so callers
@@ -1148,10 +1209,10 @@ mod write_tests {
             .await
             .unwrap();
         c.delete_post(a, "0xCreator").await.unwrap();
-        let (posts, total) = c.get_feed(Some("0xToken"), 1, 10, None).await.unwrap();
-        assert_eq!(total, 1);
-        assert_eq!(posts[0].id, b.to_string());
-        assert!(!posts[0].liked_by_me);
+        let feed = c.get_feed(Some("0xToken"), 1, 10, None).await.unwrap();
+        assert_eq!(feed.total_count, 1);
+        assert_eq!(feed.posts[0].id, b.to_string());
+        assert!(!feed.posts[0].liked_by_me);
     }
 
     #[sqlx::test(migrations = "./migrations-test")]

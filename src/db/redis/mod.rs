@@ -66,6 +66,14 @@ fn with_prefix(key: String) -> String {
     }
 }
 
+fn devpost_feed_legacy_key(scope: &str) -> String {
+    with_prefix(format!("devpost:feed:{scope}"))
+}
+
+fn devpost_feed_v2_key(scope: &str) -> String {
+    with_prefix(format!("devpost:feed:v2:{scope}"))
+}
+
 pub struct RedisDatabase {
     conn: Arc<ConnectionManager>,
 }
@@ -2259,7 +2267,7 @@ impl RedisDatabase {
 
     pub async fn set_devpost_feed_base(&self, scope: &str, base: &FeedBase) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:feed:{}", scope));
+        let key = devpost_feed_v2_key(scope);
         let json = serde_json::to_string(base)?;
         measure_redis!(
             "redis.set_devpost_feed_base",
@@ -2270,7 +2278,7 @@ impl RedisDatabase {
 
     pub async fn get_devpost_feed_base(&self, scope: &str) -> Result<FeedBase> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:feed:{}", scope));
+        let key = devpost_feed_v2_key(scope);
         let json: String =
             measure_redis!("redis.get_devpost_feed_base", conn.get::<_, String>(key))?;
         Ok(serde_json::from_str(&json)?)
@@ -2278,8 +2286,16 @@ impl RedisDatabase {
 
     pub async fn delete_devpost_feed(&self, scope: &str) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:feed:{}", scope));
-        measure_redis!("redis.delete_devpost_feed", conn.del::<String, ()>(key))?;
+        let legacy_key = devpost_feed_legacy_key(scope);
+        let v2_key = devpost_feed_v2_key(scope);
+        measure_redis!(
+            "redis.delete_devpost_feed",
+            redis::pipe()
+                .atomic()
+                .del(legacy_key)
+                .del(v2_key)
+                .query_async::<()>(&mut conn)
+        )?;
         Ok(())
     }
 
@@ -2311,5 +2327,47 @@ impl RedisDatabase {
         let key = with_prefix(format!("devpost:detail:{}", post_id));
         measure_redis!("redis.delete_devpost_detail", conn.del::<String, ()>(key))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod devpost_feed_cache_tests {
+    use super::*;
+    use redis::AsyncCommands;
+
+    #[tokio::test]
+    async fn v2_feed_round_trip_ignores_legacy_and_dual_delete_removes_both() {
+        dotenv::dotenv().ok();
+        let redis = RedisDatabase::new().await;
+        let scope = format!("test-{}", uuid::Uuid::new_v4().simple());
+        let legacy_key = with_prefix(format!("devpost:feed:{scope}"));
+        let v2_key = with_prefix(format!("devpost:feed:v2:{scope}"));
+        let mut conn = redis.conn.as_ref().clone();
+        conn.pset_ex::<_, _, ()>(
+            &legacy_key,
+            r#"{"posts":[],"total_count":99}"#,
+            *DEVPOST_FEED_EXPIRATION,
+        )
+        .await
+        .unwrap();
+        let legacy_ttl_ms: i64 = conn.pttl(&legacy_key).await.unwrap();
+        assert!(legacy_ttl_ms > 0);
+
+        assert!(redis.get_devpost_feed_base(&scope).await.is_err());
+        let base = FeedBase {
+            pin: None,
+            posts: Vec::new(),
+            total_count: 7,
+        };
+        redis.set_devpost_feed_base(&scope, &base).await.unwrap();
+        let decoded = redis.get_devpost_feed_base(&scope).await.unwrap();
+        assert!(decoded.pin.is_none());
+        assert_eq!(decoded.total_count, 7);
+        assert_eq!(conn.exists::<_, i64>(&legacy_key).await.unwrap(), 1);
+        assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 1);
+
+        redis.delete_devpost_feed(&scope).await.unwrap();
+        assert_eq!(conn.exists::<_, i64>(&legacy_key).await.unwrap(), 0);
+        assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 0);
     }
 }

@@ -1,6 +1,7 @@
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
+    http::StatusCode,
 };
 use bytes::Bytes;
 use serde::Deserialize;
@@ -10,7 +11,7 @@ use tracing::{error, info, instrument};
 use super::path::DevPostPath;
 use crate::{
     middleware::optional_session_address,
-    result::{AppError, AppJsonResult},
+    result::{AppError, AppJsonResult, AppResult},
     services::{dev_post::DevPostService, moderation::check_nsfw},
     state::AppState,
     types::{
@@ -75,7 +76,7 @@ pub async fn get_feed(
     let viewer = optional_session_address(&state, &cookies).await;
 
     let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
-    let (posts, total_count) = service
+    let feed = service
         .get_feed(
             token_id.as_deref(),
             params.page,
@@ -84,7 +85,11 @@ pub async fn get_feed(
         )
         .await?;
 
-    Ok(Json(DevPostListResponse { posts, total_count }))
+    Ok(Json(DevPostListResponse {
+        pin: feed.pin,
+        posts: feed.posts,
+        total_count: feed.total_count,
+    }))
 }
 
 /// GET /dev-post/{post_id}  (public, optional-auth)
@@ -412,6 +417,56 @@ pub async fn vote(
         options: poll.options,
         my_vote_option: poll.my_vote_option,
     }))
+}
+
+#[utoipa::path(
+    put,
+    path = DevPostPath::Pin.docs_str(),
+    params(("post_id" = i64, Path, description = "Dev post ID")),
+    responses(
+        (status = 204, description = "Post pinned or existing pin replaced"),
+        (status = 400, description = "Malformed post ID"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Current creator or author requirement not met"),
+        (status = 404, description = "Live post or token not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "DevPost"
+)]
+pub async fn pin_post(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Path(post_id): Path<i64>,
+) -> AppResult<StatusCode> {
+    DevPostService::new(state.postgres.clone(), state.redis.clone())
+        .pin_post(post_id, &session_address)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = DevPostPath::Pin.docs_str(),
+    params(("post_id" = i64, Path, description = "Dev post ID")),
+    responses(
+        (status = 204, description = "Exact pin removed or already absent"),
+        (status = 400, description = "Malformed post ID"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Current creator requirement not met"),
+        (status = 404, description = "Live post or token not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "DevPost"
+)]
+pub async fn unpin_post(
+    State(state): State<AppState>,
+    Extension(session_address): Extension<String>,
+    Path(post_id): Path<i64>,
+) -> AppResult<StatusCode> {
+    DevPostService::new(state.postgres.clone(), state.redis.clone())
+        .unpin_post(post_id, &session_address)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

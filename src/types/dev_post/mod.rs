@@ -161,11 +161,15 @@ pub struct DevPostResponse {
 }
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DevPostListResponse {
+    #[schema(required, nullable)]
+    pub pin: Option<DevPostResponse>,
     pub posts: Vec<DevPostResponse>,
     pub total_count: i64,
 }
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct FeedBase {
+    #[schema(required, nullable)]
+    pub pin: Option<DevPostResponse>,
     pub posts: Vec<DevPostResponse>,
     pub total_count: i64,
 }
@@ -222,6 +226,37 @@ pub fn parse_tweet_url(body: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample_response(id: &str) -> DevPostResponse {
+        let at = chrono::DateTime::parse_from_rfc3339("2026-07-13T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        DevPostResponse {
+            id: id.to_string(),
+            token: TokenSummary {
+                token_id: "0xToken".into(),
+                name: "Token".into(),
+                symbol: "TKN".into(),
+                image_uri: Some("img".into()),
+                market_cap: None,
+            },
+            author: AuthorSummary {
+                account_id: "0xCreator".into(),
+                nickname: None,
+                image_uri: None,
+            },
+            body: "announcement".into(),
+            tweet_url: None,
+            images: Vec::new(),
+            poll: None,
+            like_count: 0,
+            liked_by_me: false,
+            is_edited: false,
+            created_at: at,
+            updated_at: at,
+        }
+    }
+
     fn opt(label: &str) -> CreatePollOptionRequest {
         CreatePollOptionRequest {
             label: label.into(),
@@ -487,10 +522,46 @@ mod tests {
     #[test]
     fn feed_base_round_trips() {
         let b = FeedBase {
+            pin: None,
             posts: vec![],
             total_count: 7,
         };
         let back: FeedBase = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
         assert_eq!(back.total_count, 7);
+    }
+
+    #[test]
+    fn dev_post_list_serializes_required_nullable_pin() {
+        let without_pin = DevPostListResponse {
+            pin: None,
+            posts: Vec::new(),
+            total_count: 0,
+        };
+        let json = serde_json::to_value(without_pin).unwrap();
+        assert!(json.get("pin").is_some());
+        assert!(json["pin"].is_null());
+
+        let with_pin = DevPostListResponse {
+            pin: Some(sample_response("7")),
+            posts: vec![sample_response("6")],
+            total_count: 1,
+        };
+        let json = serde_json::to_value(with_pin).unwrap();
+        assert_eq!(json["pin"]["id"], "7");
+        assert_eq!(json["posts"][0]["id"], "6");
+    }
+
+    #[test]
+    fn feed_base_round_trips_pin_posts_and_count() {
+        let base = FeedBase {
+            pin: Some(sample_response("7")),
+            posts: vec![sample_response("6")],
+            total_count: 1,
+        };
+        let json = serde_json::to_string(&base).unwrap();
+        let decoded: FeedBase = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.pin.unwrap().id, "7");
+        assert_eq!(decoded.posts[0].id, "6");
+        assert_eq!(decoded.total_count, 1);
     }
 }
