@@ -29,27 +29,19 @@ pub struct CreateDevPostRequest {
 
 /// Image URIs are echoed back to every reader and rendered by the frontend, so they
 /// must come from our own upload endpoint rather than an arbitrary attacker-chosen
-/// origin. `POST /dev-post/image` is the only way to mint one.
+/// origin. `POST /dev-post/image` is the only way to mint one, and its keys are
+/// always a fresh `Uuid::new_v4()` — so the accepted form is exactly
+/// `{expected_prefix}<uuid>`, matching upload_devpost_image_file's output.
 fn validate_image_uri(uri: &str) -> Result<(), String> {
-    if uri.trim().is_empty() {
-        return Err("Empty image_uri".into());
-    }
-
     let expected_prefix = format!("{PUBLIC_BASE_URL}{DEVPOST_IMAGE_KEY_PREFIX}");
-    let parsed =
-        url::Url::parse(uri).map_err(|_| format!("image_uri must start with {expected_prefix}"))?;
-
-    // Checking both the raw prefix and the parsed path keeps the accepted form
-    // identical to upload_devpost_image_file's output and rejects URL parser
-    // normalization tricks such as `/devpost/../account/...`.
-    if !uri.starts_with(&expected_prefix)
-        || !parsed.path().starts_with("/devpost/")
-        || parsed.query().is_some()
-        || parsed.fragment().is_some()
-    {
-        return Err(format!("image_uri must start with {expected_prefix}"));
+    let err = || format!("image_uri must be {expected_prefix}<uuid>");
+    let key = uri.strip_prefix(&expected_prefix).ok_or_else(err)?;
+    // Compared against the hyphenated form on purpose: `parse_str` also accepts the
+    // braced, urn, and unhyphenated spellings, none of which the uploader ever mints.
+    match uuid::Uuid::parse_str(key) {
+        Ok(id) if id.hyphenated().to_string() == key => Ok(()),
+        _ => Err(err()),
     }
-    Ok(())
 }
 
 fn validate_images(image_uris: &Option<Vec<String>>) -> Result<(), String> {
@@ -327,7 +319,9 @@ mod tests {
 
     #[test]
     fn accepts_image_uri_from_devpost_storage_path() {
-        let r = with_images(vec!["https://storage.nadapp.net/devpost/abc"]);
+        let r = with_images(vec![
+            "https://storage.nadapp.net/devpost/550e8400-e29b-41d4-a716-446655440000",
+        ]);
         assert!(r.validate().is_ok());
     }
 
@@ -376,6 +370,38 @@ mod tests {
         ] {
             assert!(
                 with_images(vec![uri]).validate().is_err(),
+                "should have rejected image_uri {uri:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_image_uri_with_injected_chars_in_key() {
+        let r = with_images(vec![
+            "https://storage.nadapp.net/devpost/abc\"><script>alert(1)</script>",
+        ]);
+        assert!(r.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_image_uri_with_empty_key() {
+        let r = with_images(vec!["https://storage.nadapp.net/devpost/"]);
+        assert!(r.validate().is_err());
+    }
+
+    /// `Uuid::parse_str` accepts these, but `upload_devpost_image_file` never emits
+    /// them — the accepted set must be exactly what the uploader mints.
+    #[test]
+    fn rejects_noncanonical_uuid_spellings() {
+        for key in [
+            "{550e8400-e29b-41d4-a716-446655440000}",
+            "urn:uuid:550e8400-e29b-41d4-a716-446655440000",
+            "550e8400e29b41d4a716446655440000",
+            "550E8400-E29B-41D4-A716-446655440000",
+        ] {
+            let uri = format!("https://storage.nadapp.net/devpost/{key}");
+            assert!(
+                with_images(vec![&uri]).validate().is_err(),
                 "should have rejected image_uri {uri:?}"
             );
         }

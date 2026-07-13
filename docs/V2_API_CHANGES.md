@@ -711,15 +711,15 @@ GeckoTerminal 호환 Terminal 엔드포인트(`GET /pair`, `GET /events`)가 V2(
 ## Dev Post API (신규)
 
 코인의 온체인 creator가 자신의 코인에 글(텍스트 + 이미지 + 선택적 poll)을 올리는 신규 기능. 전체 피드,
-Trending(최근 7일 좋아요 상위 3), 코인별 누적 좋아요 랭킹 세 가지 집계 뷰를 제공. 상세 스펙은
-[`dev-post-api.md`](./dev-post-api.md) 참고.
+Trending(최근 7일 좋아요 상위 3, 부족하면 최신 게시물로 채움), 코인별 누적 좋아요 랭킹 세 가지 집계 뷰를
+제공. 상세 스펙은 [`dev-post-api.md`](./dev-post-api.md) 참고.
 
 ### 신규 엔드포인트
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
 | GET | `/dev-post` | optional-auth | 피드 (전체 또는 `token_id` 필터) |
-| GET | `/dev-post/trending` | optional-auth | 최근 7일 좋아요 상위 3개 |
+| GET | `/dev-post/trending` | optional-auth | 최근 7일 좋아요 상위 3개 (부족분은 최신 게시물로 채움) |
 | GET | `/dev-post/ranking` | X | 코인별 누적 좋아요 랭킹 |
 | GET | `/dev-post/{post_id}` | optional-auth | 게시물 상세 |
 | POST | `/dev-post/image` | O | 이미지 업로드 (raw body → R2, 5MB 제한) |
