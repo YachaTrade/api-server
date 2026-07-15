@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use bigdecimal::num_bigint::BigInt;
 use bigdecimal::BigDecimal;
+use bigdecimal::num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 
 /// 토큰별 USD 가격 소스 (운영=Pyth Hermes, 테스트=fake).
@@ -65,16 +65,10 @@ pub fn parse_hermes_prices(body: &str) -> HashMap<String, BigDecimal> {
             continue;
         };
         let price = item.get("price");
-        let Some(mantissa) = price
-            .and_then(|p| p.get("price"))
-            .and_then(|v| v.as_str())
-        else {
+        let Some(mantissa) = price.and_then(|p| p.get("price")).and_then(|v| v.as_str()) else {
             continue;
         };
-        let Some(expo) = price
-            .and_then(|p| p.get("expo"))
-            .and_then(|v| v.as_i64())
-        else {
+        let Some(expo) = price.and_then(|p| p.get("expo")).and_then(|v| v.as_i64()) else {
             continue;
         };
         let Ok(mantissa) = BigInt::from_str(mantissa) else {

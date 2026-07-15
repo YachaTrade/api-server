@@ -996,13 +996,21 @@ mod tests {
         // 1e18, offsetting the 18-dec divisor for a clean assertion.
         sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,NULL,0,0,5,$2,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#)
             .bind(DIV_TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO price (quote_id,block_number,price) VALUES ($1,2,200000000000000000)")
-            .bind(QUOTE).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO price (quote_id,block_number,price) VALUES ($1,2,200000000000000000)",
+        )
+        .bind(QUOTE)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         sqlx::query("INSERT INTO dividend_distribution (merkle_root,source_token,holder,dividend_token,amount,proof,status,created_at) VALUES ('0xroot',$1,$2,$3,100,ARRAY[]::text[],'AWAITING',10)")
             .bind(TOKEN).bind(HOLDER).bind(DIV_TOKEN).execute(&pool).await.unwrap();
 
-        let resp = ctrl(pool).fetch_profile_dividends(HOLDER, &page()).await.unwrap();
+        let resp = ctrl(pool)
+            .fetch_profile_dividends(HOLDER, &page())
+            .await
+            .unwrap();
 
         assert_eq!(resp.tokens.len(), 1);
         let t = &resp.tokens[0];

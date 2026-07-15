@@ -22,6 +22,7 @@ pub struct CreatePollRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateDevPostRequest {
     pub token_id: String,
+    pub title: String,
     pub body: Option<String>,
     pub image_uris: Option<Vec<String>>,
     pub poll: Option<CreatePollRequest>,
@@ -75,34 +76,59 @@ fn validate_poll(poll: &Option<CreatePollRequest>) -> Result<(), String> {
 
 impl CreateDevPostRequest {
     pub fn validate(&self) -> Result<(), String> {
-        let has_body = self
-            .body
-            .as_ref()
-            .map(|b| !b.trim().is_empty())
-            .unwrap_or(false);
-        let has_images = self
-            .image_uris
-            .as_ref()
-            .map(|v| !v.is_empty())
-            .unwrap_or(false);
-        let has_poll = self.poll.is_some();
-        if !has_body && !has_images && !has_poll {
-            return Err("Post must have a body, at least one image, or a poll".into());
+        if self.title.trim().is_empty() {
+            return Err("Title must not be blank".into());
         }
         validate_images(&self.image_uris)?;
-        validate_poll(&self.poll)?;
-        Ok(())
+        validate_poll(&self.poll)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum EditTitle {
+    #[default]
+    Omitted,
+    Null,
+    Value(String),
+}
+
+impl EditTitle {
+    pub fn value(&self) -> Option<&str> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::Omitted | Self::Null => None,
+        }
+    }
+}
+
+fn deserialize_edit_title<'de, D>(deserializer: D) -> Result<EditTitle, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match Option::<String>::deserialize(deserializer)? {
+        Some(value) => EditTitle::Value(value),
+        None => EditTitle::Null,
+    })
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EditDevPostRequest {
+    #[serde(default, deserialize_with = "deserialize_edit_title")]
+    #[schema(value_type = String, required = false, nullable = false)]
+    pub title: EditTitle,
     pub body: Option<String>,
     pub image_uris: Option<Vec<String>>,
 }
 impl EditDevPostRequest {
     pub fn validate(&self) -> Result<(), String> {
-        if self.body.is_none() && self.image_uris.is_none() {
+        match &self.title {
+            EditTitle::Null => return Err("Title must not be null or blank".into()),
+            EditTitle::Value(value) if value.trim().is_empty() => {
+                return Err("Title must not be null or blank".into());
+            }
+            EditTitle::Omitted | EditTitle::Value(_) => {}
+        }
+        if self.title == EditTitle::Omitted && self.body.is_none() && self.image_uris.is_none() {
             return Err("Nothing to update".into());
         }
         validate_images(&self.image_uris)
@@ -149,6 +175,7 @@ pub struct DevPostResponse {
     pub id: String, // BIGINT as string
     pub token: TokenSummary,
     pub author: AuthorSummary,
+    pub title: String,
     pub body: String,
     pub tweet_url: Option<String>,
     pub images: Vec<String>,
@@ -227,6 +254,66 @@ pub fn parse_tweet_url(body: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn create_title_is_required_non_null_non_blank_and_exact() {
+        for json in [
+            r#"{"token_id":"0xToken"}"#,
+            r#"{"token_id":"0xToken","title":null}"#,
+        ] {
+            assert!(serde_json::from_str::<CreateDevPostRequest>(json).is_err());
+        }
+        for title in ["", " ", "\t\r\n"] {
+            let request: CreateDevPostRequest = serde_json::from_value(serde_json::json!({
+                "token_id": "0xToken", "title": title
+            }))
+            .unwrap();
+            assert_eq!(request.validate().unwrap_err(), "Title must not be blank");
+        }
+        let exact = "  Headline\nsecond title line  ";
+        let request: CreateDevPostRequest = serde_json::from_value(serde_json::json!({
+            "token_id": "0xToken", "title": exact
+        }))
+        .unwrap();
+        request.validate().unwrap();
+        assert_eq!(request.title, exact);
+        assert!(request.body.is_none());
+    }
+
+    #[test]
+    fn edit_title_distinguishes_omitted_null_and_value() {
+        let omitted: EditDevPostRequest =
+            serde_json::from_str(r#"{"body":"description"}"#).unwrap();
+        let null: EditDevPostRequest = serde_json::from_str(r#"{"title":null}"#).unwrap();
+        let value: EditDevPostRequest =
+            serde_json::from_str(r#"{"title":"  exact\nvalue  "}"#).unwrap();
+        assert_eq!(omitted.title, EditTitle::Omitted);
+        assert_eq!(null.title, EditTitle::Null);
+        assert_eq!(value.title, EditTitle::Value("  exact\nvalue  ".into()));
+        assert_eq!(
+            null.validate().unwrap_err(),
+            "Title must not be null or blank"
+        );
+        assert_eq!(
+            serde_json::from_str::<EditDevPostRequest>(r#"{"title":"  "}"#)
+                .unwrap()
+                .validate()
+                .unwrap_err(),
+            "Title must not be null or blank"
+        );
+        value.validate().unwrap();
+    }
+
+    #[test]
+    fn title_only_create_and_edit_supersede_old_content_rules() {
+        let create: CreateDevPostRequest =
+            serde_json::from_str(r#"{"token_id":"0xToken","title":"Title"}"#).unwrap();
+        create.validate().unwrap();
+        let edit: EditDevPostRequest = serde_json::from_str(r#"{"title":"Replacement"}"#).unwrap();
+        edit.validate().unwrap();
+        let empty: EditDevPostRequest = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty.validate().unwrap_err(), "Nothing to update");
+    }
+
     fn sample_response(id: &str) -> DevPostResponse {
         let at = chrono::DateTime::parse_from_rfc3339("2026-07-13T00:00:00Z")
             .unwrap()
@@ -245,6 +332,7 @@ mod tests {
                 nickname: None,
                 image_uri: None,
             },
+            title: "Announcement".into(),
             body: "announcement".into(),
             tweet_url: None,
             images: Vec::new(),
@@ -268,6 +356,7 @@ mod tests {
     fn rejects_completely_empty_post() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: String::new(),
             body: None,
             image_uris: None,
             poll: None,
@@ -275,9 +364,10 @@ mod tests {
         assert!(r.validate().is_err());
     }
     #[test]
-    fn accepts_body_only() {
+    fn accepts_body_with_title() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("gm".into()),
             image_uris: None,
             poll: None,
@@ -289,6 +379,7 @@ mod tests {
         let imgs = vec!["u".to_string(); MAX_IMAGES + 1];
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("x".into()),
             image_uris: Some(imgs),
             poll: None,
@@ -299,6 +390,7 @@ mod tests {
     fn rejects_poll_with_one_option() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("x".into()),
             image_uris: None,
             poll: Some(CreatePollRequest {
@@ -311,6 +403,7 @@ mod tests {
     fn rejects_poll_with_four_options() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("x".into()),
             image_uris: None,
             poll: Some(CreatePollRequest {
@@ -323,6 +416,7 @@ mod tests {
     fn rejects_poll_with_empty_label() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("x".into()),
             image_uris: None,
             poll: Some(CreatePollRequest {
@@ -335,6 +429,7 @@ mod tests {
     fn accepts_poll_with_two_options() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: None,
             image_uris: None,
             poll: Some(CreatePollRequest {
@@ -346,6 +441,7 @@ mod tests {
     fn with_images(uris: Vec<&str>) -> CreateDevPostRequest {
         CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("x".into()),
             image_uris: Some(uris.into_iter().map(String::from).collect()),
             poll: None,
@@ -446,6 +542,7 @@ mod tests {
     fn rejects_poll_option_image_uri_from_a_foreign_origin() {
         let r = CreateDevPostRequest {
             token_id: "0x0".into(),
+            title: "Announcement".into(),
             body: Some("x".into()),
             image_uris: None,
             poll: Some(CreatePollRequest {
@@ -464,6 +561,7 @@ mod tests {
     #[test]
     fn edit_rejects_image_uri_from_a_foreign_origin() {
         let r = EditDevPostRequest {
+            title: EditTitle::Omitted,
             body: None,
             image_uris: Some(vec!["https://evil.com/x.png".into()]),
         };
@@ -473,6 +571,7 @@ mod tests {
     #[test]
     fn edit_rejects_too_many_images() {
         let r = EditDevPostRequest {
+            title: EditTitle::Omitted,
             body: None,
             image_uris: Some(vec!["u".to_string(); MAX_IMAGES + 1]),
         };
@@ -503,6 +602,7 @@ mod tests {
                 nickname: None,
                 image_uri: None,
             },
+            title: "Announcement".into(),
             body: "b".into(),
             tweet_url: None,
             images: vec![],

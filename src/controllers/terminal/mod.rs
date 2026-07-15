@@ -476,10 +476,7 @@ mod tests {
         sqlx::query(r#"INSERT INTO balance_history (token_id,account_id,balance,block_number,transaction_hash,log_index,tx_index)
             VALUES ($1,$2,0,12345,'0xseedtx',0,0)"#)
             .bind(TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
-        let got = ctrl(pool)
-            .get_block_number_by_tx("0xseedtx")
-            .await
-            .unwrap();
+        let got = ctrl(pool).get_block_number_by_tx("0xseedtx").await.unwrap();
         assert_eq!(got, Some(12345));
     }
 }

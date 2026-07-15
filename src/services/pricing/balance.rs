@@ -60,17 +60,19 @@ impl Default for RpcBalanceSource {
 impl BalanceSource for RpcBalanceSource {
     async fn balance_of(&self, token_id: &str, account: &str) -> Option<BigDecimal> {
         let key = format!("bal:{}:{}", token_id, account);
-        let cached: anyhow::Result<Option<String>> =
-            with_cache(&BALANCE_CACHE, key, || async {
-                match Self::fetch(token_id, account).await {
-                    Ok(b) => Ok(Some(b.to_plain_string())),
-                    Err(e) => {
-                        warn!("balanceOf failed token={token_id} account={account}: {e}");
-                        Ok(None) // degrade: 실패를 캐시하되 null로
-                    }
+        let cached: anyhow::Result<Option<String>> = with_cache(&BALANCE_CACHE, key, || async {
+            match Self::fetch(token_id, account).await {
+                Ok(b) => Ok(Some(b.to_plain_string())),
+                Err(e) => {
+                    warn!("balanceOf failed token={token_id} account={account}: {e}");
+                    Ok(None) // degrade: 실패를 캐시하되 null로
                 }
-            })
-            .await;
-        cached.ok().flatten().and_then(|s| s.parse::<BigDecimal>().ok())
+            }
+        })
+        .await;
+        cached
+            .ok()
+            .flatten()
+            .and_then(|s| s.parse::<BigDecimal>().ok())
     }
 }

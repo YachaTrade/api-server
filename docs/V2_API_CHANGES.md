@@ -734,6 +734,10 @@ Trending(최근 7일 좋아요 상위 3, 부족하면 최신 게시물로 채움
 `DevPostResponse.id`는 BIGINT를 문자열로 직렬화(JS 2^53 정밀도 손실 방지). `poll.is_closed`는 읽기
 시점에 `closes_at <= now()`로 계산(별도 배치 없음).
 
+### 제목/조정 계약
+
+생성 예시는 `{"token_id":"0x...","title":"Exact title\nwith newline","body":"Description only"}`이며 제목 누락/null/blank는 400, 전체 요청 초과는 413이다. 수정은 omitted-preserve, null/blank 400의 tri-state다. 공백/줄바꿈은 보존하고 title cap은 없으며 모든 응답 surface가 title과 body를 분리한다. 구버전 reader 오표시는 허용하지만 old-create 400과 legacy body-only edit ambiguity는 허용하지 않는다. capability header, versioned path, fallback/negotiation은 없다. OpenAPI operation 수는 Dev Post 13 + CMS 2다.
+
 ### 요약표
 
 | 타입/엔드포인트 | 변경 |

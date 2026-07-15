@@ -103,9 +103,12 @@ fn row_to_response(r: PoolRow) -> PoolDetailResponse {
     let pair_label = format!("{}-{}", token0_symbol, token1_symbol);
 
     let apr = apr_max_pct(
-        r.lp_fee_24h_usd, r.tvl_24h_usd_avg,
-        r.lp_fee_7d_usd,  r.tvl_7d_usd_avg,
-        r.lp_fee_30d_usd, r.tvl_30d_usd_avg,
+        r.lp_fee_24h_usd,
+        r.tvl_24h_usd_avg,
+        r.lp_fee_7d_usd,
+        r.tvl_7d_usd_avg,
+        r.lp_fee_30d_usd,
+        r.tvl_30d_usd_avg,
     );
 
     let fee_config = match (r.fee_creator_bps, r.fee_curve_bps, r.fee_dex_bps) {
@@ -247,7 +250,10 @@ mod tests {
         let expected_tvl = bigdecimal::BigDecimal::from_str("1000.61").unwrap();
         assert_eq!(tvl, expected_tvl);
         assert_eq!(resp.pool_info.total_supply, "5000");
-        assert!(resp.pool_info.apr.is_none(), "no pool_apr row → APR is None");
+        assert!(
+            resp.pool_info.apr.is_none(),
+            "no pool_apr row → APR is None"
+        );
         assert!(
             resp.fee_config.is_none(),
             "no fee_config row → fee_config is None"

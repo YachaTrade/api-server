@@ -1,5 +1,6 @@
 //! Dev Post controller: create/edit/delete (writes) with creator authorization.
 
+pub(crate) mod moderation;
 mod pin;
 #[cfg(test)]
 mod pin_feed_tests;
@@ -50,14 +51,16 @@ impl DevPostController {
         }
 
         let id: i64 = sqlx::query_scalar(
-            "INSERT INTO dev_post (token_id, author, body) VALUES ($1,$2,$3) RETURNING id",
+            "INSERT INTO dev_post (token_id, author, title, body) \
+             VALUES ($1,$2,$3,$4) RETURNING id",
         )
         .bind(&req.token_id)
         .bind(author)
-        .bind(req.body.clone().unwrap_or_default())
+        .bind(&req.title)
+        .bind(req.body.as_deref().unwrap_or(""))
         .fetch_one(&mut *tx)
         .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        .map_err(|error| AppError::InternalError(error.to_string()))?;
 
         if let Some(imgs) = &req.image_uris {
             for (i, uri) in imgs.iter().enumerate() {
@@ -131,24 +134,18 @@ impl DevPostController {
             return Err(AppError::Forbidden("Not the post author".into()));
         }
 
-        let token_id: String = if let Some(body) = &req.body {
-            sqlx::query_scalar(
-                "UPDATE dev_post SET body=$2, updated_at=NOW(), edited_at=NOW() WHERE id=$1 RETURNING token_id",
-            )
-            .bind(post_id)
-            .bind(body)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-        } else {
-            sqlx::query_scalar(
-                "UPDATE dev_post SET updated_at=NOW(), edited_at=NOW() WHERE id=$1 RETURNING token_id",
-            )
-            .bind(post_id)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-        };
+        let token_id: String = sqlx::query_scalar(
+            "UPDATE dev_post \
+             SET title = COALESCE($2, title), body = COALESCE($3, body), \
+                 updated_at = NOW(), edited_at = NOW() \
+             WHERE id = $1 RETURNING token_id",
+        )
+        .bind(post_id)
+        .bind(req.title.value())
+        .bind(req.body.as_deref())
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| AppError::InternalError(error.to_string()))?;
         if let Some(imgs) = &req.image_uris {
             // full replacement
             sqlx::query("DELETE FROM dev_post_image WHERE post_id=$1")
@@ -174,31 +171,12 @@ impl DevPostController {
         Ok(token_id)
     }
 
-    pub async fn delete_post(&self, post_id: i64, author: &str) -> Result<String, AppError> {
-        let mut tx = self
-            .db
-            .get_write_pool()
-            .begin()
-            .await
-            .map_err(|error| AppError::InternalError(error.to_string()))?;
-        let context = pin::lock_live_post_context(&mut tx, post_id).await?;
-        if context.author != author {
-            return Err(AppError::Forbidden("Not the post author".into()));
-        }
-        sqlx::query("DELETE FROM dev_post_pin WHERE post_id = $1")
-            .bind(post_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| AppError::InternalError(error.to_string()))?;
-        sqlx::query("UPDATE dev_post SET deleted_at = NOW() WHERE id = $1")
-            .bind(post_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| AppError::InternalError(error.to_string()))?;
-        tx.commit()
-            .await
-            .map_err(|error| AppError::InternalError(error.to_string()))?;
-        Ok(context.token_id)
+    pub async fn delete_post(
+        &self,
+        post_id: i64,
+        author: &str,
+    ) -> Result<moderation::CommitOutcome<moderation::PostMutationContext>, AppError> {
+        self.delete_post_as_author(post_id, author).await
     }
 
     pub async fn like(&self, post_id: i64, account_id: &str) -> Result<i64, AppError> {
@@ -327,6 +305,7 @@ impl DevPostController {
             id: i64,
             token_id: String,
             author: String,
+            title: String,
             body: String,
             created_at: chrono::DateTime<chrono::Utc>,
             updated_at: chrono::DateTime<chrono::Utc>,
@@ -338,7 +317,7 @@ impl DevPostController {
             author_image: Option<String>,
         }
         let core_rows: Vec<CoreRow> = sqlx::query_as(
-            "SELECT dp.id, dp.token_id, dp.author, dp.body, dp.created_at, dp.updated_at, dp.edited_at,
+            "SELECT dp.id, dp.token_id, dp.author, dp.title, dp.body, dp.created_at, dp.updated_at, dp.edited_at,
                     t.name AS token_name, t.symbol AS token_symbol, t.image_uri AS token_image,
                     a.nickname AS author_nickname, a.image_uri AS author_image
              FROM dev_post dp
@@ -455,6 +434,7 @@ impl DevPostController {
                     nickname: core.author_nickname,
                     image_uri: core.author_image,
                 },
+                title: core.title,
                 tweet_url: parse_tweet_url(&core.body),
                 body: core.body,
                 images: images_by_post.remove(&id).unwrap_or_default(),
@@ -823,10 +803,13 @@ impl DevPostController {
 }
 
 #[cfg(test)]
-mod write_tests {
+mod tests {
     use super::*;
     use crate::types::dev_post::*;
     use std::sync::Arc;
+
+    const TOKEN: &str = "0x0000000000000000000000000000000000007777";
+    const CREATOR: &str = "0x52908400098527886E0F7030069857D2E4169EE7";
 
     async fn seed_token(pool: &sqlx::PgPool, token_id: &str, creator: &str) {
         sqlx::query(
@@ -847,11 +830,163 @@ mod write_tests {
         }))
     }
 
+    fn controller(pool: sqlx::PgPool) -> DevPostController {
+        ctl(pool)
+    }
+
+    async fn seed_titled_post(pool: &sqlx::PgPool, title: &str, body: &str) -> i64 {
+        seed_token(pool, TOKEN, CREATOR).await;
+        sqlx::query_scalar(
+            "INSERT INTO dev_post (token_id, author, title, body) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(TOKEN)
+        .bind(CREATOR)
+        .bind(title)
+        .bind(body)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn seed_titled_post_with_image(
+        pool: &sqlx::PgPool,
+        title: &str,
+        body: &str,
+        image_uri: &str,
+    ) -> i64 {
+        let id = seed_titled_post(pool, title, body).await;
+        sqlx::query(
+            "INSERT INTO dev_post_image (post_id, position, image_uri) VALUES ($1, $2, $3)",
+        )
+        .bind(id)
+        .bind(0_i16)
+        .bind(image_uri)
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn create_stores_title_and_empty_description_separately(pool: sqlx::PgPool) {
+        seed_token(&pool, TOKEN, CREATOR).await;
+        let controller = controller(pool.clone());
+        let request: CreateDevPostRequest = serde_json::from_str(
+            r#"{"token_id":"0x0000000000000000000000000000000000007777","title":"  Multi\nline  "}"#,
+        )
+        .unwrap();
+        let id = controller.create_post(CREATOR, &request).await.unwrap();
+        let stored: (String, String) =
+            sqlx::query_as("SELECT title, body FROM dev_post WHERE id=$1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored, ("  Multi\nline  ".into(), "".into()));
+        let response = controller.get_post_rw(id, Some(CREATOR)).await.unwrap();
+        assert_eq!(response.title, "  Multi\nline  ");
+        assert_eq!(response.body, "");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn edit_title_tristate_is_atomic_with_body_and_images(pool: sqlx::PgPool) {
+        let id = seed_titled_post(&pool, "Original", "description").await;
+        let controller = controller(pool.clone());
+        let omitted: EditDevPostRequest = serde_json::from_str(r#"{"body":"new body"}"#).unwrap();
+        controller.edit_post(id, CREATOR, &omitted).await.unwrap();
+        let after_omitted: (String, String) =
+            sqlx::query_as("SELECT title, body FROM dev_post WHERE id=$1")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(after_omitted, ("Original".into(), "new body".into()));
+
+        let title_only: EditDevPostRequest =
+            serde_json::from_str(r#"{"title":"  Replaced\nexactly  "}"#).unwrap();
+        controller
+            .edit_post(id, CREATOR, &title_only)
+            .await
+            .unwrap();
+        let response = controller.get_post_rw(id, Some(CREATOR)).await.unwrap();
+        assert_eq!(response.title, "  Replaced\nexactly  ");
+        assert_eq!(response.body, "new body");
+        assert!(response.is_edited);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn every_read_surface_returns_title_and_description_only_body(pool: sqlx::PgPool) {
+        let id = seed_titled_post(
+            &pool,
+            "Headline",
+            "https://x.com/naddotfun/status/1 details",
+        )
+        .await;
+        let controller = controller(pool.clone());
+        controller.pin_post(id, CREATOR).await.unwrap();
+        let feed = controller.get_feed_base(Some(TOKEN), 1, 20).await.unwrap();
+        assert_eq!(feed.pin.as_ref().unwrap().title, "Headline");
+        assert_eq!(
+            feed.pin.as_ref().unwrap().body,
+            "https://x.com/naddotfun/status/1 details"
+        );
+        let detail = controller.get_post_rw(id, None).await.unwrap();
+        assert_eq!(detail.title, "Headline");
+        assert_eq!(
+            detail.tweet_url.as_deref(),
+            Some("https://x.com/naddotfun/status/1")
+        );
+        let trending = controller.get_trending_base().await.unwrap();
+        assert!(
+            trending
+                .iter()
+                .any(|post| post.id == id.to_string() && post.title == "Headline")
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn edit_title_body_and_images_roll_back_atomically(pool: sqlx::PgPool) {
+        let id = seed_titled_post_with_image(&pool, "Original", "description", "old-image").await;
+        sqlx::raw_sql(
+            "CREATE FUNCTION fail_new_image() RETURNS trigger LANGUAGE plpgsql AS $$ \
+             BEGIN RAISE EXCEPTION 'injected image failure'; END $$; \
+             CREATE TRIGGER fail_new_image BEFORE INSERT ON dev_post_image \
+             FOR EACH ROW EXECUTE FUNCTION fail_new_image()",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let request: EditDevPostRequest = serde_json::from_str(
+            r#"{"title":"Replacement","body":"replacement body","image_uris":["new-image"]}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            controller(pool.clone())
+                .edit_post(id, CREATOR, &request)
+                .await,
+            Err(AppError::InternalError(_))
+        ));
+        let stored: (String, String, String) = sqlx::query_as(
+            "SELECT dp.title,dp.body,dpi.image_uri FROM dev_post dp \
+             JOIN dev_post_image dpi ON dpi.post_id=dp.id WHERE dp.id=$1",
+        )
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            stored,
+            ("Original".into(), "description".into(), "old-image".into())
+        );
+    }
+
     async fn create_poll_post(c: &DevPostController) -> i64 {
         c.create_post(
             "0xCreator",
             &CreateDevPostRequest {
                 token_id: "0xToken".into(),
+                title: "Announcement".into(),
                 body: None,
                 image_uris: None,
                 poll: Some(CreatePollRequest {
@@ -878,6 +1013,7 @@ mod write_tests {
         let c = ctl(pool);
         let req = CreateDevPostRequest {
             token_id: "0xToken".into(),
+            title: "Announcement".into(),
             body: Some("hi".into()),
             image_uris: None,
             poll: None,
@@ -891,6 +1027,7 @@ mod write_tests {
         let c = ctl(pool);
         let req = CreateDevPostRequest {
             token_id: "0xMissing".into(),
+            title: "Announcement".into(),
             body: Some("hi".into()),
             image_uris: None,
             poll: None,
@@ -905,6 +1042,7 @@ mod write_tests {
         let c = ctl(pool.clone());
         let req = CreateDevPostRequest {
             token_id: "0xToken".into(),
+            title: "Announcement".into(),
             body: Some("gm https://x.com/a/status/1".into()),
             image_uris: Some(vec!["u1".into(), "u2".into()]),
             poll: Some(CreatePollRequest {
@@ -953,6 +1091,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("x".into()),
                     image_uris: None,
                     poll: None,
@@ -965,6 +1104,7 @@ mod write_tests {
                 id,
                 "0xSomeoneElse",
                 &EditDevPostRequest {
+                    title: Default::default(),
                     body: Some("y".into()),
                     image_uris: None,
                 },
@@ -983,6 +1123,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("x".into()),
                     image_uris: Some(vec!["old".into()]),
                     poll: None,
@@ -994,6 +1135,7 @@ mod write_tests {
             id,
             "0xCreator",
             &EditDevPostRequest {
+                title: Default::default(),
                 body: Some("new body".into()),
                 image_uris: Some(vec!["new1".into(), "new2".into()]),
             },
@@ -1024,6 +1166,7 @@ mod write_tests {
                 999,
                 "0xCreator",
                 &EditDevPostRequest {
+                    title: Default::default(),
                     body: Some("y".into()),
                     image_uris: None,
                 },
@@ -1042,6 +1185,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("x".into()),
                     image_uris: None,
                     poll: None,
@@ -1068,6 +1212,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("x".into()),
                     image_uris: None,
                     poll: None,
@@ -1095,6 +1240,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("x".into()),
                     image_uris: None,
                     poll: None,
@@ -1118,6 +1264,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("x".into()),
                     image_uris: None,
                     poll: None,
@@ -1189,6 +1336,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("a".into()),
                     image_uris: None,
                     poll: None,
@@ -1201,6 +1349,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("b".into()),
                     image_uris: None,
                     poll: None,
@@ -1229,6 +1378,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("gm from write pool".into()),
                     image_uris: None,
                     poll: None,
@@ -1269,6 +1419,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id,
+                    title: "Announcement".into(),
                     body: Some("tie".into()),
                     image_uris: None,
                     poll: None,
@@ -1308,6 +1459,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("p".into()),
                     image_uris: None,
                     poll: None,
@@ -1337,6 +1489,7 @@ mod write_tests {
                     "0xCreator",
                     &CreateDevPostRequest {
                         token_id: "0xToken".into(),
+                        title: "Announcement".into(),
                         body: Some(format!("post {i}")),
                         image_uris: None,
                         poll: None,
@@ -1395,6 +1548,7 @@ mod write_tests {
                 "0xCreator",
                 &CreateDevPostRequest {
                     token_id: "0xToken".into(),
+                    title: "Announcement".into(),
                     body: Some("b".into()),
                     image_uris: None,
                     poll: None,
@@ -1407,6 +1561,7 @@ mod write_tests {
                 id,
                 "0xCreator",
                 &EditDevPostRequest {
+                    title: Default::default(),
                     body: Some("b2".into()),
                     image_uris: None,
                 },
@@ -1415,6 +1570,13 @@ mod write_tests {
             .unwrap(),
             "0xToken"
         );
-        assert_eq!(c.delete_post(id, "0xCreator").await.unwrap(), "0xToken");
+        let outcome = c.delete_post(id, "0xCreator").await.unwrap();
+        match outcome {
+            moderation::CommitOutcome::Committed(context) => {
+                assert_eq!(context.token_id, "0xToken");
+                assert!(context.changed);
+            }
+            moderation::CommitOutcome::Unknown { .. } => panic!("delete commit outcome unknown"),
+        }
     }
 }

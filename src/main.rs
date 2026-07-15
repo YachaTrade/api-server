@@ -1,5 +1,5 @@
 use api_server::{
-    config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
+    config::{self, HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
     cors::get_cors,
     router::{
         self, account, agent, api_key, auth, chester, cms, dev_post, dex, dividend, health, hype,
@@ -166,6 +166,8 @@ use utoipa_swagger_ui::SwaggerUi;
         router::cms::handler::upload_dex_token_image,
         router::cms::handler::upsert_whitelist_token,
         router::cms::handler::list_whitelist_token,
+        router::cms::handler::delete_dev_post,
+        router::cms::handler::restore_dev_post,
 
         // ----------------CMS Analytics----------------
         router::cms::analytics::handler::get_churned_users,
@@ -497,6 +499,9 @@ async fn main() -> Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
+    config::validate_current_devpost_cache_ttls()
+        .expect("invalid Dev Post cache TTL configuration");
+
     let args = Args::parse();
 
     let ip = env::var("IP").unwrap_or_else(|_| "127.0.0.1".to_string());
@@ -750,6 +755,124 @@ mod openapi_tests {
                 v2_changes.contains(required),
                 "missing V2 API changes contract: {required}"
             );
+        }
+    }
+
+    #[test]
+    fn openapi_requires_title_and_registers_exact_moderation_contract() {
+        let json = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let schemas = &json["components"]["schemas"];
+        assert!(
+            schemas["CreateDevPostRequest"]["required"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("title"))
+        );
+        assert_eq!(
+            schemas["CreateDevPostRequest"]["properties"]["title"]["type"],
+            "string"
+        );
+        assert!(
+            schemas["CreateDevPostRequest"]["properties"]["title"]
+                .get("maxLength")
+                .is_none()
+        );
+        assert!(
+            !schemas["EditDevPostRequest"]["required"]
+                .as_array()
+                .is_some_and(|fields| fields.contains(&serde_json::json!("title")))
+        );
+        assert_eq!(
+            schemas["EditDevPostRequest"]["properties"]["title"]["type"],
+            "string"
+        );
+        assert_ne!(
+            schemas["EditDevPostRequest"]["properties"]["title"]["nullable"],
+            true
+        );
+        assert!(
+            schemas["DevPostResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("title"))
+        );
+        assert!(json["paths"]["/cms/dev-post/{post_id}"]["delete"].is_object());
+        assert!(json["paths"]["/cms/dev-post/{post_id}/restore"]["post"].is_object());
+        assert!(json["paths"]["/dev-post"]["post"]["responses"]["413"].is_object());
+        assert!(json["paths"]["/dev-post/{post_id}"]["patch"]["responses"]["413"].is_object());
+        for operation in ["delete", "post"] {
+            let path = if operation == "delete" {
+                "/cms/dev-post/{post_id}"
+            } else {
+                "/cms/dev-post/{post_id}/restore"
+            };
+            assert!(json["paths"][path][operation]["responses"]["204"]["content"].is_null());
+        }
+        for (path, method, statuses) in [
+            ("/dev-post", "post", vec!["400", "413"]),
+            ("/dev-post/{post_id}", "patch", vec!["400", "413"]),
+            (
+                "/cms/dev-post/{post_id}",
+                "delete",
+                vec!["204", "400", "401", "403", "404", "500"],
+            ),
+            (
+                "/cms/dev-post/{post_id}/restore",
+                "post",
+                vec!["204", "400", "401", "403", "404", "409", "500"],
+            ),
+        ] {
+            for status in statuses {
+                assert!(
+                    json["paths"][path][method]["responses"][status].is_object(),
+                    "missing {path} {status}"
+                );
+            }
+        }
+        let mut dev = 0;
+        let mut cms = 0;
+        for item in json["paths"].as_object().unwrap().values() {
+            for op in item.as_object().unwrap().values() {
+                if op["tags"]
+                    .as_array()
+                    .is_some_and(|t| t.iter().any(|x| x == "DevPost"))
+                {
+                    dev += 1;
+                }
+                if op["tags"]
+                    .as_array()
+                    .is_some_and(|t| t.iter().any(|x| x == "CMS"))
+                    && (op["operationId"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("dev_post"))
+                {
+                    cms += 1;
+                }
+            }
+        }
+        assert_eq!(dev, 13);
+        assert_eq!(cms, 2);
+    }
+
+    #[test]
+    fn documentation_contract() {
+        let docs = [
+            include_str!("../docs/dev-post-api.md"),
+            include_str!("../docs/V2_API_CHANGES.md"),
+            include_str!("../docs/cms-dev-post-moderation.md"),
+        ]
+        .join("\n");
+        for required in ["title", "description only", "point of no return", "13", "2"] {
+            assert!(docs.contains(required), "missing {required}");
+        }
+        for banned in [
+            "X-DevPost-Capability",
+            "/v3/dev-post",
+            "title + body",
+            "body + title",
+        ] {
+            assert!(!docs.contains(banned), "stale contract {banned}");
         }
     }
 

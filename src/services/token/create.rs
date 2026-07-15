@@ -6,7 +6,7 @@ use crate::{
     controllers::token::create::TokenCreatedController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    services::capricorn::{CapricornClient, CAPRICORN_UNION_CAP, lp_amounts_by_token},
+    services::capricorn::{CAPRICORN_UNION_CAP, CapricornClient, lp_amounts_by_token},
     types::{common::pagination::PaginationParams, profile::CreatedTokensResponse},
 };
 

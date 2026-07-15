@@ -6,11 +6,8 @@ use tracing::instrument;
 
 use super::path::VaultPath;
 use crate::{
-    result::AppJsonResult,
-    services::vault::VaultService,
-    state::AppState,
-    types::vault::TokenVaultsResponse,
-    utils::valid_existing_token_id,
+    result::AppJsonResult, services::vault::VaultService, state::AppState,
+    types::vault::TokenVaultsResponse, utils::valid_existing_token_id,
 };
 
 /// List vaults that a token routes a portion of its trading fees to.

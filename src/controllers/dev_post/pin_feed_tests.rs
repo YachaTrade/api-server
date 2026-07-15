@@ -28,12 +28,14 @@ async fn seed_token(pool: &sqlx::PgPool, token_id: &str) {
     .unwrap();
 }
 
-async fn seed_post(pool: &sqlx::PgPool, token_id: &str, body: &str) -> i64 {
+async fn seed_post(pool: &sqlx::PgPool, token_id: &str, title: &str, body: &str) -> i64 {
     sqlx::query_scalar(
-        "INSERT INTO dev_post (token_id, author, body) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO dev_post (token_id, author, title, body) \
+         VALUES ($1, $2, $3, $4) RETURNING id",
     )
     .bind(token_id)
     .bind(CREATOR)
+    .bind(title)
     .bind(body)
     .fetch_one(pool)
     .await
@@ -65,8 +67,8 @@ async fn seed_poll(pool: &sqlx::PgPool, post_id: i64) {
 #[sqlx::test(migrations = "./migrations-test")]
 async fn pin_and_posts_share_viewer_overlay_without_cross_viewer_leak(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let ordinary = seed_post(&pool, TOKEN, "ordinary").await;
-    let pin = seed_post(&pool, TOKEN, "pin").await;
+    let ordinary = seed_post(&pool, TOKEN, "Ordinary title", "ordinary").await;
+    let pin = seed_post(&pool, TOKEN, "Pinned title", "pin").await;
     seed_poll(&pool, ordinary).await;
     seed_poll(&pool, pin).await;
     for (post_id, viewer, option) in [
@@ -156,9 +158,9 @@ async fn pin_and_posts_share_viewer_overlay_without_cross_viewer_leak(pool: sqlx
 #[sqlx::test(migrations = "./migrations-test")]
 async fn token_pages_return_pin_only_on_page_one_and_exclude_before_paging(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let oldest = seed_post(&pool, TOKEN, "oldest").await;
-    let pinned = seed_post(&pool, TOKEN, "pin").await;
-    let newest = seed_post(&pool, TOKEN, "newest").await;
+    let oldest = seed_post(&pool, TOKEN, "Oldest title", "oldest").await;
+    let pinned = seed_post(&pool, TOKEN, "Pinned title", "pin").await;
+    let newest = seed_post(&pool, TOKEN, "Newest title", "newest").await;
     let controller = controller(pool);
     controller.pin_post(pinned, CREATOR).await.unwrap();
 
@@ -187,7 +189,7 @@ async fn pin_only_empty_full_and_past_end_pages_preserve_contract(pool: sqlx::Pg
     assert!(empty.posts.is_empty());
     assert_eq!(empty.total_count, 0);
 
-    let pin = seed_post(&pool, TOKEN, "pin").await;
+    let pin = seed_post(&pool, TOKEN, "Pinned title", "pin").await;
     controller.pin_post(pin, CREATOR).await.unwrap();
     let pin_only = controller.get_feed(Some(TOKEN), 1, 10, None).await.unwrap();
     assert_eq!(pin_only.pin.unwrap().id, pin.to_string());
@@ -195,7 +197,13 @@ async fn pin_only_empty_full_and_past_end_pages_preserve_contract(pool: sqlx::Pg
     assert_eq!(pin_only.total_count, 0);
 
     for index in 0..10 {
-        seed_post(&pool, TOKEN, &format!("ordinary-{index}")).await;
+        seed_post(
+            &pool,
+            TOKEN,
+            &format!("Ordinary title {index}"),
+            &format!("ordinary-{index}"),
+        )
+        .await;
     }
     let full = controller.get_feed(Some(TOKEN), 1, 10, None).await.unwrap();
     assert!(full.pin.is_some());
@@ -214,8 +222,8 @@ async fn pin_only_empty_full_and_past_end_pages_preserve_contract(pool: sqlx::Pg
 #[sqlx::test(migrations = "./migrations-test")]
 async fn global_feed_ignores_pin_state(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let pin = seed_post(&pool, TOKEN, "pin").await;
-    let ordinary = seed_post(&pool, TOKEN, "ordinary").await;
+    let pin = seed_post(&pool, TOKEN, "Pinned title", "pin").await;
+    let ordinary = seed_post(&pool, TOKEN, "Ordinary title", "ordinary").await;
     let controller = controller(pool);
     controller.pin_post(pin, CREATOR).await.unwrap();
 
@@ -234,8 +242,8 @@ async fn global_feed_ignores_pin_state(pool: sqlx::PgPool) {
 async fn stale_or_cross_token_mapping_never_emits_or_hides_wrong_post(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
     seed_token(&pool, OTHER_TOKEN).await;
-    let x_post = seed_post(&pool, TOKEN, "x").await;
-    let y_post = seed_post(&pool, OTHER_TOKEN, "y").await;
+    let x_post = seed_post(&pool, TOKEN, "X title", "x").await;
+    let y_post = seed_post(&pool, OTHER_TOKEN, "Y title", "y").await;
     sqlx::query("INSERT INTO dev_post_pin (token_id, post_id) VALUES ($1, $2)")
         .bind(TOKEN)
         .bind(y_post)
@@ -278,8 +286,8 @@ async fn stale_or_cross_token_mapping_never_emits_or_hides_wrong_post(pool: sqlx
 #[sqlx::test(migrations = "./migrations-test")]
 async fn creator_transfer_keeps_old_pin_visible_and_excluded(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let ordinary = seed_post(&pool, TOKEN, "ordinary").await;
-    let old_pin = seed_post(&pool, TOKEN, "old pin").await;
+    let ordinary = seed_post(&pool, TOKEN, "Ordinary title", "ordinary").await;
+    let old_pin = seed_post(&pool, TOKEN, "Old pin title", "old pin").await;
     let controller = controller(pool.clone());
     controller.pin_post(old_pin, CREATOR).await.unwrap();
     let new_creator = "0xde709f2102306220921060314715629080e2fb77";
@@ -300,9 +308,9 @@ async fn creator_transfer_keeps_old_pin_visible_and_excluded(pool: sqlx::PgPool)
 #[sqlx::test(migrations = "./migrations-test")]
 async fn replaced_and_unpinned_posts_reenter_newest_first_pagination(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let oldest = seed_post(&pool, TOKEN, "oldest").await;
-    let middle = seed_post(&pool, TOKEN, "middle").await;
-    let newest = seed_post(&pool, TOKEN, "newest").await;
+    let oldest = seed_post(&pool, TOKEN, "Oldest title", "oldest").await;
+    let middle = seed_post(&pool, TOKEN, "Middle title", "middle").await;
+    let newest = seed_post(&pool, TOKEN, "Newest title", "newest").await;
     let controller = controller(pool);
 
     controller.pin_post(middle, CREATOR).await.unwrap();
@@ -326,10 +334,18 @@ async fn replaced_and_unpinned_posts_reenter_newest_first_pagination(pool: sqlx:
 #[sqlx::test(migrations = "./migrations-test")]
 async fn deleting_pinned_post_soft_deletes_and_unpins_in_one_commit(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let pin = seed_post(&pool, TOKEN, "pin").await;
+    let pin = seed_post(&pool, TOKEN, "Pinned title", "pin").await;
     let controller = controller(pool.clone());
     controller.pin_post(pin, CREATOR).await.unwrap();
-    assert_eq!(controller.delete_post(pin, CREATOR).await.unwrap(), TOKEN);
+    match controller.delete_post(pin, CREATOR).await.unwrap() {
+        crate::controllers::dev_post::moderation::CommitOutcome::Committed(context) => {
+            assert_eq!(context.token_id, TOKEN);
+            assert!(context.changed);
+        }
+        crate::controllers::dev_post::moderation::CommitOutcome::Unknown { .. } => {
+            panic!("delete commit outcome unknown")
+        }
+    }
 
     let state: (bool, i64) = sqlx::query_as(
         "SELECT deleted_at IS NOT NULL, \
@@ -344,16 +360,24 @@ async fn deleting_pinned_post_soft_deletes_and_unpins_in_one_commit(pool: sqlx::
 }
 
 #[sqlx::test(migrations = "./migrations-test")]
-async fn concurrent_pin_and_delete_never_leave_deleted_post_pinned(pool: sqlx::PgPool) {
+async fn pin_delete_race_cannot_leave_deleted_post_pinned(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let post = seed_post(&pool, TOKEN, "race").await;
+    let post = seed_post(&pool, TOKEN, "Race title", "race").await;
     let pin_controller = controller(pool.clone());
     let delete_controller = controller(pool.clone());
     let (pin_result, delete_result) = tokio::join!(
         pin_controller.pin_post(post, CREATOR),
         delete_controller.delete_post(post, CREATOR)
     );
-    assert_eq!(delete_result.unwrap(), TOKEN);
+    match delete_result.unwrap() {
+        crate::controllers::dev_post::moderation::CommitOutcome::Committed(context) => {
+            assert_eq!(context.token_id, TOKEN);
+            assert!(context.changed);
+        }
+        crate::controllers::dev_post::moderation::CommitOutcome::Unknown { .. } => {
+            panic!("delete commit outcome unknown")
+        }
+    }
     match pin_result {
         Ok(token_id) => assert_eq!(token_id, TOKEN),
         Err(AppError::NotFound(message)) => assert_eq!(message, "Post not found"),
@@ -373,7 +397,7 @@ async fn concurrent_pin_and_delete_never_leave_deleted_post_pinned(pool: sqlx::P
 #[sqlx::test(migrations = "./migrations-test")]
 async fn delete_failure_rolls_back_unpin_and_soft_delete(pool: sqlx::PgPool) {
     seed_token(&pool, TOKEN).await;
-    let pin = seed_post(&pool, TOKEN, "pin").await;
+    let pin = seed_post(&pool, TOKEN, "Pinned title", "pin").await;
     let controller = controller(pool.clone());
     controller.pin_post(pin, CREATOR).await.unwrap();
     sqlx::query(

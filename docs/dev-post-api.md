@@ -665,3 +665,9 @@ interface VoteResponse {
 | POST | `/dev-post/{post_id}/like` | O | 좋아요 |
 | DELETE | `/dev-post/{post_id}/like` | O | 좋아요 취소 |
 | POST | `/dev-post/{post_id}/vote` | O | 투표 (변경 가능, 마감 전까지) |
+
+### 제목 계약 (breaking)
+
+생성 요청은 `{"token_id":"0x...","title":"Exact title\nwith newline","body":"Description only"}` 형태다. `title` 누락/null/blank는 400이며, 공백과 줄바꿈은 정확히 보존되고 title 전용 길이 제한은 없다. 전체 요청이 100000 bytes를 넘으면 413이다. 수정에서 title 생략은 기존 제목을 보존하고, null/blank는 400이다. 응답의 모든 표면(feed/detail/trending/ranking)은 title과 body를 별도 필드로 반환한다. body는 description only로 파싱한다.
+
+구버전 reader의 오표시는 허용되지만 구버전 create의 400과 legacy body-only edit의 모호성은 호환 대상이 아니다. capability header, versioned endpoint, fallback/협상은 제공하지 않는다. OpenAPI에는 Dev Post 13개 operation과 CMS moderation 2개 operation이 등록된다.

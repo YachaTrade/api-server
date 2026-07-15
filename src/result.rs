@@ -21,6 +21,7 @@ pub enum AppError {
     Unauthorized(String),
     AuthError(String),
     BadRequest(String),
+    PayloadTooLarge(String),
     Forbidden(String),
     Gone(String),
     NotFound(String),
@@ -64,6 +65,7 @@ impl IntoResponse for AppError {
             AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg),
             AppError::AuthError(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::PayloadTooLarge(msg) => (StatusCode::PAYLOAD_TOO_LARGE, msg),
             AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
             AppError::Gone(msg) => (StatusCode::GONE, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
@@ -132,6 +134,16 @@ mod error_status_tests {
                 .into_response()
                 .status(),
             StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    #[test]
+    fn payload_too_large_maps_to_413() {
+        assert_eq!(
+            AppError::PayloadTooLarge("too large".into())
+                .into_response()
+                .status(),
+            StatusCode::PAYLOAD_TOO_LARGE
         );
     }
 }

@@ -531,13 +531,19 @@ mod tests {
 
     #[test]
     fn fee_bps_v2_curve_is_creator_plus_curve() {
-        assert_eq!(fee_bps_for("V2_CURVE", Some(500), Some(50), Some(30)), Some(550));
+        assert_eq!(
+            fee_bps_for("V2_CURVE", Some(500), Some(50), Some(30)),
+            Some(550)
+        );
     }
 
     #[test]
     fn fee_bps_v2_dex_is_lp_plus_creator_plus_dex() {
         // 25 (LP) + 500 (creator) + 30 (dex) = 555
-        assert_eq!(fee_bps_for("V2_DEX", Some(500), Some(50), Some(30)), Some(555));
+        assert_eq!(
+            fee_bps_for("V2_DEX", Some(500), Some(50), Some(30)),
+            Some(555)
+        );
     }
 
     #[test]
@@ -591,17 +597,27 @@ mod tests {
     #[test]
     fn swap_v2_dex_lvmon_quote_buy_maps_quote_as_asset0() {
         // TOKEN_HI (0xff..) > LVMON (0xbe..) => quote is asset0.
-        let ev = TerminalService::convert_swap_event(swap_row("V2_DEX", LVMON_ADDR, true), V1_BC, V2_BC);
+        let ev =
+            TerminalService::convert_swap_event(swap_row("V2_DEX", LVMON_ADDR, true), V1_BC, V2_BC);
         match ev {
-            Event::Swap { asset0_in, asset1_in, asset0_out, asset1_out, price_native, reserves, pair_id, .. } => {
-                assert_eq!(asset0_in, Some("1".to_string()));   // quote in
-                assert_eq!(asset1_out, Some("2".to_string()));  // token out
+            Event::Swap {
+                asset0_in,
+                asset1_in,
+                asset0_out,
+                asset1_out,
+                price_native,
+                reserves,
+                pair_id,
+                ..
+            } => {
+                assert_eq!(asset0_in, Some("1".to_string())); // quote in
+                assert_eq!(asset1_out, Some("2".to_string())); // token out
                 assert_eq!(asset1_in, None);
                 assert_eq!(asset0_out, None);
-                assert_eq!(reserves.asset0, "100");             // reserve_quote
-                assert_eq!(reserves.asset1, "200");             // reserve_token
-                assert_eq!(price_native, "2");                  // token/quote
-                assert_eq!(pair_id, POOL);                      // V2_DEX -> pool
+                assert_eq!(reserves.asset0, "100"); // reserve_quote
+                assert_eq!(reserves.asset1, "200"); // reserve_token
+                assert_eq!(price_native, "2"); // token/quote
+                assert_eq!(pair_id, POOL); // V2_DEX -> pool
             }
             _ => panic!("expected swap"),
         }
@@ -611,7 +627,11 @@ mod tests {
     fn swap_pair_id_uses_per_event_market_type() {
         // A graduated token's curve-era swap must reference the bonding curve,
         // not the current pool.
-        let ev = TerminalService::convert_swap_event(swap_row("V2_CURVE", LVMON_ADDR, true), V1_BC, V2_BC);
+        let ev = TerminalService::convert_swap_event(
+            swap_row("V2_CURVE", LVMON_ADDR, true),
+            V1_BC,
+            V2_BC,
+        );
         match ev {
             Event::Swap { pair_id, .. } => assert_eq!(pair_id, V2_BC),
             _ => panic!("expected swap"),
@@ -621,9 +641,15 @@ mod tests {
     #[test]
     fn swap_v1_wmon_quote_unchanged() {
         // Regression: WMON quote keeps the legacy asset ordering/pricing.
-        let ev = TerminalService::convert_swap_event(swap_row("CURVE", WMON_ADDR, true), V1_BC, V2_BC);
+        let ev =
+            TerminalService::convert_swap_event(swap_row("CURVE", WMON_ADDR, true), V1_BC, V2_BC);
         match ev {
-            Event::Swap { asset0_in, asset1_out, pair_id, .. } => {
+            Event::Swap {
+                asset0_in,
+                asset1_out,
+                pair_id,
+                ..
+            } => {
                 assert_eq!(asset0_in, Some("1".to_string()));
                 assert_eq!(asset1_out, Some("2".to_string()));
                 assert_eq!(pair_id, V1_BC);
@@ -650,12 +676,18 @@ mod tests {
             quote_id: LVMON_ADDR.to_string(),
         };
         match TerminalService::convert_mint_event(row) {
-            Event::Join { amount0, amount1, reserves, pair_id, .. } => {
-                assert_eq!(amount0, "1");   // quote side
-                assert_eq!(amount1, "2");   // token side
+            Event::Join {
+                amount0,
+                amount1,
+                reserves,
+                pair_id,
+                ..
+            } => {
+                assert_eq!(amount0, "1"); // quote side
+                assert_eq!(amount1, "2"); // token side
                 assert_eq!(reserves.asset0, "100");
                 assert_eq!(reserves.asset1, "200");
-                assert_eq!(pair_id, POOL);  // market_id preserved
+                assert_eq!(pair_id, POOL); // market_id preserved
             }
             _ => panic!("expected join"),
         }
@@ -679,7 +711,12 @@ mod tests {
             quote_id: LVMON_ADDR.to_string(),
         };
         match TerminalService::convert_burn_event(row) {
-            Event::Exit { amount0, amount1, pair_id, .. } => {
+            Event::Exit {
+                amount0,
+                amount1,
+                pair_id,
+                ..
+            } => {
                 assert_eq!(amount0, "1");
                 assert_eq!(amount1, "2");
                 assert_eq!(pair_id, POOL);

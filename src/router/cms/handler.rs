@@ -1,20 +1,73 @@
 use axum::{
     Extension, Json,
-    extract::{Multipart, State},
+    extract::{Multipart, Path, State},
+    http::StatusCode,
 };
 use bytes::Bytes;
 use tracing::{error, info, instrument};
 
 use super::path::CmsPath;
 use crate::{
-    result::{AppError, AppJsonResult},
+    result::{AppError, AppJsonResult, AppResult},
     services::cms::CmsService,
+    services::dev_post::DevPostService,
     state::AppState,
     types::cms::{
         CmsActionResponse, DexTokenImageResponse, InsertTrendRequest, SetNsfwRequest,
         UpdateMetadataRequest, UpdateMetadataResponse, WhitelistTokenListResponse,
     },
 };
+
+#[utoipa::path(
+    delete,
+    path = CmsPath::DeleteDevPost.docs_str(),
+    params(("post_id" = i64, Path, description = "Positive Dev Post BIGINT ID")),
+    responses(
+        (status = 204, description = "Deleted or already deleted; empty body"),
+        (status = 400, description = "Malformed or nonpositive post_id"),
+        (status = 401, description = "Missing or invalid session"),
+        (status = 403, description = "Administrator access required"),
+        (status = 404, description = "Physical post row not found"),
+        (status = 500, description = "Database failure or outcome_unknown")
+    ),
+    tag = "CMS"
+)]
+pub async fn delete_dev_post(
+    State(state): State<AppState>,
+    Extension(admin): Extension<String>,
+    Path(post_id): Path<i64>,
+) -> AppResult<StatusCode> {
+    DevPostService::new(state.postgres.clone(), state.redis.clone())
+        .delete_post_as_admin(post_id, &admin)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = CmsPath::RestoreDevPost.docs_str(),
+    params(("post_id" = i64, Path, description = "Positive Dev Post BIGINT ID")),
+    responses(
+        (status = 204, description = "Restored or already live; empty body"),
+        (status = 400, description = "Malformed or nonpositive post_id"),
+        (status = 401, description = "Missing or invalid session"),
+        (status = 403, description = "Administrator access required"),
+        (status = 404, description = "Physical post row not found"),
+        (status = 409, description = "Post token row is absent"),
+        (status = 500, description = "Database failure or outcome_unknown")
+    ),
+    tag = "CMS"
+)]
+pub async fn restore_dev_post(
+    State(state): State<AppState>,
+    Extension(admin): Extension<String>,
+    Path(post_id): Path<i64>,
+) -> AppResult<StatusCode> {
+    DevPostService::new(state.postgres.clone(), state.redis.clone())
+        .restore_post_as_admin(post_id, &admin)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
 
 /// Set token NSFW status (Admin only)
 #[utoipa::path(
@@ -313,29 +366,37 @@ pub async fn upsert_whitelist_token(
                 })?);
             }
             "enabled" => {
-                let s = field.text().await.map_err(|e| {
-                    AppError::BadRequest(format!("Failed to read enabled: {}", e))
-                })?;
+                let s = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Failed to read enabled: {}", e)))?;
                 enabled = Some(s.trim().parse::<bool>().map_err(|_| {
                     AppError::BadRequest("enabled must be true or false".to_string())
                 })?);
             }
             "name" => {
-                let v = field.text().await.map_err(|e| {
-                    AppError::BadRequest(format!("Failed to read name: {}", e))
-                })?;
-                if !v.is_empty() { name = Some(v); }
+                let v = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Failed to read name: {}", e)))?;
+                if !v.is_empty() {
+                    name = Some(v);
+                }
             }
             "symbol" => {
-                let v = field.text().await.map_err(|e| {
-                    AppError::BadRequest(format!("Failed to read symbol: {}", e))
-                })?;
-                if !v.is_empty() { symbol = Some(v); }
+                let v = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Failed to read symbol: {}", e)))?;
+                if !v.is_empty() {
+                    symbol = Some(v);
+                }
             }
             "decimals" => {
-                let s = field.text().await.map_err(|e| {
-                    AppError::BadRequest(format!("Failed to read decimals: {}", e))
-                })?;
+                let s = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Failed to read decimals: {}", e)))?;
                 if !s.trim().is_empty() {
                     decimals = Some(s.trim().parse::<i32>().map_err(|_| {
                         AppError::BadRequest("decimals must be an integer".to_string())

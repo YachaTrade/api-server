@@ -323,7 +323,9 @@ impl CmsService {
         let ok = controller
             .upsert_whitelist_token_with_admin_guard(&p)
             .await
-            .map_err(|err| AppError::InternalError(format!("Failed to upsert whitelist: {}", err)))?;
+            .map_err(|err| {
+                AppError::InternalError(format!("Failed to upsert whitelist: {}", err))
+            })?;
         if !ok {
             return Err(AppError::AuthError("Admin access required".to_string()));
         }
