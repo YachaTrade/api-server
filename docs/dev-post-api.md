@@ -402,8 +402,8 @@ pin `B`를 지우지 않게 합니다.
 
 ### CMS moderation (관리자)
 
-CMS 관리자는 별도 CMS 인증으로 삭제/복구를 수행합니다. 상세 운영 절차는
-[`cms-dev-post-moderation.md`](./cms-dev-post-moderation.md)를 참조하세요.
+CMS 관리자는 CMS 인증과 EIP-55 canonical admin 주소로 삭제/복구를 수행합니다. 모든 Dev Post
+읽기/쓰기와 CMS 제어, 직접 API caller를 함께 gate하고 pre-title 노드를 drain해야 합니다.
 
 - `DELETE /cms/dev-post/{post_id}`: request body 없음, 성공 `204 No Content`(body 없음).
   관리자 세션이 필요하며 `400`(잘못된 id), `401`(세션 없음), `403`(관리자 아님),
@@ -417,8 +417,25 @@ CMS 관리자는 별도 CMS 인증으로 삭제/복구를 수행합니다. 상�
   콘텐츠·관계 보존을 우선하고, title migration 이후에는 pre-title binary로 롤백하지 않고
   title-aware corrective binary로 roll-forward합니다.
 
-이 CMS 섹션은 별도 문서의 endpoint 계약을 요약한 것이며, 일반 author `DELETE /dev-post/{post_id}`와
-혼동하지 마세요. 일반 삭제는 작성 당시 author만 수행할 수 있습니다.
+일반 author `DELETE /dev-post/{post_id}`와 혼동하지 마세요. 일반 삭제는 작성 당시 author만
+수행할 수 있습니다.
+
+운영 전환 순서는 다음과 같습니다. audit-schema readiness와 소비자 공지를 완료하고, row count,
+사용 가능한 sample(운영 데이터 삽입 금지), backup/WAL/free-space, replica health를 확인합니다.
+네 개 cache TTL은 모두 `<=60_000ms`여야 하며, migration `0041` 적용이 **point of no return**입니다.
+title schema, row count, representative/disposable fixture shape, audit schema, replica convergence를
+검증한 뒤 title-aware binary만 배포합니다. global feed, token feed, detail, trending의 정확한
+cache-version family에서 알려진 prefix만 삭제하고 generation key를 증가시키며, unknown legacy key는
+열거하지 않고 자연 만료시킵니다. 인증된 create/edit/read/title-validation/auth-precedence smoke test
+후 CMS controls를 활성화합니다.
+
+마이그레이션 커밋 전에는 traffic을 gate한 채 transaction을 abort/rollback하고 구 binary로 복구할
+수 있습니다. 커밋 후에는 pre-title binary를 실행하거나 body를 재결합하거나 title을 제거하거나
+compatibility response를 복구하지 말고 title-aware corrective binary로 roll-forward합니다.
+CMS controls만 비활성화하는 것은 audit/content가 authoritative로 유지되는 한 안전합니다.
+outcome-unknown, audit/reconciliation, lock/deadlock, replica lag, cache PTTL/late-fill, old-schema
+cache access와 title/body rendering을 모니터링합니다. pgactive 제약과 conditional pin restore도
+운영 점검에 포함합니다.
 
 ### 11. 좋아요 (`POST /dev-post/{post_id}/like`)
 

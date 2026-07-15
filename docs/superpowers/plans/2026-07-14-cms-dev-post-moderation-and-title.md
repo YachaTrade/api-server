@@ -66,7 +66,7 @@
 - `src/router/cms/handler.rs` — thin CMS delete/restore handlers returning `AppResult<StatusCode>`.
 - `src/router/cms/mod.rs` — authenticated route registration and real-router status/empty-body tests.
 - `src/main.rs` — OpenAPI path/schema registration, 13 Dev Post + 2 CMS operation assertions, and no-negotiation contract checks.
-- `docs/dev-post-api.md`, `docs/V2_API_CHANGES.md`, `docs/cms-dev-post-moderation.md` — title/body API contract, CMS operations/audit behavior, maintenance rollout, point of no return, rollback, and monitoring.
+- `docs/dev-post-api.md`, `docs/V2_API_CHANGES.md` — title/body API contract, CMS operations/audit behavior, maintenance rollout, point of no return, rollback, and monitoring.
 
 ### Task 1: Supersede stale documents and approve one integrated execution source
 

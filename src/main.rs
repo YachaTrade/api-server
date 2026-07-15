@@ -860,7 +860,6 @@ mod openapi_tests {
         let docs = [
             include_str!("../docs/dev-post-api.md"),
             include_str!("../docs/V2_API_CHANGES.md"),
-            include_str!("../docs/cms-dev-post-moderation.md"),
         ]
         .join("\n");
         for required in ["title", "description only", "point of no return", "13", "2"] {
