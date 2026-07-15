@@ -72,6 +72,7 @@ EIP-55 체크섬 정규화됩니다.
       "id": "123456789",
       "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": null },
       "author": { "account_id": "0x…", "nickname": "creator.eth", "image_uri": "https://…" },
+      "title": "Announcement title",
       "body": "gm holders, check this out",
       "tweet_url": null,
       "images": ["https://storage.nadapp.net/devpost/…"],
@@ -249,6 +250,7 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 ```json
 {
   "token_id": "0x…",
+  "title": "Announcement title",
   "body": "gm holders …",
   "image_uris": ["https://storage.nadapp.net/devpost/…"],
   "poll": {
@@ -263,11 +265,13 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `token_id` | string | O | 대상 코인 (EIP-55, 존재+creator==caller 확인) |
-| `body` | string | X | 본문. `x.com`/`twitter.com` 링크가 있으면 응답에서 `tweet_url`로 파싱됨 |
+| `title` | string | O | 제목. 누락/null/빈 문자열 또는 공백만이면 400. 입력 공백·줄바꿈은 그대로 보존 |
+| `body` | string | X | 설명(description) 본문. `x.com`/`twitter.com` 링크가 있으면 응답에서 `tweet_url`로 파싱됨 |
 | `image_uris` | string[] | X | `POST /dev-post/image`에서 받은 URL, 0~4개 |
 | `poll` | object | X | 옵션 2~3개. 각 옵션 `label`(필수, 공백만은 불가) + `image_uri`(선택) |
 
-**최소 1개 규칙**: `body`(공백 제외 비어있지 않음) / `image_uris`(1개 이상) / `poll` 중 **최소 하나**는
+**최소 1개 규칙**: required `title`과 함께 `body`(공백 제외 비어있지 않음) / `image_uris`(1개 이상) /
+`poll` 중 **최소 하나**는
 있어야 합니다. 셋 다 없으면 400.
 
 **이미지 URI allowlist**: `image_uris[]`와 `poll.options[].image_uri`는 반드시
@@ -280,7 +284,8 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 `DevPostResponse` (생성 직후 상태 그대로 조회해 반환).
 
 #### 에러 응답
-- `400`: 유효성 검증 실패 (완전히 빈 post, 이미지 5개 이상, poll 옵션 개수/라벨 오류, 잘못된 `token_id` 형식)
+- `400`: 유효성 검증 실패 (title 누락/null/blank, 완전히 빈 post, 이미지 5개 이상, poll 옵션 개수/라벨 오류, 잘못된 `token_id` 형식)
+- `413`: JSON 요청 body가 100,000 bytes를 초과
 - `401`: 세션 없음
 - `403`: 호출자가 해당 코인의 creator가 아님
 - `404`: `token_id`가 존재하지 않음
@@ -290,7 +295,7 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 
 ### 7. 게시물 수정 (`PATCH /dev-post/{post_id}`)
 
-**author 전용.** 본문/이미지만 수정 가능 — **poll은 생성 후 불변**(투표 무결성 보호).
+**author 전용.** 제목/description 본문/이미지를 수정할 수 있으며 **poll은 생성 후 불변**입니다.
 
 #### 요청
 - **Method**: `PATCH`
@@ -298,10 +303,11 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 
 #### Request Body
 ```json
-{ "body": "업데이트된 본문", "image_uris": ["https://…", "https://…"] }
+{ "title": "업데이트된 제목", "body": "업데이트된 설명", "image_uris": ["https://…"] }
 ```
-- `body`/`image_uris` 각각 생략 가능 — 생략한 필드는 변경 안 됨. 단, 최소 하나는 있어야 함(둘 다
-  생략 시 400).
+- `title`/`body`/`image_uris` 각각 생략 가능 — 생략한 필드는 변경하지 않습니다. `title`은 tri-state입니다:
+  생략(유지), `null`(400), 문자열 값(공백만이면 400, 그 외 그대로 교체).
+- `body`는 title과 독립적인 description-only 필드입니다. 모든 필드를 생략하면 400입니다.
 - `image_uris`를 보내면 **전체 교체**(기존 이미지 목록을 지우고 새로 삽입)입니다. 부분 추가/삭제가 아닙니다.
 - 성공 시 `edited_at = now()` 설정 → 응답의 `is_edited: true`.
 
@@ -309,7 +315,8 @@ pool**에서 이루어집니다(replica lag로 인한 오탐 방지).
 `DevPostResponse` (수정 후 최신 상태).
 
 #### 에러 응답
-- `400`: 유효성 검증 실패 (body/image_uris 둘 다 없음, 이미지 5개 이상)
+- `400`: 유효성 검증 실패 (title null/blank, 모든 필드 생략, 이미지 5개 이상)
+- `413`: JSON 요청 body가 100,000 bytes를 초과
 - `401`: 세션 없음
 - `403`: 세션 주소가 게시물 author가 아님
 - `404`: 게시물이 없거나 이미 삭제됨
@@ -392,6 +399,26 @@ pin `B`를 지우지 않게 합니다.
 않습니다.
 
 ---
+
+### CMS moderation (관리자)
+
+CMS 관리자는 별도 CMS 인증으로 삭제/복구를 수행합니다. 상세 운영 절차는
+[`cms-dev-post-moderation.md`](./cms-dev-post-moderation.md)를 참조하세요.
+
+- `DELETE /cms/dev-post/{post_id}`: request body 없음, 성공 `204 No Content`(body 없음).
+  관리자 세션이 필요하며 `400`(잘못된 id), `401`(세션 없음), `403`(관리자 아님),
+  `404`(post 없음/이미 삭제), `500`을 반환합니다.
+- `POST /cms/dev-post/{post_id}/restore`: request body 없음, 성공 `204 No Content`.
+  `400/401/403/404/409/500`을 반환하며, 이미 복구된/live post 또는 복구 불가능한 상태는
+  충돌(`409`)입니다. 삭제/복구는 content(title/body/images/poll)와 관계 행을 보존하고,
+  삭제 시 pin mapping을 조건부로 해제합니다.
+- 두 작업은 admin-first deterministic lock order와 moderation audit log를 사용합니다. audit 쓰기는
+  idempotent이며 commit outcome-unknown은 reconcile/retry 대상입니다. orphan/rollback 시에도
+  콘텐츠·관계 보존을 우선하고, title migration 이후에는 pre-title binary로 롤백하지 않고
+  title-aware corrective binary로 roll-forward합니다.
+
+이 CMS 섹션은 별도 문서의 endpoint 계약을 요약한 것이며, 일반 author `DELETE /dev-post/{post_id}`와
+혼동하지 마세요. 일반 삭제는 작성 당시 author만 수행할 수 있습니다.
 
 ### 11. 좋아요 (`POST /dev-post/{post_id}/like`)
 
@@ -484,7 +511,8 @@ pin `B`를 지우지 않게 합니다.
 | `id` | BIGINT를 **문자열로 직렬화** (snowflake id가 JS `Number` 2^53 정밀도를 초과하므로) |
 | `token` | 코인 요약 (`token_id`/`name`/`symbol`/`image_uri`/`market_cap`) — `market_cap`은 [현재 제한사항](#현재-제한사항--후속-작업) 참고 |
 | `author` | 게시물 작성자 요약 (작성 당시 creator, 이후 creator가 바뀌어도 유지) |
-| `body` | 본문 원문 (트윗 링크 포함 가능) |
+| `title` | 제목. 입력 공백·줄바꿈을 보존하며 body와 별도 필드 |
+| `body` | description-only 본문 원문 (트윗 링크 포함 가능) |
 | `tweet_url` | 본문에서 파싱한 첫 `https://x.com/…` 또는 `https://twitter.com/…` URL, 없으면 `null`. 네트워크 조회 없음 — 프론트가 fxtwitter 등으로 렌더링 |
 | `images` | 이미지 URL 배열, 0~4개, 저장 순서(`position`) 그대로 |
 | `poll` | 없으면 `null`. `closes_at`(생성 + 14일), `is_closed`(읽기 시점에 `closes_at <= now()`로 계산 — 별도 cron/배치 없음), `total_votes`, `options[]`, `my_vote_option`(비로그인/미투표 시 `null`) |
@@ -499,9 +527,10 @@ pin `B`를 지우지 않게 합니다.
 - **`token.market_cap`은 항상 `null`**입니다 (`DevPostResponse.token.market_cap`, `RankingRow.token.market_cap`
   둘 다). 마켓캡 소스 연동은 후속 작업으로 남아있습니다 — 응답 필드 자체는 이미 존재하므로 프론트는
   `null` 처리만 하면 됩니다.
-- **Trending / Ranking은 아직 Redis 캐싱되지 않습니다.** 설계 문서(§9)는 짧은 TTL 캐싱 + 좋아요/생성/삭제
-  시 무효화를 계획했지만, 현재는 매 요청마다 라이브 쿼리로 집계합니다(정확성 문제는 없음, 성능 최적화만
-  후속).
+- **캐시 정책**: feed v3(글로벌/토큰), detail v2, trending v2는 Redis cache-aside(기본 TTL 및
+  late-fill 상한 60초)입니다. ranking은 generation cache(v2 키)를 사용하며 쓰기 시 generation을
+  증가시킵니다. create/edit/delete 등 관련 쓰기는 feed/detail/trending을 무효화하고 ranking generation을
+  갱신합니다. Redis 장애 시 라이브 쿼리로 폴백합니다.
 - `GET /dev-post`, `GET /dev-post/ranking`의 `direction` 쿼리 파라미터는 파싱되지만 정렬에 반영되지
   않습니다(피드는 항상 최신순, 랭킹은 항상 좋아요 내림차순).
 - 좋아요 취소(`DELETE .../like`)는 게시물 존재 여부를 검증하지 않아 좋아요(`POST`)와 404 동작이
@@ -550,14 +579,16 @@ interface CreatePollRequest {
 }
 interface CreateDevPostRequest {
   token_id: string;
-  body?: string;
+  title: string;            // required; non-blank, exact whitespace preserved
+  body?: string;             // description only
   image_uris?: string[];   // 0..=4
   poll?: CreatePollRequest;
 }
 
 // PATCH /dev-post/{post_id}
 interface EditDevPostRequest {
-  body?: string;
+  title?: string | null;    // omitted=keep; null/blank=400; value=replaces
+  body?: string;             // description only
   image_uris?: string[];   // full replace
 }
 
@@ -596,7 +627,8 @@ interface DevPostResponse {
   id: string;                 // BIGINT as string
   token: TokenSummary;
   author: AuthorSummary;
-  body: string;
+  title: string;
+  body: string;              // description only
   tweet_url: string | null;
   images: string[];
   poll: PollResponse | null;
