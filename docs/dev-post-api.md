@@ -398,45 +398,6 @@ pin `B`를 지우지 않게 합니다.
 즉 소프트 삭제와 pin 제거는 하나의 트랜잭션으로 atomic하게 commit되며, 삭제된 post가 pinned 상태로 남지
 않습니다.
 
----
-
-### CMS moderation (관리자)
-
-CMS 관리자는 CMS 인증과 EIP-55 canonical admin 주소로 삭제/복구를 수행합니다. 모든 Dev Post
-읽기/쓰기와 CMS 제어, 직접 API caller를 함께 gate하고 pre-title 노드를 drain해야 합니다.
-
-- `DELETE /cms/dev-post/{post_id}`: request body 없음, 성공 `204 No Content`(body 없음).
-  관리자 세션이 필요하며 `400`(잘못된 id), `401`(세션 없음), `403`(관리자 아님),
-  `404`(post 없음/이미 삭제), `500`을 반환합니다.
-- `POST /cms/dev-post/{post_id}/restore`: request body 없음, 성공 `204 No Content`.
-  `400/401/403/404/409/500`을 반환하며, 이미 복구된/live post 또는 복구 불가능한 상태는
-  충돌(`409`)입니다. 삭제/복구는 content(title/body/images/poll)와 관계 행을 보존하고,
-  삭제 시 pin mapping을 조건부로 해제합니다.
-- 두 작업은 admin-first deterministic lock order와 moderation audit log를 사용합니다. audit 쓰기는
-  idempotent이며 commit outcome-unknown은 reconcile/retry 대상입니다. orphan/rollback 시에도
-  콘텐츠·관계 보존을 우선하고, title migration 이후에는 pre-title binary로 롤백하지 않고
-  title-aware corrective binary로 roll-forward합니다.
-
-일반 author `DELETE /dev-post/{post_id}`와 혼동하지 마세요. 일반 삭제는 작성 당시 author만
-수행할 수 있습니다.
-
-운영 전환 순서는 다음과 같습니다. audit-schema readiness와 소비자 공지를 완료하고, row count,
-사용 가능한 sample(운영 데이터 삽입 금지), backup/WAL/free-space, replica health를 확인합니다.
-네 개 cache TTL은 모두 `<=60_000ms`여야 하며, migration `0041` 적용이 **point of no return**입니다.
-title schema, row count, representative/disposable fixture shape, audit schema, replica convergence를
-검증한 뒤 title-aware binary만 배포합니다. global feed, token feed, detail, trending의 정확한
-cache-version family에서 알려진 prefix만 삭제하고 generation key를 증가시키며, unknown legacy key는
-열거하지 않고 자연 만료시킵니다. 인증된 create/edit/read/title-validation/auth-precedence smoke test
-후 CMS controls를 활성화합니다.
-
-마이그레이션 커밋 전에는 traffic을 gate한 채 transaction을 abort/rollback하고 구 binary로 복구할
-수 있습니다. 커밋 후에는 pre-title binary를 실행하거나 body를 재결합하거나 title을 제거하거나
-compatibility response를 복구하지 말고 title-aware corrective binary로 roll-forward합니다.
-CMS controls만 비활성화하는 것은 audit/content가 authoritative로 유지되는 한 안전합니다.
-outcome-unknown, audit/reconciliation, lock/deadlock, replica lag, cache PTTL/late-fill, old-schema
-cache access와 title/body rendering을 모니터링합니다. pgactive 제약과 conditional pin restore도
-운영 점검에 포함합니다.
-
 ### 11. 좋아요 (`POST /dev-post/{post_id}/like`)
 
 토글의 "on" 쪽. 아무 지갑이나 가능. `(post_id, account_id)` 유니크 — 이미 좋아요한 상태에서 다시
@@ -518,6 +479,110 @@ cache access와 title/body rendering을 모니터링합니다. pgactive 제약�
 - `404`: 게시물에 poll이 없음, 게시물이 삭제됨, 또는 게시물 자체가 없음 (셋 다 "Poll not found"로 동일하게 처리)
 - `409`: poll이 이미 마감됨 (`closes_at <= now()`)
 - `500`: 내부 서버 에러
+
+---
+
+### CMS moderation (관리자)
+
+CMS 관리자는 CMS 인증과 EIP-55 canonical admin 주소로 삭제/복구를 수행합니다. 일반 author
+`DELETE /dev-post/{post_id}`와 혼동하지 마세요. 일반 삭제는 작성 당시 author만 수행할 수 있습니다.
+
+### 14. CMS 게시물 삭제 (`DELETE /cms/dev-post/{post_id}`)
+
+CMS 관리자가 게시물을 삭제합니다. content(`title`/`body`/images/poll)와 관계 행은 보존하고, 해당
+게시물의 pin mapping만 조건부로 제거합니다. 물리 `dev_post` row가 존재하면 이미 삭제된 상태도
+감사되는 멱등 no-op(`changed=false`)으로 처리하고 빈 `204`를 반환합니다.
+
+#### 요청
+
+- **Method**: `DELETE`
+- **인증**: 필수, 관리자 세션 주소가 EIP-55 canonical admin 주소와 일치해야 함
+- **Request Body**: 없음
+
+#### Path Parameters
+
+| 이름 | 타입 | 설명 |
+|---|---|---|
+| `post_id` | BIGINT string | 삭제할 Dev Post ID |
+
+#### 응답
+
+빈 body의 `204 No Content`.
+
+#### 에러 응답
+
+- `400`: `post_id` 형식이 잘못됨
+- `401`: 관리자 세션 없음
+- `403`: 호출자가 관리자가 아님
+- `404`: 물리 `dev_post` row가 없음
+- `500`: 내부 서버 에러
+
+admin-first deterministic lock order와 moderation audit log를 사용합니다. audit 쓰기는 idempotent이며,
+commit outcome-unknown은 reconciliation/retry 대상입니다.
+
+---
+
+### 15. CMS 게시물 복구 (`POST /cms/dev-post/{post_id}/restore`)
+
+CMS 관리자가 삭제된 게시물을 복구합니다. content(`title`/`body`/images/poll)와 관계 행은 삭제 전
+상태로 보존됩니다. 물리 `dev_post` row와 token row가 존재하면 이미 live/복구된 상태도 감사되는
+멱등 no-op(`changed=false`)으로 처리하고 빈 `204`를 반환합니다.
+
+#### 요청
+
+- **Method**: `POST`
+- **인증**: 필수, 관리자 세션 주소가 EIP-55 canonical admin 주소와 일치해야 함
+- **Request Body**: 없음
+
+#### Path Parameters
+
+| 이름 | 타입 | 설명 |
+|---|---|---|
+| `post_id` | BIGINT string | 복구할 Dev Post ID |
+
+#### 응답
+
+빈 body의 `204 No Content`.
+
+#### 에러 응답
+
+- `400`: `post_id` 형식이 잘못됨
+- `401`: 관리자 세션 없음
+- `403`: 호출자가 관리자가 아님
+- `404`: 물리 `dev_post` row가 없음
+- `409`: 복구에 필요한 token row를 사용할 수 없음
+- `500`: 내부 서버 에러
+
+admin-first deterministic lock order와 moderation audit log를 사용합니다. audit 쓰기는 idempotent이며,
+commit outcome-unknown은 reconciliation/retry 대상입니다.
+
+### CMS 운영 전환 및 관찰
+
+- 모든 Dev Post 읽기/쓰기와 CMS 제어, 직접 API caller를 함께 gate하고 pre-title 노드를 drain합니다.
+  audit-schema readiness와 소비자 공지를 완료한 뒤 운영 전환을 시작합니다.
+- row count, disposable/representative samples를 확인하되 production inserts는 만들지 않습니다.
+  backup/WAL/free-space와 replica health도 함께 확인합니다.
+- global feed, token feed, detail, trending의 네 cache TTL은 모두 `<=60_000ms`여야 합니다.
+  migration `0041` 적용은 **point of no return**입니다. 적용 후 title schema와 row count,
+  title/disposable fixture shape, audit schema, replica convergence를 확인하고 title-aware binary만
+  배포합니다.
+- 알려진 cache key는 `REDIS_KEY_PREFIX`를 적용한 다음 exact-key 삭제만 수행합니다. 삭제 집합은
+  global feed의 `devpost:feed:global`, `devpost:feed:v2:global`, `devpost:feed:v3:global`, 해당 token
+  feed의 `devpost:feed:{token_id}`, `devpost:feed:v2:{token_id}`, `devpost:feed:v3:{token_id}`,
+  detail의 `devpost:detail:{post_id}`, `devpost:detail:v2:{post_id}`, trending의
+  `devpost:trending`, `devpost:trending:v2`입니다. legacy/v2 key는 fallback source가 아닙니다.
+  위 10개 exact key 삭제를 모두 완료한 뒤에만 `devpost:ranking:generation`을 증가시키며 payload는
+  `devpost:ranking:v2:{generation}:{page}:{limit}`을 사용합니다. 알려지지 않은 key만 자연
+  만료시키고 wildcard 열거/삭제는 하지 않습니다.
+- 인증된 create/edit/read/title-validation/auth-precedence smoke test를 통과한 뒤 CMS controls를
+  활성화합니다.
+- migration commit 전에는 traffic을 gate한 채 transaction을 abort/rollback하고 pre-title binary로
+  복구할 수 있습니다. commit 후에는 pre-title binary 실행, body 재결합, title 제거,
+  compatibility responses 복구를 금지하고 title-aware corrective binary로 roll-forward합니다.
+- CMS controls만 비활성화하는 것은 audit/content가 authoritative로 유지되는 동안 안전합니다.
+  pgactive 제약과 conditional pin restore 경계를 운영 점검에 포함합니다.
+- outcome-unknown, audit/reconciliation, lock/deadlock, replica lag, cache PTTL/late-fill,
+  old-schema cache access, title/body rendering을 모니터링합니다.
 
 ---
 
