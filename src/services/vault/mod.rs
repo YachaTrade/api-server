@@ -19,10 +19,7 @@ impl VaultService {
         Self { postgres, redis }
     }
 
-    pub async fn get_token_vaults(
-        &self,
-        token_id: &str,
-    ) -> Result<TokenVaultsResponse, AppError> {
+    pub async fn get_token_vaults(&self, token_id: &str) -> Result<TokenVaultsResponse, AppError> {
         if let Ok(cached) = self.redis.get_token_vaults_response(token_id).await {
             return Ok(cached);
         }

@@ -5,10 +5,7 @@ use anyhow::{Result, anyhow};
 use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
-    types::{
-        common::info::QuoteInfo,
-        quote_token::QuoteTokensResponse,
-    },
+    types::{common::info::QuoteInfo, quote_token::QuoteTokensResponse},
 };
 
 #[derive(Debug, sqlx::FromRow)]

@@ -66,12 +66,9 @@ impl DividendService {
         query: &DividendTokenQuery,
     ) -> Result<DexTokenListResponse, AppError> {
         let controller = DividendController::new(self.postgres.clone());
-        controller
-            .get_dividend_tokens(query)
-            .await
-            .map_err(|err| {
-                error!("Failed to get dividend tokens: error: {}", err);
-                AppError::InternalError(err.to_string())
-            })
+        controller.get_dividend_tokens(query).await.map_err(|err| {
+            error!("Failed to get dividend tokens: error: {}", err);
+            AppError::InternalError(err.to_string())
+        })
     }
 }

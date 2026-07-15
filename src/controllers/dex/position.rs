@@ -12,7 +12,11 @@ use crate::{
 
 /// APR percent for one window. None when fee/tvl missing or tvl <= 0.
 /// Inputs are LP-NET (post-0.8 carve-out) USD values from `pool_apr` view.
-pub(crate) fn window_apr_pct(fee_usd: Option<f64>, tvl_usd_avg: Option<f64>, window_days: f64) -> Option<f64> {
+pub(crate) fn window_apr_pct(
+    fee_usd: Option<f64>,
+    tvl_usd_avg: Option<f64>,
+    window_days: f64,
+) -> Option<f64> {
     let fee = fee_usd?;
     let tvl = tvl_usd_avg?;
     if tvl <= 0.0 {
@@ -24,13 +28,16 @@ pub(crate) fn window_apr_pct(fee_usd: Option<f64>, tvl_usd_avg: Option<f64>, win
 /// Max APR across 24h, 7d, 30d windows. None when ALL three are undefined.
 /// Also used by `controllers::dex::pool::row_to_response`.
 pub(crate) fn apr_max_pct(
-    fee_24h: Option<f64>, tvl_24h: Option<f64>,
-    fee_7d: Option<f64>,  tvl_7d: Option<f64>,
-    fee_30d: Option<f64>, tvl_30d: Option<f64>,
+    fee_24h: Option<f64>,
+    tvl_24h: Option<f64>,
+    fee_7d: Option<f64>,
+    tvl_7d: Option<f64>,
+    fee_30d: Option<f64>,
+    tvl_30d: Option<f64>,
 ) -> Option<f64> {
     [
         window_apr_pct(fee_24h, tvl_24h, 1.0),
-        window_apr_pct(fee_7d,  tvl_7d,  7.0),
+        window_apr_pct(fee_7d, tvl_7d, 7.0),
         window_apr_pct(fee_30d, tvl_30d, 30.0),
     ]
     .into_iter()
@@ -165,9 +172,12 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
 
     let my_liq = my_liquidity_usd(&r.balance, &r.pool_value_usd, &r.pool_total_supply);
     let apr = apr_max_pct(
-        r.lp_fee_24h_usd, r.tvl_24h_usd_avg,
-        r.lp_fee_7d_usd,  r.tvl_7d_usd_avg,
-        r.lp_fee_30d_usd, r.tvl_30d_usd_avg,
+        r.lp_fee_24h_usd,
+        r.tvl_24h_usd_avg,
+        r.lp_fee_7d_usd,
+        r.tvl_7d_usd_avg,
+        r.lp_fee_30d_usd,
+        r.tvl_30d_usd_avg,
     );
 
     // Per-side current pro-rata share = balance × reserve / total_supply.
@@ -215,10 +225,12 @@ fn row_to_entry(r: PositionRow) -> LpPositionEntry {
 /// floor to a whole number. Without this, BigDecimal `/` keeps ~100 fractional
 /// digits on non-even division and the amount serializes with a meaningless long
 /// decimal tail (e.g. `"1219326312467611623.8256…"`).
-pub(crate) fn current_share(balance: &BigDecimal, reserve: &BigDecimal, total_supply: &BigDecimal) -> Option<BigDecimal> {
-    if total_supply.is_zero()
-        || total_supply.sign() == bigdecimal::num_bigint::Sign::Minus
-    {
+pub(crate) fn current_share(
+    balance: &BigDecimal,
+    reserve: &BigDecimal,
+    total_supply: &BigDecimal,
+) -> Option<BigDecimal> {
+    if total_supply.is_zero() || total_supply.sign() == bigdecimal::num_bigint::Sign::Minus {
         return None;
     }
     // RoundingMode::Down = truncate toward zero = floor for non-negative values.
@@ -265,9 +277,12 @@ mod tests {
     fn apr_max_pct_picks_largest_window() {
         // 24h returns highest APR when 24h window has higher fee/tvl ratio
         let r = apr_max_pct(
-            Some(10.0), Some(100.0),   // 24h: 10/100 * (365/1) * 100 = 3650
-            Some(10.0), Some(1000.0),  // 7d: 10/1000 * 365/7 * 100 ≈ 521
-            Some(10.0), Some(10000.0), // 30d: 10/10000 * 365/30 * 100 ≈ 12.17
+            Some(10.0),
+            Some(100.0), // 24h: 10/100 * (365/1) * 100 = 3650
+            Some(10.0),
+            Some(1000.0), // 7d: 10/1000 * 365/7 * 100 ≈ 521
+            Some(10.0),
+            Some(10000.0), // 30d: 10/10000 * 365/30 * 100 ≈ 12.17
         )
         .unwrap();
         assert!((r - 3650.0).abs() < 1e-6, "got {}", r);
@@ -277,9 +292,12 @@ mod tests {
     fn apr_max_pct_skips_missing_windows() {
         // Only 7d has data → returns 7d APR
         let r = apr_max_pct(
-            None, None,
-            Some(24.9315068493), Some(1000.0), // ≈ 130 (baseline)
-            None, None,
+            None,
+            None,
+            Some(24.9315068493),
+            Some(1000.0), // ≈ 130 (baseline)
+            None,
+            None,
         )
         .unwrap();
         assert!((r - 130.0).abs() < 1e-6, "got {}", r);
@@ -313,7 +331,12 @@ mod tests {
         .unwrap();
         let s = got.normalized().to_plain_string();
         let frac = s.split('.').nth(1).map(|f| f.len()).unwrap_or(0);
-        assert!(frac <= 8, "liquidity_usd must be <= 8 decimals, got '{}' ({} dp)", s, frac);
+        assert!(
+            frac <= 8,
+            "liquidity_usd must be <= 8 decimals, got '{}' ({} dp)",
+            s,
+            frac
+        );
     }
 
     #[test]
@@ -367,9 +390,12 @@ mod tests {
         use std::str::FromStr;
         let bal = BigDecimal::from_str("10").unwrap();
         let res = BigDecimal::from_str("1000").unwrap();
-        let ts  = BigDecimal::from_str("100").unwrap();
+        let ts = BigDecimal::from_str("100").unwrap();
         // 10 * 1000 / 100 = 100
-        assert_eq!(current_share(&bal, &res, &ts), Some(BigDecimal::from_str("100").unwrap()));
+        assert_eq!(
+            current_share(&bal, &res, &ts),
+            Some(BigDecimal::from_str("100").unwrap())
+        );
         // total_supply 0 -> None (guard)
         assert_eq!(current_share(&bal, &res, &BigDecimal::from(0)), None);
     }

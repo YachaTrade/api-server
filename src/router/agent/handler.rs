@@ -338,8 +338,11 @@ pub async fn get_tokens_created(
         error!("Invalid account ID format: {}", account_id);
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
-    let service =
-        TokenCreatedService::new(state.postgres.clone(), state.redis.clone(), state.capricorn.clone());
+    let service = TokenCreatedService::new(
+        state.postgres.clone(),
+        state.redis.clone(),
+        state.capricorn.clone(),
+    );
     let response = service.get_tokens_created(&account_id, &pagination).await?;
 
     Ok(Json(response))

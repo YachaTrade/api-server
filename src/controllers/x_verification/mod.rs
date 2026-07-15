@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 
-use crate::{db::postgres::PostgresDatabase, types::token::x_verification::XFollowedByEntry};
 use crate::types::x_verification::floor_followers;
+use crate::{db::postgres::PostgresDatabase, types::token::x_verification::XFollowedByEntry};
 
 pub struct XVerificationController {
     db: Arc<PostgresDatabase>,
@@ -379,9 +379,18 @@ mod tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(x_user_id, "1", "x_user_id stays locked to the first X account");
-        assert_eq!(x_handle, "creatorhandle", "x_handle unchanged on rejected re-finalize");
-        assert_eq!(account_id, ACCOUNT, "account_id unchanged on rejected re-finalize");
+        assert_eq!(
+            x_user_id, "1",
+            "x_user_id stays locked to the first X account"
+        );
+        assert_eq!(
+            x_handle, "creatorhandle",
+            "x_handle unchanged on rejected re-finalize"
+        );
+        assert_eq!(
+            account_id, ACCOUNT,
+            "account_id unchanged on rejected re-finalize"
+        );
         assert_eq!(fc, 10, "followers_count unchanged on rejected re-finalize");
     }
 

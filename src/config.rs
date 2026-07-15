@@ -274,9 +274,49 @@ lazy_static! {
         .ok().and_then(|v| v.parse().ok()).unwrap_or(1000);
 }
 
+pub fn validate_devpost_cache_ttls(values: [(&str, u64); 4]) -> Result<(), String> {
+    for (name, value) in values {
+        if value > 60_000 {
+            return Err(format!("{name} must be <= 60000ms, got {value}"));
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_current_devpost_cache_ttls() -> Result<(), String> {
+    validate_devpost_cache_ttls([
+        ("DEVPOST_FEED_EXPIRATION", *DEVPOST_FEED_EXPIRATION),
+        ("DEVPOST_DETAIL_EXPIRATION", *DEVPOST_DETAIL_EXPIRATION),
+        ("DEVPOST_TRENDING_EXPIRATION", *DEVPOST_TRENDING_EXPIRATION),
+        ("DEVPOST_RANKING_EXPIRATION", *DEVPOST_RANKING_EXPIRATION),
+    ])
+}
+
 #[cfg(test)]
-mod config_tests {
+mod tests {
     use super::*;
+
+    #[test]
+    fn devpost_cache_ttl_ceiling_accepts_60000_and_rejects_60001() {
+        assert!(
+            validate_devpost_cache_ttls([
+                ("DEVPOST_FEED_EXPIRATION", 60_000),
+                ("DEVPOST_DETAIL_EXPIRATION", 60_000),
+                ("DEVPOST_TRENDING_EXPIRATION", 60_000),
+                ("DEVPOST_RANKING_EXPIRATION", 60_000),
+            ])
+            .is_ok()
+        );
+        let error = validate_devpost_cache_ttls([
+            ("DEVPOST_FEED_EXPIRATION", 60_000),
+            ("DEVPOST_DETAIL_EXPIRATION", 60_001),
+            ("DEVPOST_TRENDING_EXPIRATION", 60_000),
+            ("DEVPOST_RANKING_EXPIRATION", 60_000),
+        ])
+        .unwrap_err();
+        assert!(error.contains("DEVPOST_DETAIL_EXPIRATION"), "{error}");
+    }
+
     #[test]
     fn followed_by_max_defaults_to_three() {
         // X_FOLLOWED_BY_MAX is unset in the test env → default 3.

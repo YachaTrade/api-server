@@ -6,6 +6,8 @@ pub enum CmsPath {
     UploadDexTokenImage,
     UpsertWhitelistToken,
     ListWhitelistToken,
+    DeleteDevPost,
+    RestoreDevPost,
 }
 
 impl CmsPath {
@@ -17,10 +19,16 @@ impl CmsPath {
             CmsPath::UploadDexTokenImage => "/cms/dex-token/image",
             CmsPath::UpsertWhitelistToken => "/cms/whitelist-token",
             CmsPath::ListWhitelistToken => "/cms/whitelist-token",
+            CmsPath::DeleteDevPost => "/cms/dev-post/:post_id",
+            CmsPath::RestoreDevPost => "/cms/dev-post/:post_id/restore",
         }
     }
 
     pub fn docs_str(&self) -> &'static str {
-        self.as_str()
+        match self {
+            CmsPath::DeleteDevPost => "/cms/dev-post/{post_id}",
+            CmsPath::RestoreDevPost => "/cms/dev-post/{post_id}/restore",
+            _ => self.as_str(),
+        }
     }
 }

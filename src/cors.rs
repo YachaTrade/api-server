@@ -43,8 +43,8 @@ pub fn get_cors() -> CorsLayer {
         ])
         .allow_credentials(true)
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE, CONTENT_LENGTH])
-        .allow_origin(AllowOrigin::predicate(|origin: &HeaderValue, _| {
-            match origin.to_str() {
+        .allow_origin(AllowOrigin::predicate(
+            |origin: &HeaderValue, _| match origin.to_str() {
                 Ok(origin_string) => {
                     let allowed = is_origin_allowed(origin_string);
                     if allowed {
@@ -58,8 +58,8 @@ pub fn get_cors() -> CorsLayer {
                     warn!("[CORS] Invalid origin header: {:?}", origin);
                     false
                 }
-            }
-        }))
+            },
+        ))
         .max_age(Duration::from_secs(86400))
 }
 

@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, rejection::JsonRejection},
     http::StatusCode,
 };
 use bytes::Bytes;
@@ -29,6 +29,14 @@ use crate::{
 
 const ALLOWED_IMAGE_TYPES: [&str; 4] = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
 const MAX_IMAGE_SIZE: usize = 5 * 1024 * 1024; // 5MB
+
+fn map_devpost_json_rejection(rejection: JsonRejection) -> AppError {
+    if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        AppError::PayloadTooLarge("Request body exceeds the 100000-byte limit".into())
+    } else {
+        AppError::BadRequest(format!("Invalid request body: {rejection}"))
+    }
+}
 
 // axum's `Query` extractor uses serde_urlencoded, which does not support
 // `#[serde(flatten)]` (it buffers values as strings, breaking the int
@@ -239,6 +247,7 @@ pub async fn upload_image(
     responses(
         (status = 200, description = "Dev post created successfully", body = DevPostResponse),
         (status = 400, description = "Bad request"),
+        (status = 413, description = "Request body exceeds the 100000-byte global limit"),
         (status = 500, description = "Internal server error")
     ),
     tag = "DevPost"
@@ -247,8 +256,9 @@ pub async fn upload_image(
 pub async fn create_post(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
-    Json(mut payload): Json<CreateDevPostRequest>,
+    payload: Result<Json<CreateDevPostRequest>, JsonRejection>,
 ) -> AppJsonResult<DevPostResponse> {
+    let Json(mut payload) = payload.map_err(map_devpost_json_rejection)?;
     payload.validate().map_err(AppError::BadRequest)?;
     payload.token_id = valid_existing_token_id(&state, &payload.token_id).await?;
 
@@ -271,6 +281,7 @@ pub async fn create_post(
         (status = 400, description = "Bad request"),
         (status = 403, description = "Not the post author"),
         (status = 404, description = "Post not found"),
+        (status = 413, description = "Request body exceeds the 100000-byte global limit"),
         (status = 500, description = "Internal server error")
     ),
     tag = "DevPost"
@@ -280,8 +291,9 @@ pub async fn edit_post(
     State(state): State<AppState>,
     Extension(session_address): Extension<String>,
     Path(post_id): Path<i64>,
-    Json(payload): Json<EditDevPostRequest>,
+    payload: Result<Json<EditDevPostRequest>, JsonRejection>,
 ) -> AppJsonResult<DevPostResponse> {
+    let Json(payload) = payload.map_err(map_devpost_json_rejection)?;
     payload.validate().map_err(AppError::BadRequest)?;
 
     let service = DevPostService::new(state.postgres.clone(), state.redis.clone());
@@ -472,7 +484,98 @@ pub async fn unpin_post(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::extract::Query;
+    use crate::{
+        db::{postgres::PostgresDatabase, r2::R2Client, redis::RedisDatabase},
+        services::capricorn::CapricornClient,
+    };
+    use axum::{
+        Router,
+        body::Body,
+        extract::{DefaultBodyLimit, Query, rejection::JsonRejection},
+        http::{Request, header},
+        routing::post,
+    };
+    use std::sync::Arc;
+    use tower::ServiceExt;
+    use tower_cookies::CookieManagerLayer;
+
+    #[tokio::test]
+    async fn json_rejection_preserves_400_versus_413() {
+        async fn mapped_json(
+            payload: Result<Json<CreateDevPostRequest>, JsonRejection>,
+        ) -> AppResult<StatusCode> {
+            let _ = payload.map_err(map_devpost_json_rejection)?;
+            Ok(StatusCode::NO_CONTENT)
+        }
+
+        let app = Router::new()
+            .route("/", post(mapped_json))
+            .layer(DefaultBodyLimit::max(100_000));
+
+        let malformed = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"token_id":"0xToken","title":}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(malformed.status(), StatusCode::BAD_REQUEST);
+
+        let over_limit = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(vec![b' '; 100_001]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(over_limit.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn actual_protected_router_auth_precedes_json_rejection(pool: sqlx::PgPool) {
+        dotenv::dotenv().ok();
+        let state = AppState {
+            postgres: Arc::new(PostgresDatabase {
+                write_pool: pool.clone(),
+                read_pool: pool,
+            }),
+            redis: Arc::new(RedisDatabase::new().await),
+            r2: Arc::new(R2Client::new().await),
+            capricorn: Arc::new(CapricornClient::new(String::new())),
+        };
+        let app = crate::router::dev_post::router(state.clone())
+            .layer(DefaultBodyLimit::max(100_000))
+            .layer(CookieManagerLayer::new())
+            .with_state(state);
+
+        for body in [
+            Body::from(r#"{"token_id":"0xToken","title":}"#),
+            Body::from(vec![b' '; 100_001]),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/dev-post")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+    }
 
     // Exercises the real axum Query extractor (serde_urlencoded under the hood),
     // not a hand-built struct — this is the seam controller/service tests bypass.

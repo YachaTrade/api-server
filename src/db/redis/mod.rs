@@ -74,6 +74,34 @@ fn devpost_feed_v2_key(scope: &str) -> String {
     with_prefix(format!("devpost:feed:v2:{scope}"))
 }
 
+fn devpost_feed_v3_key(scope: &str) -> String {
+    with_prefix(format!("devpost:feed:v3:{scope}"))
+}
+
+fn devpost_detail_legacy_key(post_id: i64) -> String {
+    with_prefix(format!("devpost:detail:{post_id}"))
+}
+
+fn devpost_detail_v2_key(post_id: i64) -> String {
+    with_prefix(format!("devpost:detail:v2:{post_id}"))
+}
+
+fn devpost_trending_legacy_key() -> String {
+    with_prefix("devpost:trending".into())
+}
+
+fn devpost_trending_v2_key() -> String {
+    with_prefix("devpost:trending:v2".into())
+}
+
+fn devpost_ranking_generation_key() -> String {
+    with_prefix("devpost:ranking:generation".into())
+}
+
+fn devpost_ranking_v2_key(generation: i64, page: i64, limit: i64) -> String {
+    with_prefix(format!("devpost:ranking:v2:{generation}:{page}:{limit}"))
+}
+
 pub struct RedisDatabase {
     conn: Arc<ConnectionManager>,
 }
@@ -2214,31 +2242,50 @@ impl RedisDatabase {
 
 // Dev Post caching
 impl RedisDatabase {
-    pub async fn set_devpost_ranking_response(
+    pub async fn get_devpost_ranking_generation(&self) -> Result<i64> {
+        let mut conn = self.conn.as_ref().clone();
+        let value: Option<i64> = measure_redis!(
+            "redis.get_devpost_ranking_generation",
+            conn.get(devpost_ranking_generation_key())
+        )?;
+        Ok(value.unwrap_or(0))
+    }
+
+    pub async fn bump_devpost_ranking_generation(&self) -> Result<i64> {
+        let mut conn = self.conn.as_ref().clone();
+        Ok(measure_redis!(
+            "redis.bump_devpost_ranking_generation",
+            conn.incr(devpost_ranking_generation_key(), 1_i64)
+        )?)
+    }
+
+    pub async fn set_devpost_ranking_response_for_generation(
         &self,
+        generation: i64,
         page: i64,
         limit: i64,
-        resp: &RankingResponse,
+        response: &RankingResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:ranking:{}:{}", page, limit));
-        let json = serde_json::to_string(resp)?;
+        let key = devpost_ranking_v2_key(generation, page, limit);
+        let json = serde_json::to_string(response)?;
         measure_redis!(
-            "redis.set_devpost_ranking_response",
+            "redis.set_devpost_ranking_response_for_generation",
             conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_RANKING_EXPIRATION)
         )?;
         Ok(())
     }
 
-    pub async fn get_devpost_ranking_response(
+    pub async fn get_devpost_ranking_response_for_generation(
         &self,
+        generation: i64,
         page: i64,
         limit: i64,
     ) -> Result<RankingResponse> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:ranking:{}:{}", page, limit));
+        let key = devpost_ranking_v2_key(generation, page, limit);
         let json: String = measure_redis!(
-            "redis.get_devpost_ranking_response",
+            "redis.get_devpost_ranking_response_for_generation",
             conn.get::<_, String>(key)
         )?;
         Ok(serde_json::from_str(&json)?)
@@ -2246,7 +2293,7 @@ impl RedisDatabase {
 
     pub async fn set_devpost_trending_base(&self, base: &Vec<DevPostResponse>) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix("devpost:trending".to_string());
+        let key = devpost_trending_v2_key();
         let json = serde_json::to_string(base)?;
         measure_redis!(
             "redis.set_devpost_trending_base",
@@ -2257,7 +2304,7 @@ impl RedisDatabase {
 
     pub async fn get_devpost_trending_base(&self) -> Result<Vec<DevPostResponse>> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix("devpost:trending".to_string());
+        let key = devpost_trending_v2_key();
         let json: String = measure_redis!(
             "redis.get_devpost_trending_base",
             conn.get::<_, String>(key)
@@ -2265,9 +2312,22 @@ impl RedisDatabase {
         Ok(serde_json::from_str(&json)?)
     }
 
+    pub async fn delete_devpost_trending(&self) -> Result<()> {
+        let mut conn = self.conn.as_ref().clone();
+        measure_redis!(
+            "redis.delete_devpost_trending",
+            redis::pipe()
+                .atomic()
+                .del(devpost_trending_legacy_key())
+                .del(devpost_trending_v2_key())
+                .query_async::<()>(&mut conn)
+        )?;
+        Ok(())
+    }
+
     pub async fn set_devpost_feed_base(&self, scope: &str, base: &FeedBase) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = devpost_feed_v2_key(scope);
+        let key = devpost_feed_v3_key(scope);
         let json = serde_json::to_string(base)?;
         measure_redis!(
             "redis.set_devpost_feed_base",
@@ -2278,7 +2338,7 @@ impl RedisDatabase {
 
     pub async fn get_devpost_feed_base(&self, scope: &str) -> Result<FeedBase> {
         let mut conn = self.conn.as_ref().clone();
-        let key = devpost_feed_v2_key(scope);
+        let key = devpost_feed_v3_key(scope);
         let json: String =
             measure_redis!("redis.get_devpost_feed_base", conn.get::<_, String>(key))?;
         Ok(serde_json::from_str(&json)?)
@@ -2288,12 +2348,14 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let legacy_key = devpost_feed_legacy_key(scope);
         let v2_key = devpost_feed_v2_key(scope);
+        let v3_key = devpost_feed_v3_key(scope);
         measure_redis!(
             "redis.delete_devpost_feed",
             redis::pipe()
                 .atomic()
                 .del(legacy_key)
                 .del(v2_key)
+                .del(v3_key)
                 .query_async::<()>(&mut conn)
         )?;
         Ok(())
@@ -2305,7 +2367,7 @@ impl RedisDatabase {
         base: &DevPostResponse,
     ) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:detail:{}", post_id));
+        let key = devpost_detail_v2_key(post_id);
         let json = serde_json::to_string(base)?;
         measure_redis!(
             "redis.set_devpost_detail_base",
@@ -2316,7 +2378,7 @@ impl RedisDatabase {
 
     pub async fn get_devpost_detail_base(&self, post_id: i64) -> Result<DevPostResponse> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:detail:{}", post_id));
+        let key = devpost_detail_v2_key(post_id);
         let json: String =
             measure_redis!("redis.get_devpost_detail_base", conn.get::<_, String>(key))?;
         Ok(serde_json::from_str(&json)?)
@@ -2324,24 +2386,196 @@ impl RedisDatabase {
 
     pub async fn delete_devpost_detail(&self, post_id: i64) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("devpost:detail:{}", post_id));
-        measure_redis!("redis.delete_devpost_detail", conn.del::<String, ()>(key))?;
+        measure_redis!(
+            "redis.delete_devpost_detail",
+            redis::pipe()
+                .atomic()
+                .del(devpost_detail_legacy_key(post_id))
+                .del(devpost_detail_v2_key(post_id))
+                .query_async::<()>(&mut conn)
+        )?;
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod devpost_feed_cache_tests {
+mod devpost {
     use super::*;
     use redis::AsyncCommands;
 
+    fn assert_test_redis_namespace() {
+        let raw = std::env::var("REDIS_KEY_PREFIX")
+            .expect("Redis tests require an explicit REDIS_KEY_PREFIX");
+        let trimmed = raw.trim_end_matches(':');
+        assert!(
+            trimmed.starts_with("test-") && trimmed.len() > 36,
+            "refusing to touch Redis outside a test namespace"
+        );
+        uuid::Uuid::parse_str(&trimmed[trimmed.len() - 36..])
+            .expect("REDIS_KEY_PREFIX must end in a per-process UUID");
+        assert!(!crate::config::REDIS_KEY_PREFIX.is_empty());
+        assert_eq!(
+            crate::config::REDIS_KEY_PREFIX.as_str(),
+            format!("{}:", trimmed)
+        );
+    }
+
+    async fn raw_set(key: &str, value: &str) {
+        let client = redis::Client::open(std::env::var("REDIS_URL").unwrap()).unwrap();
+        let mut conn = client.get_multiplexed_async_connection().await.unwrap();
+        conn.pset_ex::<_, _, ()>(key, value, 60_000_u64)
+            .await
+            .unwrap();
+    }
+
+    async fn seed_all_feed_versions(scope: &str) {
+        for key in [
+            devpost_feed_legacy_key(scope),
+            devpost_feed_v2_key(scope),
+            devpost_feed_v3_key(scope),
+        ] {
+            raw_set(&key, "seed").await;
+        }
+    }
+
+    async fn seed_all_detail_versions(post_id: i64) {
+        for key in [
+            devpost_detail_legacy_key(post_id),
+            devpost_detail_v2_key(post_id),
+        ] {
+            raw_set(&key, "seed").await;
+        }
+    }
+
+    async fn seed_all_trending_versions() {
+        for key in [devpost_trending_legacy_key(), devpost_trending_v2_key()] {
+            raw_set(&key, "seed").await;
+        }
+    }
+
+    async fn assert_all_exact_payload_versions_absent(scope: &str, post_id: i64) {
+        let redis = RedisDatabase::new().await;
+        let mut conn = redis.conn.as_ref().clone();
+        for key in [
+            devpost_feed_legacy_key(scope),
+            devpost_feed_v2_key(scope),
+            devpost_feed_v3_key(scope),
+            devpost_detail_legacy_key(post_id),
+            devpost_detail_v2_key(post_id),
+            devpost_trending_legacy_key(),
+            devpost_trending_v2_key(),
+        ] {
+            assert_eq!(conn.exists::<_, i64>(&key).await.unwrap(), 0, "{key}");
+        }
+    }
+
+    async fn delete_exact_generation_key() {
+        let redis = RedisDatabase::new().await;
+        let mut conn = redis.conn.as_ref().clone();
+        conn.del::<_, ()>(devpost_ranking_generation_key())
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
-    async fn v2_feed_round_trip_ignores_legacy_and_dual_delete_removes_both() {
-        dotenv::dotenv().ok();
+    async fn title_payload_namespaces_ignore_old_shapes_and_delete_all_exact_versions() {
+        assert_test_redis_namespace();
+        let redis = RedisDatabase::new().await;
+        let scope = format!("scope-{}", uuid::Uuid::new_v4().simple());
+        let post_id = 5101_i64;
+        raw_set(
+            &devpost_feed_v2_key(&scope),
+            r#"{"posts":[],"total_count":99}"#,
+        )
+        .await;
+        raw_set(
+            &devpost_detail_legacy_key(post_id),
+            r#"{"body":"old combined"}"#,
+        )
+        .await;
+        raw_set(
+            &devpost_trending_legacy_key(),
+            r#"[{"body":"old combined"}]"#,
+        )
+        .await;
+        assert!(redis.get_devpost_feed_base(&scope).await.is_err());
+        assert!(redis.get_devpost_detail_base(post_id).await.is_err());
+        assert!(redis.get_devpost_trending_base().await.is_err());
+
+        seed_all_feed_versions(&scope).await;
+        seed_all_detail_versions(post_id).await;
+        seed_all_trending_versions().await;
+        redis.delete_devpost_feed(&scope).await.unwrap();
+        redis.delete_devpost_detail(post_id).await.unwrap();
+        redis.delete_devpost_trending().await.unwrap();
+        assert_all_exact_payload_versions_absent(&scope, post_id).await;
+    }
+
+    #[tokio::test]
+    async fn generation_missing_is_zero_and_concurrent_bumps_are_not_lost() {
+        assert_test_redis_namespace();
+        let redis = std::sync::Arc::new(RedisDatabase::new().await);
+        delete_exact_generation_key().await;
+        assert_eq!(redis.get_devpost_ranking_generation().await.unwrap(), 0);
+        let (a, b) = tokio::join!(
+            redis.bump_devpost_ranking_generation(),
+            redis.bump_devpost_ranking_generation(),
+        );
+        let mut values = vec![a.unwrap(), b.unwrap()];
+        values.sort_unstable();
+        assert_eq!(values, vec![1, 2]);
+    }
+
+    #[test]
+    fn ranking_v2_key_contains_generation_page_and_limit() {
+        assert_test_redis_namespace();
+        assert_eq!(
+            devpost_ranking_v2_key(17, 3, 25),
+            with_prefix("devpost:ranking:v2:17:3:25".to_string())
+        );
+        assert_ne!(
+            devpost_ranking_v2_key(17, 3, 25),
+            with_prefix("devpost:ranking:3:25".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn captured_generation_write_cannot_populate_the_next_generation() {
+        assert_test_redis_namespace();
+        let redis = RedisDatabase::new().await;
+        let page = (uuid::Uuid::new_v4().as_u128() % 1_000_000) as i64 + 1_000;
+        let response = RankingResponse {
+            rankings: Vec::new(),
+            total_count: 7,
+        };
+        redis
+            .set_devpost_ranking_response_for_generation(41, page, 13, &response)
+            .await
+            .unwrap();
+        assert_eq!(
+            redis
+                .get_devpost_ranking_response_for_generation(41, page, 13)
+                .await
+                .unwrap()
+                .total_count,
+            7
+        );
+        assert!(
+            redis
+                .get_devpost_ranking_response_for_generation(42, page, 13)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn v3_feed_round_trip_ignores_legacy_and_delete_removes_every_version() {
+        assert_test_redis_namespace();
         let redis = RedisDatabase::new().await;
         let scope = format!("test-{}", uuid::Uuid::new_v4().simple());
         let legacy_key = with_prefix(format!("devpost:feed:{scope}"));
         let v2_key = with_prefix(format!("devpost:feed:v2:{scope}"));
+        let v3_key = with_prefix(format!("devpost:feed:v3:{scope}"));
         let mut conn = redis.conn.as_ref().clone();
         conn.pset_ex::<_, _, ()>(
             &legacy_key,
@@ -2364,10 +2598,12 @@ mod devpost_feed_cache_tests {
         assert!(decoded.pin.is_none());
         assert_eq!(decoded.total_count, 7);
         assert_eq!(conn.exists::<_, i64>(&legacy_key).await.unwrap(), 1);
-        assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 1);
+        assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 0);
+        assert_eq!(conn.exists::<_, i64>(&v3_key).await.unwrap(), 1);
 
         redis.delete_devpost_feed(&scope).await.unwrap();
         assert_eq!(conn.exists::<_, i64>(&legacy_key).await.unwrap(), 0);
         assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 0);
+        assert_eq!(conn.exists::<_, i64>(&v3_key).await.unwrap(), 0);
     }
 }

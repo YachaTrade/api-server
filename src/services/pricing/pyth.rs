@@ -8,7 +8,7 @@ use moka::future::Cache;
 use once_cell::sync::Lazy;
 
 use crate::config::PYTH_HERMES_URL;
-use crate::services::pricing::{normalize_feed_id, parse_hermes_prices, PriceSource};
+use crate::services::pricing::{PriceSource, normalize_feed_id, parse_hermes_prices};
 use crate::utils::single_flight::with_cache;
 
 /// feed_id → USD 가격 캐시 (10초 TTL). 키는 정규화된 feed_id.
@@ -50,7 +50,10 @@ impl PythHermesClient {
                 Ok(price.map(|p| p.to_plain_string()))
             })
             .await;
-        cached.ok().flatten().and_then(|s| s.parse::<BigDecimal>().ok())
+        cached
+            .ok()
+            .flatten()
+            .and_then(|s| s.parse::<BigDecimal>().ok())
     }
 }
 

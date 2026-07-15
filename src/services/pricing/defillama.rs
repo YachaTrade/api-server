@@ -40,14 +40,22 @@ pub struct DefiLlamaPriceSource {
 
 impl DefiLlamaPriceSource {
     pub fn new() -> Self {
-        Self { chain: CHAIN.clone() }
+        Self {
+            chain: CHAIN.clone(),
+        }
     }
 
     /// 실패(네트워크/비2xx/본문 읽기)는 `Err`로 반환 → 호출부가 캐시하지 않음.
     async fn fetch_batch(chain: &str, addrs: &[String]) -> anyhow::Result<String> {
         let keys: Vec<String> = addrs.iter().map(|a| format!("{chain}:{a}")).collect();
         let url = format!("{BASE_URL}/{}", keys.join(","));
-        let body = HTTP.get(&url).send().await?.error_for_status()?.text().await?;
+        let body = HTTP
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
         Ok(body)
     }
 }
@@ -72,11 +80,10 @@ impl PriceSource for DefiLlamaPriceSource {
         let cache_key = format!("llama:{}:{}", self.chain, addrs.join(","));
         let chain = self.chain.clone();
         // 성공만 캐시 — 일시적 실패는 Err로 전파되어 with_cache(try_get_with)가 저장하지 않음.
-        let cached: anyhow::Result<String> =
-            with_cache(&PRICE_CACHE, cache_key, || async {
-                Self::fetch_batch(&chain, &addrs).await
-            })
-            .await;
+        let cached: anyhow::Result<String> = with_cache(&PRICE_CACHE, cache_key, || async {
+            Self::fetch_batch(&chain, &addrs).await
+        })
+        .await;
         match cached {
             Ok(body) => parse_defillama_prices(&body),
             Err(_) => HashMap::new(),
@@ -97,7 +104,11 @@ pub(crate) fn parse_defillama_prices(body: &str) -> HashMap<String, BigDecimal> 
     for (key, val) in coins {
         // key = "monad:0xAddr" → ':' 뒤가 주소
         let addr = key.split_once(':').map(|(_, a)| a).unwrap_or(key);
-        let Some(price) = val.get("price").filter(|p| p.is_number()).map(|p| p.to_string()) else {
+        let Some(price) = val
+            .get("price")
+            .filter(|p| p.is_number())
+            .map(|p| p.to_string())
+        else {
             continue;
         };
         if let Ok(bd) = BigDecimal::from_str(&price) {

@@ -89,7 +89,9 @@ impl DexService {
         let postgres = self.postgres.clone();
         let account = account_id.to_string();
         with_cache(&DEX_POSITIONS_CACHE, key, move || async move {
-            PositionController::new(postgres).get_positions(&account).await
+            PositionController::new(postgres)
+                .get_positions(&account)
+                .await
         })
         .await
         .map_err(|err| {
@@ -121,10 +123,7 @@ impl DexService {
         })
     }
 
-    pub async fn get_reserves(
-        &self,
-        pool_id: &str,
-    ) -> Result<Option<ReservesResponse>, AppError> {
+    pub async fn get_reserves(&self, pool_id: &str) -> Result<Option<ReservesResponse>, AppError> {
         let key = format!("dexres:{}", pool_id);
         let postgres = self.postgres.clone();
         let pid = pool_id.to_string();

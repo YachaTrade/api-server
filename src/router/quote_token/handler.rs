@@ -3,9 +3,7 @@ use tracing::instrument;
 
 use super::path::QuoteTokenPath;
 use crate::{
-    result::AppJsonResult,
-    services::quote_token::QuoteTokenService,
-    state::AppState,
+    result::AppJsonResult, services::quote_token::QuoteTokenService, state::AppState,
     types::quote_token::QuoteTokensResponse,
 };
 

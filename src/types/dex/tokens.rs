@@ -19,7 +19,10 @@ pub struct DexTokenListQuery {
     #[serde(default = "default_page", deserialize_with = "deserialize_page")]
     pub page: i64,
     /// Page size. Default 50, hard-capped at 100.
-    #[serde(default = "default_dex_tokens_limit", deserialize_with = "deserialize_limit")]
+    #[serde(
+        default = "default_dex_tokens_limit",
+        deserialize_with = "deserialize_limit"
+    )]
     pub limit: i64,
 }
 

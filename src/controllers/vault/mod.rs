@@ -224,10 +224,7 @@ impl VaultController {
             None
         };
 
-        let vaults: Vec<VaultEntry> = rows
-            .into_iter()
-            .map(|r| map_row(r, &dividend))
-            .collect();
+        let vaults: Vec<VaultEntry> = rows.into_iter().map(|r| map_row(r, &dividend)).collect();
 
         Ok(TokenVaultsResponse {
             token_id: token_id.to_string(),
@@ -420,7 +417,10 @@ fn map_row(row: VaultRow, dividend: &Option<(i64, DividendStats)>) -> VaultEntry
                 platform_id: row.gift_platform_id,
                 receiver: row.gift_receiver,
                 buyback_quote_spent: bd_to_string(row.gift_buyback_quote_spent),
-                buyback_quote_spent_usd: row.gift_buyback_quote_spent_usd.normalized().to_plain_string(),
+                buyback_quote_spent_usd: row
+                    .gift_buyback_quote_spent_usd
+                    .normalized()
+                    .to_plain_string(),
                 buyback_tokens: bd_to_string(row.gift_buyback_tokens),
                 expires_at: match row.gift_expires_at.unwrap_or(0) {
                     0 => 0,
@@ -452,7 +452,10 @@ fn map_row(row: VaultRow, dividend: &Option<(i64, DividendStats)>) -> VaultEntry
         name: row.name,
         active: row.active,
         quote_amount: bd_to_string(row.dist_distributed_quote),
-        quote_amount_usd: row.dist_distributed_quote_usd.normalized().to_plain_string(),
+        quote_amount_usd: row
+            .dist_distributed_quote_usd
+            .normalized()
+            .to_plain_string(),
         last_executed_at,
         stats,
     }
@@ -503,10 +506,22 @@ mod tests {
         // Eligibility is read from `balance`, not the published distribution, so it
         // is populated before any merkle snapshot. HOLDER (20 >= 10) qualifies,
         // HOLDER2 (5 < 10) does not → recipient_count = 1.
-        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,20,0)")
-            .bind(HOLDER).bind(TOKEN).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,5,0)")
-            .bind(HOLDER2).bind(TOKEN).execute(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,20,0)",
+        )
+        .bind(HOLDER)
+        .bind(TOKEN)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,5,0)",
+        )
+        .bind(HOLDER2)
+        .bind(TOKEN)
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query("INSERT INTO dividend_pair_state (source_token,dividend_token,last_allocated_balance,last_snapshot_block,updated_at) VALUES ($1,$2,0,5,50)")
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
 
@@ -536,8 +551,14 @@ mod tests {
             .bind(TOKEN).bind(POOL).bind(QUOTE).execute(&pool).await.unwrap();
         // All hold >= min_balance (10), but only HOLDER is a real recipient.
         for acct in [HOLDER, TOKEN, POOL, ZERO, DEAD] {
-            sqlx::query("INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,100,0)")
-                .bind(acct).bind(TOKEN).execute(&pool).await.unwrap();
+            sqlx::query(
+                "INSERT INTO balance (account_id,token_id,balance,created_at) VALUES ($1,$2,100,0)",
+            )
+            .bind(acct)
+            .bind(TOKEN)
+            .execute(&pool)
+            .await
+            .unwrap();
         }
 
         let (_, stats) = ctrl(pool).fetch_dividend_vault_stats(TOKEN).await.unwrap();

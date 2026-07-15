@@ -25,7 +25,11 @@ use tracing::info;
 use crate::result::AppError;
 
 /// Convert SVG to PNG (Rekognition doesn't accept SVG directly).
-fn convert_svg_to_png(svg_data: &[u8], max_width: u32, max_height: u32) -> Result<Vec<u8>, AppError> {
+fn convert_svg_to_png(
+    svg_data: &[u8],
+    max_width: u32,
+    max_height: u32,
+) -> Result<Vec<u8>, AppError> {
     info!("🎨 Starting SVG to PNG conversion");
     let start_time = Instant::now();
 

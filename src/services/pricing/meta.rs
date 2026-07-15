@@ -50,7 +50,11 @@ impl RpcMetaSource {
         let symbol: String = contract.symbol().call().await?;
         let decimals: u8 = contract.decimals().call().await?;
 
-        Ok(TokenMeta { name, symbol, decimals: decimals as i32 })
+        Ok(TokenMeta {
+            name,
+            symbol,
+            decimals: decimals as i32,
+        })
     }
 }
 
@@ -64,17 +68,16 @@ impl Default for RpcMetaSource {
 impl TokenMetaSource for RpcMetaSource {
     async fn token_meta(&self, token_id: &str) -> Option<TokenMeta> {
         let key = format!("meta:{token_id}");
-        let cached: anyhow::Result<Option<TokenMeta>> =
-            with_cache(&META_CACHE, key, || async {
-                match Self::fetch(token_id).await {
-                    Ok(m) => Ok(Some(m)),
-                    Err(e) => {
-                        warn!("token_meta RPC failed token={token_id}: {e}");
-                        Ok(None) // degrade: 실패를 None으로 캐시
-                    }
+        let cached: anyhow::Result<Option<TokenMeta>> = with_cache(&META_CACHE, key, || async {
+            match Self::fetch(token_id).await {
+                Ok(m) => Ok(Some(m)),
+                Err(e) => {
+                    warn!("token_meta RPC failed token={token_id}: {e}");
+                    Ok(None) // degrade: 실패를 None으로 캐시
                 }
-            })
-            .await;
+            }
+        })
+        .await;
         cached.ok().flatten()
     }
 }

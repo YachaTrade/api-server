@@ -484,12 +484,19 @@ mod tests {
         let ctrl = make_controller(pool);
         // token NOT in any other table — self-contained, no metadata check needed
         let p = wl_upsert(
-            ACC_ADMIN, DEX_TOKEN, 3, true,
-            Some("External Token"), Some("EXT"),
+            ACC_ADMIN,
+            DEX_TOKEN,
+            3,
+            true,
+            Some("External Token"),
+            Some("EXT"),
             Some("https://storage.nadapp.net/whitelist/ext"),
             Some(6),
         );
-        let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p).await.unwrap();
+        let ok = ctrl
+            .upsert_whitelist_token_with_admin_guard(&p)
+            .await
+            .unwrap();
         assert!(ok);
         let row: (i32, bool, Option<String>, Option<String>, Option<String>, Option<String>, Option<i32>) =
             sqlx::query_as(
@@ -503,7 +510,10 @@ mod tests {
         assert!(row.1);
         assert_eq!(row.2.as_deref(), Some("External Token"));
         assert_eq!(row.3.as_deref(), Some("EXT"));
-        assert_eq!(row.4.as_deref(), Some("https://storage.nadapp.net/whitelist/ext"));
+        assert_eq!(
+            row.4.as_deref(),
+            Some("https://storage.nadapp.net/whitelist/ext")
+        );
         assert_eq!(row.5, None, "price_feed_id no longer written by upsert");
         assert_eq!(row.6, Some(6));
     }
@@ -514,18 +524,24 @@ mod tests {
         let ctrl = make_controller(pool);
         // First insert with full data
         let p1 = wl_upsert(
-            ACC_ADMIN, DEX_TOKEN, 1, true,
-            Some("My Token"), Some("MTK"),
+            ACC_ADMIN,
+            DEX_TOKEN,
+            1,
+            true,
+            Some("My Token"),
+            Some("MTK"),
             Some("https://storage.nadapp.net/whitelist/mtk"),
             Some(18),
         );
-        ctrl.upsert_whitelist_token_with_admin_guard(&p1).await.unwrap();
+        ctrl.upsert_whitelist_token_with_admin_guard(&p1)
+            .await
+            .unwrap();
         // Second upsert — omit name, symbol, image_uri, decimals
-        let p2 = wl_upsert(
-            ACC_ADMIN, DEX_TOKEN, 9, false,
-            None, None, None, None,
-        );
-        let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p2).await.unwrap();
+        let p2 = wl_upsert(ACC_ADMIN, DEX_TOKEN, 9, false, None, None, None, None);
+        let ok = ctrl
+            .upsert_whitelist_token_with_admin_guard(&p2)
+            .await
+            .unwrap();
         assert!(ok);
         let row: (i32, bool, Option<String>, Option<String>, Option<String>, Option<String>, Option<i32>) =
             sqlx::query_as(
@@ -540,7 +556,11 @@ mod tests {
         // COALESCE preserves existing values
         assert_eq!(row.2.as_deref(), Some("My Token"), "name preserved");
         assert_eq!(row.3.as_deref(), Some("MTK"), "symbol preserved");
-        assert_eq!(row.4.as_deref(), Some("https://storage.nadapp.net/whitelist/mtk"), "image_uri preserved");
+        assert_eq!(
+            row.4.as_deref(),
+            Some("https://storage.nadapp.net/whitelist/mtk"),
+            "image_uri preserved"
+        );
         assert_eq!(row.5, None, "price_feed_id no longer written");
         assert_eq!(row.6, Some(18), "decimals preserved");
     }
@@ -550,29 +570,36 @@ mod tests {
         // ACC_ADMIN is NOT in admin table
         let ctrl = make_controller(pool);
         let p = wl_upsert(ACC_ADMIN, DEX_TOKEN, 1, true, None, None, None, None);
-        let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p).await.unwrap();
+        let ok = ctrl
+            .upsert_whitelist_token_with_admin_guard(&p)
+            .await
+            .unwrap();
         assert!(!ok);
-        let cnt: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM whitelist_token WHERE token_id=$1")
-                .bind(DEX_TOKEN)
-                .fetch_one(ctrl.db.get_read_pool())
-                .await
-                .unwrap();
+        let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM whitelist_token WHERE token_id=$1")
+            .bind(DEX_TOKEN)
+            .fetch_one(ctrl.db.get_read_pool())
+            .await
+            .unwrap();
         assert_eq!(cnt, 0);
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn whitelist_upsert_non_admin_cannot_overwrite_existing(pool: PgPool) {
         // Seed existing whitelist row directly (bypassing admin path)
-        sqlx::query("INSERT INTO whitelist_token (token_id, sort_order, enabled) VALUES ($1, 1, true)")
-            .bind(DEX_TOKEN)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO whitelist_token (token_id, sort_order, enabled) VALUES ($1, 1, true)",
+        )
+        .bind(DEX_TOKEN)
+        .execute(&pool)
+        .await
+        .unwrap();
         let ctrl = make_controller(pool);
         // ACC_ADMIN not in admin — attempt to overwrite existing
         let p = wl_upsert(ACC_ADMIN, DEX_TOKEN, 99, false, None, None, None, None);
-        let ok = ctrl.upsert_whitelist_token_with_admin_guard(&p).await.unwrap();
+        let ok = ctrl
+            .upsert_whitelist_token_with_admin_guard(&p)
+            .await
+            .unwrap();
         assert!(!ok, "non-admin → no update (atomic guard)");
         let (so, en): (i32, bool) =
             sqlx::query_as("SELECT sort_order, enabled FROM whitelist_token WHERE token_id=$1")
@@ -601,7 +628,10 @@ mod tests {
         let rows = ctrl.list_whitelist_tokens().await.unwrap();
         assert_eq!(rows.len(), 2);
         // sort_order ASC: Beta(1) first
-        assert_eq!(rows[0].token_id, "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A");
+        assert_eq!(
+            rows[0].token_id,
+            "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"
+        );
         assert_eq!(rows[0].symbol.as_deref(), Some("BET"));
         assert!(!rows[0].enabled);
         assert!(rows[0].image_uri.is_none());

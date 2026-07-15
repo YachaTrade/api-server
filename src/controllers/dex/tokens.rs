@@ -8,8 +8,8 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     services::pricing::{
-        balance::RpcBalanceSource, compute_balance_usd, meta::RpcMetaSource, BalanceSource,
-        TokenMetaSource,
+        BalanceSource, TokenMetaSource, balance::RpcBalanceSource, compute_balance_usd,
+        meta::RpcMetaSource,
     },
     types::dex::tokens::{DexTokenEntry, DexTokenListQuery, DexTokenListResponse},
 };
@@ -47,11 +47,12 @@ impl TokensController {
     }
 
     /// 테스트용 — 소스 주입. meta fallback은 기본 비활성(미발견 → 빈 결과).
-    pub fn with_sources(
-        db: Arc<PostgresDatabase>,
-        balance_source: Arc<dyn BalanceSource>,
-    ) -> Self {
-        Self { db, balance_source, meta_source: None }
+    pub fn with_sources(db: Arc<PostgresDatabase>, balance_source: Arc<dyn BalanceSource>) -> Self {
+        Self {
+            db,
+            balance_source,
+            meta_source: None,
+        }
     }
 
     /// 테스트용 — full-CA 미발견 시 외부 토큰 메타 fallback 주입.
@@ -78,10 +79,7 @@ impl TokensController {
     ///
     /// These are injected into the SQL as `wl_rpc` CTE (UNNEST arrays) so the DB-side
     /// tier/ordering uses real on-chain data before pagination.
-    async fn prefetch_wl_rpc(
-        &self,
-        account: &str,
-    ) -> Result<(Vec<String>, Vec<BigDecimal>)> {
+    async fn prefetch_wl_rpc(&self, account: &str) -> Result<(Vec<String>, Vec<BigDecimal>)> {
         // 1. Query all enabled whitelist tokens with their decimals.
         let wl_rows: Vec<(String, Option<i32>)> = sqlx::query_as::<_, (String, Option<i32>)>(
             "SELECT token_id, decimals FROM whitelist_token WHERE enabled",
@@ -184,7 +182,10 @@ impl TokensController {
         .map_err(|e| anyhow::anyhow!("Failed to list tokens: {}", e))?;
 
         let tokens = self.enrich(rows, query.account.as_deref()).await;
-        Ok(DexTokenListResponse { tokens, total_count })
+        Ok(DexTokenListResponse {
+            tokens,
+            total_count,
+        })
     }
 
     async fn search(&self, query: &DexTokenListQuery, q: &str) -> Result<DexTokenListResponse> {
@@ -261,7 +262,10 @@ impl TokensController {
         .map_err(|e| anyhow::anyhow!("Failed to search tokens: {}", e))?;
 
         let tokens = self.enrich(rows, account).await;
-        Ok(DexTokenListResponse { tokens, total_count })
+        Ok(DexTokenListResponse {
+            tokens,
+            total_count,
+        })
     }
 
     async fn search_full_ca(
@@ -294,13 +298,19 @@ impl TokensController {
         // fall through to the empty result below.
         if rows.is_empty() {
             if let Some(entry) = self.fetch_external_meta(ca).await {
-                return Ok(DexTokenListResponse { tokens: vec![entry], total_count: 1 });
+                return Ok(DexTokenListResponse {
+                    tokens: vec![entry],
+                    total_count: 1,
+                });
             }
         }
 
         let total_count = rows.len() as i64;
         let tokens = self.enrich(rows, query.account.as_deref()).await;
-        Ok(DexTokenListResponse { tokens, total_count })
+        Ok(DexTokenListResponse {
+            tokens,
+            total_count,
+        })
     }
 
     /// On-chain ERC20 metadata fallback for a full CA absent from every table.
@@ -667,7 +677,10 @@ mod tests {
 
     impl Default for FakeBalance {
         fn default() -> Self {
-            Self { balances: HashMap::new(), calls: AtomicUsize::new(0) }
+            Self {
+                balances: HashMap::new(),
+                calls: AtomicUsize::new(0),
+            }
         }
     }
 
@@ -675,7 +688,9 @@ mod tests {
     impl BalanceSource for FakeBalance {
         async fn balance_of(&self, token_id: &str, account: &str) -> Option<BigDecimal> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            self.balances.get(&(token_id.to_string(), account.to_string())).cloned()
+            self.balances
+                .get(&(token_id.to_string(), account.to_string()))
+                .cloned()
         }
     }
 
@@ -698,7 +713,10 @@ mod tests {
     fn make_controller(pool: PgPool) -> TokensController {
         use crate::db::postgres::PostgresDatabase;
         TokensController::with_sources(
-            std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
+            std::sync::Arc::new(PostgresDatabase {
+                write_pool: pool.clone(),
+                read_pool: pool,
+            }),
             std::sync::Arc::new(FakeBalance::default()),
         )
     }
@@ -706,13 +724,21 @@ mod tests {
     fn controller_with(pool: PgPool, bal: FakeBalance) -> TokensController {
         use crate::db::postgres::PostgresDatabase;
         TokensController::with_sources(
-            std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
+            std::sync::Arc::new(PostgresDatabase {
+                write_pool: pool.clone(),
+                read_pool: pool,
+            }),
             std::sync::Arc::new(bal),
         )
     }
 
     fn empty_query() -> DexTokenListQuery {
-        DexTokenListQuery { account: None, q: None, page: 1, limit: 50 }
+        DexTokenListQuery {
+            account: None,
+            q: None,
+            page: 1,
+            limit: 50,
+        }
     }
 
     async fn seed_pool_with_two_tokens(pool: &PgPool) {
@@ -776,16 +802,32 @@ mod tests {
 
     async fn seed_whitelist(pool: &PgPool, token_id: &str, order: i32) {
         sqlx::query("INSERT INTO whitelist_token (token_id, sort_order) VALUES ($1, $2)")
-            .bind(token_id).bind(order).execute(pool).await.unwrap();
+            .bind(token_id)
+            .bind(order)
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     async fn seed_whitelist_with_feed(pool: &PgPool, token_id: &str, order: i32, feed: &str) {
-        sqlx::query("INSERT INTO whitelist_token (token_id, sort_order, price_feed_id) VALUES ($1,$2,$3)")
-            .bind(token_id).bind(order).bind(feed).execute(pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO whitelist_token (token_id, sort_order, price_feed_id) VALUES ($1,$2,$3)",
+        )
+        .bind(token_id)
+        .bind(order)
+        .bind(feed)
+        .execute(pool)
+        .await
+        .unwrap();
         // 메타(symbol/name/decimals)는 dex_token에서 옴
-        sqlx::query(r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
-                       VALUES ($1,'USD Coin','USDC',18,'',0)"#)
-            .bind(token_id).execute(pool).await.unwrap();
+        sqlx::query(
+            r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
+                       VALUES ($1,'USD Coin','USDC',18,'',0)"#,
+        )
+        .bind(token_id)
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     // -----------------------------------------------------------------------
@@ -805,7 +847,10 @@ mod tests {
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
         // Only CHOG (nadfun V2) should appear; WMON (external, dex_token only) excluded
         assert_eq!(resp.tokens.len(), 1);
-        assert_eq!(resp.total_count, 1, "total_count reflects only whitelist+nadfun V2");
+        assert_eq!(
+            resp.total_count, 1,
+            "total_count reflects only whitelist+nadfun V2"
+        );
 
         let chog = resp
             .tokens
@@ -936,13 +981,20 @@ mod tests {
             .await
             .unwrap();
         assert!(resp.tokens.is_empty(), "page 99 of 2-token list is empty");
-        assert_eq!(resp.total_count, 2, "total count still reflects all matches");
+        assert_eq!(
+            resp.total_count, 2,
+            "total count still reflects all matches"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn default_no_account_orders_whitelist_then_v2(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1").bind(TOKEN0).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         seed_whitelist(&pool, WL_A, 1).await;
         seed_whitelist(&pool, WL_B, 2).await;
         let controller = make_controller(pool);
@@ -952,26 +1004,57 @@ mod tests {
         assert_eq!(resp.tokens[1].token_id, WL_B);
         assert_eq!(resp.tokens[2].token_id, TOKEN0); // CHOG nadfun V2 (whitelist 다음)
         assert_eq!(resp.tokens[2].token_type, "nadfun_v2");
-        assert!(resp.tokens.iter().all(|t| t.token_id != TOKEN1), "external WMON 제외");
+        assert!(
+            resp.tokens.iter().all(|t| t.token_id != TOKEN1),
+            "external WMON 제외"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn default_with_account_orders_four_tiers(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1").bind(TOKEN0).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         seed_whitelist(&pool, WL_A, 1).await; // 미보유 화이트리스트 → tier3
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // CHOG 보유 → tier2
         let controller = make_controller(pool);
-        let resp = controller.list_tokens(&DexTokenListQuery {
-            account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
-        }).await.unwrap();
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: None,
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
         // 보유 nadfun V2(CHOG)가 미보유 화이트리스트(WL_A)보다 상위로 정렬돼야 한다.
-        let chog_idx = resp.tokens.iter().position(|t| t.token_id == TOKEN0).expect("CHOG present");
-        let wl_idx = resp.tokens.iter().position(|t| t.token_id == WL_A).expect("WL_A present");
-        assert!(chog_idx < wl_idx, "보유 nadfun V2가 미보유 화이트리스트보다 상위");
+        let chog_idx = resp
+            .tokens
+            .iter()
+            .position(|t| t.token_id == TOKEN0)
+            .expect("CHOG present");
+        let wl_idx = resp
+            .tokens
+            .iter()
+            .position(|t| t.token_id == WL_A)
+            .expect("WL_A present");
+        assert!(
+            chog_idx < wl_idx,
+            "보유 nadfun V2가 미보유 화이트리스트보다 상위"
+        );
         let chog = &resp.tokens[chog_idx];
-        assert_eq!(chog.balance.as_deref(), Some("1000000000000000000000"), "보유 → balance 노출");
-        assert!(resp.tokens[wl_idx].balance.is_none(), "미보유 → balance null (account 제공돼도)");
+        assert_eq!(
+            chog.balance.as_deref(),
+            Some("1000000000000000000000"),
+            "보유 → balance 노출"
+        );
+        assert!(
+            resp.tokens[wl_idx].balance.is_none(),
+            "미보유 → balance null (account 제공돼도)"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -982,12 +1065,26 @@ mod tests {
         seed_whitelist(&pool, WL_B, 1).await;
         let controller = make_controller(pool);
         // account provided, but both whitelist tokens unheld → tier 3, must sort by sort_order.
-        let resp = controller.list_tokens(&DexTokenListQuery {
-            account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
-        }).await.unwrap();
-        let wl_ids: Vec<&str> = resp.tokens.iter()
-            .filter(|t| t.token_type == "whitelist").map(|t| t.token_id.as_str()).collect();
-        assert_eq!(wl_ids, vec![WL_B, WL_A], "미보유 화이트리스트는 account 있어도 sort_order 우선");
+        let resp = controller
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: None,
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
+        let wl_ids: Vec<&str> = resp
+            .tokens
+            .iter()
+            .filter(|t| t.token_type == "whitelist")
+            .map(|t| t.token_id.as_str())
+            .collect();
+        assert_eq!(
+            wl_ids,
+            vec![WL_B, WL_A],
+            "미보유 화이트리스트는 account 있어도 sort_order 우선"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1000,7 +1097,10 @@ mod tests {
         // No version bump → CHOG stays V1, WMON is external. Neither is a default candidate.
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        assert!(resp.tokens.is_empty(), "V1 + external만 있으면 기본 리스트 비어야 함");
+        assert!(
+            resp.tokens.is_empty(),
+            "V1 + external만 있으면 기본 리스트 비어야 함"
+        );
         assert_eq!(resp.total_count, 0);
     }
 
@@ -1093,7 +1193,10 @@ mod tests {
             .iter()
             .find(|t| t.token_id == TOKEN1)
             .expect("external present by partial CA");
-        assert_eq!(ext.token_type, "external", "partial CA는 dex_token(external)도 노출");
+        assert_eq!(
+            ext.token_type, "external",
+            "partial CA는 dex_token(external)도 노출"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -1108,7 +1211,10 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(resp.tokens.is_empty(), "어느 테이블에도 없는 full CA → 빈 결과");
+        assert!(
+            resp.tokens.is_empty(),
+            "어느 테이블에도 없는 full CA → 빈 결과"
+        );
     }
 
     /// Policy change: name/symbol search now covers dex_token, so an external
@@ -1139,7 +1245,10 @@ mod tests {
             .iter()
             .find(|t| t.token_id == TOKEN1)
             .expect("external present by symbol prefix");
-        assert_eq!(ext.token_type, "external", "text 검색은 dex_token(external) symbol prefix도 노출");
+        assert_eq!(
+            ext.token_type, "external",
+            "text 검색은 dex_token(external) symbol prefix도 노출"
+        );
     }
 
     /// V1 nadfun token (in `token`, version V1) must surface in name/symbol search,
@@ -1251,7 +1360,10 @@ mod tests {
             .iter()
             .find(|t| t.token_id == TOKEN0)
             .expect("V1 present by full CA");
-        assert_eq!(v1.token_type, "nadfun_v1", "full-CA V1 → nadfun_v1 (not external)");
+        assert_eq!(
+            v1.token_type, "nadfun_v1",
+            "full-CA V1 → nadfun_v1 (not external)"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1277,7 +1389,10 @@ mod tests {
         // 0-잔고 행: balance는 null로 떨어지는데 balance_usd가 "0"으로 남으면 불일치.
         let e = row_to_entry(token_row(Some(0), Some(0)));
         assert!(e.balance.is_none(), "0 잔고 → balance null");
-        assert!(e.balance_usd.is_none(), "balance null이면 balance_usd도 null");
+        assert!(
+            e.balance_usd.is_none(),
+            "balance null이면 balance_usd도 null"
+        );
     }
 
     #[test]
@@ -1305,14 +1420,28 @@ mod tests {
             BigDecimal::from_str("2000000000000000000").unwrap(), // 2 tokens (18dp)
         );
         let c = controller_with(pool, bal);
-        let resp = c.list_tokens(&DexTokenListQuery {
-            account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
-        }).await.unwrap();
+        let resp = c
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: None,
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
         let t = resp.tokens.iter().find(|t| t.token_id == WL_A).unwrap();
-        assert_eq!(t.balance.as_deref(), Some("2000000000000000000"), "RPC 잔액 노출");
+        assert_eq!(
+            t.balance.as_deref(),
+            Some("2000000000000000000"),
+            "RPC 잔액 노출"
+        );
         // normalized() strips trailing zeros: 3.0 → "3". Compare as BigDecimal for canonical equality.
         let usd: BigDecimal = t.balance_usd.as_deref().unwrap().parse().unwrap();
-        assert_eq!(usd, BigDecimal::from_str("3.0").unwrap(), "2 × $1.5 = $3 (price from price_usd table)");
+        assert_eq!(
+            usd,
+            BigDecimal::from_str("3.0").unwrap(),
+            "2 × $1.5 = $3 (price from price_usd table)"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -1320,9 +1449,15 @@ mod tests {
         seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
         let bal = FakeBalance::default(); // 잔액 없음 → 미보유
         let c = controller_with(pool, bal);
-        let resp = c.list_tokens(&DexTokenListQuery {
-            account: Some(ACCOUNT.to_string()), q: None, page: 1, limit: 50,
-        }).await.unwrap();
+        let resp = c
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: None,
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
         let t = resp.tokens.iter().find(|t| t.token_id == WL_A).unwrap();
         assert!(t.balance.is_none(), "미보유 → balance null");
         assert!(t.balance_usd.is_none(), "미보유 → balance_usd null");
@@ -1335,12 +1470,19 @@ mod tests {
         let c = {
             use crate::db::postgres::PostgresDatabase;
             TokensController::with_sources(
-                std::sync::Arc::new(PostgresDatabase { write_pool: pool.clone(), read_pool: pool }),
+                std::sync::Arc::new(PostgresDatabase {
+                    write_pool: pool.clone(),
+                    read_pool: pool,
+                }),
                 bal.clone(),
             )
         };
         let _ = c.list_tokens(&empty_query()).await.unwrap();
-        assert_eq!(bal.calls.load(Ordering::SeqCst), 0, "account 없으면 balanceOf 호출 0");
+        assert_eq!(
+            bal.calls.load(Ordering::SeqCst),
+            0,
+            "account 없으면 balanceOf 호출 0"
+        );
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -1357,10 +1499,17 @@ mod tests {
         .unwrap();
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        let t = resp.tokens.iter().find(|t| t.token_id == WL_A).expect("WL_A present");
+        let t = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == WL_A)
+            .expect("WL_A present");
         assert_eq!(t.symbol, "USDC", "whitelist_token.symbol 우선");
         assert_eq!(t.name, "USD Coin", "whitelist_token.name 우선");
-        assert_eq!(t.image_uri, "https://img/usdc.png", "whitelist_token.image_uri 우선");
+        assert_eq!(
+            t.image_uri, "https://img/usdc.png",
+            "whitelist_token.image_uri 우선"
+        );
         assert_eq!(t.decimals, 6, "whitelist_token.decimals 우선 (join 없어도)");
     }
 
@@ -1393,10 +1542,20 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(resp.tokens.len(), 1, "whitelist-only token이 full-CA 검색에 나와야 함");
+        assert_eq!(
+            resp.tokens.len(),
+            1,
+            "whitelist-only token이 full-CA 검색에 나와야 함"
+        );
         assert_eq!(resp.tokens[0].token_id, WL_A, "token_id 일치");
-        assert_eq!(resp.tokens[0].token_type, "whitelist", "token_type은 whitelist");
-        assert_eq!(resp.tokens[0].symbol, "USDC", "whitelist 메타데이터 그대로 노출");
+        assert_eq!(
+            resp.tokens[0].token_type, "whitelist",
+            "token_type은 whitelist"
+        );
+        assert_eq!(
+            resp.tokens[0].symbol, "USDC",
+            "whitelist 메타데이터 그대로 노출"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1428,16 +1587,25 @@ mod tests {
             BigDecimal::from_str("5000000000000000000").unwrap(), // 5 tokens (18dp)
         );
         let c = controller_with(pool, bal);
-        let resp = c.list_tokens(&DexTokenListQuery {
-            account: Some(ACCOUNT.to_string()),
-            q: None,
-            page: 1,
-            limit: 50,
-        }).await.unwrap();
+        let resp = c
+            .list_tokens(&DexTokenListQuery {
+                account: Some(ACCOUNT.to_string()),
+                q: None,
+                page: 1,
+                limit: 50,
+            })
+            .await
+            .unwrap();
 
-        let wl_idx = resp.tokens.iter().position(|t| t.token_id == WL_A)
+        let wl_idx = resp
+            .tokens
+            .iter()
+            .position(|t| t.token_id == WL_A)
             .expect("WL_A (held whitelist) must be present");
-        let v2_idx = resp.tokens.iter().position(|t| t.token_id == TOKEN0)
+        let v2_idx = resp
+            .tokens
+            .iter()
+            .position(|t| t.token_id == TOKEN0)
             .expect("CHOG (held V2) must be present");
 
         // Core assertion: held whitelist (tier 1) before held V2 (tier 2).
@@ -1448,7 +1616,10 @@ mod tests {
 
         // Confirm WL_A exposes balance (set by enrich()).
         let wl_tok = &resp.tokens[wl_idx];
-        assert!(wl_tok.balance.is_some(), "held whitelist must have balance set");
+        assert!(
+            wl_tok.balance.is_some(),
+            "held whitelist must have balance set"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1468,8 +1639,11 @@ mod tests {
         sqlx::query(
             r#"INSERT INTO price (quote_id, block_number, price) VALUES ($1, 1, $2::NUMERIC)"#,
         )
-        .bind(MON_QUOTE).bind(quote_usd)
-        .execute(pool).await.unwrap();
+        .bind(MON_QUOTE)
+        .bind(quote_usd)
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     /// whitelist price_usd comes from the price_usd table and must be present even with
@@ -1485,7 +1659,11 @@ mod tests {
 
         // No ?account= — price_usd must still be populated.
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        let wl = resp.tokens.iter().find(|t| t.token_id == WL_A).expect("whitelist present");
+        let wl = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == WL_A)
+            .expect("whitelist present");
         assert!(wl.balance.is_none(), "no account → balance None");
         assert!(wl.balance_usd.is_none(), "no account → balance_usd None");
         assert_eq!(
@@ -1500,13 +1678,20 @@ mod tests {
     async fn price_usd_for_v2_from_market(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0).execute(&pool).await.unwrap();
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         // m.price=3, quote→USD=0.5 → price_usd = 1.5
         seed_market_price(&pool, TOKEN0, "3", "0.5").await;
         let controller = make_controller(pool);
 
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        let chog = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("CHOG present");
         assert_eq!(
             chog.price_usd.as_deref(),
             Some("1.5"),
@@ -1517,10 +1702,19 @@ mod tests {
     /// Set the per-token USD unit price the observer's RawSync inference writes
     /// onto a pool. `side` is 0 or 1 (which side of POOL the token sits on).
     async fn seed_pool_token_price_usd(pool: &PgPool, side: u8, price_usd: &str) {
-        let col = if side == 0 { "token0_price_usd" } else { "token1_price_usd" };
-        sqlx::query(&format!("UPDATE pool SET {col} = $1::NUMERIC WHERE pool_id = $2"))
-            .bind(price_usd).bind(POOL)
-            .execute(pool).await.unwrap();
+        let col = if side == 0 {
+            "token0_price_usd"
+        } else {
+            "token1_price_usd"
+        };
+        sqlx::query(&format!(
+            "UPDATE pool SET {col} = $1::NUMERIC WHERE pool_id = $2"
+        ))
+        .bind(price_usd)
+        .bind(POOL)
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     /// pure-DEX nadfun_v2 token with NO market row: price_usd must come from the
@@ -1529,13 +1723,20 @@ mod tests {
     async fn price_usd_for_pure_dex_v2_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0).execute(&pool).await.unwrap();
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         // No market row. Observer set TOKEN0 (token0 side) USD price = 0.5 on the pool.
         seed_pool_token_price_usd(&pool, 0, "0.5").await;
         let controller = make_controller(pool);
 
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        let chog = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("CHOG present");
         assert_eq!(
             chog.price_usd.as_deref(),
             Some("0.5"),
@@ -1550,7 +1751,10 @@ mod tests {
     async fn balance_usd_for_held_pure_dex_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0).execute(&pool).await.unwrap();
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         seed_pool_token_price_usd(&pool, 0, "0.5").await; // pool view unit price, NO market row
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // 1000 CHOG (18dp)
         let controller = make_controller(pool);
@@ -1564,8 +1768,16 @@ mod tests {
             })
             .await
             .unwrap();
-        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
-        assert_eq!(chog.price_usd.as_deref(), Some("0.5"), "price from pool view");
+        let chog = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("CHOG present");
+        assert_eq!(
+            chog.price_usd.as_deref(),
+            Some("0.5"),
+            "price from pool view"
+        );
         let usd: BigDecimal = chog
             .balance_usd
             .as_deref()
@@ -1585,14 +1797,21 @@ mod tests {
     async fn price_usd_pool_view_takes_precedence_over_market(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0).execute(&pool).await.unwrap();
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         // market path would yield 3 × 0.5 = 1.5; pool view yields 0.5 → view wins.
         seed_market_price(&pool, TOKEN0, "3", "0.5").await;
         seed_pool_token_price_usd(&pool, 0, "0.5").await;
         let controller = make_controller(pool);
 
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        let chog = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("CHOG present");
         assert_eq!(
             chog.price_usd.as_deref(),
             Some("0.5"),
@@ -1606,7 +1825,10 @@ mod tests {
     async fn price_usd_full_ca_search_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0).execute(&pool).await.unwrap();
+            .bind(TOKEN0)
+            .execute(&pool)
+            .await
+            .unwrap();
         seed_pool_token_price_usd(&pool, 0, "0.25").await;
         let controller = make_controller(pool);
 
@@ -1620,7 +1842,11 @@ mod tests {
             })
             .await
             .unwrap();
-        let chog = resp.tokens.iter().find(|t| t.token_id == TOKEN0).expect("CHOG present");
+        let chog = resp
+            .tokens
+            .iter()
+            .find(|t| t.token_id == TOKEN0)
+            .expect("CHOG present");
         assert_eq!(
             chog.price_usd.as_deref(),
             Some("0.25"),
@@ -1641,7 +1867,11 @@ mod tests {
         let mut meta = FakeMeta::default();
         meta.metas.insert(
             UNKNOWN_CA.to_string(),
-            TokenMeta { name: "Foreign".into(), symbol: "FRGN".into(), decimals: 6 },
+            TokenMeta {
+                name: "Foreign".into(),
+                symbol: "FRGN".into(),
+                decimals: 6,
+            },
         );
         let controller = make_controller(pool).with_meta_source(std::sync::Arc::new(meta));
 

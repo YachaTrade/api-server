@@ -369,7 +369,10 @@ mod tests {
         let agg = lp_amounts_by_owner(&positions, "0x000000000000000000000000000000000000Bb01");
         let owner_cs =
             crate::utils::valid_account_id("0x000000000000000000000000000000000000Aa01").unwrap();
-        let found = agg.iter().find(|(o, _)| o == &owner_cs).expect("owner present");
+        let found = agg
+            .iter()
+            .find(|(o, _)| o == &owner_cs)
+            .expect("owner present");
         assert_eq!(
             found.1.normalized().to_plain_string(),
             "1961178955610182134800088"

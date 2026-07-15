@@ -11,6 +11,7 @@ use crate::{
     cache_key,
     db::postgres::PostgresDatabase,
     measure_postgres,
+    types::x_verification::floor_followers,
     types::{
         common::info::{AccountInfo, TokenInfo, TokenVersion},
         token::{
@@ -18,7 +19,6 @@ use crate::{
             x_verification::{TokenXVerification, XFollowedByEntry},
         },
     },
-    types::x_verification::floor_followers,
     utils::single_flight::{GLOBAL_CACHE, with_cache},
 };
 
