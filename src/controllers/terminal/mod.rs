@@ -107,6 +107,7 @@ impl TerminalController {
                     JOIN market m ON t.token_id = m.token_id
                     LEFT JOIN fee_config fc ON fc.token_id = t.token_id
                     WHERE t.token_id = $1
+                      AND m.market_type IN ('DEX', 'V2_DEX')
                 "#,
             )
             .bind(token_id)
@@ -199,9 +200,7 @@ impl TerminalController {
                     FROM swap s
                     JOIN market m ON s.token_id = m.token_id
                     WHERE s.block_number >= $1 AND s.block_number <= $2
-                      -- V2 bonding-curve(V2_CURVE)는 GeckoTerminal 미지원 → events에서 제외.
-                      -- 노출 대상: CURVE(V1) / DEX(V1) / V2_DEX.
-                      AND s.market_type <> 'V2_CURVE'
+                      AND s.market_type IN ('DEX', 'V2_DEX')
                     ORDER BY s.block_number ASC, s.tx_index ASC, s.log_index ASC
                 "#,
             )
@@ -241,6 +240,7 @@ impl TerminalController {
                     FROM mint mn
                     JOIN market m ON m.token_id = mn.token_id
                     WHERE mn.block_number >= $1 AND mn.block_number <= $2
+                      AND m.market_type IN ('DEX', 'V2_DEX')
                     ORDER BY mn.block_number ASC, mn.tx_index ASC, mn.log_index ASC
                 "#,
             )
@@ -280,6 +280,7 @@ impl TerminalController {
                     FROM burn bn
                     JOIN market m ON m.token_id = bn.token_id
                     WHERE bn.block_number >= $1 AND bn.block_number <= $2
+                      AND m.market_type IN ('DEX', 'V2_DEX')
                     ORDER BY bn.block_number ASC, bn.tx_index ASC, bn.log_index ASC
                 "#,
             )
@@ -353,7 +354,7 @@ mod tests {
     use sqlx::PgPool;
 
     const ACCOUNT: &str = "0x000000000000000000000000000000000000Aa01";
-    const TOKEN: &str = "0x00000000000000000000000000000000000000F1";
+    const TOKEN: &str = "0x00000000000000000000000000000000000000f1";
     const POOL: &str = "0x00000000000000000000000000000000000000C9";
     const QUOTE_LVMON: &str = "0xBe3fa50514D9617ce645a02B34F595541AF02b6b";
 
@@ -375,6 +376,34 @@ mod tests {
             .bind(market_type).bind(TOKEN).bind(pool_id).bind(QUOTE_LVMON).execute(pool).await.unwrap();
     }
 
+    async fn allow_future_market_type(pool: &PgPool) {
+        sqlx::query(
+            r#"
+                DO $$
+                DECLARE
+                    constraint_name text;
+                BEGIN
+                    FOR constraint_name IN
+                        SELECT c.conname
+                        FROM pg_constraint c
+                        WHERE c.conrelid = 'market'::regclass
+                          AND c.contype = 'c'
+                          AND pg_get_constraintdef(c.oid) LIKE '%market_type%'
+                    LOOP
+                        EXECUTE format(
+                            'ALTER TABLE market DROP CONSTRAINT %I',
+                            constraint_name
+                        );
+                    END LOOP;
+                END
+                $$
+            "#,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
     #[sqlx::test(migrations = "./migrations-test")]
     async fn get_pair_returns_quote_id_and_fee_config(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
@@ -391,10 +420,41 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn get_pair_without_fee_config_is_none(pool: PgPool) {
-        seed_token_market(&pool, "V2_CURVE", None).await;
+        seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         let row = ctrl(pool).get_pair(TOKEN).await.unwrap();
         assert_eq!(row.quote_id, QUOTE_LVMON);
         assert_eq!(row.creator_fee_rate, None);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn get_pair_only_returns_dex_markets(pool: PgPool) {
+        seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
+
+        for market_type in ["DEX", "V2_DEX"] {
+            sqlx::query("UPDATE market SET market_type = $1 WHERE token_id = $2")
+                .bind(market_type)
+                .bind(TOKEN)
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            let row = ctrl(pool.clone()).get_pair(TOKEN).await.unwrap();
+            assert_eq!(row.market_type, market_type);
+        }
+
+        for market_type in ["CURVE", "V2_CURVE"] {
+            sqlx::query("UPDATE market SET market_type = $1 WHERE token_id = $2")
+                .bind(market_type)
+                .bind(TOKEN)
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            assert!(
+                ctrl(pool.clone()).get_pair(TOKEN).await.is_err(),
+                "{market_type} pair must be filtered out"
+            );
+        }
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -410,54 +470,109 @@ mod tests {
         assert_eq!(rows[0].market_type, "V2_DEX");
     }
 
-    /// V2_CURVE swap은 /events에서 제외(GeckoTerminal 미지원). CURVE/DEX/V2_DEX는 노출.
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn get_events_excludes_v2_curve(pool: PgPool) {
-        // V2_DEX 토큰 + swap → 포함되어야 함
+    async fn get_events_only_returns_dex_and_uses_swap_market_type(pool: PgPool) {
+        // Current market stays V2_DEX; historical eligibility must use each swap row.
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
-        sqlx::query(r#"INSERT INTO swap (account_id,token_id,market_type,is_buy,quote_amount,token_amount,reserve_quote,reserve_token,value,created_at,transaction_hash,block_number,tx_index,log_index)
-            VALUES ($1,$2,'V2_DEX',true,1,2,100,200,0,1,'0xdex',10,0,0) ON CONFLICT DO NOTHING"#)
-            .bind(ACCOUNT).bind(TOKEN).execute(&pool).await.unwrap();
 
-        // V2_CURVE 토큰 + swap → events에서 제외되어야 함
-        const TOKEN_CURVE: &str = "0x00000000000000000000000000000000000000F2";
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version)
-            VALUES ($1,'C','C','',$2,NULL,false,false,false,100,'0xtx2',1000,'V2') ON CONFLICT DO NOTHING"#)
-            .bind(TOKEN_CURVE).bind(ACCOUNT).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote)
-            VALUES ('V2_CURVE',$1,NULL,0,0,1,$2,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#)
-            .bind(TOKEN_CURVE).bind(QUOTE_LVMON).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO swap (account_id,token_id,market_type,is_buy,quote_amount,token_amount,reserve_quote,reserve_token,value,created_at,transaction_hash,block_number,tx_index,log_index)
-            VALUES ($1,$2,'V2_CURVE',true,1,2,100,200,0,2,'0xcurve',11,0,0) ON CONFLICT DO NOTHING"#)
-            .bind(ACCOUNT).bind(TOKEN_CURVE).execute(&pool).await.unwrap();
+        for (market_type, tx_hash, block_number) in [
+            ("CURVE", "0xcurve", 10_i64),
+            ("DEX", "0xdex", 11_i64),
+            ("V2_CURVE", "0xv2curve", 12_i64),
+            ("V2_DEX", "0xv2dex", 13_i64),
+        ] {
+            sqlx::query(
+                r#"INSERT INTO swap
+                    (account_id,token_id,market_type,is_buy,quote_amount,token_amount,
+                     reserve_quote,reserve_token,value,created_at,transaction_hash,
+                     block_number,tx_index,log_index)
+                   VALUES ($1,$2,$3,true,1,2,100,200,0,$4,$5,$4,0,0)"#,
+            )
+            .bind(ACCOUNT)
+            .bind(TOKEN)
+            .bind(market_type)
+            .bind(block_number)
+            .bind(tx_hash)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
 
         let rows = ctrl(pool).get_events(0, 100).await.unwrap();
-        assert_eq!(rows.len(), 1, "V2_CURVE swap은 events에서 제외돼야 함");
-        assert_eq!(rows[0].market_type, "V2_DEX");
+        let markets: Vec<&str> = rows.iter().map(|row| row.market_type.as_str()).collect();
+        let transactions: Vec<&str> = rows
+            .iter()
+            .map(|row| row.transaction_hash.as_str())
+            .collect();
+
+        assert_eq!(markets, vec!["DEX", "V2_DEX"]);
+        assert_eq!(transactions, vec!["0xdex", "0xv2dex"]);
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn get_mint_events_carry_quote_id(pool: PgPool) {
+    async fn get_mint_events_only_return_dex_markets(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         sqlx::query(r#"INSERT INTO mint (token_id,account_id,market_id,quote_amount,token_amount,reserve_quote,reserve_token,created_at,transaction_hash,block_number,tx_index,log_index)
-            VALUES ($1,$2,$3,10,20,100,200,123,'0xm',10,0,0) ON CONFLICT DO NOTHING"#)
+            VALUES ($1,$2,$3,10,20,100,200,123,'0xm',10,0,0)"#)
             .bind(TOKEN).bind(ACCOUNT).bind(POOL).execute(&pool).await.unwrap();
 
-        let rows = ctrl(pool).get_mint_events(0, 100).await.unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].quote_id, QUOTE_LVMON);
+        allow_future_market_type(&pool).await;
+
+        for market_type in ["DEX", "V2_DEX"] {
+            sqlx::query("UPDATE market SET market_type = $1 WHERE token_id = $2")
+                .bind(market_type)
+                .bind(TOKEN)
+                .execute(&pool)
+                .await
+                .unwrap();
+            let rows = ctrl(pool.clone()).get_mint_events(0, 100).await.unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].quote_id, QUOTE_LVMON);
+        }
+
+        for market_type in ["FUTURE_MARKET", "CURVE", "V2_CURVE"] {
+            sqlx::query("UPDATE market SET market_type = $1 WHERE token_id = $2")
+                .bind(market_type)
+                .bind(TOKEN)
+                .execute(&pool)
+                .await
+                .unwrap();
+            let rows = ctrl(pool.clone()).get_mint_events(0, 100).await.unwrap();
+            assert!(rows.is_empty(), "{market_type} mint must be filtered out");
+        }
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn get_burn_events_carry_quote_id(pool: PgPool) {
+    async fn get_burn_events_only_return_dex_markets(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         sqlx::query(r#"INSERT INTO burn (token_id,account_id,market_id,quote_amount,token_amount,reserve_quote,reserve_token,created_at,transaction_hash,block_number,tx_index,log_index)
-            VALUES ($1,$2,$3,10,20,100,200,123,'0xb',10,0,0) ON CONFLICT DO NOTHING"#)
+            VALUES ($1,$2,$3,10,20,100,200,123,'0xb',10,0,0)"#)
             .bind(TOKEN).bind(ACCOUNT).bind(POOL).execute(&pool).await.unwrap();
 
-        let rows = ctrl(pool).get_burn_events(0, 100).await.unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].quote_id, QUOTE_LVMON);
+        allow_future_market_type(&pool).await;
+
+        for market_type in ["DEX", "V2_DEX"] {
+            sqlx::query("UPDATE market SET market_type = $1 WHERE token_id = $2")
+                .bind(market_type)
+                .bind(TOKEN)
+                .execute(&pool)
+                .await
+                .unwrap();
+            let rows = ctrl(pool.clone()).get_burn_events(0, 100).await.unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].quote_id, QUOTE_LVMON);
+        }
+
+        for market_type in ["FUTURE_MARKET", "CURVE", "V2_CURVE"] {
+            sqlx::query("UPDATE market SET market_type = $1 WHERE token_id = $2")
+                .bind(market_type)
+                .bind(TOKEN)
+                .execute(&pool)
+                .await
+                .unwrap();
+            let rows = ctrl(pool.clone()).get_burn_events(0, 100).await.unwrap();
+            assert!(rows.is_empty(), "{market_type} burn must be filtered out");
+        }
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
