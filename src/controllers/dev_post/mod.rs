@@ -12,6 +12,7 @@ use crate::types::dev_post::{
     POLL_DURATION_DAYS, PollOptionResponse, PollResponse, RankingRow, TokenSummary,
     parse_tweet_url,
 };
+use bigdecimal::BigDecimal;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -301,14 +302,23 @@ impl DevPostController {
             token_image: String,
             author_nickname: Option<String>,
             author_image: Option<String>,
+            market_cap: Option<BigDecimal>,
         }
         let core_rows: Vec<CoreRow> = sqlx::query_as(
             "SELECT dp.id, dp.token_id, dp.author, dp.title, dp.body, dp.created_at, dp.updated_at, dp.edited_at,
                     t.name AS token_name, t.symbol AS token_symbol, t.image_uri AS token_image,
-                    a.nickname AS author_nickname, a.image_uri AS author_image
+                    a.nickname AS author_nickname, a.image_uri AS author_image,
+                    (m.price * t.total_supply * COALESCE(lp.price, 0)) AS market_cap
              FROM dev_post dp
              JOIN token t ON t.token_id = dp.token_id
              LEFT JOIN account a ON a.account_id = dp.author
+             LEFT JOIN market m ON m.token_id = dp.token_id
+             LEFT JOIN LATERAL (
+                 SELECT p.price FROM price p
+                 WHERE p.quote_id = m.quote_id
+                 ORDER BY p.block_number DESC
+                 LIMIT 1
+             ) lp ON true
              WHERE dp.id = ANY($1) AND dp.deleted_at IS NULL",
         )
         .bind(ids)
@@ -413,7 +423,7 @@ impl DevPostController {
                     name: core.token_name,
                     symbol: core.token_symbol,
                     image_uri: Some(core.token_image),
-                    market_cap: None,
+                    market_cap: core.market_cap.map(|b| b.normalized().to_plain_string()),
                 },
                 author: AuthorSummary {
                     account_id: core.author,
@@ -739,17 +749,26 @@ impl DevPostController {
             total_likes: i64,
             post_count: i64,
             last_posted_at: Option<chrono::DateTime<chrono::Utc>>,
+            market_cap: Option<BigDecimal>,
         }
         let rows: Vec<RankRow> = sqlx::query_as(
             "SELECT p.token_id, t.name AS token_name, t.symbol AS token_symbol, t.image_uri AS token_image,
                     COUNT(l.account_id) AS total_likes,
                     COUNT(DISTINCT p.id) AS post_count,
-                    MAX(p.created_at) AS last_posted_at
+                    MAX(p.created_at) AS last_posted_at,
+                    (m.price * t.total_supply * COALESCE(lp.price, 0)) AS market_cap
              FROM dev_post p
              JOIN token t ON t.token_id = p.token_id
              LEFT JOIN dev_post_like l ON l.post_id = p.id
+             LEFT JOIN market m ON m.token_id = p.token_id
+             LEFT JOIN LATERAL (
+                 SELECT pr.price FROM price pr
+                 WHERE pr.quote_id = m.quote_id
+                 ORDER BY pr.block_number DESC
+                 LIMIT 1
+             ) lp ON true
              WHERE p.deleted_at IS NULL
-             GROUP BY p.token_id, t.name, t.symbol, t.image_uri
+             GROUP BY p.token_id, t.name, t.symbol, t.image_uri, m.price, t.total_supply, lp.price
              ORDER BY total_likes DESC, last_posted_at DESC, p.token_id ASC
              LIMIT $1 OFFSET $2",
         )
@@ -776,7 +795,7 @@ impl DevPostController {
                     name: r.token_name,
                     symbol: r.token_symbol,
                     image_uri: Some(r.token_image),
-                    market_cap: None,
+                    market_cap: r.market_cap.map(|b| b.normalized().to_plain_string()),
                 },
                 total_likes: r.total_likes,
                 post_count: r.post_count,
@@ -804,6 +823,38 @@ mod tests {
         )
         .bind(token_id)
         .bind(creator)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    async fn set_total_supply(pool: &sqlx::PgPool, token_id: &str, total_supply: &str) {
+        sqlx::query("UPDATE token SET total_supply = $2::numeric WHERE token_id = $1")
+            .bind(token_id)
+            .bind(total_supply)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    async fn seed_market(pool: &sqlx::PgPool, token_id: &str, price: &str) {
+        sqlx::query(
+            "INSERT INTO market (market_type, token_id, price, quote_id, latest_trade_at, created_at)
+             VALUES ('CURVE', $1, $2::numeric, '0xQuote', 0, 0) ON CONFLICT (token_id) DO NOTHING",
+        )
+        .bind(token_id)
+        .bind(price)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    async fn seed_quote_usd_price(pool: &sqlx::PgPool, usd: &str) {
+        sqlx::query(
+            "INSERT INTO price (quote_id, block_number, price) VALUES ('0xQuote', 1, $1::numeric)
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(usd)
         .execute(pool)
         .await
         .unwrap();
@@ -1564,5 +1615,96 @@ mod tests {
             }
             moderation::CommitOutcome::Unknown { .. } => panic!("delete commit outcome unknown"),
         }
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn ranking_populates_market_cap_usd(pool: sqlx::PgPool) {
+        seed_token(&pool, TOKEN, CREATOR).await;
+        set_total_supply(&pool, TOKEN, "1000000").await;
+        seed_market(&pool, TOKEN, "2").await;
+        seed_quote_usd_price(&pool, "0.5").await;
+        let c = ctl(pool.clone());
+        c.create_post(
+            CREATOR,
+            &CreateDevPostRequest {
+                token_id: TOKEN.into(),
+                title: "Announcement".into(),
+                body: Some("x".into()),
+                image_uris: None,
+                poll: None,
+            },
+        )
+        .await
+        .unwrap();
+        let (rank, _total) = c.get_ranking(1, 10).await.unwrap();
+        assert_eq!(rank[0].token.market_cap, Some("1000000".to_string()));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn hydrate_populates_market_cap_usd(pool: sqlx::PgPool) {
+        seed_token(&pool, TOKEN, CREATOR).await;
+        set_total_supply(&pool, TOKEN, "1000000").await;
+        seed_market(&pool, TOKEN, "2").await;
+        seed_quote_usd_price(&pool, "0.5").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                CREATOR,
+                &CreateDevPostRequest {
+                    token_id: TOKEN.into(),
+                    title: "Announcement".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let post = c.get_post_rw(id, None).await.unwrap();
+        assert_eq!(post.token.market_cap, Some("1000000".to_string()));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn market_cap_zero_when_quote_price_missing(pool: sqlx::PgPool) {
+        seed_token(&pool, TOKEN, CREATOR).await;
+        set_total_supply(&pool, TOKEN, "1000000").await;
+        seed_market(&pool, TOKEN, "2").await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                CREATOR,
+                &CreateDevPostRequest {
+                    token_id: TOKEN.into(),
+                    title: "Announcement".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let post = c.get_post_rw(id, None).await.unwrap();
+        assert_eq!(post.token.market_cap, Some("0".to_string()));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn market_cap_null_when_no_market_row(pool: sqlx::PgPool) {
+        seed_token(&pool, TOKEN, CREATOR).await;
+        let c = ctl(pool.clone());
+        let id = c
+            .create_post(
+                CREATOR,
+                &CreateDevPostRequest {
+                    token_id: TOKEN.into(),
+                    title: "Announcement".into(),
+                    body: Some("x".into()),
+                    image_uris: None,
+                    poll: None,
+                },
+            )
+            .await
+            .unwrap();
+        let post = c.get_post_rw(id, None).await.unwrap();
+        assert_eq!(post.token.market_cap, None);
     }
 }

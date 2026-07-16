@@ -70,7 +70,7 @@ EIP-55 체크섬 정규화됩니다.
   "posts": [
     {
       "id": "123456789",
-      "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": null },
+      "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": "1000000000000000000000000" },
       "author": { "account_id": "0x…", "nickname": "creator.eth", "image_uri": "https://…" },
       "title": "Announcement title",
       "body": "gm holders, check this out",
@@ -592,7 +592,7 @@ commit outcome-unknown은 reconciliation/retry 대상입니다.
 | 필드 | 설명 |
 |---|---|
 | `id` | BIGINT를 **문자열로 직렬화** (snowflake id가 JS `Number` 2^53 정밀도를 초과하므로) |
-| `token` | 코인 요약 (`token_id`/`name`/`symbol`/`image_uri`/`market_cap`) — `market_cap`은 [현재 제한사항](#현재-제한사항--후속-작업) 참고 |
+| `token` | 코인 요약 (`token_id`/`name`/`symbol`/`image_uri`/`market_cap`) — `market_cap`은 market×price 조인 기반 USD 마켓캡 (raw total_supply 스케일 문자열, hype `market_cap_usd`와 동일 관례). market 행 없으면 `null`, quote USD 가격 없으면 `"0"`. 캐시 TTL(≤60s)만큼 지연 가능 |
 | `author` | 게시물 작성자 요약 (작성 당시 creator, 이후 creator가 바뀌어도 유지) |
 | `title` | 제목. 입력 공백·줄바꿈을 보존하며 body와 별도 필드 |
 | `body` | description-only 본문 원문 (트윗 링크 포함 가능) |
@@ -607,9 +607,6 @@ commit outcome-unknown은 reconciliation/retry 대상입니다.
 
 ## 현재 제한사항 / 후속 작업
 
-- **`token.market_cap`은 항상 `null`**입니다 (`DevPostResponse.token.market_cap`, `RankingRow.token.market_cap`
-  둘 다). 마켓캡 소스 연동은 후속 작업으로 남아있습니다 — 응답 필드 자체는 이미 존재하므로 프론트는
-  `null` 처리만 하면 됩니다.
 - **캐시 정책**: feed v3(글로벌/토큰), detail v2, trending v2는 Redis cache-aside(기본 TTL 및
   late-fill 상한 60초)입니다. ranking은 generation cache(v2 키)를 사용하며 쓰기 시 generation을
   증가시킵니다. create/edit/delete 등 관련 쓰기는 feed/detail/trending을 무효화하고 ranking generation을
@@ -686,7 +683,7 @@ interface TokenSummary {
   name: string;
   symbol: string;
   image_uri: string | null;
-  market_cap: string | null;  // 현재 항상 null
+  market_cap: string | null;  // USD 마켓캡 (raw total_supply 스케일). market 행 없으면 null, quote USD 가격 없으면 "0"
 }
 interface AuthorSummary {
   account_id: string;
