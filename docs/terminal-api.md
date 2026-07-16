@@ -12,6 +12,8 @@ Terminal API는 GeckoTerminal과 같은 외부 가격 집계 서비스와의 연
 
 > **경로 안내**: 모든 Terminal 엔드포인트는 **루트 경로**에 마운트됩니다 (`/latest-block`, `/asset`, `/pair`, `/events`, `/{token_address}`). `/terminal/*` prefix는 사용하지 않습니다.
 
+> **시장 노출 정책**: 시장 데이터 엔드포인트인 `/pair`와 `/events`는 `DEX`, `V2_DEX`만 제공합니다. `CURVE`, `V2_CURVE` 및 알 수 없는 시장 유형은 노출하지 않습니다. `/asset`, `/{token_address}`, `/latest-block`의 동작은 시장 유형과 무관하며 변경되지 않습니다.
+
 ---
 
 ## V2 라우팅 / 가격 산정 요약
@@ -20,16 +22,14 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 ### dexKey 매핑
 
-`market_type`에 따라 거래 venue 식별자(`dexKey`)가 결정됩니다.
+시장 데이터 응답에 노출되는 `market_type`에 따라 거래 venue 식별자(`dexKey`)가 결정됩니다.
 
 | market_type | dexKey | 설명 |
 |---|---|---|
-| `CURVE` (V1) | `nadfun` | V1 본딩 커브 |
 | `DEX` (V1) | `capricorn` | V1 졸업 DEX (Capricorn) |
-| `V2_CURVE` | `nadfun-v2` | V2 본딩 커브 |
 | `V2_DEX` | `nadswap` | V2 졸업 DEX (NadSwap 페어) |
 
-알 수 없는 `market_type` 값은 `nadfun`으로 폴백됩니다.
+`CURVE`, `V2_CURVE` 및 알 수 없는 `market_type`은 응답 전에 제외되므로 `dexKey`가 노출되지 않습니다.
 
 ### feeBps 산식
 
@@ -37,11 +37,10 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 | market_type | feeBps | 근거 |
 |---|---|---|
-| `CURVE` / `DEX` (V1) | `100` 고정 (1%) | V1 고정 수수료 |
-| `V2_CURVE` | `creator_fee_rate + curve_protocol_fee_rate` | `fee_config` 합산 (V2 커브는 LP 없음) |
+| `DEX` (V1) | `100` 고정 (1%) | V1 고정 수수료 |
 | `V2_DEX` | `25 + creator_fee_rate + dex_protocol_fee_rate` | `25`는 NadSwap LP 수수료(0.25%, 고정 상수) + `fee_config` 합산 |
 
-- V2 토큰에 `fee_config` 행이 없으면(인덱서가 Setup 이벤트 미수신) `feeBps` 필드는 **생략**됩니다 (틀린 `0%` 또는 부분값 노출 방지). V1 토큰은 항상 `100`을 반환합니다.
+- V2_DEX 토큰에 `fee_config` 행이 없으면(인덱서가 Setup 이벤트 미수신) `feeBps` 필드는 **생략**됩니다 (틀린 `0%` 또는 부분값 노출 방지). V1 DEX 토큰은 항상 `100`을 반환합니다.
 
 ### Asset 정렬 / 가격 단위
 
@@ -53,11 +52,9 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 | market_type | pairId |
 |---|---|
-| `CURVE` | V1 본딩 커브 주소 (`V1_BONDING_CURVE`) |
-| `V2_CURVE` | V2 본딩 커브 주소 (`V2_BONDING_CURVE`) |
 | `DEX` / `V2_DEX` | 풀(pool) 주소 |
 
-`/events`의 swap 이벤트는 **각 이벤트 자신의 `market_type`** 으로 pairId를 산정합니다. 따라서 졸업한 토큰의 커브 시절 swap은 본딩 커브 주소를, DEX 시절 swap은 풀 주소를 참조합니다. join/exit 이벤트는 이벤트의 `market_id`를 그대로 pairId로 사용합니다.
+`/pair`와 `/events`에 노출되는 pairId는 DEX 풀 주소입니다. `/events`의 swap은 **각 이벤트 자신의 `market_type`** 으로 노출 여부를 판단하고, join/exit는 이벤트의 `market_id`를 pairId로 사용합니다. Curve 및 알 수 없는 시장 이벤트는 제외되므로 본딩 커브 주소가 pairId로 노출되지 않습니다.
 
 ### Decimals 가정
 
@@ -146,7 +143,7 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 ### 3. Pair 조회 (`GET /pair`)
 
-거래쌍(Pair) 정보를 조회합니다. 쿼리 `id`는 **토큰 주소**이며, 응답은 해당 토큰의 **현재** 페어를 반환합니다.
+거래쌍(Pair) 정보를 조회합니다. 쿼리 `id`는 **토큰 주소**이며, 토큰의 현재 `market_type`이 `DEX` 또는 `V2_DEX`인 경우에만 현재 페어를 반환합니다. `CURVE`, `V2_CURVE` 또는 알 수 없는 시장 유형은 `404`로 처리됩니다.
 
 #### 요청
 - **Method**: `GET`
@@ -181,15 +178,15 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `pair.id` | string | pairId — `market_type`별로 본딩 커브 주소 또는 풀 주소 (위 pairId 매핑 표 참고) |
-| `pair.dexKey` | string | DEX 식별자 (`nadfun`/`capricorn`/`nadfun-v2`/`nadswap`) |
+| `pair.id` | string | DEX/V2_DEX 풀 주소 (위 pairId 매핑 표 참고) |
+| `pair.dexKey` | string | DEX 식별자 (`capricorn` 또는 `nadswap`) |
 | `pair.asset0Id` | string | 토큰·quote 중 소문자 주소가 더 작은 쪽 |
 | `pair.asset1Id` | string | 토큰·quote 중 소문자 주소가 더 큰 쪽 |
 | `pair.createdAtBlockNumber` | number? | 생성 블록 번호 |
 | `pair.createdAtBlockTimestamp` | number? | 생성 시간 (Unix timestamp) |
 | `pair.createdAtTxnId` | string? | 생성 트랜잭션 해시 |
 | `pair.creator` | string? | 생성자 주소 |
-| `pair.feeBps` | number? | 거래 수수료 (basis points). V2 토큰에 `fee_config`가 없으면 생략됨 (feeBps 산식 표 참고) |
+| `pair.feeBps` | number? | 거래 수수료 (basis points). V2_DEX 토큰에 `fee_config`가 없으면 생략됨 (feeBps 산식 표 참고) |
 
 #### 에러 응답
 - `400`: 잘못된 요청 (id 파라미터 누락)
@@ -200,7 +197,7 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 ### 4. 이벤트 조회 (`GET /events`)
 
-특정 블록 범위 내의 거래 이벤트(swap / join / exit)를 조회합니다.
+특정 블록 범위 내의 DEX 거래 이벤트(swap / join / exit)를 조회합니다. swap은 이벤트 자신의 `market_type`, join/exit는 연결된 현재 market을 기준으로 `DEX`, `V2_DEX`만 반환하며 Curve 및 알 수 없는 시장 유형은 제외합니다.
 
 #### 요청
 - **Method**: `GET`
@@ -282,7 +279,7 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 | `txnIndex` | number | 트랜잭션 인덱스 |
 | `eventIndex` | number | 이벤트 인덱스 (log index) |
 | `maker` | string | 거래 실행자 주소 |
-| `pairId` | string | pairId — **이벤트 자신의 `market_type`** 으로 산정 (커브 시절 swap은 본딩 커브, DEX 시절 swap은 풀) |
+| `pairId` | string | DEX/V2_DEX 이벤트의 풀 주소. 필터 기준은 이벤트 자신의 `market_type` |
 | `asset0In` | string? | asset0 입금량 (십진화된 값) |
 | `asset1In` | string? | asset1 입금량 (십진화된 값) |
 | `asset0Out` | string? | asset0 출금량 (십진화된 값) |
@@ -356,7 +353,8 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 ## 알려진 한계
 
 1. **졸업 초기 유동성 시딩 미노출**: 커브 → 풀로 졸업할 때의 초기 유동성 민팅(curve → pool initial mint)은 pool-centric `dex_mint` 테이블에만 기록되므로 `/events`의 `join` 이벤트로 **나타나지 않습니다**. `/events`에는 사용자가 직접 수행한 LP add/remove(`mint` / `burn` 테이블)만 `join` / `exit`로 노출됩니다.
-2. **`/pair`는 현재 페어만 반환**: `/pair`는 토큰의 **현재** 페어 하나만 반환합니다. 졸업한 토큰의 과거 커브 페어는 `/pair`로는 조회할 수 없으며, `/events`의 이벤트별(per-event) pairId로만 추적할 수 있습니다.
+2. **`/pair`는 DEX 현재 페어만 반환**: 현재 시장이 `DEX` 또는 `V2_DEX`인 토큰의 현재 페어 하나만 반환하며 Curve 토큰은 `404`입니다.
+3. **Curve 이벤트 미노출**: `/events`는 `DEX`, `V2_DEX` swap/join/exit만 반환하므로 졸업 전 Curve 거래 이력은 포함하지 않습니다.
 
 ---
 
