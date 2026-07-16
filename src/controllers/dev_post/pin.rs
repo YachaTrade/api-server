@@ -1,12 +1,5 @@
 use super::DevPostController;
 use crate::result::AppError;
-use sqlx::{Postgres, Transaction};
-
-pub(super) struct LockedPostContext {
-    pub(super) token_id: String,
-    pub(super) creator: String,
-    pub(super) author: String,
-}
 
 fn internal(error: sqlx::Error) -> AppError {
     AppError::InternalError(error.to_string())
@@ -62,89 +55,119 @@ pub(super) async fn select_token_feed(
     .map_err(internal)
 }
 
-pub(super) async fn lock_live_post_context(
-    tx: &mut Transaction<'_, Postgres>,
-    post_id: i64,
-) -> Result<LockedPostContext, AppError> {
-    let token_id: Option<String> =
-        sqlx::query_scalar("SELECT token_id FROM dev_post WHERE id = $1")
-            .bind(post_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(internal)?;
-    let token_id = token_id.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
-
-    let creator: Option<String> =
-        sqlx::query_scalar("SELECT creator FROM token WHERE token_id = $1 FOR UPDATE")
-            .bind(&token_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(internal)?;
-    let creator = creator.ok_or_else(|| AppError::NotFound("Token not found".into()))?;
-
-    let author: Option<String> = sqlx::query_scalar(
-        "SELECT author FROM dev_post \
-         WHERE id = $1 AND token_id = $2 AND deleted_at IS NULL FOR UPDATE",
-    )
-    .bind(post_id)
-    .bind(&token_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(internal)?;
-    let author = author.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
-
-    Ok(LockedPostContext {
-        token_id,
-        creator,
-        author,
-    })
-}
-
 impl DevPostController {
+    /// Single-statement CTE. Lock order `tok` (token, `FOR UPDATE`) → `live`
+    /// (dev_post, `FOR UPDATE`) matches the old `lock_live_post_context`
+    /// order and `admin_mutate`'s `tok` → `locked` order, so concurrent
+    /// pin/unpin/moderation calls can't deadlock against each other. `live`
+    /// depends on the `tok_done` barrier (`SELECT count(*) FROM tok`) to
+    /// force `tok` to be evaluated first — a real data dependency, since
+    /// independent CTEs otherwise run in planner-chosen order. `ins` only
+    /// fires when both `tok.creator = $2` and `live.author = tok.creator`,
+    /// so a non-creator or non-self-authored pin touches nothing.
+    ///
+    /// `creator_update_serializes_before_pin_authorization` (pin.rs tests)
+    /// depends on `tok`'s `FOR UPDATE` blocking on a concurrent creator
+    /// update and then re-reading the new creator via EPQ — verified to
+    /// still hold with the lock inside a CTE.
     pub async fn pin_post(&self, post_id: i64, account_id: &str) -> Result<String, AppError> {
-        let mut tx = self.db.get_write_pool().begin().await.map_err(internal)?;
-        let context = lock_live_post_context(&mut tx, post_id).await?;
-        if context.creator != account_id {
+        let pool = self.db.get_write_pool();
+        let row: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "WITH post AS (
+                 SELECT token_id FROM dev_post WHERE id = $1
+             ),
+             tok AS (
+                 SELECT t.creator FROM token t WHERE t.token_id = (SELECT token_id FROM post) FOR UPDATE
+             ),
+             tok_done AS (SELECT count(*) AS n FROM tok),
+             live AS (
+                 SELECT p.author FROM dev_post p
+                 WHERE p.id = $1 AND p.token_id = (SELECT token_id FROM post) AND p.deleted_at IS NULL
+                   AND (SELECT n FROM tok_done) >= 0
+                 FOR UPDATE
+             ),
+             ins AS (
+                 INSERT INTO dev_post_pin (token_id, post_id)
+                 SELECT (SELECT token_id FROM post), $1
+                 FROM tok, live
+                 WHERE tok.creator = $2 AND live.author = tok.creator
+                 ON CONFLICT (token_id) DO UPDATE
+                   SET post_id = EXCLUDED.post_id, pinned_at = NOW()
+                   WHERE dev_post_pin.post_id IS DISTINCT FROM EXCLUDED.post_id
+             )
+             SELECT (SELECT token_id FROM post) AS token_id,
+                    (SELECT creator FROM tok)   AS creator,
+                    (SELECT author FROM live)   AS author",
+        )
+        .bind(post_id)
+        .bind(account_id)
+        .fetch_one(pool)
+        .await
+        .map_err(internal)?;
+
+        let (token_id, creator, author) = row;
+        let token_id = token_id.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
+        let creator = creator.ok_or_else(|| AppError::NotFound("Token not found".into()))?;
+        let author = author.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
+        if creator != account_id {
             return Err(AppError::Forbidden(
                 "Only the current coin creator can pin posts".into(),
             ));
         }
-        if context.author != context.creator {
+        if author != creator {
             return Err(AppError::Forbidden(
                 "Only a post authored by the current coin creator can be pinned".into(),
             ));
         }
-        sqlx::query(
-            "INSERT INTO dev_post_pin (token_id, post_id) VALUES ($1, $2) \
-             ON CONFLICT (token_id) DO UPDATE \
-             SET post_id = EXCLUDED.post_id, pinned_at = NOW() \
-             WHERE dev_post_pin.post_id IS DISTINCT FROM EXCLUDED.post_id",
-        )
-        .bind(&context.token_id)
-        .bind(post_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(internal)?;
-        tx.commit().await.map_err(internal)?;
-        Ok(context.token_id)
+        Ok(token_id)
     }
 
+    /// Same lock skeleton as `pin_post`, but `del` only checks the creator
+    /// gate (unpin doesn't require author == creator, matching the original
+    /// behavior). `live` is still required so unpinning a soft-deleted post
+    /// 404s instead of silently deleting the pin row.
     pub async fn unpin_post(&self, post_id: i64, account_id: &str) -> Result<String, AppError> {
-        let mut tx = self.db.get_write_pool().begin().await.map_err(internal)?;
-        let context = lock_live_post_context(&mut tx, post_id).await?;
-        if context.creator != account_id {
+        let pool = self.db.get_write_pool();
+        let row: (Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+            "WITH post AS (
+                 SELECT token_id FROM dev_post WHERE id = $1
+             ),
+             tok AS (
+                 SELECT t.creator FROM token t WHERE t.token_id = (SELECT token_id FROM post) FOR UPDATE
+             ),
+             tok_done AS (SELECT count(*) AS n FROM tok),
+             live AS (
+                 SELECT p.author FROM dev_post p
+                 WHERE p.id = $1 AND p.token_id = (SELECT token_id FROM post) AND p.deleted_at IS NULL
+                   AND (SELECT n FROM tok_done) >= 0
+                 FOR UPDATE
+             ),
+             del AS (
+                 DELETE FROM dev_post_pin
+                 WHERE token_id = (SELECT token_id FROM post) AND post_id = $1
+                   AND EXISTS (SELECT 1 FROM tok WHERE tok.creator = $2)
+                   AND EXISTS (SELECT 1 FROM live)
+             )
+             SELECT (SELECT token_id FROM post) AS token_id,
+                    (SELECT creator FROM tok)   AS creator,
+                    (SELECT author FROM live)   AS author",
+        )
+        .bind(post_id)
+        .bind(account_id)
+        .fetch_one(pool)
+        .await
+        .map_err(internal)?;
+
+        let (token_id, creator, author) = row;
+        let token_id = token_id.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
+        let creator = creator.ok_or_else(|| AppError::NotFound("Token not found".into()))?;
+        let _author = author.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
+        if creator != account_id {
             return Err(AppError::Forbidden(
                 "Only the current coin creator can unpin posts".into(),
             ));
         }
-        sqlx::query("DELETE FROM dev_post_pin WHERE token_id = $1 AND post_id = $2")
-            .bind(&context.token_id)
-            .bind(post_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(internal)?;
-        tx.commit().await.map_err(internal)?;
-        Ok(context.token_id)
+        Ok(token_id)
     }
 }
 

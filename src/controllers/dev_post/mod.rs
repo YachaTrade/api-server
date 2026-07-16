@@ -24,24 +24,70 @@ impl DevPostController {
         Self { db }
     }
 
+    /// Single-statement CTE: `pgbouncer` runs in statement pooling mode, which
+    /// forbids `BEGIN`/`COMMIT` — a single statement is its own implicit
+    /// transaction, so this stays atomic without one. `tok` carries the
+    /// creator authorization check, and `new_post` only fires when
+    /// `tok.creator = $2` matches; the outer `SELECT` always returns exactly
+    /// one row (scalar subqueries against possibly-empty CTEs), which is how
+    /// NotFound/Forbidden are distinguished afterwards.
     pub async fn create_post(
         &self,
         author: &str,
         req: &CreateDevPostRequest,
     ) -> Result<i64, AppError> {
         let pool = self.db.get_write_pool();
-        let mut tx = pool
-            .begin()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // creator authorization on the write pool (avoid replica lag)
-        let creator: Option<String> =
-            sqlx::query_scalar("SELECT creator FROM token WHERE token_id = $1")
-                .bind(&req.token_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
+        let poll_labels: Option<Vec<String>> = req
+            .poll
+            .as_ref()
+            .map(|poll| poll.options.iter().map(|o| o.label.clone()).collect());
+        let poll_images: Option<Vec<Option<String>>> = req
+            .poll
+            .as_ref()
+            .map(|poll| poll.options.iter().map(|o| o.image_uri.clone()).collect());
+
+        let row: (Option<String>, Option<i64>) = sqlx::query_as(
+            "WITH tok AS (
+                 SELECT creator FROM token WHERE token_id = $1
+             ),
+             new_post AS (
+                 INSERT INTO dev_post (token_id, author, title, body)
+                 SELECT $1, $2, $3, $4 FROM tok WHERE tok.creator = $2
+                 RETURNING id, created_at
+             ),
+             img AS (
+                 INSERT INTO dev_post_image (post_id, position, image_uri)
+                 SELECT np.id, (u.ord - 1)::smallint, u.uri
+                 FROM new_post np, unnest($5::text[]) WITH ORDINALITY AS u(uri, ord)
+             ),
+             poll AS (
+                 INSERT INTO dev_post_poll (post_id, closes_at)
+                 SELECT np.id, np.created_at + ($6 || ' days')::interval
+                 FROM new_post np
+                 WHERE $7::text[] IS NOT NULL
+                 RETURNING post_id
+             ),
+             opt AS (
+                 INSERT INTO dev_post_poll_option (post_id, position, label, image_uri)
+                 SELECT pl.post_id, u.ord::smallint, u.label, u.image_uri
+                 FROM poll pl, unnest($7::text[], $8::text[]) WITH ORDINALITY AS u(label, image_uri, ord)
+             )
+             SELECT (SELECT creator FROM tok) AS creator, (SELECT id FROM new_post) AS id",
+        )
+        .bind(&req.token_id)
+        .bind(author)
+        .bind(&req.title)
+        .bind(req.body.as_deref().unwrap_or(""))
+        .bind(&req.image_uris)
+        .bind(POLL_DURATION_DAYS.to_string())
+        .bind(&poll_labels)
+        .bind(&poll_images)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| AppError::InternalError(error.to_string()))?;
+
+        let (creator, id) = row;
         match creator {
             None => return Err(AppError::NotFound("Token not found".into())),
             Some(c) if c != author => {
@@ -49,75 +95,17 @@ impl DevPostController {
             }
             _ => {}
         }
-
-        let id: i64 = sqlx::query_scalar(
-            "INSERT INTO dev_post (token_id, author, title, body) \
-             VALUES ($1,$2,$3,$4) RETURNING id",
-        )
-        .bind(&req.token_id)
-        .bind(author)
-        .bind(&req.title)
-        .bind(req.body.as_deref().unwrap_or(""))
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|error| AppError::InternalError(error.to_string()))?;
-
-        if let Some(imgs) = &req.image_uris {
-            for (i, uri) in imgs.iter().enumerate() {
-                sqlx::query(
-                    "INSERT INTO dev_post_image (post_id, position, image_uri) VALUES ($1,$2,$3)",
-                )
-                .bind(id)
-                .bind(i as i16)
-                .bind(uri)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-            }
-        }
-        if let Some(poll) = &req.poll {
-            sqlx::query(
-                "INSERT INTO dev_post_poll (post_id, closes_at)
-                 SELECT id, created_at + ($2 || ' days')::interval FROM dev_post WHERE id = $1",
-            )
-            .bind(id)
-            .bind(POLL_DURATION_DAYS.to_string())
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-            for (i, opt) in poll.options.iter().enumerate() {
-                sqlx::query(
-                    "INSERT INTO dev_post_poll_option (post_id, position, label, image_uri) VALUES ($1,$2,$3,$4)",
-                )
-                .bind(id)
-                .bind((i + 1) as i16)
-                .bind(&opt.label)
-                .bind(&opt.image_uri)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-            }
-        }
-        tx.commit()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-        Ok(id)
+        id.ok_or_else(|| AppError::InternalError("dev post insert did not return id".into()))
     }
 
-    /// Returns the author if the post exists and is not deleted, else NotFound.
-    async fn require_author<'e, E>(exec: E, post_id: i64) -> Result<String, AppError>
-    where
-        E: sqlx::PgExecutor<'e>,
-    {
-        let row: Option<String> =
-            sqlx::query_scalar("SELECT author FROM dev_post WHERE id = $1 AND deleted_at IS NULL")
-                .bind(post_id)
-                .fetch_optional(exec)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-        row.ok_or_else(|| AppError::NotFound("Post not found".into()))
-    }
-
+    /// Single-statement CTE. `target` carries the author authorization check
+    /// (`deleted_at IS NULL`); `upd` and the image CTEs all gate on
+    /// `EXISTS (SELECT 1 FROM target WHERE target.author = $2)` so a
+    /// non-author request touches nothing. Images use upsert + disjoint
+    /// tail-delete rather than delete-then-insert: two data-modifying CTEs
+    /// deleting and inserting the same `(post_id, position)` key in one
+    /// statement hit `duplicate key value violates unique constraint`
+    /// (verified locally) because CTE execution order is unspecified.
     pub async fn edit_post(
         &self,
         post_id: i64,
@@ -125,50 +113,52 @@ impl DevPostController {
         req: &EditDevPostRequest,
     ) -> Result<String, AppError> {
         let pool = self.db.get_write_pool();
-        let mut tx = pool
-            .begin()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let existing = Self::require_author(&mut *tx, post_id).await?;
-        if existing != author {
-            return Err(AppError::Forbidden("Not the post author".into()));
-        }
 
-        let token_id: String = sqlx::query_scalar(
-            "UPDATE dev_post \
-             SET title = COALESCE($2, title), body = COALESCE($3, body), \
-                 updated_at = NOW(), edited_at = NOW() \
-             WHERE id = $1 RETURNING token_id",
+        let row: (Option<String>, Option<String>) = sqlx::query_as(
+            "WITH target AS (
+                 SELECT id, author FROM dev_post WHERE id = $1 AND deleted_at IS NULL
+             ),
+             upd AS (
+                 UPDATE dev_post
+                 SET title = COALESCE($3, title), body = COALESCE($4, body),
+                     updated_at = NOW(), edited_at = NOW()
+                 WHERE id = $1 AND EXISTS (SELECT 1 FROM target WHERE target.author = $2)
+                 RETURNING token_id
+             ),
+             img_upsert AS (
+                 INSERT INTO dev_post_image (post_id, position, image_uri)
+                 SELECT $1, (u.ord - 1)::smallint, u.uri
+                 FROM target t, unnest($5::text[]) WITH ORDINALITY AS u(uri, ord)
+                 WHERE t.author = $2
+                 ON CONFLICT (post_id, position) DO UPDATE SET image_uri = EXCLUDED.image_uri
+             ),
+             img_trim AS (
+                 DELETE FROM dev_post_image
+                 WHERE post_id = $1
+                   AND $5::text[] IS NOT NULL
+                   AND position >= cardinality($5::text[])
+                   AND EXISTS (SELECT 1 FROM target WHERE target.author = $2)
+             )
+             SELECT (SELECT author FROM target) AS author, (SELECT token_id FROM upd) AS token_id",
         )
         .bind(post_id)
+        .bind(author)
         .bind(req.title.value())
         .bind(req.body.as_deref())
-        .fetch_one(&mut *tx)
+        .bind(&req.image_uris)
+        .fetch_one(pool)
         .await
         .map_err(|error| AppError::InternalError(error.to_string()))?;
-        if let Some(imgs) = &req.image_uris {
-            // full replacement
-            sqlx::query("DELETE FROM dev_post_image WHERE post_id=$1")
-                .bind(post_id)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-            for (i, uri) in imgs.iter().enumerate() {
-                sqlx::query(
-                    "INSERT INTO dev_post_image (post_id, position, image_uri) VALUES ($1,$2,$3)",
-                )
-                .bind(post_id)
-                .bind(i as i16)
-                .bind(uri)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
-            }
+
+        let (existing_author, token_id) = row;
+        let existing_author =
+            existing_author.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
+        if existing_author != author {
+            return Err(AppError::Forbidden("Not the post author".into()));
         }
-        tx.commit()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-        Ok(token_id)
+        token_id.ok_or_else(|| {
+            AppError::InternalError("dev post update did not return token_id".into())
+        })
     }
 
     pub async fn delete_post(
@@ -228,6 +218,9 @@ impl DevPostController {
             .map_err(|e| AppError::InternalError(e.to_string()))
     }
 
+    /// Single-statement CTE. The closed-poll check moves from Rust's
+    /// `Utc::now()` to SQL's `NOW()` — a single clock, constant within the
+    /// statement, instead of two independent clocks racing each other.
     pub async fn vote(
         &self,
         post_id: i64,
@@ -235,50 +228,43 @@ impl DevPostController {
         option_position: i16,
     ) -> Result<(), AppError> {
         let pool = self.db.get_write_pool();
-        let mut tx = pool
-            .begin()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        let closes_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-            "SELECT poll.closes_at FROM dev_post_poll poll JOIN dev_post p ON p.id = poll.post_id
-             WHERE poll.post_id = $1 AND p.deleted_at IS NULL",
-        )
-        .bind(post_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
-        let closes_at = closes_at.ok_or_else(|| AppError::NotFound("Poll not found".into()))?;
-        if closes_at <= chrono::Utc::now() {
-            return Err(AppError::Conflict("Poll is closed".into()));
-        }
-
-        let opt_exists: Option<i16> = sqlx::query_scalar(
-            "SELECT position FROM dev_post_poll_option WHERE post_id=$1 AND position=$2",
-        )
-        .bind(post_id)
-        .bind(option_position)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
-        if opt_exists.is_none() {
-            return Err(AppError::BadRequest("Invalid option_position".into()));
-        }
-
-        sqlx::query(
-            "INSERT INTO dev_post_poll_vote (post_id, account_id, option_position) VALUES ($1,$2,$3)
-             ON CONFLICT (post_id, account_id)
-             DO UPDATE SET option_position = EXCLUDED.option_position, updated_at = NOW()",
+        let row: (Option<bool>, Option<bool>, Option<bool>) = sqlx::query_as(
+            "WITH poll AS (
+                 SELECT p.closes_at FROM dev_post_poll p
+                 JOIN dev_post d ON d.id = p.post_id
+                 WHERE p.post_id = $1 AND d.deleted_at IS NULL
+             ),
+             opt AS (
+                 SELECT position FROM dev_post_poll_option WHERE post_id = $1 AND position = $3
+             ),
+             v AS (
+                 INSERT INTO dev_post_poll_vote (post_id, account_id, option_position)
+                 SELECT $1, $2, $3 FROM poll, opt WHERE poll.closes_at > NOW()
+                 ON CONFLICT (post_id, account_id)
+                 DO UPDATE SET option_position = EXCLUDED.option_position, updated_at = NOW()
+             )
+             SELECT (SELECT true FROM poll) AS poll_exists,
+                    (SELECT closes_at > NOW() FROM poll) AS poll_open,
+                    (SELECT true FROM opt) AS option_exists",
         )
         .bind(post_id)
         .bind(account_id)
         .bind(option_position)
-        .execute(&mut *tx)
+        .fetch_one(pool)
         .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
-        tx.commit()
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+        .map_err(|error| AppError::InternalError(error.to_string()))?;
+
+        let (poll_exists, poll_open, option_exists) = row;
+        if poll_exists != Some(true) {
+            return Err(AppError::NotFound("Poll not found".into()));
+        }
+        if poll_open != Some(true) {
+            return Err(AppError::Conflict("Poll is closed".into()));
+        }
+        if option_exists != Some(true) {
+            return Err(AppError::BadRequest("Invalid option_position".into()));
+        }
         Ok(())
     }
 

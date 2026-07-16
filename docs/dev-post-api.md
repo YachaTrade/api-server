@@ -394,9 +394,10 @@ pin `B`를 지우지 않게 합니다.
 - `404`: live post 또는 token이 존재하지 않음
 - `500`: 내부 서버 에러
 
-게시물을 소프트 삭제할 때는 pin mapping 제거와 `deleted_at` 갱신을 같은 DB transaction에서 처리합니다.
-즉 소프트 삭제와 pin 제거는 하나의 트랜잭션으로 atomic하게 commit되며, 삭제된 post가 pinned 상태로 남지
-않습니다.
+게시물을 소프트 삭제할 때는 pin mapping 제거와 `deleted_at` 갱신을 **하나의 SQL statement(CTE)** 로 처리합니다.
+단일 statement는 그 자체가 암묵적 트랜잭션이므로 둘은 atomic하게 적용되며, 삭제된 post가 pinned 상태로 남지
+않습니다. 운영 pgbouncer가 statement pooling mode라 명시적 `BEGIN`/`COMMIT`을 쓸 수 없어, dev-post의 모든
+write 경로가 이 방식을 따릅니다.
 
 ### 11. 좋아요 (`POST /dev-post/{post_id}/like`)
 
