@@ -522,4 +522,96 @@ mod tests {
             })
         );
     }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn finalize_refreshes_surviving_followed_by_values(pool: PgPool) {
+        let fb_v1 = vec![XFollowedByEntry {
+            x_handle: "a".into(),
+            x_image_uri: "u1".into(),
+            x_followers_count: 1,
+            is_x_verified: false,
+        }];
+        let fb_v2 = vec![XFollowedByEntry {
+            x_handle: "a".into(),
+            x_image_uri: "u2".into(),
+            x_followers_count: 99,
+            is_x_verified: true,
+        }];
+        let c = ctrl(pool.clone());
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb_v1)
+            .await
+            .unwrap();
+        c.finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb_v2)
+            .await
+            .unwrap();
+
+        let (img, cnt, verified): (String, i64, bool) = sqlx::query_as(
+            "SELECT x_image_uri, x_followers_count, is_x_verified FROM token_x_followed_by WHERE token_id = $1 AND x_handle = 'a'",
+        )
+        .bind(TOKEN)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        // The pre-CTE implementation deleted-then-reinserted everything on
+        // every finalize, so a surviving handle got fresh values for free.
+        // `fb_ins`'s ON CONFLICT must be DO UPDATE (not DO NOTHING) to keep
+        // that behavior — DO NOTHING would silently leave the stale
+        // ("u1", 1, false) row in place, which is the regression this guards.
+        assert_eq!(img, "u2");
+        assert_eq!(cnt, 99);
+        assert!(verified);
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn finalize_dedupes_duplicate_input_handles_first_wins(pool: PgPool) {
+        let fb = vec![
+            XFollowedByEntry {
+                x_handle: "a".into(),
+                x_image_uri: "u1".into(),
+                x_followers_count: 1,
+                is_x_verified: false,
+            },
+            XFollowedByEntry {
+                x_handle: "a".into(),
+                x_image_uri: "u2".into(),
+                x_followers_count: 2,
+                is_x_verified: true,
+            },
+        ];
+        let c = ctrl(pool.clone());
+        // Without the `DISTINCT ON (u.h) ... ORDER BY u.h, u.ord` collapse in
+        // `fresh`, this INSERT ... ON CONFLICT DO UPDATE would hit "ON
+        // CONFLICT DO UPDATE command cannot affect row a second time" since
+        // both input rows target the same (token_id, x_handle) conflict key
+        // within one statement.
+        let result = c
+            .finalize(TOKEN, ACCOUNT, "1", "creatorhandle", 10, &fb)
+            .await;
+        assert!(
+            result.is_ok(),
+            "duplicate input handles must not error: {:?}",
+            result.err()
+        );
+
+        let (n,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM token_x_followed_by WHERE token_id = $1")
+                .bind(TOKEN)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(n, 1, "duplicate handles collapse to a single row");
+
+        let (img, cnt, verified): (String, i64, bool) = sqlx::query_as(
+            "SELECT x_image_uri, x_followers_count, is_x_verified FROM token_x_followed_by WHERE token_id = $1 AND x_handle = 'a'",
+        )
+        .bind(TOKEN)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        // Matches the old per-row `ON CONFLICT DO NOTHING` loop's semantics:
+        // the first occurrence wins, the second duplicate is dropped.
+        assert_eq!(img, "u1");
+        assert_eq!(cnt, 1);
+        assert!(!verified);
+    }
 }

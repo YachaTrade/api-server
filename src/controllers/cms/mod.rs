@@ -339,6 +339,7 @@ mod tests {
     // 외부(PairCreated 발견) 토큰 — 베니티 접미사 없음, 체크섬 주소
     const DEX_TOKEN: &str = "0xA0b86991c6218B36c1D19d4A2E9eB0cE3606eB48";
     const ACC_ADMIN: &str = "0x1111111111111111111111111111111111111111";
+    const ACC_RANDO: &str = "0x2222222222222222222222222222222222222222";
 
     fn make_controller(pool: PgPool) -> CmsController {
         CmsController::new(Arc::new(PostgresDatabase {
@@ -633,5 +634,85 @@ mod tests {
     async fn verify_admin_on_writer_false_for_non_admin(pool: PgPool) {
         let ctrl = make_controller(pool);
         assert!(!ctrl.verify_admin_on_writer(ACC_ADMIN).await.unwrap());
+    }
+
+    // TOCTOU gate on `insert_trend_with_admin_check`: a non-admin call must
+    // leave trend rows completely untouched, not just return an error. If the
+    // `adm` CTE guard were dropped (or checked-then-mutated instead of gated
+    // atomically), `del`/`ins` could still run and wipe the pre-existing row
+    // even though the call ultimately errors.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn insert_trend_with_admin_check_non_admin_leaves_rows_untouched(pool: PgPool) {
+        sqlx::query("INSERT INTO trend (token_id, display_order) VALUES ('0xOld', 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let ctrl = make_controller(pool.clone());
+        // ACC_RANDO is NOT seeded into admin
+        let result = ctrl
+            .insert_trend_with_admin_check(
+                ACC_RANDO,
+                InsertTrendRequest {
+                    token_ids: vec![DEX_TOKEN.to_string()],
+                },
+            )
+            .await;
+        let err = result.expect_err("non-admin must be rejected");
+        assert!(
+            err.to_string().contains("Admin access required"),
+            "unexpected error message: {err}"
+        );
+
+        let rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT token_id, display_order FROM trend ORDER BY display_order")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            rows,
+            vec![("0xOld".to_string(), 0)],
+            "trend must be exactly the pre-seeded state — no partial mutation"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn insert_trend_with_admin_check_admin_replaces(pool: PgPool) {
+        seed_admin(&pool, ACC_ADMIN).await;
+        let ctrl = make_controller(pool.clone());
+
+        ctrl.insert_trend_with_admin_check(
+            ACC_ADMIN,
+            InsertTrendRequest {
+                token_ids: vec!["0xTokenA".to_string(), "0xTokenB".to_string()],
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT token_id, display_order FROM trend ORDER BY display_order")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            rows,
+            vec![("0xTokenA".to_string(), 0), ("0xTokenB".to_string(), 1)]
+        );
+
+        ctrl.insert_trend_with_admin_check(
+            ACC_ADMIN,
+            InsertTrendRequest {
+                token_ids: vec!["0xTokenB".to_string()],
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows: Vec<(String, i32)> =
+            sqlx::query_as("SELECT token_id, display_order FROM trend ORDER BY display_order")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(rows, vec![("0xTokenB".to_string(), 0)]);
     }
 }
