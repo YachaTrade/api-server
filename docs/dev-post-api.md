@@ -157,7 +157,7 @@ trending/ranking 키는 건드리지 않습니다.
   "rankings": [
     {
       "rank": 1,
-      "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": null },
+      "token": { "token_id": "0x…", "name": "…", "symbol": "…", "image_uri": "https://…", "market_cap": "15875.719277088" },
       "total_likes": 900,
       "post_count": 12,
       "last_posted_at": "2026-07-07T00:00:00Z"
@@ -592,7 +592,7 @@ commit outcome-unknown은 reconciliation/retry 대상입니다.
 | 필드 | 설명 |
 |---|---|
 | `id` | BIGINT를 **문자열로 직렬화** (snowflake id가 JS `Number` 2^53 정밀도를 초과하므로) |
-| `token` | 코인 요약 (`token_id`/`name`/`symbol`/`image_uri`/`market_cap`) — `market_cap`은 market×price 조인 기반 USD 마켓캡 (raw total_supply 스케일 문자열, hype `market_cap_usd`와 동일 관례). market 행 없으면 `null`, quote USD 가격 없으면 `"0"`. 캐시 TTL(≤60s)만큼 지연 가능 |
+| `token` | 코인 요약 (`token_id`/`name`/`symbol`/`image_uri`/`market_cap`) — `market_cap`은 market×price 조인 기반 **USD 마켓캡** (= hype `market_cap_usd` 의미). **스케일 주의: 랭킹(`GET /dev-post/ranking`)은 사람이 읽는 USD 문자열(예: `"15875.719277088"`), 피드/상세/트렌딩은 아직 raw ×10^18 스케일** — 후속에서 사람 단위로 통일 예정. market 행 없으면 `null`, quote USD 가격 없으면 `"0"`. 캐시 TTL(≤60s)만큼 지연 가능 |
 | `author` | 게시물 작성자 요약 (작성 당시 creator, 이후 creator가 바뀌어도 유지) |
 | `title` | 제목. 입력 공백·줄바꿈을 보존하며 body와 별도 필드 |
 | `body` | description-only 본문 원문 (트윗 링크 포함 가능) |
@@ -683,7 +683,7 @@ interface TokenSummary {
   name: string;
   symbol: string;
   image_uri: string | null;
-  market_cap: string | null;  // USD 마켓캡 (raw total_supply 스케일). market 행 없으면 null, quote USD 가격 없으면 "0"
+  market_cap: string | null;  // USD 마켓캡. 랭킹=사람 단위("15875.71…"), 피드/상세/트렌딩=raw ×10^18 (후속 통일 예정). market 행 없으면 null, quote USD 가격 없으면 "0"
 }
 interface AuthorSummary {
   account_id: string;
