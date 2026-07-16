@@ -121,6 +121,18 @@ pub async fn authenticate_user(
     Ok(next.run(req).await)
 }
 
+/// Terminal 메타데이터 라우트는 루트 레벨 단일 세그먼트 토큰 주소다
+/// (`TerminalPath::GetMetadata` = `/:token_address`). 다른 terminal
+/// (GeckoTerminal) 엔드포인트처럼 API Key 게이트를 우회해야 하지만 리터럴
+/// 경로로 나열할 수 없어 형태로 매칭한다: `/0x` + hex 40자리, 추가 세그먼트
+/// 없음. 루트 와일드카드 라우트는 axum에서 하나뿐이므로 이 형태는 terminal
+/// 메타데이터(또는 404)로만 라우팅된다. 실제 토큰 존재/체크섬 검증은
+/// 핸들러(`valid_existing_token_id`)가 한다.
+fn is_terminal_metadata_path(path: &str) -> bool {
+    path.strip_prefix("/0x")
+        .is_some_and(|rest| rest.len() == 40 && rest.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 /// API Key 검증 및 Rate Limit 미들웨어 (전역 적용)
 /// - CORS 허용 Origin (nad.fun 등): 통과 (기존 동작)
 /// - 외부 Origin + API Key: 100 req/min
@@ -144,6 +156,8 @@ pub async fn api_key_gate(
         || path == "/asset"
         || path == "/pair"
         || path == "/events"
+        || is_terminal_metadata_path(path)
+    // `/:token_address` (terminal 메타데이터)
     {
         return Ok(next.run(req).await);
     }
@@ -268,7 +282,34 @@ pub async fn api_key_gate(
 
 #[cfg(test)]
 mod tests {
-    use super::is_allowed_origin;
+    use super::{is_allowed_origin, is_terminal_metadata_path};
+
+    #[test]
+    fn terminal_metadata_path_shape() {
+        // 정확히 /0x + hex 40자리만 통과
+        assert!(is_terminal_metadata_path(
+            "/0x5dF178C7E58046BC9074782fef0009C6Be167777"
+        ));
+        assert!(is_terminal_metadata_path(
+            "/0x0000000000000000000000000000000000007777"
+        ));
+        // 거부: 길이 미달/초과, 비-hex, 추가 세그먼트, 무관한 경로
+        assert!(!is_terminal_metadata_path("/0x1234"));
+        assert!(!is_terminal_metadata_path(
+            "/0x5dF178C7E58046BC9074782fef0009C6Be16777" // 39자리
+        ));
+        assert!(!is_terminal_metadata_path(
+            "/0x5dF178C7E58046BC9074782fef0009C6Be1677777" // 41자리
+        ));
+        assert!(!is_terminal_metadata_path(
+            "/0xZZF178C7E58046BC9074782fef0009C6Be167777" // 비-hex
+        ));
+        assert!(!is_terminal_metadata_path(
+            "/0x5dF178C7E58046BC9074782fef0009C6Be167777/extra"
+        ));
+        assert!(!is_terminal_metadata_path("/dev-post"));
+        assert!(!is_terminal_metadata_path("/"));
+    }
 
     #[test]
     fn cloudfront_and_existing_origins() {
