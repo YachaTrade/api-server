@@ -23,6 +23,7 @@
 - `/api-key/*` (API Key 관리 - 세션 인증 사용)
 - `/auth/*` (인증 엔드포인트)
 - `/latest-block`, `/asset`, `/pair`, `/events` (Terminal 엔드포인트)
+- `/{token_address}` (Terminal 메타데이터 — 루트 레벨 `/0x` + hex 40자리 형태로 매칭)
 
 ### 제한사항
 
