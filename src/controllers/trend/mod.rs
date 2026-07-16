@@ -187,46 +187,33 @@ impl TrendController {
         Ok(rows.into_iter().map(TrendToken::from).collect())
     }
 
+    /// Single-statement CTE: pgbouncer runs in statement pooling mode, which
+    /// forbids `BEGIN`/`COMMIT`. `del` and `ins` are disjoint by `token_id`
+    /// (del only removes ids NOT in the new list; ins only upserts ids IN the
+    /// new list), so this is safe regardless of the planner-chosen CTE
+    /// execution order — deleting and re-inserting the SAME key within one
+    /// statement would hit `duplicate key value violates unique constraint`.
     pub async fn insert_trend_token(&self, request: TrendRequest) -> Result<TrendActionResponse> {
-        // Start transaction
-        let mut tx = self
-            .db
-            .get_write_pool()
-            .begin()
-            .await
-            .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
-
-        // Delete all existing trends
         measure_postgres!(
-            "trend.delete_all",
-            sqlx::query("DELETE FROM trend").execute(&mut *tx)
+            "trend.replace_all",
+            sqlx::query(
+                "WITH del AS (
+                     DELETE FROM trend WHERE NOT (token_id = ANY($1::text[]))
+                 ),
+                 ins AS (
+                     INSERT INTO trend (token_id, display_order)
+                     SELECT u.token_id, (u.ord - 1)::int
+                     FROM unnest($1::text[]) WITH ORDINALITY AS u(token_id, ord)
+                     ON CONFLICT (token_id) DO UPDATE
+                       SET display_order = EXCLUDED.display_order,
+                           created_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
+                 )
+                 SELECT 1",
+            )
+            .bind(&request.token_ids)
+            .execute(self.db.get_write_pool())
         )
-        .map_err(|err| anyhow!("Failed to delete trends: {}", err))?;
-
-        // Insert new trends with order if not empty
-        if !request.token_ids.is_empty() {
-            let placeholders: Vec<String> = (0..request.token_ids.len())
-                .map(|i| format!("(${}, ${})", i * 2 + 1, i * 2 + 2))
-                .collect();
-
-            let query = format!(
-                "INSERT INTO trend (token_id, display_order) VALUES {}",
-                placeholders.join(", ")
-            );
-
-            let mut query_builder = sqlx::query(&query);
-            for (index, token_id) in request.token_ids.iter().enumerate() {
-                query_builder = query_builder.bind(token_id).bind(index as i32);
-            }
-
-            measure_postgres!("trend.insert_all", query_builder.execute(&mut *tx))
-                .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
-        }
-
-        // Commit transaction
-        tx.commit()
-            .await
-            .map_err(|err| anyhow!("Failed to commit transaction: {}", err))?;
+        .map_err(|err| anyhow!("Failed to replace trends: {}", err))?;
 
         // Clear cache
         GLOBAL_CACHE

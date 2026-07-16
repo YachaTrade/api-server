@@ -31,10 +31,20 @@ impl XVerificationController {
         Self { db }
     }
 
-    /// Idempotent upsert of a verification + its followed_by rows (transaction).
-    /// The X account (`x_user_id`) is locked on first finalize: a re-finalize
-    /// bound to a different X account is rejected (`XAccountMismatch`) and
-    /// leaves the existing row untouched; the same X account refreshes normally.
+    /// Idempotent single-statement CTE upsert of a verification + its
+    /// followed_by rows. pgbouncer runs in statement pooling mode, which
+    /// forbids `BEGIN`/`COMMIT`, so the whole thing (guarded upsert +
+    /// followed_by replace) has to be one statement. The X account
+    /// (`x_user_id`) is locked on first finalize: a re-finalize bound to a
+    /// different X account is rejected (`XAccountMismatch`) and leaves the
+    /// existing row untouched; the same X account refreshes normally.
+    ///
+    /// `fb_del`/`fb_ins` are disjoint by `x_handle` (del only removes handles
+    /// NOT in the new list; ins only upserts handles IN the new list) —
+    /// deleting and re-inserting the SAME `(token_id, x_handle)` key within
+    /// one statement would hit `duplicate key value violates unique
+    /// constraint`, since data-modifying CTE execution order is
+    /// planner-chosen, not WITH-clause order.
     pub async fn finalize(
         &self,
         token_id: &str,
@@ -44,29 +54,65 @@ impl XVerificationController {
         followers_count: i64,
         followed_by: &[XFollowedByEntry],
     ) -> Result<FinalizeOutcome> {
-        let mut tx = self
-            .db
-            .get_write_pool()
-            .begin()
-            .await
-            .map_err(|e| anyhow!("begin tx: {e}"))?;
+        let handles: Vec<&str> = followed_by.iter().map(|f| f.x_handle.as_str()).collect();
+        let image_uris: Vec<&str> = followed_by.iter().map(|f| f.x_image_uri.as_str()).collect();
+        let counts: Vec<i64> = followed_by.iter().map(|f| f.x_followers_count).collect();
+        let verified_flags: Vec<bool> = followed_by.iter().map(|f| f.is_x_verified).collect();
 
         // Guarded upsert: x_user_id is deliberately NOT in the SET list — the WHERE
         // guarantees it already equals the incoming value, so it can never be
         // mutated. No existing row → INSERT → RETURNING Some. Existing row, same
         // x_user_id → DO UPDATE (WHERE true) → RETURNING Some. Existing row,
         // different x_user_id → WHERE false → 0 rows → RETURNING None.
-        let persisted: Option<(String,)> = sqlx::query_as(
+        //
+        // `fresh` dedupes the incoming followed_by list by handle, first-one-wins
+        // (matches the old per-row `DO NOTHING` loop's semantics, where a duplicate
+        // handle would silently lose to whichever row was inserted first): a single
+        // `DO UPDATE` INSERT with a duplicate key in its input errors with `ON
+        // CONFLICT DO UPDATE command cannot affect row a second time`, so the
+        // `DISTINCT ON (u.h) ... ORDER BY u.h, u.ord` collapse is mandatory, not
+        // cosmetic.
+        //
+        // `fb_del`/`fb_ins` are gated on `up` producing a row so an `XAccountMismatch`
+        // (zero rows from `up`) leaves followed_by completely untouched, mirroring the
+        // old early-return-before-rollback behavior.
+        let persisted: (bool,) = sqlx::query_as(
             r#"
-            INSERT INTO token_x_verification (token_id, account_id, x_user_id, x_handle, followers_count)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (token_id) DO UPDATE
-              SET account_id = EXCLUDED.account_id,
-                  x_handle = EXCLUDED.x_handle,
-                  followers_count = EXCLUDED.followers_count,
-                  verified_at = NOW()
-              WHERE token_x_verification.x_user_id = EXCLUDED.x_user_id
-            RETURNING token_id
+            WITH up AS (
+                INSERT INTO token_x_verification (token_id, account_id, x_user_id, x_handle, followers_count)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (token_id) DO UPDATE
+                  SET account_id = EXCLUDED.account_id,
+                      x_handle = EXCLUDED.x_handle,
+                      followers_count = EXCLUDED.followers_count,
+                      verified_at = NOW()
+                  WHERE token_x_verification.x_user_id = EXCLUDED.x_user_id
+                RETURNING token_id
+            ),
+            fresh AS (
+                SELECT DISTINCT ON (u.h) u.h, u.img, u.cnt, u.ver
+                FROM unnest($6::text[], $7::text[], $8::bigint[], $9::bool[])
+                     WITH ORDINALITY AS u(h, img, cnt, ver, ord)
+                ORDER BY u.h, u.ord
+            ),
+            fb_del AS (
+                DELETE FROM token_x_followed_by
+                WHERE token_id = $1
+                  AND EXISTS (SELECT 1 FROM up)
+                  AND NOT (x_handle = ANY($6::text[]))
+            ),
+            fb_ins AS (
+                INSERT INTO token_x_followed_by
+                    (token_id, x_handle, x_image_uri, x_followers_count, is_x_verified)
+                SELECT $1, f.h, f.img, f.cnt, f.ver
+                FROM up, fresh f
+                ON CONFLICT (token_id, x_handle) DO UPDATE
+                  SET x_image_uri = EXCLUDED.x_image_uri,
+                      x_followers_count = EXCLUDED.x_followers_count,
+                      is_x_verified = EXCLUDED.is_x_verified,
+                      checked_at = NOW()
+            )
+            SELECT EXISTS (SELECT 1 FROM up) AS persisted
             "#,
         )
         .bind(token_id)
@@ -74,43 +120,19 @@ impl XVerificationController {
         .bind(x_user_id)
         .bind(x_handle)
         .bind(followers_count)
-        .fetch_optional(&mut *tx)
+        .bind(&handles)
+        .bind(&image_uris)
+        .bind(&counts)
+        .bind(&verified_flags)
+        .fetch_one(self.db.get_write_pool())
         .await
-        .map_err(|e| anyhow!("upsert verification: {e}"))?;
+        .map_err(|e| anyhow!("finalize verification: {e}"))?;
 
-        if persisted.is_none() {
-            // Existing row bound to a different x_user_id → reject WITHOUT touching
-            // followed_by. Dropping `tx` rolls back (the guarded upsert changed nothing).
-            return Ok(FinalizeOutcome::XAccountMismatch);
+        if persisted.0 {
+            Ok(FinalizeOutcome::Persisted)
+        } else {
+            Ok(FinalizeOutcome::XAccountMismatch)
         }
-
-        sqlx::query("DELETE FROM token_x_followed_by WHERE token_id = $1")
-            .bind(token_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| anyhow!("clear followed_by: {e}"))?;
-
-        for fb in followed_by {
-            sqlx::query(
-                r#"
-                INSERT INTO token_x_followed_by
-                    (token_id, x_handle, x_image_uri, x_followers_count, is_x_verified)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (token_id, x_handle) DO NOTHING
-                "#,
-            )
-            .bind(token_id)
-            .bind(&fb.x_handle)
-            .bind(&fb.x_image_uri)
-            .bind(fb.x_followers_count)
-            .bind(fb.is_x_verified)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| anyhow!("insert followed_by: {e}"))?;
-        }
-
-        tx.commit().await.map_err(|e| anyhow!("commit: {e}"))?;
-        Ok(FinalizeOutcome::Persisted)
     }
 
     /// Atomic first-writer-wins reservation. Returns the SURVIVING owner:
