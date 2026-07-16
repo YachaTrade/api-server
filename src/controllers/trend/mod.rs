@@ -326,3 +326,118 @@ impl From<TrendTokenRow> for TrendToken {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::PgPool;
+
+    // trend.token_id has no FK to `token` — any VARCHAR(42)-fitting string is
+    // valid storage-wise; checksum validation is a router-layer concern.
+    const TOKEN_A: &str = "0xA000000000000000000000000000000000000A";
+    const TOKEN_B: &str = "0xB000000000000000000000000000000000000B";
+    const TOKEN_C: &str = "0xC000000000000000000000000000000000000C";
+    const TOKEN_D: &str = "0xD000000000000000000000000000000000000D";
+
+    fn make_controller(pool: PgPool) -> TrendController {
+        TrendController::new(Arc::new(PostgresDatabase {
+            write_pool: pool.clone(),
+            read_pool: pool,
+        }))
+    }
+
+    async fn trend_rows(pool: &PgPool) -> Vec<(String, i32)> {
+        sqlx::query_as("SELECT token_id, display_order FROM trend ORDER BY display_order")
+            .fetch_all(pool)
+            .await
+            .unwrap()
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn insert_trend_replaces_all_zero_based(pool: PgPool) {
+        let ctrl = make_controller(pool.clone());
+        ctrl.insert_trend_token(TrendRequest {
+            token_ids: vec![
+                TOKEN_A.to_string(),
+                TOKEN_B.to_string(),
+                TOKEN_C.to_string(),
+            ],
+        })
+        .await
+        .unwrap();
+
+        let rows = trend_rows(&pool).await;
+        assert_eq!(
+            rows,
+            vec![
+                (TOKEN_A.to_string(), 0),
+                (TOKEN_B.to_string(), 1),
+                (TOKEN_C.to_string(), 2),
+            ]
+        );
+    }
+
+    // Regression guard for the del/ins CTE split documented on
+    // `insert_trend_token`: resubmitting an overlapping-but-reordered set of
+    // token_ids must NOT hit `duplicate key value violates unique
+    // constraint`. A naive DELETE-all-then-INSERT-all CTE would try to
+    // delete AND (re)insert the same surviving keys (C, A) within a single
+    // statement, which errors under Postgres's data-modifying-CTE rules —
+    // this proves the disjoint upsert+delete implementation avoids that.
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn insert_trend_reorder_with_overlap_does_not_duplicate_key(pool: PgPool) {
+        let ctrl = make_controller(pool.clone());
+        ctrl.insert_trend_token(TrendRequest {
+            token_ids: vec![
+                TOKEN_A.to_string(),
+                TOKEN_B.to_string(),
+                TOKEN_C.to_string(),
+            ],
+        })
+        .await
+        .unwrap();
+
+        let result = ctrl
+            .insert_trend_token(TrendRequest {
+                token_ids: vec![
+                    TOKEN_C.to_string(),
+                    TOKEN_A.to_string(),
+                    TOKEN_D.to_string(),
+                ],
+            })
+            .await;
+        assert!(
+            result.is_ok(),
+            "reorder with overlap must not error: {:?}",
+            result.err()
+        );
+
+        let rows = trend_rows(&pool).await;
+        assert_eq!(
+            rows,
+            vec![
+                (TOKEN_C.to_string(), 0),
+                (TOKEN_A.to_string(), 1),
+                (TOKEN_D.to_string(), 2),
+            ],
+            "B dropped, C/A reordered, D added"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn insert_trend_empty_list_clears_all(pool: PgPool) {
+        let ctrl = make_controller(pool.clone());
+        ctrl.insert_trend_token(TrendRequest {
+            token_ids: vec![TOKEN_A.to_string(), TOKEN_B.to_string()],
+        })
+        .await
+        .unwrap();
+
+        ctrl.insert_trend_token(TrendRequest { token_ids: vec![] })
+            .await
+            .unwrap();
+
+        let rows = trend_rows(&pool).await;
+        assert!(rows.is_empty());
+    }
+}
