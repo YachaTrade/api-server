@@ -756,7 +756,7 @@ impl DevPostController {
                     COUNT(l.account_id) AS total_likes,
                     COUNT(DISTINCT p.id) AS post_count,
                     MAX(p.created_at) AS last_posted_at,
-                    (m.price * t.total_supply * COALESCE(lp.price, 0)) AS market_cap
+                    (m.price * t.total_supply * COALESCE(lp.price, 0) / 1e18) AS market_cap
              FROM dev_post p
              JOIN token t ON t.token_id = p.token_id
              LEFT JOIN dev_post_like l ON l.post_id = p.id
@@ -1620,7 +1620,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn ranking_populates_market_cap_usd(pool: sqlx::PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
-        set_total_supply(&pool, TOKEN, "1000000").await;
+        set_total_supply(&pool, TOKEN, "1000000000000000000000000").await; // 1,000,000 tokens, raw ×10^18
         seed_market(&pool, TOKEN, "2").await;
         seed_quote_usd_price(&pool, "0.5").await;
         let c = ctl(pool.clone());
