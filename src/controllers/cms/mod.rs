@@ -74,66 +74,47 @@ impl CmsController {
         Ok(CmsActionResponse { success: true })
     }
 
-    /// Insert trends with admin check in a single transaction to prevent TOCTOU attacks
+    /// Single-statement CTE: pgbouncer runs in statement pooling mode, which
+    /// forbids `BEGIN`/`COMMIT`. The admin check (`adm`) stays atomic with the
+    /// mutation to prevent TOCTOU — `del`/`ins` only touch rows when `adm`
+    /// produced a row, and always run on the WRITE pool so the check can't be
+    /// bypassed by replica lag. `del` and `ins` are disjoint by `token_id`
+    /// (same reasoning as `TrendController::insert_trend_token`), so this is
+    /// safe regardless of planner-chosen CTE execution order.
     pub async fn insert_trend_with_admin_check(
         &self,
         account_id: &str,
         request: InsertTrendRequest,
     ) -> Result<CmsActionResponse> {
-        // Start transaction
-        let mut tx = self
-            .db
-            .get_write_pool()
-            .begin()
-            .await
-            .map_err(|err| anyhow!("Failed to start transaction: {}", err))?;
-
-        // Verify admin status
-        let is_admin = measure_postgres!(
-            "cms.trend.verify_admin",
-            sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS(SELECT 1 FROM admin WHERE account_id = $1)"
+        let is_admin: bool = measure_postgres!(
+            "cms.trend.replace_all",
+            sqlx::query_scalar(
+                "WITH adm AS (
+                     SELECT 1 AS ok FROM admin WHERE account_id = $2
+                 ),
+                 del AS (
+                     DELETE FROM trend
+                     WHERE EXISTS (SELECT 1 FROM adm) AND NOT (token_id = ANY($1::text[]))
+                 ),
+                 ins AS (
+                     INSERT INTO trend (token_id, display_order)
+                     SELECT u.token_id, (u.ord - 1)::int
+                     FROM adm, unnest($1::text[]) WITH ORDINALITY AS u(token_id, ord)
+                     ON CONFLICT (token_id) DO UPDATE
+                       SET display_order = EXCLUDED.display_order,
+                           created_at = EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::BIGINT
+                 )
+                 SELECT EXISTS (SELECT 1 FROM adm) AS is_admin",
             )
+            .bind(&request.token_ids)
             .bind(account_id)
-            .fetch_one(&mut *tx)
+            .fetch_one(self.db.get_write_pool())
         )
-        .map_err(|err| anyhow!("Failed to verify admin status: {}", err))?;
+        .map_err(|err| anyhow!("Failed to replace trends: {}", err))?;
 
         if !is_admin {
             return Err(anyhow!("Admin access required"));
         }
-
-        // Delete all existing trends
-        measure_postgres!(
-            "cms.trend.delete_all",
-            sqlx::query("DELETE FROM trend").execute(&mut *tx)
-        )
-        .map_err(|err| anyhow!("Failed to delete trends: {}", err))?;
-
-        // Insert new trends with order if not empty
-        if !request.token_ids.is_empty() {
-            let placeholders: Vec<String> = (0..request.token_ids.len())
-                .map(|i| format!("(${}, ${})", i * 2 + 1, i * 2 + 2))
-                .collect();
-
-            let query = format!(
-                "INSERT INTO trend (token_id, display_order) VALUES {}",
-                placeholders.join(", ")
-            );
-
-            let mut query_builder = sqlx::query(&query);
-            for (index, token_id) in request.token_ids.iter().enumerate() {
-                query_builder = query_builder.bind(token_id).bind(index as i32);
-            }
-
-            measure_postgres!("cms.trend.insert", query_builder.execute(&mut *tx))
-                .map_err(|err| anyhow!("Failed to insert trends: {}", err))?;
-        }
-
-        // Commit transaction
-        tx.commit()
-            .await
-            .map_err(|err| anyhow!("Failed to commit transaction: {}", err))?;
 
         Ok(CmsActionResponse { success: true })
     }

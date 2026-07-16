@@ -1,6 +1,18 @@
 use super::DevPostController;
 use crate::result::AppError;
 
+/// Whether a failed write may nonetheless have been applied.
+///
+/// A single statement is atomic, so an error the server itself reported
+/// (constraint, trigger, syntax) means the write definitively did not land —
+/// report it as-is. Only transport-level failures (connection dropped, pool
+/// timeout) are ambiguous: the server may have committed and the response was
+/// lost on the way back. Those are the only ones worth the extra lookup and a
+/// defensive cache purge.
+fn outcome_is_ambiguous(error: &sqlx::Error) -> bool {
+    error.as_database_error().is_none()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PostMutationContext {
     pub post_id: i64,
@@ -10,13 +22,7 @@ pub(crate) struct PostMutationContext {
 #[derive(Debug)]
 pub(crate) enum CommitOutcome<T> {
     Committed(T),
-    #[allow(dead_code)] // Unreachable now that writes are single-statement CTEs
-    // (no separate commit step can fail ambiguously); kept because the enum
-    // and downstream service-layer match arms are out of scope for this change.
-    Unknown {
-        context: T,
-        error: String,
-    },
+    Unknown { context: T, error: String },
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ModerationAction {
@@ -72,7 +78,7 @@ impl DevPostController {
         author: &str,
     ) -> Result<CommitOutcome<PostMutationContext>, AppError> {
         let pool = self.db.get_write_pool();
-        let row: (Option<String>, Option<String>, bool) = sqlx::query_as(
+        let row: (Option<String>, Option<String>, bool) = match sqlx::query_as(
             "WITH target AS (
                  SELECT id, token_id, author FROM dev_post WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
              ),
@@ -94,7 +100,13 @@ impl DevPostController {
         .bind(author)
         .fetch_one(pool)
         .await
-        .map_err(|error| AppError::InternalError(error.to_string()))?;
+        {
+            Ok(row) => row,
+            Err(error) if !outcome_is_ambiguous(&error) => {
+                return Err(AppError::InternalError(error.to_string()));
+            }
+            Err(error) => return Self::recover_author_delete(pool, post_id, error).await,
+        };
 
         let (token_id, existing_author, changed) = row;
         match (token_id, existing_author) {
@@ -109,6 +121,39 @@ impl DevPostController {
                 }))
             }
             _ => Err(AppError::NotFound("Post not found".into())),
+        }
+    }
+
+    /// The statement above may have already committed server-side before the
+    /// connection dropped and sqlx surfaced `error`. Look the row up again so
+    /// the caller can still purge the public cache — otherwise a soft-deleted
+    /// post keeps being served from cache until TTL. Only `deleted_at IS NOT
+    /// NULL` is treated as evidence of a real (if ambiguous) commit: a
+    /// statement that genuinely failed server-side (e.g. a trigger raising an
+    /// exception) rolls back atomically, so the row is found unchanged and
+    /// there is nothing to purge — the original error is surfaced instead.
+    async fn recover_author_delete(
+        pool: &sqlx::PgPool,
+        post_id: i64,
+        error: sqlx::Error,
+    ) -> Result<CommitOutcome<PostMutationContext>, AppError> {
+        let looked: Option<(String, bool)> =
+            sqlx::query_as("SELECT token_id, deleted_at IS NOT NULL FROM dev_post WHERE id = $1")
+                .bind(post_id)
+                .fetch_optional(pool)
+                .await
+                .ok()
+                .flatten();
+        match looked {
+            Some((token_id, changed @ true)) => Ok(CommitOutcome::Unknown {
+                context: PostMutationContext {
+                    post_id,
+                    token_id,
+                    changed,
+                },
+                error: error.to_string(),
+            }),
+            Some((_, false)) | None => Err(AppError::InternalError(error.to_string())),
         }
     }
 
@@ -132,7 +177,7 @@ impl DevPostController {
         action: ModerationAction,
     ) -> Result<CommitOutcome<ModerationContext>, AppError> {
         let pool = self.db.get_write_pool();
-        let row: (Option<bool>, Option<String>, Option<bool>, Option<bool>, bool) = sqlx::query_as(
+        let row: (Option<bool>, Option<String>, Option<bool>, Option<bool>, bool) = match sqlx::query_as(
             "WITH adm AS (
                  SELECT account_id FROM admin WHERE account_id = $2 FOR KEY SHARE
              ),
@@ -187,7 +232,17 @@ impl DevPostController {
         .bind(action.as_str())
         .fetch_one(pool)
         .await
-        .map_err(|error| AppError::InternalError(error.to_string()))?;
+        {
+            Ok(row) => row,
+            Err(error) if !outcome_is_ambiguous(&error) => {
+                return Err(AppError::InternalError(error.to_string()));
+            }
+            Err(error) => {
+                return self
+                    .recover_admin_mutate(post_id, admin, audit_id, action, error)
+                    .await;
+            }
+        };
 
         let (is_admin, token_id, token_exists, post_locked, changed) = row;
         if is_admin != Some(true) {
@@ -210,6 +265,65 @@ impl DevPostController {
             changed,
         }))
     }
+
+    /// The audit row is inserted in the same statement as the mutation, so if
+    /// it's visible under `audit_id` the statement committed and the row
+    /// itself carries the truth of `token_id`/`changed`; if it's confirmed
+    /// absent, nothing committed and there's no cache to purge. If the lookup
+    /// itself fails we can't tell either way, so fall back to a best-effort
+    /// cache purge by `token_id` alone.
+    async fn recover_admin_mutate(
+        &self,
+        post_id: i64,
+        admin: &str,
+        audit_id: uuid::Uuid,
+        action: ModerationAction,
+        error: sqlx::Error,
+    ) -> Result<CommitOutcome<ModerationContext>, AppError> {
+        match self.get_moderation_audit_on_write_pool(audit_id).await {
+            Ok(Some(a))
+                if a.post_id == post_id
+                    && a.admin_account_id == admin
+                    && a.action == action.as_str() =>
+            {
+                Ok(CommitOutcome::Committed(ModerationContext {
+                    audit_id,
+                    admin_account_id: admin.to_string(),
+                    post_id,
+                    token_id: a.token_id,
+                    action,
+                    changed: a.changed,
+                }))
+            }
+            // Audit row confirmed absent = statement did not commit = nothing to purge.
+            Ok(_) => Err(AppError::InternalError(error.to_string())),
+            // Lookup itself failed = can't tell either way; best-effort purge by token_id.
+            Err(_) => {
+                let token_id: Option<String> =
+                    sqlx::query_scalar("SELECT token_id FROM dev_post WHERE id = $1")
+                        .bind(post_id)
+                        .fetch_optional(self.db.get_write_pool())
+                        .await
+                        .ok()
+                        .flatten();
+                match token_id {
+                    Some(token_id) => Ok(CommitOutcome::Unknown {
+                        context: ModerationContext {
+                            audit_id,
+                            admin_account_id: admin.to_string(),
+                            post_id,
+                            token_id,
+                            action,
+                            changed: false,
+                        },
+                        error: error.to_string(),
+                    }),
+                    None => Err(AppError::InternalError(error.to_string())),
+                }
+            }
+        }
+    }
+
     pub(crate) async fn delete_post_as_admin(
         &self,
         p: i64,

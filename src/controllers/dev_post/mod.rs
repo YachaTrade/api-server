@@ -105,7 +105,7 @@ impl DevPostController {
     /// tail-delete rather than delete-then-insert: two data-modifying CTEs
     /// deleting and inserting the same `(post_id, position)` key in one
     /// statement hit `duplicate key value violates unique constraint`
-    /// (verified locally) because CTE execution order is unspecified.
+    /// because CTE execution order is unspecified.
     pub async fn edit_post(
         &self,
         post_id: i64,
