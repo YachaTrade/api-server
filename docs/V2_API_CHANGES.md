@@ -744,5 +744,5 @@ Trending(최근 7일 좋아요 상위 3, 부족하면 최신 게시물로 채움
 |---|---|
 | `GET/POST/PUT/PATCH/DELETE /dev-post*` (13개 엔드포인트) | **신규** — Dev Post 기능 전체 |
 | `DevPostResponse`, `TokenSummary`, `AuthorSummary`, `PollResponse`, `PollOptionResponse`, `RankingRow`, `LikeResponse`, `VoteResponse`, `UploadImageResponse` 등 | **신규 타입** |
-| `token.market_cap` (Dev Post 응답 내) | 현재 항상 `null` — 소스 연동은 후속 작업 |
+| `token.market_cap` (Dev Post 응답 내) | market×price 조인 기반 USD 마켓캡으로 채워짐 |
 | Trending/Ranking Redis 캐싱 | 아직 미적용 — 매 요청 라이브 쿼리 (성능 후속 작업) |
