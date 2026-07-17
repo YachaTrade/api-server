@@ -87,38 +87,6 @@ impl TerminalController {
     }
 
     /// Get pair (token) information by token_id
-    pub async fn get_pair(&self, token_id: &str) -> Result<PairRow> {
-        let row = measure_postgres!(
-            "terminal.get_pair",
-            sqlx::query_as::<_, PairRow>(
-                r#"
-                    SELECT
-                        t.token_id,
-                        t.created_at,
-                        t.transaction_hash,
-                        m.pool_id,
-                        m.market_type,
-                        m.quote_id,
-                        t.creator,
-                        fc.creator_fee_rate,
-                        fc.curve_protocol_fee_rate,
-                        fc.dex_protocol_fee_rate
-                    FROM token t
-                    JOIN market m ON t.token_id = m.token_id
-                    LEFT JOIN fee_config fc ON fc.token_id = t.token_id
-                    WHERE t.token_id = $1
-                      AND m.market_type IN ('DEX', 'V2_DEX')
-                "#,
-            )
-            .bind(token_id)
-            .fetch_one(self.db.get_read_pool())
-        )
-        .map_err(|err| anyhow!("Failed to get pair: {}", err))?;
-
-        Ok(row)
-    }
-
-    /// Get pair (token) information by pool_id
     pub async fn get_pair_by_pool_id(&self, pool_id: &str) -> Result<PairRow> {
         let row = measure_postgres!(
             "terminal.get_pair_by_pool_id",
@@ -139,6 +107,7 @@ impl TerminalController {
                     JOIN token t ON m.token_id = t.token_id
                     LEFT JOIN fee_config fc ON fc.token_id = t.token_id
                     WHERE m.pool_id = $1
+                      AND m.market_type IN ('DEX', 'V2_DEX')
                 "#,
             )
             .bind(pool_id)
@@ -411,7 +380,7 @@ mod tests {
             VALUES ($1,$2,500,50,30,0) ON CONFLICT DO NOTHING"#)
             .bind(POOL).bind(TOKEN).execute(&pool).await.unwrap();
 
-        let row = ctrl(pool).get_pair(TOKEN).await.unwrap();
+        let row = ctrl(pool).get_pair_by_pool_id(POOL).await.unwrap();
         assert_eq!(row.quote_id, QUOTE_LVMON);
         assert_eq!(row.market_type, "V2_DEX");
         assert_eq!(row.creator_fee_rate, Some(500));
@@ -421,7 +390,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn get_pair_without_fee_config_is_none(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
-        let row = ctrl(pool).get_pair(TOKEN).await.unwrap();
+        let row = ctrl(pool).get_pair_by_pool_id(POOL).await.unwrap();
         assert_eq!(row.quote_id, QUOTE_LVMON);
         assert_eq!(row.creator_fee_rate, None);
     }
@@ -438,7 +407,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let row = ctrl(pool.clone()).get_pair(TOKEN).await.unwrap();
+            let row = ctrl(pool.clone()).get_pair_by_pool_id(POOL).await.unwrap();
             assert_eq!(row.market_type, market_type);
         }
 
@@ -451,7 +420,7 @@ mod tests {
                 .unwrap();
 
             assert!(
-                ctrl(pool.clone()).get_pair(TOKEN).await.is_err(),
+                ctrl(pool.clone()).get_pair_by_pool_id(POOL).await.is_err(),
                 "{market_type} pair must be filtered out"
             );
         }
