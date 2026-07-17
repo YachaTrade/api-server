@@ -169,10 +169,12 @@ impl TerminalService {
         Ok(AssetResponse { asset })
     }
 
-    pub async fn get_pair(&self, token_id: &str) -> Result<PairResponse, AppError> {
-        // Query by token_id (token address)
+    pub async fn get_pair(&self, pool_id: &str) -> Result<PairResponse, AppError> {
+        // Query by pool_id — the `id` GeckoTerminal sends back is the pairId we
+        // emitted from /events, which for DEX markets is the pool address
+        // (`pair_id_for`), NOT the token address.
         let controller = TerminalController::new(self.postgres.clone());
-        let pair_row = controller.get_pair(token_id).await.map_err(|e| {
+        let pair_row = controller.get_pair_by_pool_id(pool_id).await.map_err(|e| {
             error!("Failed to get pair: {}", e);
             AppError::NotFound(format!("Pair not found: {}", e))
         })?;

@@ -61,7 +61,7 @@ pub async fn get_asset(
     get,
     path = "/pair",
     params(
-        ("id" = String, Query, description = "Pair ID")
+        ("id" = String, Query, description = "Pair ID (DEX pool address, as emitted in /events pairId)")
     ),
     responses(
         (status = 200, description = "Pair fetched successfully", body = PairResponse),

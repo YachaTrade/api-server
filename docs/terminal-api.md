@@ -143,7 +143,7 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 ### 3. Pair 조회 (`GET /pair`)
 
-거래쌍(Pair) 정보를 조회합니다. 쿼리 `id`는 **토큰 주소**이며, 토큰의 현재 `market_type`이 `DEX` 또는 `V2_DEX`인 경우에만 현재 페어를 반환합니다. `CURVE`, `V2_CURVE` 또는 알 수 없는 시장 유형은 `404`로 처리됩니다.
+거래쌍(Pair) 정보를 조회합니다. 쿼리 `id`는 **pair ID(= DEX pool 주소, `/events`가 내리는 `pairId`와 동일)**이며, 해당 pool의 `market_type`이 `DEX` 또는 `V2_DEX`인 경우에만 페어를 반환합니다. `CURVE`, `V2_CURVE` 또는 알 수 없는 시장 유형은 `404`로 처리됩니다.
 
 #### 요청
 - **Method**: `GET`
@@ -372,7 +372,7 @@ interface AssetQuery {
 
 // GET /pair
 interface PairQuery {
-  id: string;  // 토큰 컨트랙트 주소
+  id: string;  // pair ID (= DEX pool 주소, /events의 pairId)
 }
 
 // GET /events
