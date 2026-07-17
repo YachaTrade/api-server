@@ -15,7 +15,10 @@ pub struct AssetRow {
     pub token_id: String,
     pub name: String,
     pub symbol: String,
-    pub total_supply: BigDecimal,
+    pub decimals: i32,
+    /// nadfun `token` 테이블에서 온 자산만 Some — quote/whitelist 자산은
+    /// 공급량을 추적하지 않으므로 None (응답에서 필드 생략).
+    pub total_supply: Option<BigDecimal>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -63,19 +66,27 @@ impl TerminalController {
         Ok(row.block_number as u64)
     }
 
-    /// Get asset (token) information by token_id
+    /// Get asset information by address, resolving across every table an
+    /// asset id we emit can live in: nadfun `token` first (the only source
+    /// with supply data), then `quote_token` (the quote side of every /pair),
+    /// then enabled `whitelist_token`. Priority is fixed so a token present
+    /// in multiple tables resolves consistently.
     pub async fn get_asset(&self, token_id: &str) -> Result<AssetRow> {
         let row = measure_postgres!(
             "terminal.get_asset",
             sqlx::query_as::<_, AssetRow>(
                 r#"
-                    SELECT
-                        token_id,
-                        name,
-                        symbol,
-                        total_supply
-                    FROM token
-                    WHERE token_id = $1
+                    SELECT token_id, name, symbol, 18 AS decimals, total_supply, 1 AS priority
+                    FROM token WHERE token_id = $1
+                    UNION ALL
+                    SELECT quote_id, name, symbol, decimals, NULL::numeric, 2
+                    FROM quote_token WHERE quote_id = $1
+                    UNION ALL
+                    SELECT token_id, COALESCE(name, ''), COALESCE(symbol, ''),
+                           COALESCE(decimals, 18), NULL::numeric, 3
+                    FROM whitelist_token WHERE token_id = $1 AND enabled
+                    ORDER BY priority
+                    LIMIT 1
                 "#,
             )
             .bind(token_id)
@@ -562,5 +573,53 @@ mod tests {
             .bind(TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
         let got = ctrl(pool).get_block_number_by_tx("0xseedtx").await.unwrap();
         assert_eq!(got, Some(12345));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn get_asset_prefers_token_table(pool: PgPool) {
+        seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
+        // 같은 주소가 whitelist에도 있어도 token 테이블이 우선 (supply 보존)
+        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol,decimals) VALUES ($1,0,true,'WL','WL',6)")
+            .bind(TOKEN).execute(&pool).await.unwrap();
+
+        let row = ctrl(pool).get_asset(TOKEN).await.unwrap();
+        assert_eq!(row.name, "T");
+        assert_eq!(row.decimals, 18);
+        assert!(row.total_supply.is_some(), "nadfun token must keep supply");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn get_asset_falls_back_to_quote_token(pool: PgPool) {
+        // 마이그레이션이 시딩하는 quote(WMON/LVMON 등)와 겹치지 않는 신선한 주소
+        const QUOTE_FRESH: &str = "0x00000000000000000000000000000000000000d2";
+        sqlx::query("INSERT INTO quote_token (quote_id,name,symbol,decimals,pyth_feed_id,image_uri) VALUES ($1,'FreshQuote','FQ',9,'','')")
+            .bind(QUOTE_FRESH).execute(&pool).await.unwrap();
+
+        let row = ctrl(pool).get_asset(QUOTE_FRESH).await.unwrap();
+        assert_eq!(row.symbol, "FQ");
+        assert_eq!(row.decimals, 9);
+        assert!(row.total_supply.is_none(), "quote asset carries no supply");
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn get_asset_falls_back_to_enabled_whitelist(pool: PgPool) {
+        const WL: &str = "0x00000000000000000000000000000000000000e1";
+        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol,decimals) VALUES ($1,0,true,'Wrapped X','WX',6)")
+            .bind(WL).execute(&pool).await.unwrap();
+
+        let row = ctrl(pool.clone()).get_asset(WL).await.unwrap();
+        assert_eq!(
+            (row.name.as_str(), row.symbol.as_str(), row.decimals),
+            ("Wrapped X", "WX", 6)
+        );
+        assert!(row.total_supply.is_none());
+
+        // disabled 행은 노출하지 않는다
+        sqlx::query("UPDATE whitelist_token SET enabled = false WHERE token_id = $1")
+            .bind(WL)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(ctrl(pool).get_asset(WL).await.is_err());
     }
 }

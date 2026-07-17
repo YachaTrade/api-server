@@ -16,6 +16,7 @@ use crate::{
 };
 
 use crate::controllers::terminal::{BurnEventRow, MintEventRow, SwapEventRow};
+use crate::services::pricing::{TokenMetaSource, meta::RpcMetaSource};
 
 /// Truncate BigDecimal to maximum 50 decimal places and convert to string
 fn to_truncated_string(value: &BigDecimal) -> String {
@@ -143,27 +144,72 @@ impl TerminalService {
     }
 
     pub async fn get_asset(&self, token_id: &str) -> Result<AssetResponse, AppError> {
+        // name/symbol/decimals are served from the chain itself (the source of
+        // truth for ERC-20 metadata — DB copies can be missing or NULL for
+        // quote/whitelist assets). RpcMetaSource caches results for 1h and
+        // caches failures too, so this public (rate-limit-exempt) endpoint
+        // can't be used to amplify outbound RPC traffic.
+        //
+        // The DB row is still consulted for two things the chain call doesn't
+        // give us: nadfun supply figures, and metadata resilience when the RPC
+        // is down (an asset we index must not 404 just because the node blips).
         let controller = TerminalController::new(self.postgres.clone());
-        let asset_row = controller.get_asset(token_id).await.map_err(|e| {
-            error!("Failed to get asset: {}", e);
-            AppError::NotFound(format!("Asset not found: {}", e))
-        })?;
+        let db_row = controller.get_asset(token_id).await.ok();
+        let rpc_meta = RpcMetaSource::new().token_meta(token_id).await;
 
-        // Total supply is always 1 billion (1,000,000,000)
-        let total_supply = BigDecimal::from(1_000_000_000u64);
+        let (name, symbol, decimals) = match (&rpc_meta, &db_row) {
+            (Some(meta), _) => (meta.name.clone(), meta.symbol.clone(), meta.decimals as u8),
+            (None, Some(row)) => (row.name.clone(), row.symbol.clone(), row.decimals as u8),
+            (None, None) => {
+                error!("Failed to get asset (rpc miss + db miss): {}", token_id);
+                return Err(AppError::NotFound(format!("Asset not found: {}", token_id)));
+            }
+        };
 
-        // Remove 18 decimals from circulating_supply (divide by 10^18)
-        let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64); // 10^18
-        let circulating_supply = asset_row.total_supply / decimals_divisor;
+        // totalSupply: on-chain `IERC20.totalSupply()` first (10-min cache,
+        // failures cached), human units = raw ÷ 10^decimals — reflects burns
+        // instead of a hard-coded figure, and works for quote/whitelist/
+        // external assets too. circulatingSupply can't be derived on-chain
+        // (locked/vault balances need interpretation), so it stays nadfun-only
+        // from the DB row, which also serves as the totalSupply fallback when
+        // the RPC is down.
+        let onchain_total = match RpcMetaSource::total_supply(token_id).await {
+            Some(raw) => raw.parse::<BigDecimal>().ok().map(|raw_supply| {
+                let divisor = BigDecimal::new(1.into(), -(i64::from(decimals))); // 10^decimals
+                (raw_supply / divisor).normalized().to_plain_string()
+            }),
+            None => None,
+        };
+
+        let (db_total, db_circulating, coin_gecko_id) =
+            match db_row.and_then(|row| row.total_supply) {
+                Some(raw_supply) => {
+                    let total = BigDecimal::from(1_000_000_000u64);
+                    let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64); // 10^18
+                    (
+                        Some(total.normalized().to_plain_string()),
+                        Some(
+                            (raw_supply / decimals_divisor)
+                                .normalized()
+                                .to_plain_string(),
+                        ),
+                        Some("monad".to_string()),
+                    )
+                }
+                None => (None, None, None),
+            };
+        let total_supply = onchain_total.or(db_total);
+        // circulating을 못 구하는 자산(quote/whitelist/외부)은 totalSupply로 대신 채운다.
+        let circulating_supply = db_circulating.or_else(|| total_supply.clone());
 
         let asset = Asset {
-            id: asset_row.token_id,
-            name: asset_row.name,
-            symbol: asset_row.symbol,
-            decimals: 18,
-            total_supply: Some(total_supply.normalized().to_plain_string()),
-            circulating_supply: Some(circulating_supply.normalized().to_plain_string()),
-            coin_gecko_id: Some("monad".to_string()),
+            id: token_id.to_string(),
+            name,
+            symbol,
+            decimals,
+            total_supply,
+            circulating_supply,
+            coin_gecko_id,
         };
 
         Ok(AssetResponse { asset })

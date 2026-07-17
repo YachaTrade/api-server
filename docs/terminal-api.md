@@ -96,7 +96,15 @@ V2(멀티 quote bonding curve + NadSwap DEX)부터 `/pair`와 `/events`의 값�
 
 ### 2. Asset 조회 (`GET /asset`)
 
-토큰(Asset) 정보를 조회합니다.
+자산(Asset) 정보를 조회합니다. `name`/`symbol`/`decimals`는 **온체인 ERC-20 컨트랙트에서 직접 조회**합니다
+(1시간 캐시, 실패도 캐시하여 RPC 폭주 방지). RPC 조회가 실패하면 DB 사본(`token` → `quote_token` →
+활성 `whitelist_token` 순)으로 폴백하므로, 인덱싱된 자산은 노드 장애 중에도 404가 나지 않습니다.
+
+`totalSupply`는 **온체인 `IERC20.totalSupply()`** 를 우선 사용합니다(10분 캐시, 실패도 캐시;
+human 단위 = raw ÷ 10^decimals — burn이 반영된 실제 공급량). RPC 실패 시 nadfun 자산만 기존
+고정값(10억)으로 폴백합니다. `circulatingSupply`는 온체인만으로 판별할 수 없어 nadfun `token`
+테이블 자산만 DB 기반(raw ÷ 10^18)으로 계산하며, **못 구하는 자산은 `totalSupply` 값으로 대신
+채웁니다.**
 
 #### 요청
 - **Method**: `GET`
