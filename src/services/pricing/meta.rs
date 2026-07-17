@@ -64,6 +64,57 @@ impl Default for RpcMetaSource {
     }
 }
 
+/// token_id → on-chain `IERC20.totalSupply()` (raw, ×10^decimals) 캐시.
+/// 공급량은 burn/mint로 변할 수 있어 메타(1h)보다 짧게 캐시한다.
+/// 실패도 None으로 캐시해 반복 RPC 폭주를 막는다.
+static SUPPLY_CACHE: Lazy<Cache<String, Arc<Vec<u8>>>> = Lazy::new(|| {
+    Cache::builder()
+        .time_to_live(Duration::from_secs(600))
+        .max_capacity(50_000)
+        .build()
+});
+
+impl RpcMetaSource {
+    async fn fetch_total_supply(token_id: &str) -> anyhow::Result<String> {
+        use alloy::primitives::Address;
+        use alloy::providers::ProviderBuilder;
+        use alloy::sol;
+
+        sol! {
+            #[allow(missing_docs)]
+            #[sol(rpc)]
+            interface IERC20Supply {
+                function totalSupply() external view returns (uint256);
+            }
+        }
+
+        let rpc_url: url::Url = RPC_URL.parse()?;
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
+        let addr: Address = token_id.parse()?;
+        let contract = IERC20Supply::new(addr, provider);
+
+        let supply = contract.totalSupply().call().await?;
+        Ok(supply.to_string())
+    }
+
+    /// on-chain `IERC20.totalSupply()`를 raw(×10^decimals) 십진 문자열로 반환.
+    /// 10분 캐시, 실패(비표준 컨트랙트/EOA/노드 장애)는 None으로 캐시.
+    pub async fn total_supply(token_id: &str) -> Option<String> {
+        let key = format!("supply:{token_id}");
+        let cached: anyhow::Result<Option<String>> = with_cache(&SUPPLY_CACHE, key, || async {
+            match Self::fetch_total_supply(token_id).await {
+                Ok(supply) => Ok(Some(supply)),
+                Err(e) => {
+                    warn!("total_supply RPC failed token={token_id}: {e}");
+                    Ok(None) // degrade: 실패를 None으로 캐시
+                }
+            }
+        })
+        .await;
+        cached.ok().flatten()
+    }
+}
+
 #[async_trait]
 impl TokenMetaSource for RpcMetaSource {
     async fn token_meta(&self, token_id: &str) -> Option<TokenMeta> {
