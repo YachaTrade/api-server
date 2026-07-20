@@ -8,9 +8,7 @@ use crate::{
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{
-            AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
-        },
+        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
         trend::{TrendActionResponse, TrendRequest, TrendResponse, TrendToken},
     },
     utils::{
@@ -32,7 +30,6 @@ struct TrendTokenRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: TokenVersion,
     created_at: i64,
     creator: String,
     holder_count: i64,
@@ -109,7 +106,6 @@ impl TrendController {
                 t.is_graduated,
                 t.is_nsfw,
                 t.is_cto,
-                        t.version,
                 t.created_at,
                 t.creator,
                 t.token_holder_count as holder_count,
@@ -276,7 +272,6 @@ impl From<TrendTokenRow> for TrendToken {
                     image_uri: row.creator_image_uri,
                 },
                 is_cto: row.is_cto,
-                version: row.version.clone(),
                 x_verification: None,
             },
             market_info: MarketInfo {

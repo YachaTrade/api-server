@@ -11,9 +11,7 @@ use crate::{
     types::{
         common::{
             CountRow,
-            info::{
-                AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
-            },
+            info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
             pagination::PaginationParams,
         },
         token::order::{OrderToken, OrderTokenResponse, TokenOrderType},
@@ -37,7 +35,6 @@ struct OrderTokenRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: TokenVersion,
     created_at: i64,
     creator: String,
     holder_count: i64,
@@ -136,7 +133,6 @@ impl OrderController {
                         t.is_graduated,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -258,7 +254,6 @@ impl OrderController {
                         t.is_graduated,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -359,7 +354,6 @@ impl OrderController {
                         t.is_graduated,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -521,7 +515,6 @@ impl From<OrderTokenRow> for OrderToken {
                     image_uri: row.creator_image_uri,
                 },
                 is_cto: row.is_cto,
-                version: row.version.clone(),
                 x_verification: None,
             },
             market_info: MarketInfo {
@@ -615,8 +608,8 @@ mod tests {
     async fn seed_token_market(pool: &PgPool, token_id: &str, creator: &str, quote_id: &str) {
         sqlx::query(
             "INSERT INTO token
-                (token_id, name, symbol, image_uri, creator, created_at, transaction_hash, total_supply, version)
-             VALUES ($1, 'n', 's', '', $2, 0, $3, 0, 'V2')
+                (token_id, name, symbol, image_uri, creator, created_at, transaction_hash, total_supply)
+             VALUES ($1, 'n', 's', '', $2, 0, $3, 0)
              ON CONFLICT (token_id) DO NOTHING",
         )
         .bind(token_id)

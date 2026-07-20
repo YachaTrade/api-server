@@ -14,7 +14,6 @@ use crate::{
             CountRow,
             info::{
                 AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, RewardInfo, TokenInfo,
-                TokenVersion,
             },
             pagination::PaginationParams,
         },
@@ -41,7 +40,6 @@ const TOKEN_MARKET_COLUMNS: &str = r#"
     t.is_graduated,
     t.is_nsfw,
     t.is_cto,
-    t.version,
     t.created_at as token_created_at,
     t.creator,
     t.token_holder_count as holder_count,
@@ -84,7 +82,7 @@ const TOKEN_MARKET_JOINS: &str = r#"
 "#;
 
 // Dividend-token candidate set for GET /dividend/tokens:
-//   whitelist(enabled) ∪ V1(graduated) ∪ V2(all), deduped against whitelist.
+//   whitelist(enabled) ∪ all nadfun tokens, deduped against whitelist.
 // `enriched` exposes display meta + price_usd + market_cap_usd (for ordering).
 // price_usd: dex_token_price (pool view) → market.price×quote→USD → price table
 // (whitelist/quote tokens). Appended with a SELECT/COUNT tail before execution.
@@ -96,15 +94,9 @@ WITH cand AS (
     FROM whitelist_token
     WHERE enabled AND symbol IN ('USDC','USDT','AUSD','LV','XAUt0','LVMON','WMON')
     UNION ALL
-    SELECT token_id, 'nadfun_v1'::text AS token_type, NULL::int AS sort_order
-    FROM token
-    WHERE version = 'V1' AND is_graduated
-      AND token_id NOT IN (SELECT token_id FROM whitelist_token WHERE enabled)
-    UNION ALL
     SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order
     FROM token
-    WHERE version = 'V2'
-      AND token_id NOT IN (SELECT token_id FROM whitelist_token WHERE enabled)
+    WHERE token_id NOT IN (SELECT token_id FROM whitelist_token WHERE enabled)
 ),
 enriched AS (
     SELECT
@@ -177,7 +169,6 @@ struct TokenMarketRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: TokenVersion,
     token_created_at: i64,
     creator: String,
     holder_count: i64,
@@ -226,7 +217,6 @@ fn build_token_info(row: &TokenMarketRow) -> TokenInfo {
             image_uri: row.creator_image_uri.clone(),
         },
         is_cto: row.is_cto,
-        version: row.version.clone(),
         x_verification: None,
     }
 }
@@ -803,7 +793,7 @@ impl DividendController {
 
     // ------------------------------------------------------------------
     // Dividend token search — GET /dividend/tokens
-    //   candidates: whitelist(enabled) ∪ V1(graduated) ∪ V2(all)
+    //   candidates: whitelist(enabled) ∪ all nadfun tokens
     // ------------------------------------------------------------------
 
     pub async fn get_dividend_tokens(
@@ -932,7 +922,7 @@ mod tests {
     async fn seed_base(pool: &PgPool) {
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'creator','','') ON CONFLICT DO NOTHING")
             .bind(CREATOR).execute(pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'Beak','BEAK','',$2,NULL,false,true,false,100,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'Beak','BEAK','',$2,NULL,false,true,false,100,'0xh',1000000) ON CONFLICT DO NOTHING"#)
             .bind(TOKEN).bind(CREATOR).execute(pool).await.unwrap();
         sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,NULL,0,0,1,$2,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#)
             .bind(TOKEN).bind(QUOTE).execute(pool).await.unwrap();
@@ -1158,18 +1148,17 @@ mod tests {
     }
 
     const WLTOKEN: &str = "0x000000000000000000000000000000000000Dd01";
-    const V1TOKEN: &str = "0x000000000000000000000000000000000000Dd02";
-    const V1NONGRAD: &str = "0x000000000000000000000000000000000000Dd03";
+    const OTHER_TOKEN: &str = "0x000000000000000000000000000000000000Dd02";
+    const NONGRAD_TOKEN: &str = "0x000000000000000000000000000000000000Dd03";
 
-    // Dividend token search: candidate set = whitelist ∪ V1-graduated ∪ V2;
-    // non-graduated V1 must be excluded.
+    // Dividend token search: candidate set = whitelist ∪ all nadfun tokens.
     #[sqlx::test(migrations = "./migrations-test")]
     async fn dividend_token_search(pool: PgPool) {
         seed_base(&pool).await; // TOKEN = V2 (graduated)
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'OldCoin','OLD','',$2,NULL,false,true,false,50,'0xh',1000000,'V1') ON CONFLICT DO NOTHING"#)
-            .bind(V1TOKEN).bind(CREATOR).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'CurveCoin','CRV','',$2,NULL,false,false,false,40,'0xh',1000000,'V1') ON CONFLICT DO NOTHING"#)
-            .bind(V1NONGRAD).bind(CREATOR).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'OldCoin','OLD','',$2,NULL,false,true,false,50,'0xh',1000000) ON CONFLICT DO NOTHING"#)
+            .bind(OTHER_TOKEN).bind(CREATOR).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'CurveCoin','CRV','',$2,NULL,false,false,false,40,'0xh',1000000) ON CONFLICT DO NOTHING"#)
+            .bind(NONGRAD_TOKEN).bind(CREATOR).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ($1,99,true,'USD Coin','USDC') ON CONFLICT DO NOTHING")
             .bind(WLTOKEN).execute(&pool).await.unwrap();
         // native WETH placeholder (zero address) must be excluded from results
@@ -1192,9 +1181,12 @@ mod tests {
             .unwrap();
         let ids: Vec<&str> = all.tokens.iter().map(|t| t.token_id.as_str()).collect();
         assert!(ids.contains(&WLTOKEN), "whitelist token present");
-        assert!(ids.contains(&TOKEN), "V2 token present");
-        assert!(ids.contains(&V1TOKEN), "V1 graduated token present");
-        assert!(!ids.contains(&V1NONGRAD), "V1 non-graduated excluded");
+        assert!(ids.contains(&TOKEN), "nadfun token present");
+        assert!(ids.contains(&OTHER_TOKEN), "graduated nadfun token present");
+        assert!(
+            ids.contains(&NONGRAD_TOKEN),
+            "non-graduated nadfun token present"
+        );
         assert!(
             !ids.contains(&"0x0000000000000000000000000000000000000000"),
             "zero-address (native MON) excluded"
@@ -1214,10 +1206,10 @@ mod tests {
         assert_eq!(
             all.tokens
                 .iter()
-                .find(|t| t.token_id == V1TOKEN)
+                .find(|t| t.token_id == OTHER_TOKEN)
                 .unwrap()
                 .token_type,
-            "nadfun_v1"
+            "nadfun_v2"
         );
         assert_eq!(
             all.tokens
@@ -1249,7 +1241,7 @@ mod tests {
         seed_base(&pool).await;
         // A blacklisted V2 token (matches DIVIDEND_TOKEN_BLACKLIST[0]).
         const BANNED: &str = "0x81A224F8A62f52BdE942dBF23A56df77A10b7777";
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'emonad','emo','',$2,NULL,false,true,false,60,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'emonad','emo','',$2,NULL,false,true,false,60,'0xh',1000000) ON CONFLICT DO NOTHING"#)
             .bind(BANNED).bind(CREATOR).execute(&pool).await.unwrap();
 
         let c = ctrl(pool);
