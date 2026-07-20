@@ -13,7 +13,7 @@ use crate::{
     measure_postgres,
     types::x_verification::floor_followers,
     types::{
-        common::info::{AccountInfo, TokenInfo, TokenVersion},
+        common::info::{AccountInfo, TokenInfo},
         token::{
             TokenResponse,
             x_verification::{TokenXVerification, XFollowedByEntry},
@@ -35,7 +35,6 @@ struct TokenRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: TokenVersion,
     created_at: i64,
     creator: String,
     creator_nickname: String,
@@ -82,7 +81,6 @@ impl TokenController {
                     t.is_graduated,
                     t.is_nsfw,
                     t.is_cto,
-                        t.version,
                     t.created_at,
                     t.creator,
                     COALESCE(ax.x_handle, a.nickname) as creator_nickname,
@@ -163,7 +161,6 @@ impl TokenController {
                 image_uri: row.creator_image_uri,
             },
             is_cto: row.is_cto,
-            version: row.version.clone(),
             x_verification,
         };
 
@@ -196,8 +193,8 @@ mod tests {
     async fn seed_token(pool: &PgPool, token: &str, creator: &str) {
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'c','','') ON CONFLICT DO NOTHING")
             .bind(creator).execute(pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version)
-            VALUES ($1,'T','T','',$2,NULL,false,false,false,1,'0xh',1000,'V2') ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply)
+            VALUES ($1,'T','T','',$2,NULL,false,false,false,1,'0xh',1000) ON CONFLICT DO NOTHING"#)
             .bind(token).bind(creator).execute(pool).await.unwrap();
     }
 

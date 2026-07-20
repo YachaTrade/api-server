@@ -64,7 +64,7 @@ impl AuthService {
 
         if payload.chain_id != env_chain_id {
             return Err(AppError::BadRequest(format!(
-                "Invalid chain ID. Monad test chain Id is {} your chain Id is {}",
+                "Invalid chain ID. Expected chain Id is {} your chain Id is {}",
                 env_chain_id, payload.chain_id
             )));
         }

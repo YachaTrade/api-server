@@ -314,7 +314,7 @@ impl AnalyticsController {
     }
 
     /// 토큰 기간별 거래량/크리에이터 수수료 집계.
-    /// `token.version`으로 v1/v2 분기. 토큰 미존재 시 `Ok(None)`.
+    /// 모든 token 행은 nadfun bonding-curve token이다. 토큰 미존재 시 `Ok(None)`.
     /// `to`는 배타적 상한(생략 시 상한 없음).
     /// 금액은 해당 토큰 quote token decimals(`market.quote_id` → `quote_token.decimals`)로 스케일.
     pub async fn creator_fee_stats(
@@ -323,7 +323,7 @@ impl AnalyticsController {
         from: i64,
         to: Option<i64>,
     ) -> Result<Option<CreatorFeeResponse>> {
-        // version + quote token 메타를 한 번에. token row가 없으면 Ok(None) = 404 신호.
+        // quote token 메타를 한 번에. token row가 없으면 Ok(None) = 404 신호.
         // 토큰당 market 1행(PK token_id)이므로 quote는 단일 → decimals/symbol 단일.
         // market/quote_token row가 없으면 native WMON(18 decimals)로 기본값.
         let meta: Option<TokenQuoteMetaRow> = measure_postgres!(
@@ -331,7 +331,6 @@ impl AnalyticsController {
             sqlx::query_as::<_, TokenQuoteMetaRow>(
                 r#"
                 SELECT
-                    t.version,
                     COALESCE(qt.decimals, 18) AS decimals,
                     COALESCE(qt.symbol, 'MON') AS quote_symbol,
                     COALESCE(m.quote_id, '0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A') AS quote_id
@@ -349,9 +348,7 @@ impl AnalyticsController {
         let Some(meta) = meta else {
             return Ok(None);
         };
-        let version = meta.version;
-
-        // total_volume: v1/v2 공통 (swap에 V2_CURVE/V2_DEX 행 포함)
+        // total_volume includes V2_CURVE/V2_DEX swap rows.
         let total_volume = measure_postgres!(
             "analytics.creator_fee.volume",
             sqlx::query_scalar::<_, BigDecimal>(
@@ -369,56 +366,24 @@ impl AnalyticsController {
         )
         .map_err(|err| anyhow!("Failed to fetch total volume: {}", err))?;
 
-        let (pure_raw, sell_raw, total_raw) = if version == "V2" {
-            let total = measure_postgres!(
-                "analytics.creator_fee.v2",
-                sqlx::query_scalar::<_, BigDecimal>(
-                    r#"
-                    SELECT COALESCE(SUM(amount), 0)
-                    FROM v2_creator_fee_distribution
-                    WHERE token = $1 AND event_type = 'DISTRIBUTE'
-                      AND created_at >= $2 AND ($3::bigint IS NULL OR created_at < $3)
-                    "#
-                )
-                .bind(token_id)
-                .bind(from)
-                .bind(to)
-                .fetch_one(self.db.get_read_pool())
+        let total_raw = measure_postgres!(
+            "analytics.creator_fee.v2",
+            sqlx::query_scalar::<_, BigDecimal>(
+                r#"
+                SELECT COALESCE(SUM(amount), 0)
+                FROM v2_creator_fee_distribution
+                WHERE token = $1 AND event_type = 'DISTRIBUTE'
+                  AND created_at >= $2 AND ($3::bigint IS NULL OR created_at < $3)
+                "#
             )
-            .map_err(|err| anyhow!("Failed to fetch v2 creator fee: {}", err))?;
-            // v2는 pure/sell 구분 없음
-            (BigDecimal::from(0), BigDecimal::from(0), total)
-        } else {
-            let row = measure_postgres!(
-                "analytics.creator_fee.v1",
-                sqlx::query_as::<_, CreatorFeeV1Row>(
-                    r#"
-                    WITH
-                    collect_agg AS (
-                        SELECT COALESCE(SUM(c_amount), 0) AS pure_creator_fee
-                        FROM lp_collect_history
-                        WHERE token_id = $1 AND created_at >= $2
-                          AND ($3::bigint IS NULL OR created_at < $3)
-                    ),
-                    distribute_agg AS (
-                        SELECT COALESCE(SUM(creator_amount), 0) AS sell_fee
-                        FROM fee_distribute_history
-                        WHERE token_id = $1 AND created_at >= $2
-                          AND ($3::bigint IS NULL OR created_at < $3)
-                    )
-                    SELECT c.pure_creator_fee, d.sell_fee
-                    FROM collect_agg c, distribute_agg d
-                    "#
-                )
-                .bind(token_id)
-                .bind(from)
-                .bind(to)
-                .fetch_one(self.db.get_read_pool())
-            )
-            .map_err(|err| anyhow!("Failed to fetch v1 creator fee: {}", err))?;
-            let total = &row.pure_creator_fee + &row.sell_fee;
-            (row.pure_creator_fee, row.sell_fee, total)
-        };
+            .bind(token_id)
+            .bind(from)
+            .bind(to)
+            .fetch_one(self.db.get_read_pool())
+        )
+        .map_err(|err| anyhow!("Failed to fetch v2 creator fee: {}", err))?;
+        let pure_raw = BigDecimal::from(0);
+        let sell_raw = BigDecimal::from(0);
 
         let decimals = meta.decimals;
         Ok(Some(CreatorFeeResponse {
@@ -435,16 +400,9 @@ impl AnalyticsController {
 
 #[derive(Debug, sqlx::FromRow)]
 struct TokenQuoteMetaRow {
-    version: String,
     decimals: i32,
     quote_symbol: String,
     quote_id: String,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-struct CreatorFeeV1Row {
-    pure_creator_fee: BigDecimal,
-    sell_fee: BigDecimal,
 }
 
 /// raw amount(BigDecimal)를 quote token 단위 문자열로. 10^decimals로 나눈 뒤
@@ -472,17 +430,16 @@ mod tests {
         }))
     }
 
-    async fn seed_token(pool: &PgPool, token_id: &str, version: &str) {
+    async fn seed_token(pool: &PgPool, token_id: &str) {
         sqlx::query(
             r#"INSERT INTO token
-               (token_id, name, symbol, image_uri, creator, created_at, transaction_hash, total_supply, version)
-               VALUES ($1, 'n', 's', 'u', $2, 0, $3, 0, $4)
-               ON CONFLICT (token_id) DO UPDATE SET version = EXCLUDED.version"#,
+               (token_id, name, symbol, image_uri, creator, created_at, transaction_hash, total_supply)
+               VALUES ($1, 'n', 's', 'u', $2, 0, $3, 0)
+               ON CONFLICT (token_id) DO NOTHING"#,
         )
         .bind(token_id)
         .bind(ACC)
         .bind(format!("txtok_{token_id}"))
-        .bind(version)
         .execute(pool)
         .await
         .unwrap();
@@ -506,50 +463,6 @@ mod tests {
         .bind(quote_amount)
         .bind(created_at)
         .bind(tx)
-        .execute(pool)
-        .await
-        .unwrap();
-    }
-
-    async fn seed_lp_collect(
-        pool: &PgPool,
-        token_id: &str,
-        c_amount: &str,
-        created_at: i64,
-        tx: &str,
-    ) {
-        sqlx::query(
-            r#"INSERT INTO lp_collect_history
-               (token_id, quote_amount, token_amount, c_amount, ft_amount, ct_amount,
-                transaction_hash, tx_index, log_index, created_at)
-               VALUES ($1, 0, 0, $2::NUMERIC, 0, 0, $3, 0, 0, $4)"#,
-        )
-        .bind(token_id)
-        .bind(c_amount)
-        .bind(tx)
-        .bind(created_at)
-        .execute(pool)
-        .await
-        .unwrap();
-    }
-
-    async fn seed_fee_distribute(
-        pool: &PgPool,
-        token_id: &str,
-        creator_amount: &str,
-        created_at: i64,
-        tx: &str,
-    ) {
-        sqlx::query(
-            r#"INSERT INTO fee_distribute_history
-               (transaction_hash, tx_index, log_index, token_id, token_amount, mon_received,
-                foundation_amount, creator_amount, block_number, created_at)
-               VALUES ($1, 0, 0, $2, 0, 0, 0, $3::NUMERIC, 0, $4)"#,
-        )
-        .bind(tx)
-        .bind(token_id)
-        .bind(creator_amount)
-        .bind(created_at)
         .execute(pool)
         .await
         .unwrap();
@@ -617,7 +530,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn applies_quote_token_decimals(pool: PgPool) {
         // V2 토큰이 USDC(6 decimals) quote 사용 → /10^6로 스케일되어야 함
-        seed_token(&pool, T_V2, "V2").await;
+        seed_token(&pool, T_V2).await;
         seed_quote_token(&pool, USDC, "USDC", 6).await;
         seed_market(&pool, T_V2, USDC).await;
         seed_swap(&pool, T_V2, "1000000", 1000, "s1").await; // 1e6 raw = 1.0 USDC
@@ -638,16 +551,12 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn v1_aggregates_volume_and_creator_fees(pool: PgPool) {
-        seed_token(&pool, T_V1, "V1").await;
+    async fn every_token_uses_distribution_table_and_zeros_pure_sell(pool: PgPool) {
+        seed_token(&pool, T_V1).await;
         // volume: 2 + 3 = 5 MON
         seed_swap(&pool, T_V1, &mon(2), 1000, "s1").await;
         seed_swap(&pool, T_V1, &mon(3), 2000, "s2").await;
-        // pure creator fee: 1 + 0.5 = 1.5 MON
-        seed_lp_collect(&pool, T_V1, &mon(1), 1000, "c1").await;
-        seed_lp_collect(&pool, T_V1, "500000000000000000", 2000, "c2").await;
-        // sell fee: 2 MON
-        seed_fee_distribute(&pool, T_V1, &mon(2), 1500, "d1").await;
+        seed_v2_dist(&pool, T_V1, "DISTRIBUTE", &mon(3), 1500, "d1").await;
 
         let ctrl = make_controller(pool);
         let resp = ctrl
@@ -657,16 +566,16 @@ mod tests {
             .expect("token exists");
 
         assert_eq!(resp.total_volume, "5");
-        assert_eq!(resp.pure_creator_fee, "1.5");
-        assert_eq!(resp.sell_fee, "2");
-        assert_eq!(resp.total_creator_fee, "3.5", "total = pure + sell");
+        assert_eq!(resp.pure_creator_fee, "0");
+        assert_eq!(resp.sell_fee, "0");
+        assert_eq!(resp.total_creator_fee, "3");
         assert_eq!(resp.decimals, 18, "no market row → native 18 decimals");
         assert_eq!(resp.quote_symbol, "MON");
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn v2_uses_distribution_table_and_zeros_pure_sell(pool: PgPool) {
-        seed_token(&pool, T_V2, "V2").await;
+        seed_token(&pool, T_V2).await;
         // volume still from swap: 10 MON
         seed_swap(&pool, T_V2, &mon(10), 1000, "s1").await;
         // creator fee from DISTRIBUTE events: 3 + 2 = 5 MON
@@ -674,10 +583,6 @@ mod tests {
         seed_v2_dist(&pool, T_V2, "DISTRIBUTE", &mon(2), 2000, "v2").await;
         // CallbackFail must be excluded
         seed_v2_dist(&pool, T_V2, "CallbackFail", &mon(100), 1500, "v3").await;
-        // v1 tables for this token must be ignored entirely
-        seed_lp_collect(&pool, T_V2, &mon(99), 1000, "c1").await;
-        seed_fee_distribute(&pool, T_V2, &mon(99), 1000, "d1").await;
-
         let ctrl = make_controller(pool);
         let resp = ctrl
             .creator_fee_stats(T_V2, 0, None)
@@ -697,7 +602,7 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn respects_time_range_window(pool: PgPool) {
-        seed_token(&pool, T_V1, "V1").await;
+        seed_token(&pool, T_V1).await;
         seed_swap(&pool, T_V1, &mon(1), 1000, "s1").await; // < from → excluded
         seed_swap(&pool, T_V1, &mon(2), 2000, "s2").await; // == from → included
         seed_swap(&pool, T_V1, &mon(4), 3000, "s3").await; // in range → included
@@ -715,7 +620,7 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn omitted_to_has_no_upper_bound(pool: PgPool) {
-        seed_token(&pool, T_V1, "V1").await;
+        seed_token(&pool, T_V1).await;
         seed_swap(&pool, T_V1, &mon(1), 1000, "s1").await; // < from → excluded
         seed_swap(&pool, T_V1, &mon(2), 2000, "s2").await;
         seed_swap(&pool, T_V1, &mon(4), 9999, "s3").await;
@@ -732,7 +637,7 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations-test")]
     async fn returns_zeros_when_no_data(pool: PgPool) {
-        seed_token(&pool, T_V1, "V1").await;
+        seed_token(&pool, T_V1).await;
 
         let ctrl = make_controller(pool);
         let resp = ctrl

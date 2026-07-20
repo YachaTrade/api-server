@@ -348,8 +348,8 @@ mod tests {
     async fn seed_token_market(pool: &PgPool, market_type: &str, pool_id: Option<&str>) {
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'me','','') ON CONFLICT DO NOTHING")
             .bind(ACCOUNT).execute(pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version)
-            VALUES ($1,'T','T','',$2,NULL,false,false,false,100,'0xtx',1000000000000000000000000000,'V2') ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply)
+            VALUES ($1,'T','T','',$2,NULL,false,false,false,100,'0xtx',1000000000000000000000000000) ON CONFLICT DO NOTHING"#)
             .bind(TOKEN).bind(ACCOUNT).execute(pool).await.unwrap();
         sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote)
             VALUES ($1,$2,$3,0,0,1,$4,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#)
