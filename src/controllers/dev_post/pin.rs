@@ -203,6 +203,16 @@ mod tests {
     }
 
     pub(super) async fn seed_post(pool: &sqlx::PgPool, author: &str, body: &str) -> i64 {
+        // Age existing posts for TOKEN back a day first so `posted_on`
+        // (generated from `created_at`) recomputes off today, freeing
+        // today's slot under `uq_dev_post_token_daily` for the row below.
+        sqlx::query(
+            "UPDATE dev_post SET created_at = created_at - INTERVAL '1 day' WHERE token_id = $1",
+        )
+        .bind(TOKEN)
+        .execute(pool)
+        .await
+        .unwrap();
         sqlx::query_scalar(
             "INSERT INTO dev_post (token_id, author, body) VALUES ($1, $2, $3) RETURNING id",
         )

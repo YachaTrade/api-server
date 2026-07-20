@@ -588,6 +588,17 @@ mod tests {
         .unwrap();
     }
 
+    /// Ages every existing `dev_post` row back a day so `posted_on`
+    /// (generated from `created_at`) recomputes off today, freeing today's
+    /// slot under `uq_dev_post_token_daily` for a subsequent same-token
+    /// create call in the same test.
+    async fn age_posts_one_day(pool: &sqlx::PgPool) {
+        sqlx::query("UPDATE dev_post SET created_at = created_at - INTERVAL '1 day'")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
     async fn create_text_post(service: &DevPostService, token: &str, body: &str) -> i64 {
         let post_id = service
             .create_post(
@@ -880,8 +891,11 @@ mod tests {
         let token = unique_scope();
         seed_token(&pool, &token, &token).await;
         let redis = Arc::new(RedisDatabase::new().await);
-        let service = service(pool, redis.clone());
+        let service = service(pool.clone(), redis.clone());
         for index in 0..12 {
+            if index > 0 {
+                age_posts_one_day(&pool).await;
+            }
             create_text_post(&service, &token, &format!("post-{index}")).await;
         }
         let poisoned = FeedBase {
@@ -950,7 +964,7 @@ mod tests {
         let viewer_b = unique_scope();
         seed_token(&pool, &token, &token).await;
         let redis = Arc::new(RedisDatabase::new().await);
-        let service = service(pool, redis.clone());
+        let service = service(pool.clone(), redis.clone());
         let make_request = |body: &str| CreateDevPostRequest {
             token_id: token.clone(),
             title: "Announcement".into(),
@@ -973,6 +987,7 @@ mod tests {
             .create_post(&token, &make_request("ordinary"))
             .await
             .unwrap();
+        age_posts_one_day(&pool).await;
         let pin = service
             .create_post(&token, &make_request("pin"))
             .await
