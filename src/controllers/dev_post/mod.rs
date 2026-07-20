@@ -953,7 +953,7 @@ mod tests {
             .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_stores_title_and_empty_description_separately(pool: sqlx::PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
         let controller = controller(pool.clone());
@@ -974,7 +974,7 @@ mod tests {
         assert_eq!(response.body, "");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_title_tristate_is_atomic_with_body_and_images(pool: sqlx::PgPool) {
         let id = seed_titled_post(&pool, "Original", "description").await;
         let controller = controller(pool.clone());
@@ -1000,7 +1000,7 @@ mod tests {
         assert!(response.is_edited);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn every_read_surface_returns_title_and_description_only_body(pool: sqlx::PgPool) {
         let id = seed_titled_post(
             &pool,
@@ -1030,7 +1030,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_title_body_and_images_roll_back_atomically(pool: sqlx::PgPool) {
         let id = seed_titled_post_with_image(&pool, "Original", "description", "old-image").await;
         sqlx::raw_sql(
@@ -1092,7 +1092,7 @@ mod tests {
         .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_rejects_non_creator(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool);
@@ -1107,7 +1107,7 @@ mod tests {
         assert!(matches!(err, AppError::Forbidden(_)));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_rejects_missing_token(pool: sqlx::PgPool) {
         let c = ctl(pool);
         let req = CreateDevPostRequest {
@@ -1121,7 +1121,7 @@ mod tests {
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_with_images_and_poll(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1167,7 +1167,7 @@ mod tests {
         assert_eq!((closes.1 - closes.0).num_days(), 14);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_by_non_author_forbidden(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool);
@@ -1199,7 +1199,7 @@ mod tests {
         assert!(matches!(err, AppError::Forbidden(_)));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_updates_body_and_replaces_images(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1243,7 +1243,7 @@ mod tests {
         assert_eq!(imgs, vec!["new1".to_string(), "new2".to_string()]);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_missing_post_not_found(pool: sqlx::PgPool) {
         let c = ctl(pool);
         let err = c
@@ -1261,7 +1261,7 @@ mod tests {
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn delete_soft_hides_post(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1288,7 +1288,7 @@ mod tests {
         assert!(deleted.is_some());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn delete_by_non_author_forbidden(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool);
@@ -1309,14 +1309,14 @@ mod tests {
         assert!(matches!(err, AppError::Forbidden(_)));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn delete_missing_post_not_found(pool: sqlx::PgPool) {
         let c = ctl(pool);
         let err = c.delete_post(999, "0xCreator").await.unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn like_is_idempotent_toggle(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1340,7 +1340,7 @@ mod tests {
         assert_eq!(c.unlike(id, "0xUser").await.unwrap(), 1); // idempotent
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn like_deleted_post_404(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1364,7 +1364,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn vote_then_change(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1383,7 +1383,7 @@ mod tests {
         assert_eq!(n, 1); // still exactly one vote row
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn vote_bad_option_400(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1394,7 +1394,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn vote_closed_poll_409(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1412,7 +1412,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn feed_excludes_deleted_and_orders_newest_first(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1450,7 +1450,7 @@ mod tests {
         assert!(!feed.posts[0].liked_by_me);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_post_rw_hydrates_from_write_pool(pool: sqlx::PgPool) {
         // Single test pool can't simulate replica lag, so this only proves
         // get_post_rw hydrates correctly on the write pool. The read-after-write
@@ -1477,7 +1477,7 @@ mod tests {
         assert_eq!(r.body, "gm from write pool");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn detail_personalization_and_poll(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1495,7 +1495,7 @@ mod tests {
 
     /// All coins tie on (total_likes=0, last_posted_at): without a unique final sort
     /// key, OFFSET paging can repeat one coin across pages and drop another.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn ranking_pages_are_disjoint_when_sort_keys_tie(pool: sqlx::PgPool) {
         let c = ctl(pool.clone());
         for i in 0..6 {
@@ -1536,7 +1536,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn ranking_and_trending_by_likes(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1564,7 +1564,7 @@ mod tests {
         assert_eq!(trending[0].id, p.to_string());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn trending_falls_back_to_newest_when_no_likes(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1594,7 +1594,7 @@ mod tests {
         assert_eq!(got, want);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hydrate_base_has_no_personalization(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1607,7 +1607,7 @@ mod tests {
         assert_eq!(base[0].like_count, 1); // counts ARE in base
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn apply_personalization_overlays_viewer(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1628,7 +1628,7 @@ mod tests {
         assert!(!base2[0].liked_by_me);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_and_delete_return_token_id(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool);
@@ -1669,7 +1669,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn ranking_populates_market_cap_usd(pool: sqlx::PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
         set_total_supply(&pool, TOKEN, "1000000000000000000000000").await; // 1,000,000 tokens, raw ×10^18
@@ -1693,7 +1693,7 @@ mod tests {
         assert_eq!(rank[0].token.market_cap, Some("1000000".to_string()));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hydrate_populates_market_cap_usd(pool: sqlx::PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
         set_total_supply(&pool, TOKEN, "1000000").await;
@@ -1717,7 +1717,7 @@ mod tests {
         assert_eq!(post.token.market_cap, Some("1000000".to_string()));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn market_cap_zero_when_quote_price_missing(pool: sqlx::PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
         set_total_supply(&pool, TOKEN, "1000000").await;
@@ -1740,7 +1740,7 @@ mod tests {
         assert_eq!(post.token.market_cap, Some("0".to_string()));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn market_cap_null_when_no_market_row(pool: sqlx::PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
         let c = ctl(pool.clone());
@@ -1771,7 +1771,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn posts_up_to_daily_limit_then_429(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool);
@@ -1789,7 +1789,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn post_allowed_next_utc_day(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool.clone());
@@ -1800,7 +1800,7 @@ mod tests {
         c.create_post("0xCreator", &daily_req()).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn daily_limit_survives_delete(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let c = ctl(pool);
@@ -1814,7 +1814,7 @@ mod tests {
         assert!(matches!(err, AppError::TooManyRequests { .. }));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn daily_limit_is_per_token(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         seed_token(&pool, "0xOther", "0xCreator").await;

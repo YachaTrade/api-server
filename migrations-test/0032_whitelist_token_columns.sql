@@ -1,1 +1,0 @@
-../migrations/0032_whitelist_token_columns.sql

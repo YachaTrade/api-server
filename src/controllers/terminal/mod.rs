@@ -384,7 +384,7 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_pair_returns_quote_id_and_fee_config(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         sqlx::query(r#"INSERT INTO fee_config (pair_id,token_id,creator_fee_rate,curve_protocol_fee_rate,dex_protocol_fee_rate,created_at)
@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(row.dex_protocol_fee_rate, Some(30));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_pair_without_fee_config_is_none(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         let row = ctrl(pool).get_pair_by_pool_id(POOL).await.unwrap();
@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(row.creator_fee_rate, None);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_pair_only_returns_dex_markets(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
 
@@ -437,7 +437,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_swap_events_carry_quote_id_and_market_type(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         sqlx::query(r#"INSERT INTO swap (account_id,token_id,market_type,is_buy,quote_amount,token_amount,reserve_quote,reserve_token,value,created_at,transaction_hash,block_number,tx_index,log_index)
@@ -450,7 +450,7 @@ mod tests {
         assert_eq!(rows[0].market_type, "V2_DEX");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_events_only_returns_dex_and_uses_swap_market_type(pool: PgPool) {
         // Current market stays V2_DEX; historical eligibility must use each swap row.
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
@@ -489,7 +489,7 @@ mod tests {
         assert_eq!(transactions, vec!["0xdex", "0xv2dex"]);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_mint_events_only_return_dex_markets(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         sqlx::query(r#"INSERT INTO mint (token_id,account_id,market_id,quote_amount,token_amount,reserve_quote,reserve_token,created_at,transaction_hash,block_number,tx_index,log_index)
@@ -522,7 +522,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_burn_events_only_return_dex_markets(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         sqlx::query(r#"INSERT INTO burn (token_id,account_id,market_id,quote_amount,token_amount,reserve_quote,reserve_token,created_at,transaction_hash,block_number,tx_index,log_index)
@@ -555,7 +555,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn block_number_by_tx_none_when_no_balance_history(pool: PgPool) {
         // A token created without an initial buy has no balance_history row for
         // its creation tx. get_block_number_by_tx must return None, not error.
@@ -566,7 +566,7 @@ mod tests {
         assert_eq!(got, None);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn block_number_by_tx_some_when_present(pool: PgPool) {
         sqlx::query(r#"INSERT INTO balance_history (token_id,account_id,balance,block_number,transaction_hash,log_index,tx_index)
             VALUES ($1,$2,0,12345,'0xseedtx',0,0)"#)
@@ -575,7 +575,7 @@ mod tests {
         assert_eq!(got, Some(12345));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_asset_prefers_token_table(pool: PgPool) {
         seed_token_market(&pool, "V2_DEX", Some(POOL)).await;
         // 같은 주소가 whitelist에도 있어도 token 테이블이 우선 (supply 보존)
@@ -588,7 +588,7 @@ mod tests {
         assert!(row.total_supply.is_some(), "nadfun token must keep supply");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_asset_falls_back_to_quote_token(pool: PgPool) {
         // 마이그레이션이 시딩하는 quote(WMON/LVMON 등)와 겹치지 않는 신선한 주소
         const QUOTE_FRESH: &str = "0x00000000000000000000000000000000000000d2";
@@ -601,7 +601,7 @@ mod tests {
         assert!(row.total_supply.is_none(), "quote asset carries no supply");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_asset_falls_back_to_enabled_whitelist(pool: PgPool) {
         const WL: &str = "0x00000000000000000000000000000000000000e1";
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol,decimals) VALUES ($1,0,true,'Wrapped X','WX',6)")

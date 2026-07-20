@@ -28,7 +28,7 @@ struct VaultRow {
     vault_type: VaultType,
     active: bool,
 
-    // BURN — `v2_burn_vault_stats`
+    // BURN — `burn_vault_stats`
     burn_quote_spent: Option<BigDecimal>,
     // USD aggregates: COALESCE'd in SQL so they're never NULL — plain BigDecimal.
     burn_quote_spent_usd: BigDecimal,
@@ -36,7 +36,7 @@ struct VaultRow {
     burn_count: Option<i32>,
     burn_updated_at: Option<i64>,
 
-    // LP — `v2_lp_vault_stats`
+    // LP — `lp_vault_stats`
     lp_quote_injected: Option<BigDecimal>,
     lp_quote_injected_usd: BigDecimal,
     lp_token_injected: Option<BigDecimal>,
@@ -44,7 +44,7 @@ struct VaultRow {
     lp_inject_count: Option<i32>,
     lp_updated_at: Option<i64>,
 
-    // CREATOR_FEE — `v2_creator_fee_vault_stats`
+    // CREATOR_FEE — `creator_fee_vault_stats`
     cf_current_balance: Option<BigDecimal>,
     // current_balance_usd: live `current_balance × latest_price / 10^decimals`,
     // COALESCE'd to 0 when no price row.
@@ -58,7 +58,7 @@ struct VaultRow {
     cf_updated_at: Option<i64>,
     cf_creator_id: Option<String>,
 
-    // GIFT — `v2_gift_vault_stats`
+    // GIFT — `gift_vault_stats`
     gift_current_state: Option<String>,
     gift_current_balance: Option<BigDecimal>,
     gift_current_balance_usd: BigDecimal,
@@ -76,7 +76,7 @@ struct VaultRow {
     gift_buyback_tokens: Option<BigDecimal>,
     gift_updated_at: Option<i64>,
     // GIFT verification window — both columns are NOT NULL with default 0
-    // on v2_gift_vault_stats; they're Option<i64> here only because the
+    // on gift_vault_stats; they're Option<i64> here only because the
     // outer LEFT JOIN can produce NULL rows for non-GIFT vaults.
     gift_expires_at: Option<i64>,
     gift_receiver_set_at: Option<i64>,
@@ -85,7 +85,7 @@ struct VaultRow {
     token_symbol: Option<String>,
     quote_symbol: Option<String>,
 
-    // Per-(token, vault) distributed fee total — `v2_creator_fee_distribution_stats`.
+    // Per-(token, vault) distributed fee total — `creator_fee_distribution_stats`.
     dist_distributed_quote: Option<BigDecimal>,
     dist_distributed_quote_usd: BigDecimal,
     // Token's market.quote_id — used to denote `total_quote_amount`.
@@ -166,16 +166,16 @@ impl VaultController {
                     COALESCE(dist.distributed_quote, 0)     AS dist_distributed_quote,
                     COALESCE(dist.distributed_quote_usd, 0) AS dist_distributed_quote_usd,
                     mk.quote_id                             AS market_quote_id
-                FROM v2_creator_fee_allocation a
-                JOIN v2_vault_metadata m
+                FROM creator_fee_allocation a
+                JOIN vault_metadata m
                     ON m.vault_id = a.vault_id
-                LEFT JOIN v2_burn_vault_stats burn
+                LEFT JOIN burn_vault_stats burn
                     ON m.vault_type = 'BURN' AND burn.token_id = a.token_id
-                LEFT JOIN v2_lp_vault_stats lp
+                LEFT JOIN lp_vault_stats lp
                     ON m.vault_type = 'LP' AND lp.token_id = a.token_id
-                LEFT JOIN v2_creator_fee_vault_stats cf
+                LEFT JOIN creator_fee_vault_stats cf
                     ON m.vault_type = 'CREATOR_FEE' AND cf.token_id = a.token_id
-                LEFT JOIN v2_gift_vault_stats g
+                LEFT JOIN gift_vault_stats g
                     ON m.vault_type = 'GIFT' AND g.token_id = a.token_id
                 LEFT JOIN token tk
                     ON tk.token_id = a.token_id
@@ -190,7 +190,7 @@ impl VaultController {
                     ORDER BY p.block_number DESC
                     LIMIT 1
                 ) lp_price ON true
-                LEFT JOIN v2_creator_fee_distribution_stats dist
+                LEFT JOIN creator_fee_distribution_stats dist
                     ON dist.token_id = a.token_id AND dist.vault_id = a.vault_id
                 WHERE a.token_id = $1
                 ORDER BY a.bps DESC
@@ -268,8 +268,8 @@ impl VaultController {
                     COALESCE(wl.symbol, qt.symbol, tk.symbol, '') AS dt_symbol,
                     COALESCE(wl.decimals, qt.decimals, 18) AS dt_decimals,
                     COALESCE(wl.image_uri, qt.image_uri, tk.image_uri, '') AS dt_image_uri
-                FROM v2_dividend_setups s
-                LEFT JOIN v2_dividend_vault_stats st
+                FROM dividend_setups s
+                LEFT JOIN dividend_vault_stats st
                     ON st.source_token = s.source_token AND st.dividend_token = s.dividend_token
                 LEFT JOIN whitelist_token wl ON wl.token_id = s.dividend_token AND wl.enabled
                 LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
@@ -481,7 +481,7 @@ mod tests {
     use sqlx::PgPool;
 
     const TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
-    const QUOTE: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"; // MON (seeded)
+    const QUOTE: &str = "0x4200000000000000000000000000000000000006"; // WETH (seeded)
     const DIV2: &str = "0x000000000000000000000000000000000000Cc01";
     const HOLDER: &str = "0x000000000000000000000000000000000000Aa01";
     const HOLDER2: &str = "0x000000000000000000000000000000000000Aa02";
@@ -495,13 +495,21 @@ mod tests {
 
     // DIVIDEND vault stats: per-token breakdown + allocated volume + USD total +
     // eligibility recipient count (balance >= contract min_balance) + last executed.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn dividend_vault_stats(pool: PgPool) {
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,2500,10,0,'0xs1',1,1,0,0)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,2500,10,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,7500,10,1,'0xs1',1,1,0,1)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,7500,10,1,'0xs1',1,1,0,1)"#)
             .bind(TOKEN).bind(DIV2).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_vault_stats (source_token,dividend_token,total_deposited,total_deposited_usd,total_pending_deposited,total_pending_deposited_usd,dividend_balance,updated_at) VALUES ($1,$2,400,800,100,200,1000,50)"#)
+        // dividend_setups seeds this pair through the deployment-schema trigger.
+        sqlx::query(r#"INSERT INTO dividend_vault_stats (source_token,dividend_token,total_deposited,total_deposited_usd,total_pending_deposited,total_pending_deposited_usd,dividend_balance,updated_at) VALUES ($1,$2,400,800,100,200,1000,50)
+            ON CONFLICT (source_token, dividend_token) DO UPDATE SET
+                total_deposited = EXCLUDED.total_deposited,
+                total_deposited_usd = EXCLUDED.total_deposited_usd,
+                total_pending_deposited = EXCLUDED.total_pending_deposited,
+                total_pending_deposited_usd = EXCLUDED.total_pending_deposited_usd,
+                dividend_balance = EXCLUDED.dividend_balance,
+                updated_at = EXCLUDED.updated_at"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // Eligibility is read from `balance`, not the published distribution, so it
         // is populated before any merkle snapshot. HOLDER (20 >= 10) qualifies,
@@ -538,13 +546,13 @@ mod tests {
     // recipient_count excludes system holders: the token contract itself, its DEX
     // pool (market.pool_id), and the null/dead burn sinks (DIVIDEND_RECIPIENT_BLACKLIST
     // always carries zero + dead). Only real eligible holders are counted.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn dividend_recipient_count_excludes_system_holders(pool: PgPool) {
         const POOL: &str = "0x00000000000000000000000000000000000000F1";
         const ZERO: &str = "0x0000000000000000000000000000000000000000";
         const DEAD: &str = "0x000000000000000000000000000000000000dEaD";
 
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,10,0,'0xs1',1,1,0,0)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,10,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // DEX pool of the token — its pair holds reserves, not a real recipient.
         sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,$2,0,0,1,$3,0,0,0,0,0)"#)

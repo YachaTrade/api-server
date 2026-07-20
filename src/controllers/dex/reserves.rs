@@ -82,7 +82,7 @@ mod tests {
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn returns_reserves_for_existing_pool(pool: PgPool) {
         seed_pool(&pool).await;
         let controller = make_controller(pool);
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(r.block_number, 987654);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn returns_none_for_missing_pool(pool: PgPool) {
         let controller = make_controller(pool);
         let r = controller.get_reserves(POOL_ADDR).await.unwrap();

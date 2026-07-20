@@ -661,6 +661,7 @@ mod tests {
 
     const WL_A: &str = "0x000000000000000000000000000000000000cC01"; // whitelist sort 1
     const WL_B: &str = "0x000000000000000000000000000000000000cC02"; // whitelist sort 2
+    const SEEDED_WETH: &str = "0x4200000000000000000000000000000000000006";
 
     // -----------------------------------------------------------------------
     // Fake sources
@@ -826,12 +827,23 @@ mod tests {
         .unwrap();
     }
 
+    async fn remove_seeded_whitelist(pool: &PgPool) {
+        // These tests isolate pool/default-list behavior from the deployment's
+        // always-present WETH whitelist entry.
+        sqlx::query("DELETE FROM whitelist_token WHERE token_id = $1")
+            .bind(SEEDED_WETH)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
     // -----------------------------------------------------------------------
     // Existing tests
     // -----------------------------------------------------------------------
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn lists_only_whitelist_and_nadfun_v2(pool: PgPool) {
+        remove_seeded_whitelist(&pool).await;
         seed_pool_with_two_tokens(&pool).await;
         // CHOG is a nadfun token-table candidate.
         let controller = make_controller(pool);
@@ -858,7 +870,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn includes_balance_when_account_provided(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         // CHOG is a nadfun token-table candidate.
@@ -897,15 +909,15 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn pagination_returns_total_count(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         // CHOG is a nadfun token-table candidate.
-        // Add a whitelist token so total_count = 2
+        // Add a whitelist token; deployment-seeded WETH makes total_count = 3.
         seed_whitelist(&pool, WL_A, 1).await;
         let controller = make_controller(pool);
 
-        // Page 1, limit 1 → 1 token returned, total_count = 2
+        // Page 1, limit 1 → 1 token returned, total_count = 3
         let resp = controller
             .list_tokens(&DexTokenListQuery {
                 account: None,
@@ -916,9 +928,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.tokens.len(), 1);
-        assert_eq!(resp.total_count, 2, "total_count = all matching rows");
+        assert_eq!(resp.total_count, 3, "total_count = all matching rows");
 
-        // Page 2, limit 1 → 1 token returned, total_count still = 2
+        // Page 2, limit 1 → 1 token returned, total_count still = 3
         let resp2 = controller
             .list_tokens(&DexTokenListQuery {
                 account: None,
@@ -929,22 +941,23 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp2.tokens.len(), 1);
-        assert_eq!(resp2.total_count, 2, "total_count consistent across pages");
+        assert_eq!(resp2.total_count, 3, "total_count consistent across pages");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn returns_empty_when_no_pools(pool: PgPool) {
+        remove_seeded_whitelist(&pool).await;
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
         assert!(resp.tokens.is_empty());
         assert_eq!(resp.total_count, 0);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn pagination_out_of_range_page_returns_correct_total_count(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         // CHOG is a nadfun token-table candidate.
-        // Add a whitelist token so total_count = 2
+        // Add a whitelist token; deployment-seeded WETH makes total_count = 3.
         seed_whitelist(&pool, WL_A, 1).await;
         let controller = make_controller(pool);
         let resp = controller
@@ -956,15 +969,16 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(resp.tokens.is_empty(), "page 99 of 2-token list is empty");
+        assert!(resp.tokens.is_empty(), "page 99 of 3-token list is empty");
         assert_eq!(
-            resp.total_count, 2,
+            resp.total_count, 3,
             "total count still reflects all matches"
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn default_no_account_orders_whitelist_then_v2(pool: PgPool) {
+        remove_seeded_whitelist(&pool).await;
         seed_pool_with_two_tokens(&pool).await;
         seed_whitelist(&pool, WL_A, 1).await;
         seed_whitelist(&pool, WL_B, 2).await;
@@ -981,7 +995,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn default_with_account_orders_four_tiers(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         seed_whitelist(&pool, WL_A, 1).await; // 미보유 화이트리스트 → tier3
@@ -1023,8 +1037,9 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn account_unheld_whitelist_sorted_by_sort_order(pool: PgPool) {
+        remove_seeded_whitelist(&pool).await;
         seed_pool_with_two_tokens(&pool).await;
         // WL_A = ...cC01, WL_B = ...cC02. sort_order intentionally reversed vs token_id.
         seed_whitelist(&pool, WL_A, 2).await;
@@ -1057,8 +1072,9 @@ mod tests {
     // Task 4 — external exclusion from default list
     // -----------------------------------------------------------------------
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn external_excluded_from_default(pool: PgPool) {
+        remove_seeded_whitelist(&pool).await;
         seed_pool_with_two_tokens(&pool).await;
         // CHOG is a nadfun token row; WMON is external (dex_token only).
         let controller = make_controller(pool);
@@ -1073,7 +1089,7 @@ mod tests {
     // Task 5 — search behaviors
     // -----------------------------------------------------------------------
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_text_prefix_only(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
@@ -1100,7 +1116,7 @@ mod tests {
         assert!(miss.tokens.is_empty(), "substring 매칭 금지 (prefix만)");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_full_ca_exposes_external(pool: PgPool) {
         sqlx::query(
             r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
@@ -1127,7 +1143,7 @@ mod tests {
 
     /// Policy change: CA search (incl. partial) now covers dex_token, so indexed
     /// external tokens surface by CA prefix too (was: partial-CA excluded external).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_partial_ca_includes_external(pool: PgPool) {
         sqlx::query(
             r#"INSERT INTO dex_token (token_id, name, symbol, decimals, image_uri, created_at)
@@ -1159,7 +1175,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_full_ca_nonexistent_returns_empty(pool: PgPool) {
         let controller = make_controller(pool);
         let resp = controller
@@ -1179,7 +1195,7 @@ mod tests {
 
     /// Policy change: name/symbol search now covers dex_token, so an external
     /// token whose symbol prefix-matches surfaces (was: text search excluded external).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_text_includes_external_symbol_match(pool: PgPool) {
         // external token (dex_token only) whose symbol matches the "CHO" prefix
         sqlx::query(
@@ -1212,7 +1228,7 @@ mod tests {
     }
 
     /// A token-table row surfaces in name/symbol search as nadfun_v2.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_text_labels_token_row_nadfun_v2(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
@@ -1234,7 +1250,7 @@ mod tests {
     }
 
     /// Search: a held nadfun token (balance > 0) sorts above unheld external results.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_held_nadfun_sorts_above_unheld(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // hold CHOG
@@ -1276,7 +1292,7 @@ mod tests {
     }
 
     /// Nadfun token found by partial CA is labeled nadfun_v2.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_partial_ca_finds_nadfun(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
@@ -1299,7 +1315,7 @@ mod tests {
     }
 
     /// Full-CA on a token-table row labels it nadfun_v2.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_full_ca_token_row_labeled_nadfun_v2(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
@@ -1365,7 +1381,7 @@ mod tests {
 
     const WL_FEED: &str = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_balance_from_rpc_and_usd_from_price_usd_table(pool: PgPool) {
         seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
         // latest price_usd row → $1.5 (no external price source)
@@ -1401,7 +1417,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_unheld_has_null_balance_and_no_price_call(pool: PgPool) {
         seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
         let bal = FakeBalance::default(); // 잔액 없음 → 미보유
@@ -1420,7 +1436,7 @@ mod tests {
         assert!(t.balance_usd.is_none(), "미보유 → balance_usd null");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn no_account_skips_balance_source(pool: PgPool) {
         seed_whitelist_with_feed(&pool, WL_A, 1, WL_FEED).await;
         let bal = std::sync::Arc::new(FakeBalance::default());
@@ -1442,7 +1458,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_uses_own_metadata_over_join_tables(pool: PgPool) {
         // whitelist_token에 직접 넣은 name/symbol/image_uri는 token/dex_token/quote_token
         // 행이 전혀 없어도 그대로 노출돼야 한다 (whitelist는 self-described 우선).
@@ -1476,7 +1492,7 @@ mod tests {
 
     /// Token present ONLY in whitelist_token (not in token/dex_token/quote_token).
     /// Full-CA search must return it with token_type="whitelist".
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_full_ca_returns_whitelist_only_token(pool: PgPool) {
         // WL_A exists only in whitelist_token — no row in token/dex_token/quote_token.
         sqlx::query(
@@ -1522,7 +1538,7 @@ mod tests {
     /// Proves the P2 ordering bug is fixed:
     /// A whitelist token with NO DB balance row (off-DEX) but held on-chain (RPC)
     /// must sort as tier=1 and appear BEFORE a held nadfun V2 token (tier=2).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn held_whitelist_rpc_sorts_before_held_v2(pool: PgPool) {
         // Seed: CHOG as nadfun V2, account holds it in DB balance (tier 2).
         seed_pool_with_two_tokens(&pool).await;
@@ -1581,7 +1597,7 @@ mod tests {
     async fn seed_market_price(pool: &PgPool, token_id: &str, market_price: &str, quote_usd: &str) {
         // market.quote_id and price.quote_id MUST match exactly (case-sensitive
         // join), so pin both to the same address rather than relying on defaults.
-        const MON_QUOTE: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
+        const MON_QUOTE: &str = "0x4200000000000000000000000000000000000006";
         sqlx::query(
             r#"INSERT INTO market (market_type, token_id, price, quote_id, latest_trade_at, created_at)
                VALUES ('V2_DEX', $1, $2::NUMERIC, $3, 0, 0)"#,
@@ -1600,7 +1616,7 @@ mod tests {
 
     /// whitelist price_usd comes from the price_usd table and must be present even with
     /// NO account (price is account-independent), truncated to 8 decimals.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn price_usd_for_whitelist_without_account(pool: PgPool) {
         const FEED: &str = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         seed_whitelist_with_feed(&pool, WL_A, 1, FEED).await;
@@ -1626,7 +1642,7 @@ mod tests {
     }
 
     /// nadfun_v2 price_usd = market.price × quote→USD, from SQL, account-independent.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn price_usd_for_v2_from_market(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         // m.price=3, quote→USD=0.5 → price_usd = 1.5
@@ -1666,7 +1682,7 @@ mod tests {
 
     /// pure-DEX nadfun_v2 token with NO market row: price_usd must come from the
     /// dex_token_price view (deepest-TVL pool's per-token USD), not market.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn price_usd_for_pure_dex_v2_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         // No market row. Observer set TOKEN0 (token0 side) USD price = 0.5 on the pool.
@@ -1689,7 +1705,7 @@ mod tests {
     /// Held pure-DEX token (pool-view price, no market row): balance_usd must use
     /// the same unit price as price_usd. codex P2 — was null because balance_usd
     /// only multiplied the market path (m.price × lp.price).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn balance_usd_for_held_pure_dex_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         seed_pool_token_price_usd(&pool, 0, "0.5").await; // pool view unit price, NO market row
@@ -1730,7 +1746,7 @@ mod tests {
 
     /// When both a market row and a pool view price exist, the pool view wins
     /// (COALESCE(view, market) — pool is the canonical single source).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn price_usd_pool_view_takes_precedence_over_market(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         // market path would yield 3 × 0.5 = 1.5; pool view yields 0.5 → view wins.
@@ -1753,7 +1769,7 @@ mod tests {
 
     /// Full-CA search path resolves price_usd from the pool view too (second SQL
     /// builder: search_full_ca_sql). Pure-dex token, no market row.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn price_usd_full_ca_search_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         seed_pool_token_price_usd(&pool, 0, "0.25").await;
@@ -1789,7 +1805,7 @@ mod tests {
 
     /// full CA that is in NO table → fall back to on-chain meta and surface it
     /// as an external token (name/symbol/decimals from RPC, price/balance null).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_full_ca_rpc_fallback_external(pool: PgPool) {
         let mut meta = FakeMeta::default();
         meta.metas.insert(
@@ -1825,7 +1841,7 @@ mod tests {
     }
 
     /// meta source present but the address resolves to nothing on-chain → empty.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn search_full_ca_meta_miss_returns_empty(pool: PgPool) {
         let controller =
             make_controller(pool).with_meta_source(std::sync::Arc::new(FakeMeta::default()));

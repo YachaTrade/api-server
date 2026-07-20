@@ -24,7 +24,7 @@ use crate::{
 
 /// Tokens where the given account is bound as the gift vault receiver.
 /// Mirrors `TokenCreatedController` shape — same `TokenCreatedInfo` rows,
-/// just anchored on `v2_gift_vault_stats.receiver` instead of `token.creator`.
+/// just anchored on `gift_vault_stats.receiver` instead of `token.creator`.
 pub struct GiftFeeController {
     db: Arc<PostgresDatabase>,
 }
@@ -41,7 +41,7 @@ impl GiftFeeController {
                 r#"
                 SELECT COUNT(DISTINCT mm.token_id)::bigint as count
                 FROM (
-                    SELECT token_id FROM v2_gift_vault_stats WHERE receiver = $1
+                    SELECT token_id FROM gift_vault_stats WHERE receiver = $1
                     UNION
                     SELECT m.token_id FROM lp_position lp
                         JOIN market m ON m.pool_id = lp.pool_id
@@ -164,7 +164,7 @@ impl GiftFeeController {
                     SELECT token_id, amt FROM unnest($4::varchar[], $5::numeric[]) AS u(token_id, amt)
                 ),
                 member_ids AS (
-                    SELECT token_id FROM v2_gift_vault_stats WHERE receiver = $1
+                    SELECT token_id FROM gift_vault_stats WHERE receiver = $1
                     UNION
                     SELECT m.token_id FROM lp_position lp
                         JOIN market m ON m.pool_id = lp.pool_id
@@ -180,7 +180,7 @@ impl GiftFeeController {
                     FROM member_ids mi
                     JOIN token tk  ON tk.token_id = mi.token_id
                     JOIN market mk ON mk.token_id = mi.token_id
-                    LEFT JOIN v2_gift_vault_stats g ON g.token_id = mi.token_id AND g.receiver = $1
+                    LEFT JOIN gift_vault_stats g ON g.token_id = mi.token_id AND g.receiver = $1
                     ORDER BY g.current_balance DESC NULLS LAST, g.updated_at DESC NULLS LAST, mi.token_id ASC
                     LIMIT $2 OFFSET $3
                 )
@@ -396,7 +396,7 @@ mod tests {
     const GIFT_TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
     const LP_TOKEN: &str = "0x000000000000000000000000000000000000Bb09";
     const POOL_ID: &str = "0x000000000000000000000000000000000000Cc09";
-    const QUOTE_ID: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
+    const QUOTE_ID: &str = "0x4200000000000000000000000000000000000006";
 
     fn ctrl(pool: PgPool) -> GiftFeeController {
         GiftFeeController::new(Arc::new(crate::db::postgres::PostgresDatabase {
@@ -405,7 +405,7 @@ mod tests {
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn gift_fee_union_lp_only_sorts_last(pool: PgPool) {
         for (a, n) in [(ACCOUNT, "me"), (OTHER, "other")] {
             sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,$2,'','') ON CONFLICT DO NOTHING").bind(a).bind(n).execute(&pool).await.unwrap();
@@ -422,7 +422,7 @@ mod tests {
         sqlx::query(r#"INSERT INTO market (market_type,token_id,pool_id,reserve_token,reserve_quote,price,quote_id,latest_trade_at,created_at,volume,ath_price,ath_price_quote) VALUES ('V2_DEX',$1,$2,10000,20000,1,$3,0,0,0,0,0) ON CONFLICT (token_id) DO NOTHING"#).bind(LP_TOKEN).bind(POOL_ID).bind(QUOTE_ID).execute(&pool).await.unwrap();
         sqlx::query(r#"INSERT INTO lp_position (account_id,pool_id,lp_in,lp_out,token0_in,token0_out,token1_in,token1_out,token0_in_usd,token0_out_usd,token1_in_usd,token1_out_usd,created_at,updated_at,epoch_start_block,epoch_start_tx_index,epoch_start_log_index) VALUES ($1,$2,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0) ON CONFLICT DO NOTHING"#).bind(ACCOUNT).bind(POOL_ID).execute(&pool).await.unwrap();
         // gift vault: ACCOUNT receives fees for GIFT_TOKEN
-        sqlx::query(r#"INSERT INTO v2_gift_vault_stats (token_id,receiver,current_balance,total_claimed,updated_at) VALUES ($1,$2,999,0,0) ON CONFLICT DO NOTHING"#).bind(GIFT_TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
+        sqlx::query(r#"INSERT INTO gift_vault_stats (token_id,receiver,current_balance,total_claimed,updated_at) VALUES ($1,$2,999,0,0) ON CONFLICT DO NOTHING"#).bind(GIFT_TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
 
         let p = PaginationParams {
             page: 1,

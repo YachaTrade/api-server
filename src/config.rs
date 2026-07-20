@@ -158,7 +158,7 @@ lazy_static! {
     pub static ref V2_TOKEN_IMPL: String = env::var("V2_TOKEN_IMPL")
         .expect("V2_TOKEN_IMPL must be set");
     // Singleton DividendVault address. Identifies the dividend fee-split
-    // allocation (v2_creator_fee_allocation.vault_id) for the "Dividend %" card.
+    // allocation (creator_fee_allocation.vault_id) for the "Dividend %" card.
     // Optional: empty -> dividend_bps reports 0 (feature degrades gracefully).
     pub static ref V2_DIVIDEND_VAULT: String = env::var("V2_DIVIDEND_VAULT")
         .unwrap_or_default();

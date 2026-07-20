@@ -61,7 +61,7 @@ pub struct DividendReward {
     /// proof for the on-chain claim tx. Claimable amount = amount - claimed_amount.
     pub reward_info: RewardInfo,
     /// Cumulative claimed value in USD for this dividend token
-    /// (Σ v2_dividend_claims.usd_value; 0 when the token is unpriceable).
+    /// (Σ dividend_claims.usd_value; 0 when the token is unpriceable).
     pub claimed_usd: String,
     /// Claimable value in USD = max(amount - claimed_amount, 0)/10^decimals ×
     /// latest dividend-token USD price (price_usd → dex_token_price → price → 0).

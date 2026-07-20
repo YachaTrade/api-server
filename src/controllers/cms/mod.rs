@@ -361,20 +361,20 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn dex_token_exists_true_when_present(pool: PgPool) {
         seed_dex_token(&pool, DEX_TOKEN, "").await;
         let ctrl = make_controller(pool);
         assert!(ctrl.dex_token_exists(DEX_TOKEN).await.unwrap());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn dex_token_exists_false_when_absent(pool: PgPool) {
         let ctrl = make_controller(pool);
         assert!(!ctrl.dex_token_exists(DEX_TOKEN).await.unwrap());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn set_dex_token_image_updates_existing_for_admin(pool: PgPool) {
         seed_dex_token(&pool, DEX_TOKEN, "old").await;
         seed_admin(&pool, ACC_ADMIN).await;
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(stored, url);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn set_dex_token_image_false_when_not_admin(pool: PgPool) {
         seed_dex_token(&pool, DEX_TOKEN, "old").await;
         // ACC_ADMIN is NOT seeded into admin
@@ -417,7 +417,7 @@ mod tests {
         assert_eq!(stored, "old", "image must be unchanged for non-admin");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn set_dex_token_image_false_when_token_absent(pool: PgPool) {
         seed_admin(&pool, ACC_ADMIN).await;
         let ctrl = make_controller(pool);
@@ -460,7 +460,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_upsert_inserts_all_columns_for_admin(pool: PgPool) {
         seed_admin(&pool, ACC_ADMIN).await;
         let ctrl = make_controller(pool);
@@ -500,7 +500,7 @@ mod tests {
         assert_eq!(row.6, Some(6));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_upsert_conflict_preserves_omitted_fields(pool: PgPool) {
         seed_admin(&pool, ACC_ADMIN).await;
         let ctrl = make_controller(pool);
@@ -547,7 +547,7 @@ mod tests {
         assert_eq!(row.6, Some(18), "decimals preserved");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_upsert_false_when_not_admin(pool: PgPool) {
         // ACC_ADMIN is NOT in admin table
         let ctrl = make_controller(pool);
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(cnt, 0);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn whitelist_upsert_non_admin_cannot_overwrite_existing(pool: PgPool) {
         // Seed existing whitelist row directly (bypassing admin path)
         sqlx::query(
@@ -593,16 +593,24 @@ mod tests {
         assert!(en, "enabled unchanged");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn list_whitelist_reads_own_columns_no_join(pool: PgPool) {
-        // Insert whitelist_token rows with own metadata (no dex_token/token/quote_token seeded)
+        // Upsert own metadata, overriding the deployment-seeded WETH whitelist row.
         sqlx::query(
             r#"INSERT INTO whitelist_token (token_id, sort_order, enabled, name, symbol, image_uri, price_feed_id, decimals)
                VALUES ($1, 2, true, 'Alpha', 'ALPH', 'https://storage.nadapp.net/whitelist/alph', '0xfeed1', 18),
-                      ($2, 1, false, 'Beta', 'BET', NULL, NULL, NULL)"#,
+                      ($2, 1, false, 'Beta', 'BET', NULL, NULL, NULL)
+               ON CONFLICT (token_id) DO UPDATE SET
+                   sort_order = EXCLUDED.sort_order,
+                   enabled = EXCLUDED.enabled,
+                   name = EXCLUDED.name,
+                   symbol = EXCLUDED.symbol,
+                   image_uri = EXCLUDED.image_uri,
+                   price_feed_id = EXCLUDED.price_feed_id,
+                   decimals = EXCLUDED.decimals"#,
         )
         .bind(DEX_TOKEN)
-        .bind("0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A")
+        .bind("0x4200000000000000000000000000000000000006")
         .execute(&pool)
         .await
         .unwrap();
@@ -612,7 +620,7 @@ mod tests {
         // sort_order ASC: Beta(1) first
         assert_eq!(
             rows[0].token_id,
-            "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"
+            "0x4200000000000000000000000000000000000006"
         );
         assert_eq!(rows[0].symbol.as_deref(), Some("BET"));
         assert!(!rows[0].enabled);
@@ -623,14 +631,14 @@ mod tests {
         assert_eq!(rows[1].decimals, Some(18));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn verify_admin_on_writer_true_for_admin(pool: PgPool) {
         seed_admin(&pool, ACC_ADMIN).await;
         let ctrl = make_controller(pool);
         assert!(ctrl.verify_admin_on_writer(ACC_ADMIN).await.unwrap());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn verify_admin_on_writer_false_for_non_admin(pool: PgPool) {
         let ctrl = make_controller(pool);
         assert!(!ctrl.verify_admin_on_writer(ACC_ADMIN).await.unwrap());
@@ -641,7 +649,7 @@ mod tests {
     // `adm` CTE guard were dropped (or checked-then-mutated instead of gated
     // atomically), `del`/`ins` could still run and wipe the pre-existing row
     // even though the call ultimately errors.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_with_admin_check_non_admin_leaves_rows_untouched(pool: PgPool) {
         sqlx::query("INSERT INTO trend (token_id, display_order) VALUES ('0xOld', 0)")
             .execute(&pool)
@@ -675,7 +683,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_with_admin_check_admin_replaces(pool: PgPool) {
         seed_admin(&pool, ACC_ADMIN).await;
         let ctrl = make_controller(pool.clone());

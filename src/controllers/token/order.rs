@@ -673,7 +673,7 @@ mod tests {
     /// - 자격 swap이 있는 토큰만 노출(없으면 제외)
     /// - 더스트(임계 미만) swap은 "최근 거래"로 치지 않음 → 정렬에 영향 없음
     /// - total_count도 동일 기준으로 재계산
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn latest_trade_filters_by_quote_amount_and_orders_by_qualifying_swap(pool: PgPool) {
         let acc = addr("acc1");
         let quote = addr("9011");
