@@ -543,7 +543,7 @@ mod tests {
     use crate::controllers::terminal::{BurnEventRow, MintEventRow, SwapEventRow};
     use bigdecimal::BigDecimal;
 
-    const WMON_ADDR: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
+    const WMON_ADDR: &str = "0x4200000000000000000000000000000000000006";
     const LVMON_ADDR: &str = "0xBe3fa50514D9617ce645a02B34F595541AF02b6b";
     const V1_BC: &str = "0x0000000000000000000000000000000000000001";
     const V2_BC: &str = "0x0000000000000000000000000000000000000002";

@@ -198,14 +198,14 @@ mod tests {
             .bind(token).bind(creator).execute(pool).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn unverified_token_has_none(pool: PgPool) {
         seed_token(&pool, TOKEN, CREATOR).await;
         let resp = ctrl(pool).get_token(TOKEN).await.unwrap();
         assert!(resp.token_info.x_verification.is_none());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn verified_token_returns_nested_signals(pool: PgPool) {
         seed_token(&pool, TOKEN_VERIFIED, CREATOR_VERIFIED).await;
         sqlx::query("INSERT INTO token_x_verification (token_id,account_id,x_user_id,followers_count) VALUES ($1,$2,'9',128500)")

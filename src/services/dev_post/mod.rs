@@ -641,7 +641,7 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_uses_full_payload_invalidation_and_bumps_generation(pool: sqlx::PgPool) {
         assert_test_redis_namespace();
         let token = unique_scope();
@@ -662,7 +662,7 @@ mod tests {
         assert_eq!(redis.get_devpost_ranking_generation().await.unwrap(), 42);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_uses_full_payload_invalidation_and_bumps_generation_once(pool: sqlx::PgPool) {
         assert_test_redis_namespace();
         let token = unique_scope();
@@ -695,7 +695,7 @@ mod tests {
         assert_eq!(redis.get_devpost_ranking_generation().await.unwrap(), 74);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn ranking_captures_generation_once_for_get_miss_and_set(pool: sqlx::PgPool) {
         assert_test_redis_namespace();
         let token = unique_scope();
@@ -723,7 +723,7 @@ mod tests {
         assert!(raw_get(&next_key).await.is_none());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn ranking_generation_error_bypasses_get_and_set(pool: sqlx::PgPool) {
         assert_test_redis_namespace();
         let token = unique_scope();
@@ -755,7 +755,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn ranking_reader_ignores_legacy_key_and_never_sets_it(pool: sqlx::PgPool) {
         assert_test_redis_namespace();
         let token = unique_scope();
@@ -781,7 +781,7 @@ mod tests {
         assert!(raw_get(&v2_key).await.is_some());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_then_get_round_trips_through_service(pool: sqlx::PgPool) {
         seed_token(&pool, "0xToken", "0xCreator").await;
         let service = DevPostService::new(
@@ -804,7 +804,7 @@ mod tests {
         assert_eq!(post.body, "hello from service");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn token_feed_cache_miss_and_hit_preserve_pin_shape(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let token = unique_scope();
@@ -824,7 +824,7 @@ mod tests {
         redis.delete_devpost_feed(&token).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn pin_mutations_invalidate_only_token_feed(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let token = unique_scope();
@@ -860,7 +860,7 @@ mod tests {
         redis.delete_devpost_detail(post).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn corrupt_v3_payload_falls_back_to_postgres(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let token = unique_scope();
@@ -885,7 +885,7 @@ mod tests {
         redis.delete_devpost_feed(&token).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn non_default_limit_and_later_pages_bypass_page_one_cache(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let token = unique_scope();
@@ -917,7 +917,7 @@ mod tests {
         redis.delete_devpost_feed(&token).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn edit_and_delete_refresh_cached_pinned_post_and_existing_scopes(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let token = unique_scope();
@@ -956,7 +956,7 @@ mod tests {
         assert_eq!(mappings, 0);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn cached_base_personalizes_pin_and_posts_independently_per_viewer(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let token = unique_scope();

@@ -224,7 +224,7 @@ mod tests {
         .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn pin_put_is_idempotent_and_replaces_atomically(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let first = seed_post(&pool, CREATOR, "first").await;
@@ -256,7 +256,7 @@ mod tests {
         assert!(replaced_time > same_time);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn concurrent_puts_leave_exactly_one_mapping(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let first = seed_post(&pool, CREATOR, "first").await;
@@ -278,7 +278,7 @@ mod tests {
         assert_eq!(mappings, 1);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn creator_update_serializes_before_pin_authorization(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let post = seed_post(&pool, CREATOR, "post").await;
@@ -299,7 +299,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn pin_authorization_is_exact_and_requires_current_creator_author(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let creator_post = seed_post(&pool, CREATOR, "creator").await;
@@ -337,7 +337,7 @@ mod tests {
         controller.pin_post(creator_post, CREATOR).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn unpin_is_idempotent_and_stale_safe(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let first = seed_post(&pool, CREATOR, "first").await;
@@ -359,7 +359,7 @@ mod tests {
         controller.unpin_post(second, CREATOR).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn transfer_changes_permissions_without_removing_mapping(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let old_post = seed_post(&pool, CREATOR, "old").await;
@@ -414,7 +414,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn missing_deleted_or_missing_token_context_is_not_found(pool: sqlx::PgPool) {
         seed_token(&pool).await;
         let deleted = seed_post(&pool, CREATOR, "deleted").await;

@@ -70,7 +70,7 @@ pub struct CreatorFeeResponse {
     pub pure_creator_fee: String,
     /// sell fee (v1: fee_distribute creator_amount 합 / v2: "0")
     pub sell_fee: String,
-    /// 총 creator fee (v1: pure + sell / v2: v2_creator_fee_distribution amount 합)
+    /// 총 creator fee (v1: pure + sell / v2: creator_fee_distribution amount 합)
     pub total_creator_fee: String,
 }
 

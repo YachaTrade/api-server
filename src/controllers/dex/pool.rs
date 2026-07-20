@@ -217,7 +217,7 @@ mod tests {
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_returns_none_when_pool_missing(pool: PgPool) {
         let controller = make_controller(pool);
         let resp = controller.get_pool_detail(POOL).await.unwrap();
@@ -227,7 +227,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_returns_pool_detail_without_fee_config(pool: PgPool) {
         seed_pool(&pool).await;
         let controller = make_controller(pool);
@@ -260,7 +260,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_whitelist_token_overrides_empty_image(pool: PgPool) {
         // Repro: TOKEN1 is in dex_token with image_uri='' (empty, not NULL). Plain COALESCE
         // would short-circuit on '' and return "". whitelist_token must win for curated tokens.
@@ -291,7 +291,7 @@ mod tests {
         assert_eq!(resp.token0.symbol, "MON");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_returns_pool_detail_with_fee_config(pool: PgPool) {
         seed_pool(&pool).await;
         seed_fee_config(&pool).await;

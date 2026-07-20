@@ -347,7 +347,7 @@ impl DividendController {
                     COALESCE(wl.symbol, qt.symbol, tk.symbol, '') AS dt_symbol,
                     COALESCE(wl.decimals, qt.decimals, 18) AS dt_decimals,
                     COALESCE(wl.image_uri, qt.image_uri, tk.image_uri, '') AS dt_image_uri
-                FROM v2_dividend_setups s
+                FROM dividend_setups s
                 LEFT JOIN whitelist_token wl ON wl.token_id = s.dividend_token AND wl.enabled
                 LEFT JOIN quote_token qt ON qt.quote_id = s.dividend_token
                 LEFT JOIN token tk ON tk.token_id = s.dividend_token
@@ -403,7 +403,7 @@ impl DividendController {
             WITH member_ids AS (
                 SELECT source_token AS token_id FROM dividend_distribution WHERE holder = $1
                 UNION
-                SELECT source_token AS token_id FROM v2_dividend_claims WHERE holder = $1
+                SELECT source_token AS token_id FROM dividend_claims WHERE holder = $1
             ),
             paged_tokens AS (
                 SELECT t.* FROM token t
@@ -466,7 +466,7 @@ impl DividendController {
                                SUM(amount) AS claimed_amount,
                                SUM(usd_value) AS claimed_usd,
                                MAX(created_at) AS last_claimed_at
-                        FROM v2_dividend_claims
+                        FROM dividend_claims
                         WHERE holder = $1 AND source_token = ANY($2::varchar[])
                         GROUP BY 1, 2
                     )
@@ -596,7 +596,7 @@ impl DividendController {
                 SELECT COUNT(*)::bigint AS count FROM (
                     SELECT source_token FROM dividend_distribution WHERE holder = $1
                     UNION
-                    SELECT source_token FROM v2_dividend_claims WHERE holder = $1
+                    SELECT source_token FROM dividend_claims WHERE holder = $1
                 ) s
                 WHERE EXISTS (SELECT 1 FROM token t WHERE t.token_id = s.source_token)
                   AND EXISTS (SELECT 1 FROM market mk WHERE mk.token_id = s.source_token)
@@ -901,7 +901,7 @@ mod tests {
     const HOLDER: &str = "0x000000000000000000000000000000000000Aa01";
     const HOLDER2: &str = "0x000000000000000000000000000000000000Aa02";
     const TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
-    const QUOTE: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"; // MON (seeded)
+    const QUOTE: &str = "0x4200000000000000000000000000000000000006"; // WETH (seeded)
 
     fn ctrl(pool: PgPool) -> DividendController {
         DividendController::new(Arc::new(crate::db::postgres::PostgresDatabase {
@@ -918,7 +918,7 @@ mod tests {
         }
     }
 
-    /// account(creator) + source token + V2_DEX market(MON) + MON price.
+    /// account(creator) + source token + V2_DEX market(WETH) + WETH price.
     async fn seed_base(pool: &PgPool) {
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'creator','','') ON CONFLICT DO NOTHING")
             .bind(CREATOR).execute(pool).await.unwrap();
@@ -931,12 +931,12 @@ mod tests {
     }
 
     // ① Profile Dividend: claimable = leaf − claimed, with proof + last_claimed_at.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn profile_dividend_claimable(pool: PgPool) {
         seed_base(&pool).await;
         sqlx::query("INSERT INTO dividend_distribution (merkle_root,source_token,holder,dividend_token,amount,proof,status,created_at) VALUES ('0xroot',$1,$2,$3,100,ARRAY['0xa','0xb'],'AWAITING',10)")
             .bind(TOKEN).bind(HOLDER).bind(QUOTE).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_claims (holder,source_token,dividend_token,amount,merkle_root,entry_index,transaction_hash,block_number,created_at,log_index,tx_index,usd_value) VALUES ($1,$2,$3,30,'0xroot',0,'0xc1',1,20,0,0,25)"#)
+        sqlx::query(r#"INSERT INTO dividend_claims (holder,source_token,dividend_token,amount,merkle_root,entry_index,transaction_hash,block_number,created_at,log_index,tx_index,usd_value) VALUES ($1,$2,$3,30,'0xroot',0,'0xc1',1,20,0,0,25)"#)
             .bind(HOLDER).bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // price_usd inflated by 10^18 to offset 18-dec scaling so raw amounts (100-30) give a clean USD figure (70)
         sqlx::query("INSERT INTO price_usd (token_id,block_number,price,created_at) VALUES ($1,5,1000000000000000000,0)")
@@ -956,7 +956,7 @@ mod tests {
         assert_eq!(t.claimable_usd, "70"); // (100-30)/1e18 × price_usd 1e18
         assert_eq!(t.rewards.len(), 1);
         let r = &t.rewards[0];
-        assert_eq!(r.dividend_token_info.symbol, "MON");
+        assert_eq!(r.dividend_token_info.symbol, "WETH");
         assert_eq!(r.reward_info.amount, "100");
         assert_eq!(r.reward_info.claimed_amount, "30");
         assert_eq!(r.claimed_usd, "25"); // per dividend token claimed USD
@@ -973,7 +973,7 @@ mod tests {
     // market's live quote-per-token price × that quote's USD price (price),
     // mirroring observer's compose_dividend_claim_usd chain_ref tier instead of
     // silently pricing at $0.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn profile_dividend_claimable_market_price_fallback(pool: PgPool) {
         seed_base(&pool).await;
         const DIV_TOKEN: &str = "0x000000000000000000000000000000000000Cc01";
@@ -1012,14 +1012,14 @@ mod tests {
     }
 
     // ② Trade Dividend: holders ranked by cumulative accrued USD.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn trade_dividend_holder_ranking(pool: PgPool) {
         seed_base(&pool).await;
         for (a, n) in [(HOLDER, "alice"), (HOLDER2, "bob")] {
             sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,$2,'','') ON CONFLICT DO NOTHING")
                 .bind(a).bind(n).execute(&pool).await.unwrap();
         }
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // accrued in raw 1e18 units; /1e18 * price(2) => USD.
         sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,10000000000000000000,100)")
@@ -1057,7 +1057,7 @@ mod tests {
     // ② Trade Dividend: a dividend token that lives only in whitelist_token (not
     // quote_token) must use the whitelist decimals for USD scaling. Regression for
     // the 10^(18-decimals) undercount when qt.decimals fell back to 18.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn trade_dividend_holder_whitelist_decimals(pool: PgPool) {
         seed_base(&pool).await;
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'alice','','') ON CONFLICT DO NOTHING")
@@ -1065,7 +1065,7 @@ mod tests {
         // 6-decimal whitelist dividend token (USDC-like); absent from quote_token.
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol,decimals) VALUES ($1,1,true,'USD Coin','USDC',6) ON CONFLICT DO NOTHING")
             .bind(WLTOKEN).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(WLTOKEN).execute(&pool).await.unwrap();
         // 10 USDC accrued in raw 6-decimal units.
         sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,10000000,100)")
@@ -1091,12 +1091,12 @@ mod tests {
 
     // ② Trade Dividend: with no price_usd row, dex_token_price (pool view) must win
     // over the legacy `price` table — same precedence as the profile/vault views.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn trade_dividend_holder_price_source_precedence(pool: PgPool) {
         seed_base(&pool).await;
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'alice','','') ON CONFLICT DO NOTHING")
             .bind(HOLDER).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // 1 token (18-dec) accrued; no price_usd row exists for QUOTE.
         sqlx::query("INSERT INTO dividend_accrual (source_token,holder,dividend_token,accrued,updated_at) VALUES ($1,$2,$3,1000000000000000000,100)")
@@ -1117,7 +1117,7 @@ mod tests {
 
     // ② Trade Dividend: system holders (token contract itself, its DEX pool, and
     // the dead burn sink) are excluded from both the ranking and total_count.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn trade_dividend_holders_exclude_system(pool: PgPool) {
         const POOL: &str = "0x00000000000000000000000000000000000000F1";
         const DEAD: &str = "0x000000000000000000000000000000000000dEaD";
@@ -1129,7 +1129,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        sqlx::query(r#"INSERT INTO v2_dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
+        sqlx::query(r#"INSERT INTO dividend_setups (source_token,dividend_token,ratio,min_balance,entry_index,transaction_hash,block_number,created_at,log_index,tx_index) VALUES ($1,$2,10000,0,0,'0xs1',1,1,0,0)"#)
             .bind(TOKEN).bind(QUOTE).execute(&pool).await.unwrap();
         // HOLDER is a real recipient; TOKEN/POOL/DEAD are system holders.
         for acct in [HOLDER, TOKEN, POOL, DEAD] {
@@ -1152,7 +1152,7 @@ mod tests {
     const NONGRAD_TOKEN: &str = "0x000000000000000000000000000000000000Dd03";
 
     // Dividend token search: candidate set = whitelist ∪ all nadfun tokens.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn dividend_token_search(pool: PgPool) {
         seed_base(&pool).await; // TOKEN = V2 (graduated)
         sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'OldCoin','OLD','',$2,NULL,false,true,false,50,'0xh',1000000) ON CONFLICT DO NOTHING"#)
@@ -1236,7 +1236,7 @@ mod tests {
 
     // Curated DIVIDEND_TOKEN_BLACKLIST entries are excluded from both the full
     // list and `q` search, even though they pass the V2 candidate filter.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn dividend_token_blacklist_excludes(pool: PgPool) {
         seed_base(&pool).await;
         // A blacklisted V2 token (matches DIVIDEND_TOKEN_BLACKLIST[0]).

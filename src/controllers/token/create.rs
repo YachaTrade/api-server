@@ -235,7 +235,7 @@ impl TokenCreatedController {
                 JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
-                LEFT JOIN v2_creator_fee_vault_stats v2cfv ON t.token_id = v2cfv.token_id
+                LEFT JOIN creator_fee_vault_stats v2cfv ON t.token_id = v2cfv.token_id
                 LEFT JOIN pool ON pool.pool_id = m.pool_id
                 LEFT JOIN lp_position lp_pos ON lp_pos.pool_id = pool.pool_id AND lp_pos.account_id = $1
                 LEFT JOIN v1_lp v1 ON v1.token_id = t.token_id
@@ -387,7 +387,7 @@ mod tests {
     const CREATED_TOKEN: &str = "0x000000000000000000000000000000000000Bb01";
     const LP_TOKEN: &str = "0x000000000000000000000000000000000000Bb09";
     const POOL_ID: &str = "0x000000000000000000000000000000000000Cc09";
-    const QUOTE_ID: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A";
+    const QUOTE_ID: &str = "0x4200000000000000000000000000000000000006";
 
     fn ctrl(pool: PgPool) -> TokenCreatedController {
         TokenCreatedController::new(Arc::new(crate::db::postgres::PostgresDatabase {
@@ -396,7 +396,7 @@ mod tests {
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn created_union_includes_lp_only_token(pool: PgPool) {
         for (a, n) in [(ACCOUNT, "me"), (OTHER, "other")] {
             sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,$2,'','') ON CONFLICT DO NOTHING")

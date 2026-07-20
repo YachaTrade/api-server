@@ -348,7 +348,7 @@ mod tests {
             .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_replaces_all_zero_based(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
         ctrl.insert_trend_token(TrendRequest {
@@ -379,7 +379,7 @@ mod tests {
     // delete AND (re)insert the same surviving keys (C, A) within a single
     // statement, which errors under Postgres's data-modifying-CTE rules —
     // this proves the disjoint upsert+delete implementation avoids that.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_reorder_with_overlap_does_not_duplicate_key(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
         ctrl.insert_trend_token(TrendRequest {
@@ -419,7 +419,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_empty_list_clears_all(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
         ctrl.insert_trend_token(TrendRequest {

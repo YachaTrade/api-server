@@ -89,7 +89,7 @@ mod tests {
         (app, redis)
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn actual_router_pin_is_authenticated_empty_204_and_malformed_is_400(pool: sqlx::PgPool) {
         sqlx::query(
             "INSERT INTO token (token_id, name, symbol, image_uri, creator, created_at, transaction_hash, total_supply) \

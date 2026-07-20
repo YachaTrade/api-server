@@ -1,1 +1,0 @@
-../migrations/0036_token_x_verification.sql

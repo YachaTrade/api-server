@@ -540,7 +540,7 @@ mod tests {
         assert_eq!(over_limit.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn actual_protected_router_auth_precedes_json_rejection(pool: sqlx::PgPool) {
         dotenv::dotenv().ok();
         let state = AppState {

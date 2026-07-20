@@ -245,7 +245,7 @@ mod tests {
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_persists_verification_and_followers(pool: PgPool) {
         let fb = vec![XFollowedByEntry {
             x_handle: "elonmusk".into(),
@@ -285,7 +285,7 @@ mod tests {
         assert_eq!(h, "elonmusk");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_is_idempotent(pool: PgPool) {
         let fb = vec![XFollowedByEntry {
             x_handle: "a".into(),
@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(fc, 20, "followers_count refreshed on re-finalize");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_removes_stale_followed_by_on_change(pool: PgPool) {
         let fb_ab = vec![
             XFollowedByEntry {
@@ -372,7 +372,7 @@ mod tests {
         assert_eq!(h, "a", "handle 'a' should remain");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_rejects_different_x_account(pool: PgPool) {
         let fb = vec![XFollowedByEntry {
             x_handle: "a".into(),
@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(fc, 10, "followers_count unchanged on rejected re-finalize");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_rejects_mismatch_without_wiping_followed_by(pool: PgPool) {
         let fb_a = vec![XFollowedByEntry {
             x_handle: "a".into(),
@@ -451,7 +451,7 @@ mod tests {
         assert_eq!(h, "a");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn reserve_is_first_writer_wins_and_idempotent(pool: PgPool) {
         let c = ctrl(pool.clone());
         // first writer wins
@@ -476,7 +476,7 @@ mod tests {
         assert_eq!(n, 1);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn reservation_owner_reads_back(pool: PgPool) {
         let c = ctrl(pool.clone());
         assert!(c.reservation_owner(TOKEN).await.unwrap().is_none());
@@ -487,13 +487,13 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_verification_returns_none_when_unverified(pool: PgPool) {
         let c = ctrl(pool.clone());
         assert!(c.get_verification(TOKEN).await.unwrap().is_none());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_verification_returns_nested_signals_when_verified(pool: PgPool) {
         let c = ctrl(pool.clone());
         let fb = vec![XFollowedByEntry {
@@ -523,7 +523,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_refreshes_surviving_followed_by_values(pool: PgPool) {
         let fb_v1 = vec![XFollowedByEntry {
             x_handle: "a".into(),
@@ -562,7 +562,7 @@ mod tests {
         assert!(verified);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn finalize_dedupes_duplicate_input_handles_first_wins(pool: PgPool) {
         let fb = vec![
             XFollowedByEntry {

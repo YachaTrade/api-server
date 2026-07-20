@@ -333,7 +333,7 @@ impl AnalyticsController {
                 SELECT
                     COALESCE(qt.decimals, 18) AS decimals,
                     COALESCE(qt.symbol, 'MON') AS quote_symbol,
-                    COALESCE(m.quote_id, '0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A') AS quote_id
+                    COALESCE(m.quote_id, '0x4200000000000000000000000000000000000006') AS quote_id
                 FROM token t
                 LEFT JOIN market m ON m.token_id = t.token_id
                 LEFT JOIN quote_token qt ON qt.quote_id = m.quote_id
@@ -371,7 +371,7 @@ impl AnalyticsController {
             sqlx::query_scalar::<_, BigDecimal>(
                 r#"
                 SELECT COALESCE(SUM(amount), 0)
-                FROM v2_creator_fee_distribution
+                FROM creator_fee_distribution
                 WHERE token = $1 AND event_type = 'DISTRIBUTE'
                   AND created_at >= $2 AND ($3::bigint IS NULL OR created_at < $3)
                 "#
@@ -477,7 +477,7 @@ mod tests {
         tx: &str,
     ) {
         sqlx::query(
-            r#"INSERT INTO v2_creator_fee_distribution
+            r#"INSERT INTO creator_fee_distribution
                (event_type, token, amount, transaction_hash, block_number, created_at, log_index, tx_index)
                VALUES ($1, $2, $3::NUMERIC, $4, 0, $5, 0, 0)"#,
         )
@@ -527,7 +527,7 @@ mod tests {
     // USDC mainnet 주소 (유효한 EIP-55 체크섬), decimals 6
     const USDC: &str = "0xA0b86991c6218B36c1D19d4A2E9eB0cE3606eB48";
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn applies_quote_token_decimals(pool: PgPool) {
         // V2 토큰이 USDC(6 decimals) quote 사용 → /10^6로 스케일되어야 함
         seed_token(&pool, T_V2).await;
@@ -550,7 +550,7 @@ mod tests {
         assert_eq!(resp.quote_id, USDC);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn every_token_uses_distribution_table_and_zeros_pure_sell(pool: PgPool) {
         seed_token(&pool, T_V1).await;
         // volume: 2 + 3 = 5 MON
@@ -573,7 +573,7 @@ mod tests {
         assert_eq!(resp.quote_symbol, "MON");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn v2_uses_distribution_table_and_zeros_pure_sell(pool: PgPool) {
         seed_token(&pool, T_V2).await;
         // volume still from swap: 10 MON
@@ -600,7 +600,7 @@ mod tests {
         assert_eq!(resp.decimals, 18, "no market row → native 18 decimals");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn respects_time_range_window(pool: PgPool) {
         seed_token(&pool, T_V1).await;
         seed_swap(&pool, T_V1, &mon(1), 1000, "s1").await; // < from → excluded
@@ -618,7 +618,7 @@ mod tests {
         assert_eq!(resp.total_volume, "6", "[2000, 4000): 2 + 4");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn omitted_to_has_no_upper_bound(pool: PgPool) {
         seed_token(&pool, T_V1).await;
         seed_swap(&pool, T_V1, &mon(1), 1000, "s1").await; // < from → excluded
@@ -635,7 +635,7 @@ mod tests {
         assert_eq!(resp.total_volume, "6", "from=2000, no upper bound: 2 + 4");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn returns_zeros_when_no_data(pool: PgPool) {
         seed_token(&pool, T_V1).await;
 
@@ -652,7 +652,7 @@ mod tests {
         assert_eq!(resp.total_creator_fee, "0");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn returns_none_when_token_missing(pool: PgPool) {
         let ctrl = make_controller(pool);
         let resp = ctrl.creator_fee_stats(T_V1, 0, None).await.unwrap();

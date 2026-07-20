@@ -472,7 +472,7 @@ mod tests {
         }))
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_returns_empty_when_no_positions(pool: PgPool) {
         let controller = make_controller(pool);
         let resp = controller.get_positions(ACCOUNT).await.unwrap();
@@ -480,7 +480,7 @@ mod tests {
         assert!(resp.positions.is_empty());
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_returns_open_position_with_correct_fields(pool: PgPool) {
         seed_pool_with_position(&pool).await;
         let controller = make_controller(pool);
@@ -515,7 +515,7 @@ mod tests {
         assert_eq!(p.token1.current_amount.as_deref(), Some("2000"));
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn integration_excludes_closed_positions(pool: PgPool) {
         seed_pool_with_position(&pool).await;
         // Close position by setting lp_out = lp_in (balance = 0)

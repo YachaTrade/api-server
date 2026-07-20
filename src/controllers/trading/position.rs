@@ -506,7 +506,7 @@ mod tests {
     const TOKEN1_ID: &str = "0x000000000000000000000000000000000000Bb02"; // pool token1 (quote side)
     const TOKEN2_ID: &str = "0x000000000000000000000000000000000000bB03";
     const POOL_ID: &str = "0x000000000000000000000000000000000000Cc01";
-    const QUOTE_ID: &str = "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A"; // default MON
+    const QUOTE_ID: &str = "0x4200000000000000000000000000000000000006"; // GIWA WETH predeploy — the quote_token seed
     const QUOTE2_ID: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
     fn make_controller(pool: PgPool) -> PositionController {
@@ -644,7 +644,7 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn lp_balance_v2_dex_computed_correctly(pool: PgPool) {
         seed_v2_dex(&pool).await;
 
@@ -673,7 +673,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn lp_balance_zero_when_no_lp_position(pool: PgPool) {
         seed_v2_dex(&pool).await;
         // Remove lp_position to simulate no LP stake
@@ -697,7 +697,7 @@ mod tests {
         assert_eq!(resp.tokens[0].balance_info.lp_balance, "0");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn lp_balance_zero_when_total_supply_zero(pool: PgPool) {
         seed_v2_dex(&pool).await;
         // Set pool total_supply to 0
@@ -721,7 +721,7 @@ mod tests {
         assert_eq!(resp.tokens[0].balance_info.lp_balance, "0");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_computes_total_balance(pool: PgPool) {
         seed_v2_dex(&pool).await; // ACCOUNT: balance 500, lp_balance 1000 -> total 1500
         let ctrl = make_controller(pool);
@@ -740,7 +740,7 @@ mod tests {
         assert_eq!(tok.balance_info.total_balance, "1500");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_sorts_by_usd_value_not_raw_balance(pool: PgPool) {
         seed_v2_dex(&pool).await; // 1,500 tokens * $2 = $3,000
         sqlx::query("UPDATE market SET price = 2 WHERE token_id = $1")
@@ -774,7 +774,7 @@ mod tests {
         assert_eq!(resp.tokens[1].balance_info.total_balance, "2000");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_usd_value_ties_sort_by_token_id(pool: PgPool) {
         seed_v2_dex(&pool).await; // 1,500 tokens * $2 = $3,000
         sqlx::query("UPDATE market SET price = 2 WHERE token_id = $1")
@@ -806,7 +806,7 @@ mod tests {
         assert_eq!(resp.tokens[1].token_info.token_id, TOKEN2_ID);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_missing_quote_price_has_zero_usd_value(pool: PgPool) {
         seed_v2_dex(&pool).await;
         sqlx::query("INSERT INTO price (quote_id, block_number, price) VALUES ($1, 999, 1)")
@@ -842,7 +842,7 @@ mod tests {
         assert_eq!(resp.tokens[1].balance_info.token_price, "0");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_includes_lp_only_v2(pool: PgPool) {
         seed_v2_dex(&pool).await;
         sqlx::query("DELETE FROM balance WHERE account_id=$1 AND token_id=$2")
@@ -868,7 +868,7 @@ mod tests {
         assert_eq!(resp.total_count, 1);
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_includes_lp_only_v1_injected(pool: PgPool) {
         seed_v2_dex(&pool).await;
         sqlx::query("DELETE FROM lp_position WHERE account_id=$1")
@@ -925,7 +925,7 @@ mod tests {
 
     /// A holder with an lp_position for a V2_DEX pool gets
     /// lp_balance = lp_pos.balance * reserve / total_supply = 100 * 10000 / 1000 = 1000.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn holder_lp_balance_v2_dex_computed_correctly(pool: PgPool) {
         seed_v2_dex(&pool).await;
         seed_account2_balance(&pool).await;
@@ -962,7 +962,7 @@ mod tests {
     }
 
     /// A holder with no lp_position for the V2_DEX pool shows lp_balance = "0".
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn holder_lp_balance_zero_when_no_lp_position(pool: PgPool) {
         seed_v2_dex(&pool).await;
         seed_account2_balance(&pool).await;
@@ -992,7 +992,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn holder_includes_lp_only_owner_v2(pool: PgPool) {
         seed_v2_dex(&pool).await; // ACCOUNT: balance 500 + lp 1000 -> total 1500
         let acct3 = "0x000000000000000000000000000000000000Aa03";
@@ -1018,7 +1018,7 @@ mod tests {
         assert_eq!(resp.holders[0].account_info.account_id, ACCOUNT); // total_balance DESC (1500 first)
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn holder_includes_lp_only_owner_v1_injected(pool: PgPool) {
         seed_v2_dex(&pool).await;
         let acct4 = "0x000000000000000000000000000000000000Aa04";
@@ -1041,7 +1041,7 @@ mod tests {
         assert_eq!(row.balance_info.total_balance, "777");
     }
 
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn hold_token_v2_lp_balance_is_floored(pool: PgPool) {
         seed_v2_dex(&pool).await;
         // 100 * 10001 / 1000 = 1000.1 → floor → 1000 (Uniswap V2 integer division)
@@ -1069,7 +1069,7 @@ mod tests {
 
     /// The burn address (0x…dEaD) is INCLUDED in the holder list and count so that
     /// burned supply surfaces as a holder. (Only the DividendVault is hidden.)
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn holder_includes_burn_address(pool: PgPool) {
         seed_v2_dex(&pool).await; // ACCOUNT is a holder (balance + lp)
         let dead = "0x000000000000000000000000000000000000dEaD";
