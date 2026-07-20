@@ -16,6 +16,12 @@ use bigdecimal::BigDecimal;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// 코인(token_id)당 UTC 달력 하루에 허용되는 dev post 수. create_post의
+/// CTE 카운트 게이트로 앱에서 강제한다 — unique 인덱스는 "정확히 1건"만
+/// 표현할 수 있어 N건 캡에는 쓸 수 없고, 그 대가로 극단적 동시 요청이
+/// 순간적으로 캡을 넘길 수 있다(스팸 제한 목적엔 허용).
+const DAILY_POST_LIMIT: i64 = 3;
+
 pub struct DevPostController {
     db: Arc<PostgresDatabase>,
 }
@@ -28,10 +34,14 @@ impl DevPostController {
     /// Single-statement CTE: `pgbouncer` runs in statement pooling mode, which
     /// forbids `BEGIN`/`COMMIT` — a single statement is its own implicit
     /// transaction, so this stays atomic without one. `tok` carries the
-    /// creator authorization check, and `new_post` only fires when
-    /// `tok.creator = $2` matches; the outer `SELECT` always returns exactly
-    /// one row (scalar subqueries against possibly-empty CTEs), which is how
-    /// NotFound/Forbidden are distinguished afterwards.
+    /// creator authorization check, `today` is an app-level pre-check for a
+    /// clean 429 (UX only — see `uq_dev_post_token_daily`, which is what
+    /// actually closes the race between two concurrent creates that both
+    /// pass this pre-check under READ COMMITTED), and `new_post` only fires
+    /// when `tok.creator = $2` matches and `today` found nothing; the outer
+    /// `SELECT` always returns exactly one row (scalar subqueries against
+    /// possibly-empty CTEs), which is how NotFound/Forbidden/TooManyRequests
+    /// are distinguished afterwards.
     pub async fn create_post(
         &self,
         author: &str,
@@ -48,13 +58,18 @@ impl DevPostController {
             .as_ref()
             .map(|poll| poll.options.iter().map(|o| o.image_uri.clone()).collect());
 
-        let row: (Option<String>, Option<i64>) = sqlx::query_as(
+        let row: (Option<String>, Option<i64>, bool, i64) = sqlx::query_as(
             "WITH tok AS (
                  SELECT creator FROM token WHERE token_id = $1
              ),
+             today AS (
+                 SELECT count(*) AS n FROM dev_post
+                 WHERE token_id = $1 AND posted_on = (NOW() AT TIME ZONE 'UTC')::date
+             ),
              new_post AS (
                  INSERT INTO dev_post (token_id, author, title, body)
-                 SELECT $1, $2, $3, $4 FROM tok WHERE tok.creator = $2
+                 SELECT $1, $2, $3, $4 FROM tok
+                 WHERE tok.creator = $2 AND (SELECT n FROM today) < $9
                  RETURNING id, created_at
              ),
              img AS (
@@ -74,7 +89,13 @@ impl DevPostController {
                  SELECT pl.post_id, u.ord::smallint, u.label, u.image_uri
                  FROM poll pl, unnest($7::text[], $8::text[]) WITH ORDINALITY AS u(label, image_uri, ord)
              )
-             SELECT (SELECT creator FROM tok) AS creator, (SELECT id FROM new_post) AS id",
+             SELECT (SELECT creator FROM tok) AS creator,
+                    (SELECT id FROM new_post) AS id,
+                    (SELECT n FROM today) >= $9 AS daily_limited,
+                    CEIL(EXTRACT(EPOCH FROM (
+                        date_trunc('day', NOW() AT TIME ZONE 'UTC') + INTERVAL '1 day'
+                            - (NOW() AT TIME ZONE 'UTC')
+                    )))::bigint AS retry_after",
         )
         .bind(&req.token_id)
         .bind(author)
@@ -84,17 +105,23 @@ impl DevPostController {
         .bind(POLL_DURATION_DAYS.to_string())
         .bind(&poll_labels)
         .bind(&poll_images)
+        .bind(DAILY_POST_LIMIT)
         .fetch_one(pool)
         .await
         .map_err(|error| AppError::InternalError(error.to_string()))?;
 
-        let (creator, id) = row;
+        let (creator, id, daily_limited, retry_after) = row;
         match creator {
             None => return Err(AppError::NotFound("Token not found".into())),
             Some(c) if c != author => {
                 return Err(AppError::Forbidden("Only the coin creator can post".into()));
             }
             _ => {}
+        }
+        if daily_limited {
+            return Err(AppError::TooManyRequests {
+                retry_after: retry_after.max(1) as u64,
+            });
         }
         id.ok_or_else(|| AppError::InternalError("dev post insert did not return id".into()))
     }
@@ -873,6 +900,16 @@ mod tests {
 
     async fn seed_titled_post(pool: &sqlx::PgPool, title: &str, body: &str) -> i64 {
         seed_token(pool, TOKEN, CREATOR).await;
+        // Age existing posts for TOKEN back a day first so `posted_on`
+        // (generated from `created_at`) recomputes off today, freeing
+        // today's slot under `uq_dev_post_token_daily` for the row below.
+        sqlx::query(
+            "UPDATE dev_post SET created_at = created_at - INTERVAL '1 day' WHERE token_id = $1",
+        )
+        .bind(TOKEN)
+        .execute(pool)
+        .await
+        .unwrap();
         sqlx::query_scalar(
             "INSERT INTO dev_post (token_id, author, title, body) \
              VALUES ($1, $2, $3, $4) RETURNING id",
@@ -903,6 +940,17 @@ mod tests {
         .await
         .unwrap();
         id
+    }
+
+    /// Ages every existing `dev_post` row back a day so `posted_on`
+    /// (generated from `created_at`) recomputes off today, freeing today's
+    /// slot under `uq_dev_post_token_daily` for a subsequent same-token
+    /// `create_post` call in the same test.
+    async fn age_posts_one_day(pool: &sqlx::PgPool) {
+        sqlx::query("UPDATE dev_post SET created_at = created_at - INTERVAL '1 day'")
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     #[sqlx::test(migrations = "./migrations-test")]
@@ -1381,6 +1429,7 @@ mod tests {
             )
             .await
             .unwrap();
+        age_posts_one_day(&pool).await;
         let b = c
             .create_post(
                 "0xCreator",
@@ -1521,6 +1570,9 @@ mod tests {
         let c = ctl(pool.clone());
         let mut ids = Vec::new();
         for i in 0..4 {
+            if i > 0 {
+                age_posts_one_day(&pool).await;
+            }
             let id = c
                 .create_post(
                     "0xCreator",
@@ -1707,5 +1759,72 @@ mod tests {
             .unwrap();
         let post = c.get_post_rw(id, None).await.unwrap();
         assert_eq!(post.token.market_cap, None);
+    }
+
+    fn daily_req() -> CreateDevPostRequest {
+        CreateDevPostRequest {
+            token_id: "0xToken".into(),
+            title: "Announcement".into(),
+            body: Some("x".into()),
+            image_uris: None,
+            poll: None,
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn posts_up_to_daily_limit_then_429(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool);
+        // 같은 날 3건까지는 허용
+        for _ in 0..DAILY_POST_LIMIT {
+            c.create_post("0xCreator", &daily_req()).await.unwrap();
+        }
+        // 4번째부터 429 + 다음 UTC 자정까지의 Retry-After
+        let err = c.create_post("0xCreator", &daily_req()).await.unwrap_err();
+        match err {
+            AppError::TooManyRequests { retry_after } => {
+                assert!(retry_after > 0 && retry_after <= 86_400);
+            }
+            other => panic!("expected TooManyRequests, got {other:?}"),
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn post_allowed_next_utc_day(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool.clone());
+        for _ in 0..DAILY_POST_LIMIT {
+            c.create_post("0xCreator", &daily_req()).await.unwrap();
+        }
+        age_posts_one_day(&pool).await;
+        c.create_post("0xCreator", &daily_req()).await.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn daily_limit_survives_delete(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        let c = ctl(pool);
+        let mut last_id = 0;
+        for _ in 0..DAILY_POST_LIMIT {
+            last_id = c.create_post("0xCreator", &daily_req()).await.unwrap();
+        }
+        // 삭제해도 그날 쿼터는 안 돌아온다
+        c.delete_post(last_id, "0xCreator").await.unwrap();
+        let err = c.create_post("0xCreator", &daily_req()).await.unwrap_err();
+        assert!(matches!(err, AppError::TooManyRequests { .. }));
+    }
+
+    #[sqlx::test(migrations = "./migrations-test")]
+    async fn daily_limit_is_per_token(pool: sqlx::PgPool) {
+        seed_token(&pool, "0xToken", "0xCreator").await;
+        seed_token(&pool, "0xOther", "0xCreator").await;
+        let c = ctl(pool);
+        for _ in 0..DAILY_POST_LIMIT {
+            c.create_post("0xCreator", &daily_req()).await.unwrap();
+        }
+        // 같은 creator라도 다른 코인은 별도 쿼터
+        let mut other = daily_req();
+        other.token_id = "0xOther".into();
+        c.create_post("0xCreator", &other).await.unwrap();
     }
 }
