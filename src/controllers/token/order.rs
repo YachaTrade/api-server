@@ -603,7 +603,7 @@ mod tests {
     async fn seed_quote(pool: &PgPool, quote_id: &str) {
         sqlx::query(
             "INSERT INTO quote_token (quote_id, name, symbol, decimals, pyth_feed_id, image_uri)
-             VALUES ($1, 'Monad', 'MON', 18, 'feed', '')
+             VALUES ($1, 'Wrapped Ether', 'WETH', 18, 'feed', '')
              ON CONFLICT (quote_id) DO NOTHING",
         )
         .bind(quote_id)

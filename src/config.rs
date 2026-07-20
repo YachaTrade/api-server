@@ -138,8 +138,8 @@ lazy_static! {
     // Contract Addresses
     pub static ref COMMUNITY_TREASURY: String = env::var("V1_COMMUNITY_TREASURY")
         .expect("V1_COMMUNITY_TREASURY must be set");
-    pub static ref WMON: String = env::var("WMON")
-        .expect("WMON must be set");
+    pub static ref WETH: String = env::var("WETH")
+        .expect("WETH must be set");
     pub static ref RPC_URL: String = env::var("RPC_URL")
         .expect("RPC_URL must be set");
 

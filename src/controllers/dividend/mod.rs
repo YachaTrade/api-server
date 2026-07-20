@@ -1172,8 +1172,8 @@ mod tests {
             .bind(V1NONGRAD).bind(CREATOR).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ($1,99,true,'USD Coin','USDC') ON CONFLICT DO NOTHING")
             .bind(WLTOKEN).execute(&pool).await.unwrap();
-        // native MON placeholder (zero address) must be excluded from results
-        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ('0x0000000000000000000000000000000000000000',1,true,'Monad','MON') ON CONFLICT DO NOTHING")
+        // native WETH placeholder (zero address) must be excluded from results
+        sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ('0x0000000000000000000000000000000000000000',1,true,'Wrapped Ether','WETH') ON CONFLICT DO NOTHING")
             .execute(&pool).await.unwrap();
         // WETH is whitelisted but not dividend-eligible -> excluded by symbol allowlist
         sqlx::query("INSERT INTO whitelist_token (token_id,sort_order,enabled,name,symbol) VALUES ('0x000000000000000000000000000000000000Dd04',2,true,'Wrapped Ether','WETH') ON CONFLICT DO NOTHING")

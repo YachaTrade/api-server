@@ -26,9 +26,9 @@ static HTTP: Lazy<reqwest::Client> = Lazy::new(|| {
         .expect("failed to build reqwest client")
 });
 
-/// DefiLlama coins API의 체인 키. 기본 "monad", env `DEFILLAMA_CHAIN`로 override.
+/// DefiLlama coins API의 체인 키. 기본 "ethereum", env `DEFILLAMA_CHAIN`로 override.
 static CHAIN: Lazy<String> =
-    Lazy::new(|| std::env::var("DEFILLAMA_CHAIN").unwrap_or_else(|_| "monad".to_string()));
+    Lazy::new(|| std::env::var("DEFILLAMA_CHAIN").unwrap_or_else(|_| "ethereum".to_string()));
 
 const BASE_URL: &str = "https://coins.llama.fi/prices/current";
 
@@ -91,7 +91,7 @@ impl PriceSource for DefiLlamaPriceSource {
     }
 }
 
-/// `{ "coins": { "monad:0xAddr": { "price": 0.99, ... } } }` → 소문자 주소 → 가격.
+/// `{ "coins": { "ethereum:0xAddr": { "price": 0.99, ... } } }` → 소문자 주소 → 가격.
 /// 가격은 JSON 숫자 리터럴 그대로 파싱(f64 왕복 없이 정밀도 보존).
 pub(crate) fn parse_defillama_prices(body: &str) -> HashMap<String, BigDecimal> {
     let mut out = HashMap::new();
@@ -102,7 +102,7 @@ pub(crate) fn parse_defillama_prices(body: &str) -> HashMap<String, BigDecimal> 
         return out;
     };
     for (key, val) in coins {
-        // key = "monad:0xAddr" → ':' 뒤가 주소
+        // key = "ethereum:0xAddr" → ':' 뒤가 주소
         let addr = key.split_once(':').map(|(_, a)| a).unwrap_or(key);
         let Some(price) = val
             .get("price")
@@ -125,8 +125,8 @@ mod tests {
     #[test]
     fn parse_extracts_lowercased_address_prices() {
         let body = r#"{"coins":{
-            "monad:0x754704Bc059F8C67012fEd69BC8A327a5aafb603":{"decimals":6,"symbol":"USDC","price":0.9996326093575469,"confidence":0.99},
-            "monad:0x0000000000000000000000000000000000000000":{"decimals":18,"symbol":"MON","price":0.021004619947610256,"confidence":0.99}
+            "ethereum:0x754704Bc059F8C67012fEd69BC8A327a5aafb603":{"decimals":6,"symbol":"USDC","price":0.9996326093575469,"confidence":0.99},
+            "ethereum:0x0000000000000000000000000000000000000000":{"decimals":18,"symbol":"WETH","price":0.021004619947610256,"confidence":0.99}
         }}"#;
         let m = parse_defillama_prices(body);
         assert_eq!(
@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(
             m.get("0x0000000000000000000000000000000000000000"),
             Some(&BigDecimal::from_str("0.021004619947610256").unwrap()),
-            "native MON(0x0) 도 파싱"
+            "native WETH(0x0) 도 파싱"
         );
     }
 

@@ -1049,18 +1049,18 @@ impl HypeController {
     }
 
     async fn fetch_community_treasury(&self) -> Result<AmountResponse> {
-        let wmon_balance = self.get_wmon_balance().await.unwrap_or_else(|e| {
-            tracing::error!("Failed to get WMON balance: {}", e);
+        let weth_balance = self.get_weth_balance().await.unwrap_or_else(|e| {
+            tracing::error!("Failed to get WETH balance: {}", e);
             BigDecimal::from(0)
         });
 
         Ok(AmountResponse {
-            amount: wmon_balance.normalized().to_plain_string(),
+            amount: weth_balance.normalized().to_plain_string(),
         })
     }
 
-    async fn get_wmon_balance(&self) -> Result<bigdecimal::BigDecimal> {
-        use crate::config::{COMMUNITY_TREASURY, RPC_URL, WMON};
+    async fn get_weth_balance(&self) -> Result<bigdecimal::BigDecimal> {
+        use crate::config::{COMMUNITY_TREASURY, RPC_URL, WETH};
         use alloy::primitives::{Address, U256};
         use alloy::providers::ProviderBuilder;
         use alloy::sol;
@@ -1079,14 +1079,14 @@ impl HypeController {
 
         let provider = ProviderBuilder::new().connect_http(rpc_url);
 
-        let wmon_address: Address = WMON
+        let weth_address: Address = WETH
             .parse()
-            .map_err(|e| anyhow!("Invalid WMON address: {}", e))?;
+            .map_err(|e| anyhow!("Invalid WETH address: {}", e))?;
         let treasury_address: Address = COMMUNITY_TREASURY
             .parse()
             .map_err(|e| anyhow!("Invalid COMMUNITY_TREASURY address: {}", e))?;
 
-        let contract = IERC20::new(wmon_address, provider);
+        let contract = IERC20::new(weth_address, provider);
 
         let balance_result = contract.balanceOf(treasury_address).call().await?;
         let balance: U256 = balance_result;
