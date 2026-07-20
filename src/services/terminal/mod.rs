@@ -193,7 +193,7 @@ impl TerminalService {
                                 .normalized()
                                 .to_plain_string(),
                         ),
-                        Some("monad".to_string()),
+                        Some("ethereum".to_string()),
                     )
                 }
                 None => (None, None, None),

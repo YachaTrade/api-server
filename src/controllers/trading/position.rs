@@ -12,7 +12,7 @@ use crate::{
         CountRow,
         info::{
             AccountInfo, BalanceInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo,
-            TokenVersion, TokenWithBalanceInfo,
+            TokenWithBalanceInfo,
         },
         pagination::PaginationParams,
     },
@@ -269,7 +269,6 @@ impl PositionController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-            version: TokenVersion,
             created_at: i64,
             creator: String,
             creator_nickname: String,
@@ -323,7 +322,7 @@ impl PositionController {
                     SELECT
                     t.token_id, t.name, t.symbol, t.image_uri, t.description,
                     t.twitter, t.telegram, t.website, t.is_graduated, t.is_nsfw, t.is_cto,
-                    t.version, t.created_at, t.creator,
+                    t.created_at, t.creator,
                     COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                     a.bio as creator_bio,
                     COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
@@ -429,7 +428,6 @@ impl PositionController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
-                        version: row.version.clone(),
                         x_verification: None,
                     },
                     balance_info: BalanceInfo {
@@ -532,10 +530,10 @@ mod tests {
         .await
         .unwrap();
 
-        // token (V2)
+        // nadfun token
         sqlx::query(
-            r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description, is_nsfw, is_graduated, is_cto, created_at, transaction_hash, total_supply, version)
-               VALUES ($1, 'TestTok', 'TTK', '', $2, NULL, false, false, false, 0, '0xhash', 1000000, 'V2')
+            r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description, is_nsfw, is_graduated, is_cto, created_at, transaction_hash, total_supply)
+               VALUES ($1, 'TestTok', 'TTK', '', $2, NULL, false, false, false, 0, '0xhash', 1000000)
                ON CONFLICT DO NOTHING"#,
         )
         .bind(TOKEN_ID)
@@ -615,8 +613,8 @@ mod tests {
         market_price: &str,
     ) {
         sqlx::query(
-            r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description, is_nsfw, is_graduated, is_cto, created_at, transaction_hash, total_supply, version)
-               VALUES ($1, 'WalletTok', 'WTK', '', $2, NULL, false, false, false, 0, $1, 1000000, 'V2')"#,
+            r#"INSERT INTO token (token_id, name, symbol, image_uri, creator, description, is_nsfw, is_graduated, is_cto, created_at, transaction_hash, total_supply)
+               VALUES ($1, 'WalletTok', 'WTK', '', $2, NULL, false, false, false, 0, $1, 1000000)"#,
         )
         .bind(token_id)
         .bind(ACCOUNT)
@@ -873,11 +871,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn hold_token_includes_lp_only_v1_injected(pool: PgPool) {
         seed_v2_dex(&pool).await;
-        sqlx::query("UPDATE token SET version='V1' WHERE token_id=$1")
-            .bind(TOKEN_ID)
-            .execute(&pool)
-            .await
-            .unwrap();
         sqlx::query("DELETE FROM lp_position WHERE account_id=$1")
             .bind(ACCOUNT)
             .execute(&pool)
@@ -1028,11 +1021,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn holder_includes_lp_only_owner_v1_injected(pool: PgPool) {
         seed_v2_dex(&pool).await;
-        sqlx::query("UPDATE token SET version='V1' WHERE token_id=$1")
-            .bind(TOKEN_ID)
-            .execute(&pool)
-            .await
-            .unwrap();
         let acct4 = "0x000000000000000000000000000000000000Aa04";
         sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,'h4','','') ON CONFLICT DO NOTHING").bind(acct4).execute(&pool).await.unwrap();
         let ctrl = make_controller(pool);

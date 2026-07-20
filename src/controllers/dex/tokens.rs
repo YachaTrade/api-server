@@ -145,11 +145,10 @@ impl TokensController {
                 r#"
                 SELECT (SELECT COUNT(*) FROM whitelist_token WHERE enabled)
                      + (SELECT COUNT(*) FROM token t
-                         WHERE t.version='V2'
-                           -- OR split into two EXISTS so idx_pool_token0/1 are usable.
-                           -- A single EXISTS(token0=? OR token1=?) can't use either index →
-                           -- correlated seq scan of pool per token (O(tokens × pools)).
-                           AND (EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id)
+                         -- OR split into two EXISTS so idx_pool_token0/1 are usable.
+                         -- A single EXISTS(token0=? OR token1=?) can't use either index →
+                         -- correlated seq scan of pool per token (O(tokens × pools)).
+                         WHERE (EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id)
                                 OR EXISTS (SELECT 1 FROM pool p WHERE p.token1=t.token_id))
                            AND t.token_id NOT IN (SELECT token_id FROM whitelist_token WHERE enabled))
                 "#,
@@ -382,20 +381,19 @@ impl TokensController {
 ///
 /// The wl_rpc CTE holds RPC-derived (token_id, balance_usd) for held whitelist tokens.
 /// It is LEFT JOINed into `enriched`, overriding the DB balance table for tier/order.
-/// Default-list candidate CTEs: whitelist ∪ (nadfun V2 with a pool). Slots into
+/// Default-list candidate CTEs: whitelist ∪ (nadfun token with a pool). Slots into
 /// `enriched_cte_with` between wl_rpc and enriched; must end with `candidates AS (…),`.
 const DEFAULT_CANDIDATES_CTES: &str = r#"
 wl AS (
     SELECT token_id, sort_order, name, symbol, image_uri, decimals FROM whitelist_token WHERE enabled
 ),
-v2 AS (
+nadfun AS (
     SELECT t.token_id
     FROM token t
-    WHERE t.version='V2'
-      -- OR split into two EXISTS so idx_pool_token0/1 are usable. A single
-      -- EXISTS(token0=? OR token1=?) can't use either index → correlated seq
-      -- scan of pool per token (O(tokens × pools); ~157s at 50k V2 tokens).
-      AND (EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id)
+    -- OR split into two EXISTS so idx_pool_token0/1 are usable. A single
+    -- EXISTS(token0=? OR token1=?) can't use either index → correlated seq
+    -- scan of pool per token (O(tokens × pools); ~157s at 50k tokens).
+    WHERE (EXISTS (SELECT 1 FROM pool p WHERE p.token0=t.token_id)
            OR EXISTS (SELECT 1 FROM pool p WHERE p.token1=t.token_id))
       AND t.token_id NOT IN (SELECT token_id FROM wl)
 ),
@@ -403,7 +401,7 @@ candidates AS (
     SELECT token_id, 'whitelist'::text AS token_type, sort_order, name, symbol, image_uri, decimals FROM wl
     UNION ALL
     SELECT token_id, 'nadfun_v2'::text AS token_type, NULL::int AS sort_order,
-           NULL::varchar AS name, NULL::varchar AS symbol, NULL::varchar AS image_uri, NULL::int AS decimals FROM v2
+           NULL::varchar AS name, NULL::varchar AS symbol, NULL::varchar AS image_uri, NULL::int AS decimals FROM nadfun
 ),
 "#;
 
@@ -424,14 +422,14 @@ const CA_MATCHED_UNION: &str = r#"
     UNION SELECT token_id FROM whitelist_token WHERE enabled AND token_id ILIKE $4
 "#;
 
-/// Default list candidate set (whitelist + nadfun V2 with pool).
+/// Default list candidate set (whitelist + nadfun tokens with a pool).
 fn enriched_cte_sql() -> String {
     enriched_cte_with(DEFAULT_CANDIDATES_CTES)
 }
 
 /// Search candidate set spanning token ∪ dex_token ∪ quote_token ∪ whitelist.
 /// token_type is by table membership: whitelist_token → whitelist, `token`
-/// version V2/V1 → nadfun_v2/nadfun_v1, otherwise → external. `matched_union`
+/// → nadfun_v2, otherwise → external. `matched_union`
 /// supplies the prefix filter (name/symbol or token_id) over `$4`.
 fn search_enriched_cte_sql(matched_union: &str) -> String {
     let mid = format!(
@@ -442,8 +440,7 @@ matched AS (
 candidates AS (
     SELECT m.token_id,
            CASE WHEN wl.token_id IS NOT NULL THEN 'whitelist'
-                WHEN t.version = 'V2'        THEN 'nadfun_v2'
-                WHEN t.version = 'V1'        THEN 'nadfun_v1'
+                WHEN t.token_id IS NOT NULL  THEN 'nadfun_v2'
                 ELSE 'external' END::text AS token_type,
            wl.sort_order, wl.name, wl.symbol, wl.image_uri, wl.decimals
     FROM matched m
@@ -489,8 +486,8 @@ enriched AS (
         COALESCE(dtp.price_usd, m.price * lp.price, pu.price) AS price_usd,
         CASE
           WHEN $1 IS NOT NULL AND wl_rpc.token_id IS NOT NULL AND c.token_type='whitelist' THEN 1
-          -- held (balance > 0) non-whitelist floats up: nadfun_v2/v1 and external
-          -- alike (search surfaces V1/external; holding any of them ranks above
+          -- held (balance > 0) non-whitelist floats up: nadfun_v2 and external
+          -- alike (search surfaces external; holding any of them ranks above
           -- unheld). Default list only has nadfun_v2 candidates here, so unchanged.
           WHEN $1 IS NOT NULL AND b.balance > 0 AND c.token_type <> 'whitelist' THEN 2
           WHEN c.token_type='whitelist' THEN 3
@@ -547,8 +544,7 @@ SELECT
     tg.token_id,
     CASE
       WHEN wl.token_id IS NOT NULL THEN 'whitelist'
-      WHEN t.version = 'V2' THEN 'nadfun_v2'
-      WHEN t.version = 'V1' THEN 'nadfun_v1'
+      WHEN t.token_id IS NOT NULL THEN 'nadfun_v2'
       ELSE 'external'
     END AS token_type,
     COALESCE(wl.symbol,    t.symbol,    dt.symbol,    qt.symbol)    AS symbol,
@@ -837,12 +833,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn lists_only_whitelist_and_nadfun_v2(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        // Make CHOG a nadfun V2 candidate
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
+        // CHOG is a nadfun token-table candidate.
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
         // Only CHOG (nadfun V2) should appear; WMON (external, dex_token only) excluded
@@ -870,12 +861,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn includes_balance_when_account_provided(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        // Make CHOG a nadfun V2 candidate
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
+        // CHOG is a nadfun token-table candidate.
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // 1000 CHOG (18 dp)
         let controller = make_controller(pool);
         let resp = controller
@@ -914,12 +900,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn pagination_returns_total_count(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        // Make CHOG a nadfun V2 candidate
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
+        // CHOG is a nadfun token-table candidate.
         // Add a whitelist token so total_count = 2
         seed_whitelist(&pool, WL_A, 1).await;
         let controller = make_controller(pool);
@@ -962,12 +943,7 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn pagination_out_of_range_page_returns_correct_total_count(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        // Make CHOG a nadfun V2 candidate
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
+        // CHOG is a nadfun token-table candidate.
         // Add a whitelist token so total_count = 2
         seed_whitelist(&pool, WL_A, 1).await;
         let controller = make_controller(pool);
@@ -990,11 +966,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn default_no_account_orders_whitelist_then_v2(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         seed_whitelist(&pool, WL_A, 1).await;
         seed_whitelist(&pool, WL_B, 2).await;
         let controller = make_controller(pool);
@@ -1013,11 +984,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn default_with_account_orders_four_tiers(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         seed_whitelist(&pool, WL_A, 1).await; // 미보유 화이트리스트 → tier3
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // CHOG 보유 → tier2
         let controller = make_controller(pool);
@@ -1088,20 +1054,19 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Task 4 — external/V1 exclusion from default list
+    // Task 4 — external exclusion from default list
     // -----------------------------------------------------------------------
 
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn external_and_v1_excluded_from_default(pool: PgPool) {
+    async fn external_excluded_from_default(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        // No version bump → CHOG stays V1, WMON is external. Neither is a default candidate.
+        // CHOG is a nadfun token row; WMON is external (dex_token only).
         let controller = make_controller(pool);
         let resp = controller.list_tokens(&empty_query()).await.unwrap();
-        assert!(
-            resp.tokens.is_empty(),
-            "V1 + external만 있으면 기본 리스트 비어야 함"
-        );
-        assert_eq!(resp.total_count, 0);
+        assert_eq!(resp.tokens.len(), 1);
+        assert_eq!(resp.tokens[0].token_id, TOKEN0);
+        assert_eq!(resp.tokens[0].token_type, "nadfun_v2");
+        assert_eq!(resp.total_count, 1);
     }
 
     // -----------------------------------------------------------------------
@@ -1111,11 +1076,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn search_text_prefix_only(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         let controller = make_controller(pool);
         let hit = controller
             .list_tokens(&DexTokenListQuery {
@@ -1251,11 +1211,10 @@ mod tests {
         );
     }
 
-    /// V1 nadfun token (in `token`, version V1) must surface in name/symbol search,
-    /// labeled nadfun_v1. Previously invisible — search reused the V2-only candidate set.
+    /// A token-table row surfaces in name/symbol search as nadfun_v2.
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_text_finds_v1(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await; // TOKEN0 = CHOG, version stays V1
+    async fn search_text_labels_token_row_nadfun_v2(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
         let resp = controller
             .list_tokens(&DexTokenListQuery {
@@ -1266,20 +1225,18 @@ mod tests {
             })
             .await
             .unwrap();
-        let v1 = resp
+        let nadfun = resp
             .tokens
             .iter()
             .find(|t| t.token_id == TOKEN0)
-            .expect("V1 token present by symbol prefix");
-        assert_eq!(v1.token_type, "nadfun_v1", "V1 nadfun token → nadfun_v1");
+            .expect("nadfun token present by symbol prefix");
+        assert_eq!(nadfun.token_type, "nadfun_v2");
     }
 
-    /// Search: a held token (balance > 0) must sort above unheld results even when
-    /// it's nadfun_v1/external — previously only nadfun_v2 got the held tier, so a
-    /// held V1 sank to tier 4 below unheld tokens.
+    /// Search: a held nadfun token (balance > 0) sorts above unheld external results.
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_held_v1_sorts_above_unheld(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await; // TOKEN0 = V1 "CHOG" (token row)
+    async fn search_held_nadfun_sorts_above_unheld(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // hold CHOG
         // unheld external that also prefix-matches "CHO"
         const OTHER: &str = "0x000000000000000000000000000000000000c0DE";
@@ -1306,7 +1263,7 @@ mod tests {
             .tokens
             .iter()
             .position(|t| t.token_id == TOKEN0)
-            .expect("held V1 present");
+            .expect("held nadfun token present");
         let unheld = resp
             .tokens
             .iter()
@@ -1318,9 +1275,9 @@ mod tests {
         );
     }
 
-    /// V1 nadfun token found by partial CA too.
+    /// Nadfun token found by partial CA is labeled nadfun_v2.
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_partial_ca_finds_v1(pool: PgPool) {
+    async fn search_partial_ca_finds_nadfun(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
         let prefix = &TOKEN0[..10];
@@ -1333,18 +1290,18 @@ mod tests {
             })
             .await
             .unwrap();
-        let v1 = resp
+        let nadfun = resp
             .tokens
             .iter()
             .find(|t| t.token_id == TOKEN0)
-            .expect("V1 present by partial CA");
-        assert_eq!(v1.token_type, "nadfun_v1");
+            .expect("nadfun token present by partial CA");
+        assert_eq!(nadfun.token_type, "nadfun_v2");
     }
 
-    /// full-CA on a V1 token labels it nadfun_v1 (was external under the version='V2' CASE).
+    /// Full-CA on a token-table row labels it nadfun_v2.
     #[sqlx::test(migrations = "./migrations-test")]
-    async fn search_full_ca_v1_labeled_nadfun_v1(pool: PgPool) {
-        seed_pool_with_two_tokens(&pool).await; // TOKEN0 V1
+    async fn search_full_ca_token_row_labeled_nadfun_v2(pool: PgPool) {
+        seed_pool_with_two_tokens(&pool).await;
         let controller = make_controller(pool);
         let resp = controller
             .list_tokens(&DexTokenListQuery {
@@ -1355,14 +1312,14 @@ mod tests {
             })
             .await
             .unwrap();
-        let v1 = resp
+        let nadfun = resp
             .tokens
             .iter()
             .find(|t| t.token_id == TOKEN0)
-            .expect("V1 present by full CA");
+            .expect("nadfun token present by full CA");
         assert_eq!(
-            v1.token_type, "nadfun_v1",
-            "full-CA V1 → nadfun_v1 (not external)"
+            nadfun.token_type, "nadfun_v2",
+            "full-CA token row → nadfun_v2 (not external)"
         );
     }
 
@@ -1569,11 +1526,6 @@ mod tests {
     async fn held_whitelist_rpc_sorts_before_held_v2(pool: PgPool) {
         // Seed: CHOG as nadfun V2, account holds it in DB balance (tier 2).
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // CHOG held → tier2
 
         // WL_A: off-DEX whitelist token — NO DB balance row, but RPC returns held balance.
@@ -1677,11 +1629,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn price_usd_for_v2_from_market(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         // m.price=3, quote→USD=0.5 → price_usd = 1.5
         seed_market_price(&pool, TOKEN0, "3", "0.5").await;
         let controller = make_controller(pool);
@@ -1722,11 +1669,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn price_usd_for_pure_dex_v2_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         // No market row. Observer set TOKEN0 (token0 side) USD price = 0.5 on the pool.
         seed_pool_token_price_usd(&pool, 0, "0.5").await;
         let controller = make_controller(pool);
@@ -1750,11 +1692,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn balance_usd_for_held_pure_dex_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         seed_pool_token_price_usd(&pool, 0, "0.5").await; // pool view unit price, NO market row
         seed_balance(&pool, TOKEN0, "1000000000000000000000").await; // 1000 CHOG (18dp)
         let controller = make_controller(pool);
@@ -1796,11 +1733,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn price_usd_pool_view_takes_precedence_over_market(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         // market path would yield 3 × 0.5 = 1.5; pool view yields 0.5 → view wins.
         seed_market_price(&pool, TOKEN0, "3", "0.5").await;
         seed_pool_token_price_usd(&pool, 0, "0.5").await;
@@ -1824,11 +1756,6 @@ mod tests {
     #[sqlx::test(migrations = "./migrations-test")]
     async fn price_usd_full_ca_search_from_pool_view(pool: PgPool) {
         seed_pool_with_two_tokens(&pool).await;
-        sqlx::query("UPDATE token SET version='V2' WHERE token_id=$1")
-            .bind(TOKEN0)
-            .execute(&pool)
-            .await
-            .unwrap();
         seed_pool_token_price_usd(&pool, 0, "0.25").await;
         let controller = make_controller(pool);
 

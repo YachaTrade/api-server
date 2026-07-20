@@ -8,9 +8,7 @@ use crate::{
     config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
     db::postgres::PostgresDatabase,
     types::{
-        common::info::{
-            AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo, TokenVersion,
-        },
+        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
         search::{
             AccountSearchResponse, AccountSearchResult, SearchResponse, TokenSearchResponse,
             TokenSearchResult,
@@ -124,7 +122,6 @@ impl SearchController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
-                        version: row.version.clone(),
                         x_verification: None,
                     },
                     market_info: MarketInfo {
@@ -243,7 +240,6 @@ impl SearchController {
                         t.is_graduated,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -310,7 +306,6 @@ impl SearchController {
                             t.is_graduated,
                             t.is_nsfw,
                             t.is_cto,
-                        t.version,
                             t.created_at,
                             t.creator,
                             t.token_holder_count as holder_count,
@@ -371,7 +366,6 @@ impl SearchController {
                             t.is_graduated,
                             t.is_nsfw,
                             t.is_cto,
-                        t.version,
                             t.created_at,
                             t.creator,
                             t.token_holder_count as holder_count,
@@ -612,7 +606,6 @@ struct SearchTokenRow {
     is_graduated: bool,
     is_nsfw: bool,
     is_cto: bool,
-    version: TokenVersion,
     created_at: i64,
     creator: String,
     holder_count: i64,

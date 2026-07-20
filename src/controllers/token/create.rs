@@ -13,7 +13,7 @@ use crate::{
             CountRow,
             info::{
                 AccountInfo, BalanceInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, RewardInfo,
-                TokenCreatedInfo, TokenInfo, TokenVersion,
+                TokenCreatedInfo, TokenInfo,
             },
             pagination::PaginationParams,
         },
@@ -118,7 +118,6 @@ impl TokenCreatedController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-            version: TokenVersion,
             token_created_at: i64,
             creator: String,
             holder_count: i64,
@@ -147,10 +146,6 @@ impl TokenCreatedController {
             dex_protocol_fee_rate: Option<i16>,
             balance: BigDecimal,
             balance_created_at: i64,
-            reward_amount: BigDecimal,
-            reward_claimed_amount: BigDecimal,
-            reward_proof: Vec<String>,
-            reward_status: Option<String>,
             v2_current_balance: Option<BigDecimal>,
             v2_total_claimed: Option<BigDecimal>,
             lp_balance: BigDecimal,
@@ -179,12 +174,6 @@ impl TokenCreatedController {
                       AND EXISTS (SELECT 1 FROM market mk WHERE mk.token_id = t.token_id)
                     ORDER BY t.created_at DESC, t.token_id ASC
                     LIMIT $2 OFFSET $3
-                ),
-                claimed_totals AS (
-                    SELECT token_id, SUM(amount) as claimed_amount
-                    FROM creator_treasury_claim_history
-                    WHERE account_id = $1
-                    GROUP BY token_id
                 )
                 SELECT
                     t.token_id,
@@ -198,7 +187,6 @@ impl TokenCreatedController {
                     t.is_graduated,
                     t.is_nsfw,
                     t.is_cto,
-                    t.version,
                     t.created_at as token_created_at,
                     t.creator,
                     t.token_holder_count as holder_count,
@@ -227,10 +215,6 @@ impl TokenCreatedController {
                     fc.dex_protocol_fee_rate,
                     COALESCE(b.balance, 0) as balance,
                     COALESCE(b.created_at, 0) as balance_created_at,
-                    COALESCE(cr.amount, 0) as reward_amount,
-                    COALESCE(ctch.claimed_amount, 0) as reward_claimed_amount,
-                    COALESCE(cr.proof, ARRAY[]::TEXT[]) as reward_proof,
-                    cr.status as reward_status,
                     v2cfv.current_balance as v2_current_balance,
                     v2cfv.total_claimed as v2_total_claimed,
                     (
@@ -251,8 +235,6 @@ impl TokenCreatedController {
                 JOIN quote_token qt ON m.quote_id = qt.quote_id
                 LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                 LEFT JOIN balance b ON t.token_id = b.token_id AND b.account_id = $1
-                LEFT JOIN creator_reward cr ON t.token_id = cr.token_id AND cr.account_id = $1
-                LEFT JOIN claimed_totals ctch ON t.token_id = ctch.token_id
                 LEFT JOIN v2_creator_fee_vault_stats v2cfv ON t.token_id = v2cfv.token_id
                 LEFT JOIN pool ON pool.pool_id = m.pool_id
                 LEFT JOIN lp_position lp_pos ON lp_pos.pool_id = pool.pool_id AND lp_pos.account_id = $1
@@ -308,7 +290,6 @@ impl TokenCreatedController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
-                        version: row.version.clone(),
                         x_verification: None,
                     },
                     market_info: MarketInfo {
@@ -363,34 +344,23 @@ impl TokenCreatedController {
                         quote_price: row.native_price.normalized().to_plain_string(),
                         created_at: row.balance_created_at,
                     },
-                    reward_info: match row.version {
-                        TokenVersion::V2 => {
-                            let current_balance = row
-                                .v2_current_balance
-                                .clone()
-                                .unwrap_or_else(|| BigDecimal::from(0));
-                            let claimable = current_balance > BigDecimal::from(0);
-                            RewardInfo {
-                                amount: current_balance.normalized().to_plain_string(),
-                                claimed_amount: row
-                                    .v2_total_claimed
-                                    .clone()
-                                    .unwrap_or_else(|| BigDecimal::from(0))
-                                    .normalized()
-                                    .to_plain_string(),
-                                proof: vec![],
-                                claimable,
-                            }
-                        }
-                        TokenVersion::V1 => RewardInfo {
-                            amount: row.reward_amount.normalized().to_plain_string(),
+                    reward_info: {
+                        let current_balance = row
+                            .v2_current_balance
+                            .clone()
+                            .unwrap_or_else(|| BigDecimal::from(0));
+                        let claimable = current_balance > BigDecimal::from(0);
+                        RewardInfo {
+                            amount: current_balance.normalized().to_plain_string(),
                             claimed_amount: row
-                                .reward_claimed_amount
+                                .v2_total_claimed
+                                .clone()
+                                .unwrap_or_else(|| BigDecimal::from(0))
                                 .normalized()
                                 .to_plain_string(),
-                            proof: row.reward_proof,
-                            claimable: row.reward_status.as_deref() == Some("AWAITING"),
-                        },
+                            proof: vec![],
+                            claimable,
+                        }
                     },
                 }
             })
@@ -432,9 +402,9 @@ mod tests {
             sqlx::query("INSERT INTO account (account_id,nickname,bio,image_uri) VALUES ($1,$2,'','') ON CONFLICT DO NOTHING")
                 .bind(a).bind(n).execute(&pool).await.unwrap();
         }
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'Mine','MINE','',$2,NULL,false,false,false,100,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'Mine','MINE','',$2,NULL,false,false,false,100,'0xh',1000000) ON CONFLICT DO NOTHING"#)
             .bind(CREATED_TOKEN).bind(ACCOUNT).execute(&pool).await.unwrap();
-        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply,version) VALUES ($1,'Lp','LP','',$2,NULL,false,false,false,200,'0xh',1000000,'V2') ON CONFLICT DO NOTHING"#)
+        sqlx::query(r#"INSERT INTO token (token_id,name,symbol,image_uri,creator,description,is_nsfw,is_graduated,is_cto,created_at,transaction_hash,total_supply) VALUES ($1,'Lp','LP','',$2,NULL,false,false,false,200,'0xh',1000000) ON CONFLICT DO NOTHING"#)
             .bind(LP_TOKEN).bind(OTHER).execute(&pool).await.unwrap();
         for t in [CREATED_TOKEN, LP_TOKEN] {
             sqlx::query("INSERT INTO swap_count (token_id,count,buy_count,sell_count) VALUES ($1,0,0,0) ON CONFLICT DO NOTHING")

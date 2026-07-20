@@ -11,7 +11,7 @@ use crate::{
     types::{
         common::{
             CountRow,
-            info::{AccountInfo, TokenInfo, TokenVersion},
+            info::{AccountInfo, TokenInfo},
             pagination::PaginationParams,
         },
         hype::{
@@ -42,7 +42,6 @@ struct HypeTokenRow {
     website: Option<String>,
     is_nsfw: bool,
     is_cto: bool,
-    version: TokenVersion,
     #[allow(dead_code)]
     total_supply: BigDecimal,
     created_at: i64,
@@ -148,7 +147,6 @@ impl HypeController {
                         t.created_at,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.creator,
                         COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
@@ -228,7 +226,6 @@ impl HypeController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    version: row.version.clone(),
                     x_verification: None,
                 },
                 hype_info: HypeInfo {
@@ -272,7 +269,6 @@ impl HypeController {
                         t.created_at,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.creator,
                         COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                         a.bio as creator_bio,
@@ -352,7 +348,6 @@ impl HypeController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    version: row.version.clone(),
                     x_verification: None,
                 },
                 hype_info: HypeInfo {
@@ -425,7 +420,6 @@ impl HypeController {
                         t.website,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.total_supply,
                         t.created_at,
                         t.creator,
@@ -503,7 +497,6 @@ impl HypeController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    version: row.version.clone(),
                     x_verification: None,
                 },
                 hype_info: HypeInfo {
@@ -660,7 +653,6 @@ impl HypeController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-            version: TokenVersion,
             vote_amount: BigDecimal,
             creator: String,
             creator_nickname: String,
@@ -694,7 +686,6 @@ impl HypeController {
                 t.is_nsfw,
                 t.is_graduated,
                 t.is_cto,
-                        t.version,
                 COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 a.bio as creator_bio,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
@@ -772,7 +763,6 @@ impl HypeController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    version: row.version.clone(),
                     x_verification: None,
                 },
                 vote_amount: row.vote_amount.normalized().to_plain_string(),
@@ -1049,18 +1039,18 @@ impl HypeController {
     }
 
     async fn fetch_community_treasury(&self) -> Result<AmountResponse> {
-        let wmon_balance = self.get_wmon_balance().await.unwrap_or_else(|e| {
-            tracing::error!("Failed to get WMON balance: {}", e);
+        let weth_balance = self.get_weth_balance().await.unwrap_or_else(|e| {
+            tracing::error!("Failed to get WETH balance: {}", e);
             BigDecimal::from(0)
         });
 
         Ok(AmountResponse {
-            amount: wmon_balance.normalized().to_plain_string(),
+            amount: weth_balance.normalized().to_plain_string(),
         })
     }
 
-    async fn get_wmon_balance(&self) -> Result<bigdecimal::BigDecimal> {
-        use crate::config::{COMMUNITY_TREASURY, RPC_URL, WMON};
+    async fn get_weth_balance(&self) -> Result<bigdecimal::BigDecimal> {
+        use crate::config::{COMMUNITY_TREASURY, RPC_URL, WETH};
         use alloy::primitives::{Address, U256};
         use alloy::providers::ProviderBuilder;
         use alloy::sol;
@@ -1079,14 +1069,14 @@ impl HypeController {
 
         let provider = ProviderBuilder::new().connect_http(rpc_url);
 
-        let wmon_address: Address = WMON
+        let weth_address: Address = WETH
             .parse()
-            .map_err(|e| anyhow!("Invalid WMON address: {}", e))?;
+            .map_err(|e| anyhow!("Invalid WETH address: {}", e))?;
         let treasury_address: Address = COMMUNITY_TREASURY
             .parse()
             .map_err(|e| anyhow!("Invalid COMMUNITY_TREASURY address: {}", e))?;
 
-        let contract = IERC20::new(wmon_address, provider);
+        let contract = IERC20::new(weth_address, provider);
 
         let balance_result = contract.balanceOf(treasury_address).call().await?;
         let balance: U256 = balance_result;
@@ -1141,7 +1131,6 @@ impl HypeController {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-            version: TokenVersion,
             token_created_at: i64,
             amount: BigDecimal,
             total_amount: BigDecimal,
@@ -1173,7 +1162,6 @@ impl HypeController {
                         t.is_graduated,
                         t.is_nsfw,
                         t.is_cto,
-                        t.version,
                         t.created_at as token_created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
@@ -1243,7 +1231,6 @@ impl HypeController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    version: row.version.clone(),
                     x_verification: None,
                 },
                 amount: row.amount.normalized().to_plain_string(),

@@ -674,7 +674,7 @@ mod openapi_tests {
             .collect();
         assert_eq!(
             vals,
-            vec!["whitelist", "nadfun_v2", "nadfun_v1", "external"],
+            vec!["whitelist", "nadfun_v2", "external"],
             "token_type 가능한 값이 swagger에 명시돼야 함"
         );
         // $ref 필드는 example을 못 가지므로(OpenAPI 3.0), example은 컴포넌트에 있어야
