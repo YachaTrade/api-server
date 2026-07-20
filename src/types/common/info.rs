@@ -34,7 +34,6 @@ pub struct TokenInfo {
     pub created_at: i64,
     pub creator: AccountInfo,
     pub is_cto: bool,
-    pub version: TokenVersion,
     /// Per-coin X verification signals. `None` (⇒ JSON null) when unverified.
     /// NOTE: `TokenInfo` derives `FromRow`; this field is NOT a DB column, so
     /// it must be excluded from row mapping.

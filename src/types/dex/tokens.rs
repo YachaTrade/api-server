@@ -37,10 +37,10 @@ pub struct DexTokenListResponse {
 /// `DexTokenEntry.token_type` — 토큰 분류(테이블 멤버십 기준). FE 렌더 분기용.
 ///
 /// - `whitelist`: 큐레이션된 `whitelist_token`(enabled)
-/// - `nadfun_v2` / `nadfun_v1`: `token.version` 이 V2 / V1
+/// - `nadfun_v2`: `token` 테이블에 존재하는 nadfun bonding-curve token
 /// - `external`: 위 어디에도 없음 — indexed `dex_token` 단독 또는 RPC 온체인 메타 fallback
 ///
-/// 기본 리스트(`q` 없음)는 `whitelist` + `nadfun_v2`만, `nadfun_v1`/`external`은 검색에서만 노출.
+/// 기본 리스트(`q` 없음)는 `whitelist` + `nadfun_v2`만, `external`은 검색에서만 노출.
 /// external 판정 = `token_type == "external"`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -48,7 +48,6 @@ pub struct DexTokenListResponse {
 pub enum DexTokenType {
     Whitelist,
     NadfunV2,
-    NadfunV1,
     External,
 }
 
@@ -61,7 +60,7 @@ pub struct DexTokenEntry {
     pub decimals: i32,
     pub image_uri: String,
     /// 토큰 분류 — 가능한 값과 의미는 [`DexTokenType`] 참고.
-    /// 런타임은 string이며 `whitelist` | `nadfun_v2` | `nadfun_v1` | `external` 중 하나.
+    /// 런타임은 string이며 `whitelist` | `nadfun_v2` | `external` 중 하나.
     #[schema(value_type = DexTokenType)]
     pub token_type: String,
     /// 보유(balance > 0) 시에만 raw wei balance. 미보유·account 미제공이면 null → FE는 balance != null로 보유 판정.
