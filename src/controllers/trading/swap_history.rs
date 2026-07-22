@@ -149,8 +149,8 @@ impl SwapController {
                     t.is_cto,
                     t.created_at as token_created_at,
                     t.creator,
-                    COALESCE(ax.x_handle, a.nickname) as creator_nickname,
-                    COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                    a.nickname as creator_nickname,
+                    a.image_uri as creator_image_uri,
                     a.bio as creator_bio,
                     rs.is_buy,
                     rs.quote_amount,
@@ -162,7 +162,6 @@ impl SwapController {
                 FROM recent_swaps rs
                 JOIN token t ON rs.token_id = t.token_id
                 JOIN account a ON t.creator = a.account_id
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 JOIN market m ON rs.token_id = m.token_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
@@ -209,7 +208,6 @@ impl SwapController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    x_verification: None,
                 },
                 swap_info: SwapInfo {
                     event_type: if row.is_buy {
@@ -252,8 +250,6 @@ impl SwapController {
             value: BigDecimal,
             created_at: i64,
             transaction_hash: String,
-            x_handle: Option<String>,
-            x_image_uri: Option<String>,
         }
 
         let mut next_param = 2;
@@ -269,19 +265,9 @@ impl SwapController {
             s.value,
             s.created_at,
             s.transaction_hash,
-            ax.x_handle,
-            ax.x_image_uri,
             COALESCE(lp.price, 0) as native_price
         FROM swap s
         JOIN account a ON s.account_id = a.account_id
-        LEFT JOIN LATERAL (
-            SELECT
-                ax.x_handle,
-                x_image_uri
-            FROM account_x ax
-            WHERE ax.account_id = a.account_id
-            LIMIT 1
-        ) ax ON true
         JOIN market m ON s.token_id = m.token_id
         LEFT JOIN LATERAL (
             SELECT p.price
@@ -370,17 +356,9 @@ impl SwapController {
             .map(|row| TokenSwap {
                 account_info: AccountInfo {
                     account_id: row.account_id,
-                    nickname: row
-                        .x_handle
-                        .clone()
-                        .filter(|h| !h.is_empty())
-                        .unwrap_or(row.account_nickname),
+                    nickname: row.account_nickname,
                     bio: row.bio,
-                    image_uri: row
-                        .x_image_uri
-                        .clone()
-                        .filter(|img| !img.is_empty())
-                        .unwrap_or(row.account_image),
+                    image_uri: row.account_image,
                 },
                 swap_info: SwapInfo {
                     event_type: if row.is_buy {

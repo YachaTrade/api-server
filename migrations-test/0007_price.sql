@@ -1,1 +1,0 @@
-../migrations/0007_price.sql

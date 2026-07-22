@@ -8,17 +8,17 @@ use tracing::{error, info};
 
 use crate::{
     config::RPC_URL,
-    controllers::cms::{CmsController, WhitelistUpsert},
+    controllers::cms::CmsController,
     db::{postgres::PostgresDatabase, r2::R2Client},
     result::AppError,
     types::{
         cms::{
-            CmsActionResponse, DexTokenImageResponse, InsertTrendRequest, SetNsfwRequest,
-            UpdateMetadataRequest, UpdateMetadataResponse, WhitelistTokenListResponse,
+            CmsActionResponse, InsertTrendRequest, SetNsfwRequest, UpdateMetadataRequest,
+            UpdateMetadataResponse,
         },
         metadata::TokenMetadata,
     },
-    utils::{single_flight::GLOBAL_CACHE, valid_account_id},
+    utils::single_flight::GLOBAL_CACHE,
 };
 
 sol! {
@@ -187,170 +187,6 @@ impl CmsService {
             success: true,
             metadata_uri,
         })
-    }
-
-    /// dex_token 로고 이미지 업로드 + image_uri 등록 (admin).
-    /// 이미지를 R2(`coin/{uuid}`)에 올리고 dex_token.image_uri를 갱신한다.
-    pub async fn update_dex_token_image(
-        &self,
-        session_address: &str,
-        token_id: &str,
-        image_data: Bytes,
-    ) -> Result<DexTokenImageResponse, AppError> {
-        // dex 토큰은 베니티 접미사 없음 → 순수 EIP-55 체크섬 정규화
-        let token_id = valid_account_id(token_id)
-            .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
-
-        let controller = CmsController::new(self.postgres.clone());
-
-        // Verify admin status on the PRIMARY (write pool). write 경로 인가를 replica에서
-        // 읽으면 복제 지연 동안 방금 권한 회수된 admin이 통과할 수 있어 primary로 확인한다.
-        let is_admin = controller
-            .verify_admin_on_writer(session_address)
-            .await
-            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
-        if !is_admin {
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-
-        // 존재 확인을 업로드 前에 → 미존재 시 R2 orphan 방지
-        let exists = controller
-            .dex_token_exists(&token_id)
-            .await
-            .map_err(|err| {
-                AppError::InternalError(format!("Failed to check dex_token: {}", err))
-            })?;
-        if !exists {
-            return Err(AppError::NotFound(format!(
-                "dex_token not found: {}",
-                token_id
-            )));
-        }
-
-        // 이미지 검증(magic byte) + R2 업로드 → coin/{uuid}
-        let image_uri = self.upload_new_image(&image_data).await?;
-
-        // 최종 UPDATE에 admin EXISTS를 원자적으로 묶음 → 업로드 동안 권한이 회수되는 TOCTOU 창 차단.
-        let updated = controller
-            .set_dex_token_image(session_address, &token_id, &image_uri)
-            .await
-            .map_err(|err| {
-                AppError::InternalError(format!("Failed to set dex_token image: {}", err))
-            })?;
-        if !updated {
-            // 사전 admin/존재 확인 통과 후 0건 → 업로드 중 admin 회수(또는 토큰 삭제).
-            // 원자적 admin 가드에서 막힌 것이므로 인가 실패로 처리.
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-
-        info!("Updated dex_token image for {}: {}", token_id, image_uri);
-
-        Ok(DexTokenImageResponse {
-            success: true,
-            token_id,
-            image_uri,
-        })
-    }
-
-    /// 화이트리스트 토큰 upsert (admin, multipart).
-    /// valid_account_id 정규화 → admin(write) 확인 → 이미지 있으면 R2 업로드 → 원자 upsert.
-    /// whitelist_token은 self-contained — token/dex_token/quote_token 존재 확인 없음.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn upsert_whitelist_token(
-        &self,
-        session_address: &str,
-        token_id: &str,
-        sort_order: i32,
-        enabled: bool,
-        name: Option<String>,
-        symbol: Option<String>,
-        decimals: Option<i32>,
-        image_data: Option<Bytes>,
-    ) -> Result<CmsActionResponse, AppError> {
-        let token_id = valid_account_id(token_id)
-            .ok_or_else(|| AppError::BadRequest("Invalid token_id format".to_string()))?;
-
-        let controller = CmsController::new(self.postgres.clone());
-
-        let is_admin = controller
-            .verify_admin_on_writer(session_address)
-            .await
-            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
-        if !is_admin {
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-
-        // Upload image if provided
-        let image_uri = if let Some(bytes) = image_data {
-            let fmt = self.validate_image(&bytes)?;
-            // Sanitize symbol: lowercase, keep [a-z0-9._-] only
-            let raw_symbol = symbol.as_deref().unwrap_or("");
-            let sanitized: String = raw_symbol
-                .to_lowercase()
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-                .collect();
-            if sanitized.is_empty() {
-                return Err(AppError::BadRequest(
-                    "symbol required for image upload".to_string(),
-                ));
-            }
-            let url = self
-                .r2
-                .upload_whitelist_image_file(&sanitized, &bytes, &fmt)
-                .await
-                .map_err(|e| {
-                    error!("Failed to upload whitelist image: {}", e);
-                    AppError::InternalError(format!("Failed to upload image: {}", e))
-                })?;
-            info!("Uploaded whitelist image: {}", url);
-            Some(url)
-        } else {
-            None
-        };
-
-        let p = WhitelistUpsert {
-            account_id: session_address,
-            token_id: &token_id,
-            sort_order,
-            enabled,
-            name: name.as_deref(),
-            symbol: symbol.as_deref(),
-            image_uri: image_uri.as_deref(),
-            decimals,
-        };
-
-        let ok = controller
-            .upsert_whitelist_token_with_admin_guard(&p)
-            .await
-            .map_err(|err| {
-                AppError::InternalError(format!("Failed to upsert whitelist: {}", err))
-            })?;
-        if !ok {
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-
-        Ok(CmsActionResponse { success: true })
-    }
-
-    /// 화이트리스트 목록 (admin).
-    pub async fn list_whitelist_tokens(
-        &self,
-        session_address: &str,
-    ) -> Result<WhitelistTokenListResponse, AppError> {
-        let controller = CmsController::new(self.postgres.clone());
-        let is_admin = controller
-            .verify_admin_on_writer(session_address)
-            .await
-            .map_err(|err| AppError::InternalError(format!("Failed to verify admin: {}", err)))?;
-        if !is_admin {
-            return Err(AppError::AuthError("Admin access required".to_string()));
-        }
-        let tokens = controller
-            .list_whitelist_tokens()
-            .await
-            .map_err(|err| AppError::InternalError(format!("Failed to list whitelist: {}", err)))?;
-        Ok(WhitelistTokenListResponse { tokens })
     }
 
     async fn get_token_uri(&self, token_address: &Address) -> Result<String, AppError> {

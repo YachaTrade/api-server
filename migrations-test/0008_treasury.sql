@@ -1,1 +1,0 @@
-../migrations/0008_treasury.sql

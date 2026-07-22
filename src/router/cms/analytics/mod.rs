@@ -25,14 +25,4 @@ pub fn router(state: AppState) -> Router<AppState> {
             AnalyticsPath::UserRoi.as_str(),
             get(handler::get_user_roi).layer(from_fn_with_state(state.clone(), authenticate_user)),
         )
-        .route(
-            AnalyticsPath::ChesterRetention.as_str(),
-            get(handler::get_chester_retention)
-                .layer(from_fn_with_state(state.clone(), authenticate_user)),
-        )
-        .route(
-            AnalyticsPath::CreatorFee.as_str(),
-            get(handler::get_creator_fee)
-                .layer(from_fn_with_state(state.clone(), authenticate_user)),
-        )
 }

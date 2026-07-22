@@ -8,7 +8,6 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 - **보유 토큰 조회**: 사용자가 보유한 토큰 목록 및 잔액 정보
 - **생성 토큰 조회**: 사용자가 생성한 토큰 목록
 - **스왑 히스토리 조회**: 사용자의 거래 내역
-- **포인트 히스토리 조회**: 사용자의 포인트 적립 내역 (인증 필요)
 
 ---
 
@@ -92,8 +91,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
           "bio": "...",
           "image_uri": "https://..."
         },
-        "is_cto": false,
-        "version": "V1"
+        "is_cto": false
       },
       "balance_info": {
         "balance": "1000000000000000000",
@@ -128,8 +126,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
         "ath_price_usd": "0.006",
         "ath_price_native": "0.000002",
         "ath_price_quote": "0.000002",
-        "holder_count": 150,
-        "fee_info": null
+        "holder_count": 150
       }
     }
   ],
@@ -189,8 +186,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
           "bio": "...",
           "image_uri": "https://..."
         },
-        "is_cto": false,
-        "version": "V1"
+        "is_cto": false
       },
       "market_info": {
         "market_type": "DEX",
@@ -215,12 +211,6 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
         "token_price": "0.005",
         "native_price": "3000",
         "created_at": 1234567890
-      },
-      "reward_info": {
-        "amount": "1000000000000000000",
-        "claimed_amount": "500000000000000000",
-        "proof": ["0xabc...", "0xdef..."],
-        "claimable": true
       }
     }
   ],
@@ -235,120 +225,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 
 ---
 
-### 4. Gift Fee 토큰 조회 (`GET /profile/gift-fee/{account_id}`)
-
-특정 계정이 V2 gift vault의 receiver로 등록된 토큰 목록을 페이지네이션으로 조회합니다.
-응답 항목은 `tokens/created` 와 동일한 `TokenCreatedInfo` 형식이라 UI에서 동일 카드 레이아웃 재사용 가능.
-
-데이터 소스: `v2_gift_vault_stats` (`receiver = $account_id`).
-
-#### 요청
-- **Method**: `GET`
-- **인증**: 불필요
-- **캐시**: 30초 (env `GET_GIFT_FEE_RESPONSE_EXPIRATION` 으로 조정, ms 단위)
-
-#### Path Parameters
-
-| 파라미터 | 타입 | 필수 | 설명 |
-|----------|------|------|------|
-| `account_id` | string | O | 사용자 Ethereum 주소 (EVM 형식, EIP-55) |
-
-#### Query Parameters
-
-| 파라미터 | 타입 | 기본값 | 설명 |
-|----------|------|--------|------|
-| `page` | integer | 1 | 페이지 번호 (1부터 시작) |
-| `limit` | integer | 10 | 페이지당 항목 수 (최대 100) |
-| `direction` | string | DESC | 정렬 방향 (현재 무시 — `current_balance DESC, updated_at DESC` 고정) |
-
-#### 응답
-
-```json
-{
-  "tokens": [
-    {
-      "token_info": {
-        "token_id": "0x350035555E10d9AfAF1566AaebfCeD5BA6C27777",
-        "name": "Cosmos",
-        "symbol": "ATOM",
-        "image_uri": "https://storage.nadapp.net/...",
-        "description": "...",
-        "is_graduated": false,
-        "is_nsfw": false,
-        "twitter": "https://x.com/...",
-        "telegram": null,
-        "website": null,
-        "created_at": 1714560000,
-        "creator": {
-          "account_id": "0x...",
-          "nickname": "Creator",
-          "bio": "...",
-          "image_uri": "https://..."
-        },
-        "is_cto": false,
-        "version": "V2"
-      },
-      "market_info": {
-        "market_type": "V2_CURVE",
-        "token_id": "0x350035555E10d9AfAF1566AaebfCeD5BA6C27777",
-        "quote_info": {
-          "quote_id": "0x5a4E0bFDeF88C9032CB4d24338C5EB3d3870BfDd",
-          "name": "MONAD",
-          "symbol": "MON",
-          "decimals": 18,
-          "image_uri": "https://storage.nadapp.net/quote/mon.webp"
-        },
-        "market_id": "0x...",
-        "reserve_native": "100000000000000000000000",
-        "reserve_quote": "100000000000000000000000",
-        "reserve_token": "500000000000000000000000000",
-        "token_price": "0.001",
-        "native_price": "3000",
-        "quote_price": "3000",
-        "price": "0.000001",
-        "price_usd": "0.003",
-        "price_native": "0.000001",
-        "price_quote": "0.000001",
-        "total_supply": "1000000000000000000000000000",
-        "volume": "50000000000000000000000",
-        "ath_price": "0.000002",
-        "ath_price_usd": "0.006",
-        "ath_price_native": "0.000002",
-        "ath_price_quote": "0.000002",
-        "holder_count": 150,
-        "fee_info": {
-          "creator_protocol_fee_rate": 100,
-          "curve_protocol_fee_rate": 100,
-          "dex_protocol_fee_rate": 50
-        }
-      },
-      "balance_info": {
-        "balance": "0",
-        "token_price": "0.001",
-        "native_price": "3000",
-        "created_at": 0
-      },
-      "reward_info": {
-        "amount": "0",
-        "claimed_amount": "0",
-        "proof": [],
-        "claimable": false
-      }
-    }
-  ],
-  "total_count": 3
-}
-```
-
-`tokens` 배열은 gift vault `current_balance` (받을 수 있는 잔액) 내림차순 정렬 — 받을 게 많은 토큰이 위로. 잔액이 같은 경우 `updated_at` 내림차순(최신 활동 우선)으로 보조 정렬.
-
-#### 에러 응답
-- `400`: 잘못된 account_id
-- `500`: 내부 서버 에러
-
----
-
-### 5. 스왑 히스토리 조회 (`GET /profile/swap-history/{account_id}`)
+### 4. 스왑 히스토리 조회 (`GET /profile/swap-history/{account_id}`)
 
 사용자의 거래(스왑) 내역을 페이지네이션으로 조회합니다.
 
@@ -393,8 +270,7 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
           "bio": "...",
           "image_uri": "https://..."
         },
-        "is_cto": false,
-        "version": "V1"
+        "is_cto": false
       },
       "swap_info": {
         "event_type": "BUY",
@@ -413,56 +289,6 @@ Profile API는 사용자 프로필 및 활동 정보를 조회하기 위한 API�
 
 #### 에러 응답
 - `400`: 잘못된 요청 (유효하지 않은 account_id)
-- `500`: 내부 서버 에러
-
----
-
-### 6. 포인트 히스토리 조회 (`GET /profile/point-history`)
-
-사용자의 포인트 적립 내역을 조회합니다. **인증 필요**
-
-#### 요청
-- **Method**: `GET`
-- **인증**: 필수 (Session Cookie)
-
-#### Query Parameters
-
-| 파라미터 | 타입 | 기본값 | 설명 |
-|----------|------|--------|------|
-| `page` | integer | 1 | 페이지 번호 (1부터 시작) |
-| `limit` | integer | 10 | 페이지당 항목 수 (최대 100) |
-| `direction` | string | DESC | 정렬 방향 (ASC/DESC) |
-
-#### 응답
-```json
-{
-  "histories": [
-    {
-      "total_point": "15000",
-      "history": [
-        {
-          "epoch": 1,
-          "activity_type": "TRADE",
-          "amount": "5000",
-          "created_at": 1234567890
-        },
-        {
-          "epoch": 1,
-          "activity_type": "REFERRAL",
-          "amount": "10000",
-          "created_at": 1234567800
-        }
-      ],
-      "created_at": 1234567890
-    }
-  ],
-  "total_count": 10
-}
-```
-
-#### 에러 응답
-- `400`: 잘못된 요청
-- `401`: 인증 실패 (세션 쿠키 없음 또는 만료)
 - `500`: 내부 서버 에러
 
 ---
@@ -502,14 +328,11 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  version: TokenVersion;
 }
 
-// 토큰 버전
-type TokenVersion = "V1" | "V2";
 
 // 마켓 타입
-type MarketType = "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
+type MarketType = "CURVE" | "DEX";
 
 // 마켓 정보
 interface QuoteInfo {
@@ -520,11 +343,6 @@ interface QuoteInfo {
   image_uri: string;
 }
 
-interface FeeInfo {
-  creator_protocol_fee_rate: number;
-  curve_protocol_fee_rate: number;
-  dex_protocol_fee_rate: number;
-}
 
 interface MarketInfo {
   market_type: MarketType;
@@ -548,7 +366,6 @@ interface MarketInfo {
   ath_price_native: string;
   ath_price_quote: string;
   holder_count: number;
-  fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
 // 잔액 정보
@@ -573,20 +390,6 @@ interface SwapInfo {
   created_at: number;
 }
 
-// 리워드 정보 (V1 토큰: creator_reward Merkle, V2 토큰: v2_creator_fee_vault_stats)
-//
-// V1: amount = creator_reward.amount, claimed_amount = sum(claim_history),
-//     proof = Merkle proof, claimable = status === 'AWAITING'
-// V2: amount = v2_creator_fee_vault_stats.current_balance (지금 받을 수 있는 잔액),
-//     claimed_amount = v2_creator_fee_vault_stats.total_claimed,
-//     proof = [] (V2는 Merkle 미사용 — vault에서 직접 claim),
-//     claimable = current_balance > 0
-interface RewardInfo {
-  amount: string;
-  claimed_amount: string;
-  proof: string[];
-  claimable: boolean;
-}
 ```
 
 ### 응답 타입
@@ -619,7 +422,6 @@ interface TokenCreatedInfo {
   token_info: TokenInfo;
   market_info: MarketInfo;
   balance_info: BalanceInfo;
-  reward_info: RewardInfo;
 }
 
 // GET /profile/swap-history/{account_id}
@@ -633,24 +435,6 @@ interface TokenSwapInfo {
   swap_info: SwapInfo;
 }
 
-// GET /profile/point-history
-interface PointHistoryResponse {
-  histories: PointRecordTotal[];
-  total_count: number;
-}
-
-interface PointRecordTotal {
-  total_point: string;
-  history: PointRecord[];
-  created_at: number;
-}
-
-interface PointRecord {
-  epoch: number;
-  activity_type: string;
-  amount: string;
-  created_at: number;
-}
 ```
 
 ---

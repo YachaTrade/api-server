@@ -235,11 +235,7 @@ pub async fn get_holdings(
         error!("Invalid account ID format: {}", account_id);
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
-    let service = PositionService::new(
-        state.postgres.clone(),
-        state.redis.clone(),
-        state.capricorn.clone(),
-    );
+    let service = PositionService::new(state.postgres.clone(), state.redis.clone());
     let response = service
         .get_hold_token_by_account(&account_id, &query)
         .await?;
@@ -321,7 +317,7 @@ pub async fn upload_metadata(
         ("limit" = Option<i64>, Query, description = "Items per page")
     ),
     responses(
-        (status = 200, description = "Created tokens with rewards", body = CreatedTokensResponse),
+        (status = 200, description = "Created tokens", body = CreatedTokensResponse),
         (status = 400, description = "Invalid account ID"),
         (status = 401, description = "API key required"),
     ),
@@ -338,11 +334,7 @@ pub async fn get_tokens_created(
         error!("Invalid account ID format: {}", account_id);
         AppError::BadRequest("Invalid account ID".to_string())
     })?;
-    let service = TokenCreatedService::new(
-        state.postgres.clone(),
-        state.redis.clone(),
-        state.capricorn.clone(),
-    );
+    let service = TokenCreatedService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_tokens_created(&account_id, &pagination).await?;
 
     Ok(Json(response))

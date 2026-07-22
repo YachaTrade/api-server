@@ -145,13 +145,13 @@ curl "https://api.nad.fun/asset?id=0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c"
 | --- | --- |
 | URL | /pair |
 | Method | GET |
-| Description | Retrieves trading pair information for a token |
+| Description | Retrieves DEX trading-pair information by pool address |
 
 ### Parameters
 
 | Parameter | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| id | Query | String | Required | Token contract address (42 characters with 0x prefix) |
+| id | Query | String | Required | DEX pool address (42 characters with 0x prefix) |
 
 ### Response
 
@@ -161,14 +161,13 @@ curl "https://api.nad.fun/asset?id=0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c"
 {
   "pair": {
     "id": "0xD5724171C2b7f0AA717a324626050BD05767e2C6",
-    "dexKey": "nadfun",
+    "dexKey": "nadswap",
     "asset0Id": "0x1234567890123456789012345678901234567890",
     "asset1Id": "0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c",
     "createdAtBlockNumber": 1234567,
     "createdAtBlockTimestamp": 1704067200,
     "createdAtTxnId": "0x91a01448267c6959171ec75d9aac3c011f39346d7f3152b7f9f087519852d1d6",
-    "creator": "0x9b834355d9EbcDFb291eAba6809B9E8D2C6b88d1",
-    "feeBps": 100
+    "creator": "0x9b834355d9EbcDFb291eAba6809B9E8D2C6b88d1"
   }
 }
 ```
@@ -177,17 +176,17 @@ curl "https://api.nad.fun/asset?id=0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c"
 
 | Field | Type | Description |
 | --- | --- | --- |
-| pair.id | String | Pool ID or bonding curve contract address |
-| pair.dexKey | String | DEX identifier: "nadfun" (bonding curve) or "capricorn" (DEX) |
+| pair.id | String | DEX pool address |
+| pair.dexKey | String | DEX identifier: always `nadswap` |
 | pair.asset0Id | String | First asset address (alphabetically ordered) |
 | pair.asset1Id | String | Second asset address (alphabetically ordered) |
 | pair.createdAtBlockNumber | Integer (u64, optional) | Block number when pair was created |
 | pair.createdAtBlockTimestamp | Integer (u64, optional) | Unix timestamp of pair creation |
 | pair.createdAtTxnId | String (optional) | Transaction hash of pair creation |
 | pair.creator | String (optional) | Creator wallet address |
-| pair.feeBps | Integer (u32, optional) | Trading fee in basis points (always 100 = 1%) |
+| pair.feeBps | Integer (u32, optional) | Currently omitted because total fee configuration is unavailable |
 
-**Note:** Assets are always ordered alphabetically by comparing token address with WMON address.
+**Note:** Assets are ordered alphabetically by comparing the token address with `market.quote_id`.
 
 #### Error Response (Status: 404)
 
@@ -309,7 +308,7 @@ curl "https://api.nad.fun/pair?id=0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c"
 | txnIndex | Integer (u32) | Transaction index in block |
 | eventIndex | Integer (u32) | Log index within transaction |
 | maker | String | Account address that executed the swap |
-| pairId | String | Pool ID or bonding curve address |
+| pairId | String | DEX pool address |
 | asset0In | String (optional) | Amount of asset0 sent in (decimalized, max 50 decimals) |
 | asset1In | String (optional) | Amount of asset1 sent in (decimalized, max 50 decimals) |
 | asset0Out | String (optional) | Amount of asset0 received (decimalized, max 50 decimals) |
@@ -334,7 +333,7 @@ curl "https://api.nad.fun/pair?id=0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c"
 | txnIndex | Integer (u32) | Transaction index in block |
 | eventIndex | Integer (u32) | Log index within transaction |
 | maker | String | Account address that added liquidity |
-| pairId | String | Pool ID or bonding curve address |
+| pairId | String | DEX pool address |
 | amount0 | String | Amount of asset0 added (decimalized, max 50 decimals) |
 | amount1 | String | Amount of asset1 added (decimalized, max 50 decimals) |
 | reserves.asset0 | String | Reserve amount of asset0 after addition (decimalized) |
@@ -351,7 +350,7 @@ curl "https://api.nad.fun/pair?id=0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c"
 | txnIndex | Integer (u32) | Transaction index in block |
 | eventIndex | Integer (u32) | Log index within transaction |
 | maker | String | Account address that removed liquidity |
-| pairId | String | Pool ID or bonding curve address |
+| pairId | String | DEX pool address |
 | amount0 | String | Amount of asset0 removed (decimalized, max 50 decimals) |
 | amount1 | String | Amount of asset1 removed (decimalized, max 50 decimals) |
 | reserves.asset0 | String | Reserve amount of asset0 after removal (decimalized) |
@@ -520,20 +519,19 @@ In pair and event responses, assets are ordered alphabetically by comparing toke
 - `asset0`: The asset with the smaller address (alphabetically)
 - `asset1`: The asset with the larger address (alphabetically)
 
-WMON (Wrapped MON, native currency) is typically compared against the project token address.
+The market's configured quote token is compared against the project token address.
 
 ### DEX Key Values
 
 | dexKey | Description |
 | --- | --- |
-| nadfun | Bonding Curve market (CURVE type) |
-| capricorn | Uniswap v3 DEX market (DEX type) |
+| nadswap | DEX market (`DEX` type) |
 
 ### Constants
 
 - **Token Decimals**: Always 18 for all tokens
 - **Total Supply**: Always 1,000,000,000 (1 billion)
-- **Trading Fee**: Always 100 basis points (1%)
+- **Trading Fee**: `feeBps` is currently omitted rather than guessed
 
 ---
 

@@ -430,21 +430,14 @@ const apiTests = {
     }, 150);
   },
 
-  // 8. Hype API
-  getHypeTokens: () => {
-    httpGetWithErrorLog(`${BASE_URL}/hype/token?epoch=1`, {
-      'hype tokens response time < 200ms': (r) => r.timings.duration < 200,
-    }, 200);
-  },
-
-  // 9. Trend API (Honor Hall of Fame)
+  // 8. Trend API
   getTrendTokens: () => {
     httpGetWithErrorLog(`${BASE_URL}/trend`, {
       'trend tokens response time < 200ms': (r) => r.timings.duration < 200,
     }, 200);
   },
 
-  // 10. Management API (인증 필요하므로 제외)
+  // 9. Management API (인증 필요하므로 제외)
 };
 
 // 가중치 기반 시나리오 분포 (실제 API 경로 반영)
@@ -468,7 +461,6 @@ const scenarios = [
   // 낮은 빈도 (각 0.4%)
   { weight: 0.004, test: 'getMarket' },
   { weight: 0.004, test: 'getTokenMetadata' },
-  { weight: 0.004, test: 'getHypeTokens' },
   { weight: 0.004, test: 'getTrendTokens' },
   { weight: 0.004, test: 'getTokensCreated' },
 ];

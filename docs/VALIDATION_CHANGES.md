@@ -38,15 +38,7 @@ pub fn validate(&self) -> Result<(), String> {
 }
 ```
 
-### 4. HypeVoteRequest (`src/types/hype/mod.rs`)
-```rust
-pub fn validate(&self) -> Result<(), String> {
-    // token_id: EVM 주소 형식
-    // amount: 양수 (> 0)
-}
-```
-
-### 5. EventsQuery (`src/types/terminal/mod.rs`)
+### 4. EventsQuery (`src/types/terminal/mod.rs`)
 ```rust
 const MAX_BLOCK_RANGE: u64 = 10000;
 
@@ -56,7 +48,7 @@ pub fn validate(&self) -> Result<(), String> {
 }
 ```
 
-### 6. RegisterWalletRequest (`src/types/account/mod.rs`)
+### 5. RegisterWalletRequest (`src/types/account/mod.rs`)
 ```rust
 const ALLOWED_WALLETS: &[&str] = &[
     "METAMASK", "KEPLR", "BACKPACK", "HAHA", "OKX", "PHANTOM", "RABBY", "OTHER"
@@ -67,14 +59,14 @@ pub fn validate(&self) -> Result<(), String> {
 }
 ```
 
-### 7. SetNsfwRequest (`src/types/cms/mod.rs`)
+### 6. SetNsfwRequest (`src/types/cms/mod.rs`)
 ```rust
 pub fn validate(&self) -> Result<(), String> {
     // token_id: EVM 주소 형식
 }
 ```
 
-### 8. InsertTrendRequest (`src/types/cms/mod.rs`)
+### 7. InsertTrendRequest (`src/types/cms/mod.rs`)
 ```rust
 const MAX_TREND_TOKENS: usize = 50;
 
@@ -167,7 +159,6 @@ TimeFrame::OneDay => "D",
 | AuthNonceRequest | `get_nonce` | `src/router/auth/handler.rs` |
 | AuthSessionRequest | `create_session` | `src/router/auth/handler.rs` |
 | MineSaltRequest | `mine_salt` | `src/router/token/handler.rs` |
-| HypeVoteRequest | `vote` | `src/router/hype/handler.rs` |
 | EventsQuery | `get_events` | `src/router/terminal/handler.rs` |
 | RegisterWalletRequest | `register_wallet` | `src/router/account/handler.rs` |
 | GetBarsRequest | `get_prices` | `src/router/trade/handler.rs` |

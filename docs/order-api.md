@@ -52,8 +52,7 @@ Order API는 토큰 목록을 다양한 기준으로 정렬하여 조회하는 A
           "bio": "...",
           "image_uri": "https://..."
         },
-        "is_cto": false,
-        "version": "V1"
+        "is_cto": false
       },
       "market_info": {
         "market_type": "CURVE",
@@ -82,8 +81,7 @@ Order API는 토큰 목록을 다양한 기준으로 정렬하여 조회하는 A
         "ath_price_usd": "0.006",
         "ath_price_native": "0.000002",
         "ath_price_quote": "0.000002",
-        "holder_count": 150,
-        "fee_info": null
+        "holder_count": 150
       },
       "percent": 15.5
     }
@@ -193,7 +191,6 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  version: TokenVersion;
 }
 
 interface AccountInfo {
@@ -211,14 +208,9 @@ interface QuoteInfo {
   image_uri: string;
 }
 
-interface FeeInfo {
-  creator_protocol_fee_rate: number;
-  curve_protocol_fee_rate: number;
-  dex_protocol_fee_rate: number;
-}
 
 interface MarketInfo {
-  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
+  market_type: "CURVE" | "DEX";
   token_id: string;
   quote_info: QuoteInfo;
   market_id: string;
@@ -239,10 +231,8 @@ interface MarketInfo {
   ath_price_native: string;     // ATH 가격 (Native)
   ath_price_quote: string;      // ATH 가격 (Quote)
   holder_count: number;         // 홀더 수
-  fee_info: FeeInfo | null;     // 수수료 설정 (V2 토큰만, V1은 null)
 }
 
-type TokenVersion = "V1" | "V2";
 ```
 
 ### 정렬 기준 타입

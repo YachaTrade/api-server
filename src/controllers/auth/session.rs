@@ -41,15 +41,14 @@ impl SessionController {
                 )
                 SELECT
                     a.account_id,
-                    COALESCE(ax.x_handle, a.nickname) as nickname,
-                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    a.nickname as nickname,
+                    a.image_uri as image_uri,
                     a.bio
                 -- Read from the account_upsert CTE, not the base `account` table:
                 -- data-modifying CTEs run under the statement's start snapshot, so a
                 -- just-inserted brand-new account is invisible to `FROM account` and
                 -- the query would return 0 rows (RowNotFound) on first login.
                 FROM account_upsert a
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 CROSS JOIN session_upsert
                 WHERE a.account_id = $2
                 "#,
@@ -138,7 +137,7 @@ mod tests {
     /// logging in for the first time. The final `SELECT` must see the row the
     /// `account_upsert` CTE just inserted, otherwise `fetch_one` hits RowNotFound
     /// → InternalError("Database error: no rows returned ...").
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn set_session_succeeds_for_brand_new_account(pool: PgPool) {
         set_default_image_env();
         let ctrl = make_controller(pool.clone());
@@ -159,7 +158,7 @@ mod tests {
     /// Returning user: the `account` row already exists. The upsert must return the
     /// stored profile (not the generated default) and rotate the session id via
     /// `ON CONFLICT (account_id) DO UPDATE`.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn set_session_updates_session_for_existing_account(pool: PgPool) {
         set_default_image_env();
         sqlx::query(

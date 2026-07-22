@@ -3,4 +3,3 @@ pub mod market;
 pub mod metrics;
 pub mod position;
 pub mod swap_history;
-pub mod xinfo;

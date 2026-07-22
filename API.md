@@ -12,10 +12,9 @@ This document provides the complete API specification for the NADS Pump API Serv
 2. [Get Market Data API](#2-get-market-data-api)
 3. [Get Chart Data API](#3-get-chart-data-api)
 4. [Get Token Metrics API](#4-get-token-metrics-api)
-5. [Get Hype Token API](#5-get-hype-token-api)
-6. [Upload Image API](#6-upload-image-api)
-7. [Upload Metadata API](#7-upload-metadata-api)
-8. [Mine Salt API](#8-mine-salt-api)
+5. [Upload Image API](#5-upload-image-api)
+6. [Upload Metadata API](#6-upload-metadata-api)
+7. [Mine Salt API](#7-mine-salt-api)
 
 ---
 
@@ -438,127 +437,7 @@ GET /trade/metrics/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c?timeframes=1,5,15,
 
 ---
 
-# 5. Get Hype Token API
-
-### Basic Information
-
-| Item        | Description                                                             |
-| ----------- | ----------------------------------------------------------------------- |
-| URL         | /hype/token                                                             |
-| Method      | GET                                                                     |
-| Description | Query hype tokens for current active epoch or specific historical epoch |
-
-### Parameters
-
-| Parameter | Location | Type    | Required | Description                                                                   |
-| --------- | -------- | ------- | -------- | ----------------------------------------------------------------------------- |
-| epoch     | Query    | Integer | Optional | Specific epoch number to query. If not provided, returns current active epoch |
-
-### Response
-
-#### Success Response (Status: 200)
-
-```json
-{
-  "tokens": [
-    {
-      "token_info": {
-        "token_id": "0x1234567890abcdef1234567890abcdef12345678",
-        "name": "Sample Token",
-        "symbol": "SAMPLE",
-        "image_uri": "https://storage.nadapp.net/coin/550e8400-e29b-41d4-a716-446655440000.png",
-        "description": "A sample hype token for demonstration",
-        "is_graduated": false,
-        "is_nsfw": false,
-        "twitter": "https://x.com/example",
-        "telegram": "https://t.me/example",
-        "website": "https://example.com",
-        "created_at": 1641024000,
-        "creator": {
-          "account_id": "0xabcdef1234567890abcdef1234567890abcdef12",
-          "nickname": "TokenCreator",
-          "bio": "Token creator bio",
-          "image_uri": "https://storage.nadapp.net/profile/..."
-        }
-      },
-      "hype_info": {
-        "vote": "25430.50",
-        "holder_count": 450,
-        "market_cap": "1250000.00",
-        "reward_amount": "5000.50"
-      }
-    }
-  ],
-  "total_count": 150
-}
-```
-
-### Response Fields
-
-| Field                                  | Type              | Description                                                       |
-| -------------------------------------- | ----------------- | ----------------------------------------------------------------- |
-| tokens                                 | Array             | List of hype tokens for the specified epoch                       |
-| tokens[].token_info                    | Object            | Basic token information                                           |
-| tokens[].token_info.token_id           | String            | EVM token address (42 characters with 0x prefix)                  |
-| tokens[].token_info.name               | String            | Token name                                                        |
-| tokens[].token_info.symbol             | String            | Token symbol                                                      |
-| tokens[].token_info.image_uri          | String            | Token image URL                                                   |
-| tokens[].token_info.description        | String (nullable) | Token description                                                 |
-| tokens[].token_info.is_graduated       | Boolean           | Whether token graduated to DEX                                    |
-| tokens[].token_info.is_nsfw            | Boolean           | Whether token is marked as NSFW                                   |
-| tokens[].token_info.twitter            | String (nullable) | Twitter/X profile link                                            |
-| tokens[].token_info.telegram           | String (nullable) | Telegram group link                                               |
-| tokens[].token_info.website            | String (nullable) | Official website link                                             |
-| tokens[].token_info.created_at         | Integer           | Token creation timestamp (Unix timestamp in seconds)              |
-| tokens[].token_info.creator            | Object            | Token creator information                                         |
-| tokens[].token_info.creator.account_id | String            | Creator's wallet address                                          |
-| tokens[].token_info.creator.nickname   | String            | Creator's display name (X handle if verified, otherwise nickname) |
-| tokens[].token_info.creator.bio        | String            | Creator's biography                                               |
-| tokens[].token_info.creator.image_uri  | String            | Creator's profile image URL                                       |
-| tokens[].hype_info                     | Object            | Hype-related metrics for this token                               |
-| tokens[].hype_info.vote                | String            | Total votes received by this token                                |
-| tokens[].hype_info.holder_count        | Integer           | Number of token holders                                           |
-| tokens[].hype_info.market_cap          | String            | Current market capitalization (price × total_supply)              |
-| tokens[].hype_info.reward_amount       | String            | Reward pool amount allocated for this token                       |
-| total_count                            | Integer           | Total number of hype tokens in this epoch                         |
-
-**Note:** All numeric values (vote, market_cap, reward_amount) are returned as strings to preserve decimal precision.
-
-#### Error Responses
-
-Invalid Epoch Parameter (Status: 400)
-
-```json
-{
-  "error": "Invalid epoch"
-}
-```
-
-Database Error (Status: 500)
-
-```json
-{
-  "error": "Failed to get hype token, error: [error details]"
-}
-```
-
-### Usage Examples
-
-Get current active epoch hype tokens:
-
-```
-GET /hype/token
-```
-
-Get specific epoch hype tokens:
-
-```
-GET /hype/token?epoch=10
-```
-
----
-
-# 6. Upload Image API
+# 5. Upload Image API
 
 ### Basic Information
 
@@ -679,7 +558,7 @@ The following content categories are detected with respective confidence thresho
 
 ---
 
-# 7. Upload Metadata API
+# 6. Upload Metadata API
 
 ### Basic Information
 
@@ -804,7 +683,7 @@ Upload Failed (Status: 500)
 
 ---
 
-# 8. Mine Salt API
+# 7. Mine Salt API
 
 ### Basic Information
 
@@ -961,16 +840,6 @@ curl -X POST https://api.nadapp.net/token/salt \
 - **Added** `percent` field for price change percentage
 - Uses `price_history` table instead of chart table for price calculations
 - Implements fallback logic when no price exists at timeframe start
-
-#### Hype Token API (`/hype/token`)
-
-- **Changed** response structure to include full `token_info` object with creator details
-- **Added** `creator` nested object with account information
-- **Added** token fields: `is_graduated`, `is_nsfw`, `twitter`, `telegram`, `website`, `created_at`
-- **Changed** `hype_info.vote`, `market_cap`, `reward_amount` to string format for decimal precision
-- **Removed** `account_info` fields: `follower_count`, `following_count`
-- Creator nickname now shows X handle if verified, otherwise default nickname
-- Creator image shows X profile image if verified, otherwise default image
 
 #### Upload Image API (`/metadata/image`)
 

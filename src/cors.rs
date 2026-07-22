@@ -5,27 +5,28 @@ use axum::http::{
 use std::time::Duration;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
+use url::Url;
 
-/// Exact-match allowed origins (apex domains).
-const STATIC_ORIGINS: [&str; 4] = [
-    "https://nad.fun",
-    "https://nadapp.net",
-    "https://symphony.io",
-    "https://mm-dashboard-six.vercel.app",
-];
+const STATIC_ORIGINS: [&str; 1] = ["https://app.yacha.trade"];
 
-/// Whether a request `Origin` is allowed. Exact apex match, allowed suffixes
-/// (subdomains), CloudFront distributions, or local dev.
-/// NOTE: keep in sync with `crate::middleware::is_allowed_origin` (CSRF check) —
-/// a CORS-allowed origin still gets rejected on protected routes if the
-/// middleware allowlist disagrees.
-fn is_origin_allowed(origin: &str) -> bool {
-    STATIC_ORIGINS.contains(&origin)
-        || origin.ends_with(".nad.fun")
-        || origin.ends_with(".nadapp.net")
-        || origin.ends_with(".symphony.io")
-        || origin.ends_with(".cloudfront.net")
-        || origin.starts_with("http://localhost:")
+pub(crate) fn is_origin_allowed(origin: &str) -> bool {
+    if STATIC_ORIGINS.contains(&origin) {
+        return true;
+    }
+
+    let Ok(url) = Url::parse(origin) else {
+        return false;
+    };
+
+    url.scheme() == "http"
+        && url.host_str() == Some("localhost")
+        && url.port().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && origin == url.origin().ascii_serialization()
 }
 
 pub fn get_cors() -> CorsLayer {
@@ -70,27 +71,27 @@ mod tests {
     #[test]
     fn origin_allow_rules() {
         let cases = [
-            // exact apex
-            ("https://nad.fun", true),
-            ("https://nadapp.net", true),
-            ("https://symphony.io", true),
-            ("https://mm-dashboard-six.vercel.app", true),
-            // allowed subdomains
-            ("https://app.nad.fun", true),
-            ("https://x.symphony.io", true),
-            ("https://dev-api.nadapp.net", true),
-            ("https://www.nadapp.net", true),
-            // CloudFront distributions (newly allowed)
-            ("https://d111abcdef8.cloudfront.net", true),
-            ("https://assets.d111.cloudfront.net", true),
-            // local dev
+            ("https://app.yacha.trade", true),
             ("http://localhost:3000", true),
-            // rejected
+            ("http://localhost:8090", true),
+            ("http://localhost:", false),
+            ("http://localhost:abc", false),
+            ("http://localhost:65536", false),
+            ("http://localhost:3000.evil", false),
+            ("http://user@localhost:3000", false),
+            ("http://localhost:3000/path", false),
+            ("http://localhost:3000?query", false),
+            ("http://localhost:3000#fragment", false),
+            ("https://yacha.trade", false),
+            ("https://api.yacha.trade", false),
+            ("https://nad.fun", false),
+            ("https://app.nad.fun", false),
+            ("https://nadapp.net", false),
+            ("https://dev-api.nadapp.net", false),
+            ("https://x.symphony.io", false),
+            ("https://d111abcdef8.cloudfront.net", false),
+            ("https://mm-dashboard-six.vercel.app", false),
             ("https://evil.com", false),
-            ("https://nad.fun.evil.com", false),
-            ("https://notcloudfront.net", false),
-            ("https://cloudfront.net", false), // apex without subdomain
-            ("https://nadapp.net.attacker.com", false),
         ];
         for (origin, expected) in cases {
             assert_eq!(is_origin_allowed(origin), expected, "origin: {origin}");
