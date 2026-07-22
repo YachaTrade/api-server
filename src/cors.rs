@@ -7,26 +7,56 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use url::Url;
 
-const STATIC_ORIGINS: [&str; 1] = ["https://app.yacha.trade"];
+const YACHA_DOMAIN_SUFFIX: &str = ".yacha.trade";
 
-pub(crate) fn is_origin_allowed(origin: &str) -> bool {
-    if STATIC_ORIGINS.contains(&origin) {
-        return true;
-    }
-
-    let Ok(url) = Url::parse(origin) else {
-        return false;
-    };
-
-    url.scheme() == "http"
-        && url.host_str() == Some("localhost")
-        && url.port().is_some()
-        && url.username().is_empty()
+fn is_canonical_origin(origin: &str, url: &Url) -> bool {
+    url.username().is_empty()
         && url.password().is_none()
         && url.path() == "/"
         && url.query().is_none()
         && url.fragment().is_none()
         && origin == url.origin().ascii_serialization()
+}
+
+fn is_valid_dns_label(label: &str) -> bool {
+    let bytes = label.as_bytes();
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+
+    bytes.len() <= 63
+        && first.is_ascii_alphanumeric()
+        && last.is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+}
+
+fn is_yacha_subdomain_origin(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let Some(subdomains) = host.strip_suffix(YACHA_DOMAIN_SUFFIX) else {
+        return false;
+    };
+
+    url.scheme() == "https"
+        && url.port().is_none()
+        && host.len() <= 253
+        && subdomains.split('.').all(is_valid_dns_label)
+}
+
+pub(crate) fn is_origin_allowed(origin: &str) -> bool {
+    let Ok(url) = Url::parse(origin) else {
+        return false;
+    };
+
+    if !is_canonical_origin(origin, &url) {
+        return false;
+    }
+
+    is_yacha_subdomain_origin(&url)
+        || (url.scheme() == "http" && url.host_str() == Some("localhost") && url.port().is_some())
 }
 
 pub fn get_cors() -> CorsLayer {
@@ -66,12 +96,30 @@ pub fn get_cors() -> CorsLayer {
 
 #[cfg(test)]
 mod tests {
-    use super::is_origin_allowed;
+    use super::{get_cors, is_origin_allowed};
+    use axum::{
+        Router,
+        body::Body,
+        http::{
+            Method, Request,
+            header::{
+                ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_ORIGIN,
+                ACCESS_CONTROL_REQUEST_METHOD, ORIGIN,
+            },
+        },
+        routing::get,
+    };
+    use tower::ServiceExt;
 
     #[test]
     fn origin_allow_rules() {
         let cases = [
             ("https://app.yacha.trade", true),
+            ("https://dev.yacha.trade", true),
+            ("https://api.yacha.trade", true),
+            ("https://a.b.yacha.trade", true),
+            ("https://foo-bar.yacha.trade", true),
+            ("https://xn--bcher-kva.yacha.trade", true),
             ("http://localhost:3000", true),
             ("http://localhost:8090", true),
             ("http://localhost:", false),
@@ -83,7 +131,27 @@ mod tests {
             ("http://localhost:3000?query", false),
             ("http://localhost:3000#fragment", false),
             ("https://yacha.trade", false),
-            ("https://api.yacha.trade", false),
+            ("http://dev.yacha.trade", false),
+            ("https://dev.yacha.trade:443", false),
+            ("https://dev.yacha.trade:8443", false),
+            ("https://user@dev.yacha.trade", false),
+            ("https://dev.yacha.trade/", false),
+            ("https://dev.yacha.trade/path", false),
+            ("https://dev.yacha.trade?query", false),
+            ("https://dev.yacha.trade#fragment", false),
+            ("https://.yacha.trade", false),
+            ("https://a..yacha.trade", false),
+            ("https://foo_bar.yacha.trade", false),
+            ("https://-foo.yacha.trade", false),
+            ("https://foo-.yacha.trade", false),
+            ("https://dev.yacha.trade.", false),
+            ("https://evil-yacha.trade", false),
+            ("https://yacha.trade.evil.com", false),
+            ("https://dev%2eyacha.trade", false),
+            ("https://dev。yacha。trade", false),
+            ("https://dev.yacha.trade\\@evil.com", false),
+            ("blob:https://dev.yacha.trade/id", false),
+            ("null", false),
             ("https://nad.fun", false),
             ("https://app.nad.fun", false),
             ("https://nadapp.net", false),
@@ -96,5 +164,68 @@ mod tests {
         for (origin, expected) in cases {
             assert_eq!(is_origin_allowed(origin), expected, "origin: {origin}");
         }
+
+        let oversized_label = format!("https://{}.yacha.trade", "a".repeat(64));
+        assert!(!is_origin_allowed(&oversized_label));
+
+        let oversized_hostname =
+            format!("https://{}.yacha.trade", vec!["a".repeat(63); 4].join("."));
+        assert!(!is_origin_allowed(&oversized_hostname));
+    }
+
+    #[tokio::test]
+    async fn cors_layer_only_echoes_trusted_origin() {
+        let app = Router::new()
+            .route("/", get(|| async { "ok" }))
+            .layer(get_cors());
+
+        let trusted = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::OPTIONS)
+                    .uri("/")
+                    .header(ORIGIN, "https://dev.yacha.trade")
+                    .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            trusted
+                .headers()
+                .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+                .and_then(|value| value.to_str().ok()),
+            Some("https://dev.yacha.trade")
+        );
+        assert_eq!(
+            trusted
+                .headers()
+                .get(ACCESS_CONTROL_ALLOW_CREDENTIALS)
+                .and_then(|value| value.to_str().ok()),
+            Some("true")
+        );
+
+        let rejected = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::OPTIONS)
+                    .uri("/")
+                    .header(ORIGIN, "https://evil-yacha.trade")
+                    .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            rejected
+                .headers()
+                .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+                .is_none()
+        );
     }
 }
