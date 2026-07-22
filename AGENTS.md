@@ -55,3 +55,9 @@ The release build mirrors the Docker build's SQLx offline mode. Running the serv
 - Build with `SQLX_OFFLINE=true` to catch divergence from tracked query metadata without connecting to a database.
 - For route changes, verify status codes, response JSON, authentication boundaries, and OpenAPI output.
 - Report any integration checks skipped because PostgreSQL, Redis, RPC, or AWS services were unavailable.
+
+## Branch Workflow
+
+- Target `dev` for normal pull requests.
+- Treat `main` as promotion/release-only; target it only with explicit user authorization.
+- Use squash merge for pull requests.
