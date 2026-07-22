@@ -24,6 +24,7 @@
 **Files:**
 - Modify: `src/cors.rs`
 - Test: `src/cors.rs` (`tests::origin_allow_rules`)
+- Test: `src/middleware.rs` (`tests::yacha_and_local_origins_only`)
 
 **Interfaces:**
 - Consumes: `url::Url` and the raw `Origin` header string.
@@ -74,15 +75,32 @@ let cases = [
 ];
 ```
 
+Update the middleware's representative shared-policy assertions so the wrapper expects the same wildcard behavior without duplicating the full edge-case matrix:
+
+```rust
+#[test]
+fn yacha_and_local_origins_only() {
+    assert!(is_allowed_origin("https://app.yacha.trade"));
+    assert!(is_allowed_origin("https://dev.yacha.trade"));
+    assert!(is_allowed_origin("https://a.b.yacha.trade"));
+    assert!(is_allowed_origin("http://localhost:3000"));
+    assert!(!is_allowed_origin("https://yacha.trade"));
+    assert!(!is_allowed_origin("http://dev.yacha.trade"));
+    assert!(!is_allowed_origin("https://evil-yacha.trade"));
+    assert!(!is_allowed_origin("https://yacha.trade.evil.com"));
+}
+```
+
 - [ ] **Step 2: Run the focused test and verify the red state**
 
 Run:
 
 ```bash
 cargo test cors::tests::origin_allow_rules
+cargo test middleware::tests::yacha_and_local_origins_only
 ```
 
-Expected: FAIL at `https://dev.yacha.trade` because the current implementation only trusts `https://app.yacha.trade`.
+Expected: both commands FAIL at `https://dev.yacha.trade` because the current implementation only trusts `https://app.yacha.trade`.
 
 - [ ] **Step 3: Implement the minimal parsed-hostname policy**
 
@@ -136,9 +154,10 @@ Run:
 
 ```bash
 cargo test cors::tests::origin_allow_rules
+cargo test middleware::tests::yacha_and_local_origins_only
 ```
 
-Expected: PASS with one `origin_allow_rules` test passing and no failures.
+Expected: PASS with both focused policy tests passing and no failures.
 
 - [ ] **Step 5: Format and confirm the focused test still passes**
 
@@ -147,6 +166,7 @@ Run:
 ```bash
 cargo fmt --all
 cargo test cors::tests::origin_allow_rules
+cargo test middleware::tests::yacha_and_local_origins_only
 ```
 
 Expected: formatting succeeds and the focused test remains PASS.
@@ -155,6 +175,7 @@ Expected: formatting succeeds and the focused test remains PASS.
 
 **Files:**
 - Verify: `src/cors.rs`
+- Verify: `src/middleware.rs`
 - Verify: `docs/superpowers/specs/2026-07-22-yacha-wildcard-cors-design.md`
 - Verify: `docs/superpowers/plans/2026-07-22-yacha-wildcard-cors.md`
 
@@ -193,11 +214,11 @@ Expected: only the approved design, plan, and CORS policy/test changes are prese
 Run:
 
 ```bash
-git add src/cors.rs
+git add src/cors.rs src/middleware.rs
 git commit -m "fix: allow Yacha subdomain origins"
 ```
 
-Expected: one implementation commit containing only `src/cors.rs`.
+Expected: one implementation commit containing only the CORS implementation and its two focused policy tests.
 
 - [ ] **Step 4: Push and create the pull request**
 
