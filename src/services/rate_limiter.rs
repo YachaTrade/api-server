@@ -6,13 +6,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const RATE_LIMIT_WITH_API_KEY: u64 = 100; // With API key: 100 req/min
 pub const RATE_LIMIT_WITHOUT_API_KEY: u64 = 10; // Without API key: 10 req/min
 
-/// X OAuth login attempts per account per minute.
-pub const X_OAUTH_LOGIN_RATE_LIMIT: u64 = 3;
-/// X followed-by checks per account per minute.
-pub const X_FOLLOWED_BY_RATE_LIMIT: u64 = 5;
-/// X reservation attempts per account per minute (each does an on-chain RPC call).
-pub const X_RESERVE_RATE_LIMIT: u64 = 5;
-
 /// Rate limit check result
 #[derive(Debug)]
 pub enum RateLimitResult {

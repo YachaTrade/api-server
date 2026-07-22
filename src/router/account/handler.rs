@@ -8,8 +8,8 @@ use crate::{
     services::account::AccountService,
     state::AppState,
     types::account::{
-        AccountResponse, ConnectXRequest, GetWalletResponse, RegisterWalletRequest,
-        UpdateAccountRequest, UpdateXRequest, UploadImageResponse,
+        AccountResponse, GetWalletResponse, RegisterWalletRequest, UpdateAccountRequest,
+        UploadImageResponse,
     },
 };
 
@@ -82,83 +82,6 @@ pub async fn get_account(
     let service = AccountService::new(state.postgres.clone(), state.redis.clone());
     let response = service.get_account(&session_address).await?;
 
-    Ok(Json(response))
-}
-
-/// Connect X account
-#[utoipa::path(
-    put,
-    path = AccountPath::ConnectX.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    request_body = ConnectXRequest,
-    responses(
-        (status = 200, description = "X account connected successfully", body = AccountResponse)
-    ),
-    tag="Account"
-)]
-pub async fn connect_x(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-    Json(payload): Json<ConnectXRequest>,
-) -> AppJsonResult<AccountResponse> {
-    payload.validate().map_err(|e| {
-        error!("Invalid connect_x request: {}", e);
-        AppError::BadRequest(e)
-    })?;
-
-    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.connect_x(&session_address, payload).await?;
-    Ok(Json(response))
-}
-
-/// Disconnect X account
-#[utoipa::path(
-    delete,
-    path = AccountPath::DisconnectX.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    responses(
-        (status = 200, description = "X account disconnected successfully", body = AccountResponse)
-    ),
-    tag="Account"
-)]
-pub async fn disconnect_x(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-) -> AppJsonResult<AccountResponse> {
-    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.disconnect_x(session_address).await?;
-    Ok(Json(response))
-}
-
-/// Update X account
-#[utoipa::path(
-    patch,
-    path = AccountPath::UpdateX.docs_str(),
-    params(
-        ("session" = String, Cookie, description = "Session cookie for authentication")
-    ),
-    request_body = UpdateXRequest,
-    responses(
-        (status = 200, description = "X account updated successfully", body = AccountResponse)
-    ),
-    tag="Account"
-)]
-pub async fn update_x(
-    State(state): State<AppState>,
-    Extension(session_address): Extension<String>,
-    Json(payload): Json<UpdateXRequest>,
-) -> AppJsonResult<AccountResponse> {
-    payload.validate().map_err(|e| {
-        error!("Invalid update_x request: {}", e);
-        AppError::BadRequest(e)
-    })?;
-
-    let service = AccountService::new(state.postgres.clone(), state.redis.clone());
-    let response = service.update_x(session_address, payload).await?;
     Ok(Json(response))
 }
 

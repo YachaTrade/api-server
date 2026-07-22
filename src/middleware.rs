@@ -18,16 +18,9 @@ use tower_cookies::Cookies;
 use tracing::{error, info, warn};
 
 /// 허용된 Origin인지 검증 (CSRF 방어).
-/// 허용 목록은 `crate::cors::is_origin_allowed`(CORS predicate)와 반드시 동기 유지.
+/// CORS와 동일한 정책을 사용해 인증/CSRF/API-key 우회가 달라지지 않게 한다.
 fn is_allowed_origin(origin: &str) -> bool {
-    origin == "https://nad.fun"
-        || origin == "https://nadapp.net"
-        || origin == "https://mm-dashboard-six.vercel.app"
-        || origin.ends_with(".nad.fun")
-        || origin.ends_with(".nadapp.net")
-        || origin.ends_with(".symphony.io")
-        || origin.ends_with(".cloudfront.net")
-        || origin.starts_with("http://localhost:")
+    crate::cors::is_origin_allowed(origin)
 }
 
 #[derive(Clone, Debug)]
@@ -134,7 +127,7 @@ fn is_terminal_metadata_path(path: &str) -> bool {
 }
 
 /// API Key 검증 및 Rate Limit 미들웨어 (전역 적용)
-/// - CORS 허용 Origin (nad.fun 등): 통과 (기존 동작)
+/// - Yacha 프론트엔드 및 로컬 개발 Origin: 통과
 /// - 외부 Origin + API Key: 100 req/min
 /// - 외부 Origin + No API Key: 10 req/min (IP 기반)
 pub async fn api_key_gate(
@@ -150,7 +143,6 @@ pub async fn api_key_gate(
         || path.starts_with("/dev-sw")
         || path.starts_with("/api-key")  // API Key 관리 엔드포인트 (세션 인증 사용)
         || path.starts_with("/auth/")    // 인증 엔드포인트
-        || path == "/x/oauth/callback"    // X redirects here (no Origin / API key)
         // Terminal (GeckoTerminal) 엔드포인트 - API Key 불필요
         || path == "/latest-block"
         || path == "/asset"
@@ -168,7 +160,7 @@ pub async fn api_key_gate(
     // 2. CORS 허용 Origin이면 API Key 검사 건너뛰기
     if let Some(origin_str) = origin {
         if is_allowed_origin(origin_str) {
-            // nad.fun, nadapp.net 등 → 기존 플로우 (API Key 불필요, Rate Limit 없음)
+            // Yacha 프론트엔드 및 로컬 개발 → API Key 불필요, Rate Limit 없음
             return Ok(next.run(req).await);
         }
     }
@@ -307,24 +299,32 @@ mod tests {
         assert!(!is_terminal_metadata_path(
             "/0x5dF178C7E58046BC9074782fef0009C6Be167777/extra"
         ));
-        assert!(!is_terminal_metadata_path("/dev-post"));
+        assert!(!is_terminal_metadata_path("/unrelated"));
         assert!(!is_terminal_metadata_path("/"));
     }
 
     #[test]
-    fn cloudfront_and_existing_origins() {
-        // newly allowed
-        assert!(is_allowed_origin("https://d111abcdef8.cloudfront.net"));
-        assert!(is_allowed_origin("https://assets.d111.cloudfront.net"));
-        // existing allowed
-        assert!(is_allowed_origin("https://nad.fun"));
-        assert!(is_allowed_origin("https://app.nad.fun"));
-        assert!(is_allowed_origin("https://x.symphony.io"));
+    fn yacha_and_local_origins_only() {
+        assert!(is_allowed_origin("https://app.yacha.trade"));
         assert!(is_allowed_origin("http://localhost:3000"));
-        assert!(is_allowed_origin("https://mm-dashboard-six.vercel.app"));
-        // rejected
+        assert!(is_allowed_origin("http://localhost:8090"));
+        assert!(!is_allowed_origin("http://localhost:"));
+        assert!(!is_allowed_origin("http://localhost:abc"));
+        assert!(!is_allowed_origin("http://localhost:65536"));
+        assert!(!is_allowed_origin("http://localhost:3000.evil"));
+        assert!(!is_allowed_origin("http://user@localhost:3000"));
+        assert!(!is_allowed_origin("http://localhost:3000/path"));
+        assert!(!is_allowed_origin("http://localhost:3000?query"));
+        assert!(!is_allowed_origin("http://localhost:3000#fragment"));
+        assert!(!is_allowed_origin("https://yacha.trade"));
+        assert!(!is_allowed_origin("https://api.yacha.trade"));
+        assert!(!is_allowed_origin("https://nad.fun"));
+        assert!(!is_allowed_origin("https://app.nad.fun"));
+        assert!(!is_allowed_origin("https://nadapp.net"));
+        assert!(!is_allowed_origin("https://dev-api.nadapp.net"));
+        assert!(!is_allowed_origin("https://x.symphony.io"));
+        assert!(!is_allowed_origin("https://d111abcdef8.cloudfront.net"));
+        assert!(!is_allowed_origin("https://mm-dashboard-six.vercel.app"));
         assert!(!is_allowed_origin("https://evil.com"));
-        assert!(!is_allowed_origin("https://cloudfront.net")); // apex, no subdomain
-        assert!(!is_allowed_origin("https://notcloudfront.net"));
     }
 }

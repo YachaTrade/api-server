@@ -4,11 +4,11 @@ use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 
 use crate::{
-    config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
+        common::info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
         trend::{TrendActionResponse, TrendRequest, TrendResponse, TrendToken},
     },
     utils::{
@@ -36,7 +36,7 @@ struct TrendTokenRow {
     creator_nickname: String,
     creator_bio: String,
     creator_image_uri: String,
-    market_type: String,
+    market_type: MarketType,
     market_id: String,
     quote_id: String,
     token_price: BigDecimal,
@@ -54,9 +54,6 @@ struct TrendTokenRow {
     quote_decimals: i32,
     quote_image_uri: String,
     price_24h_ago: BigDecimal,
-    creator_fee_rate: Option<i16>,
-    curve_protocol_fee_rate: Option<i16>,
-    dex_protocol_fee_rate: Option<i16>,
 }
 
 pub struct TrendController {
@@ -109,9 +106,9 @@ impl TrendController {
                 t.created_at,
                 t.creator,
                 t.token_holder_count as holder_count,
-                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                a.nickname as creator_nickname,
                 a.bio as creator_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                a.image_uri as creator_image_uri,
                 m.market_type,
                 COALESCE(m.pool_id, '') as market_id,
                     COALESCE(m.quote_id, '') as quote_id,
@@ -129,9 +126,6 @@ impl TrendController {
                 COALESCE(qt.symbol, '') as quote_symbol,
                 COALESCE(qt.decimals, 18) as quote_decimals,
                 COALESCE(qt.image_uri, '') as quote_image_uri,
-                fc.creator_fee_rate,
-                fc.curve_protocol_fee_rate,
-                fc.dex_protocol_fee_rate,
                 COALESCE(
                     (
                         SELECT ph.price
@@ -158,10 +152,8 @@ impl TrendController {
             FROM trend tr
             JOIN token t ON tr.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
-            LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN market m ON t.token_id = m.token_id
             JOIN quote_token qt ON m.quote_id = qt.quote_id
-            LEFT JOIN fee_config fc ON t.token_id = fc.token_id
             LEFT JOIN LATERAL (
                 SELECT p.price
                 FROM price p
@@ -183,12 +175,6 @@ impl TrendController {
         Ok(rows.into_iter().map(TrendToken::from).collect())
     }
 
-    /// Single-statement CTE: pgbouncer runs in statement pooling mode, which
-    /// forbids `BEGIN`/`COMMIT`. `del` and `ins` are disjoint by `token_id`
-    /// (del only removes ids NOT in the new list; ins only upserts ids IN the
-    /// new list), so this is safe regardless of the planner-chosen CTE
-    /// execution order — deleting and re-inserting the SAME key within one
-    /// statement would hit `duplicate key value violates unique constraint`.
     pub async fn insert_trend_token(&self, request: TrendRequest) -> Result<TrendActionResponse> {
         measure_postgres!(
             "trend.replace_all",
@@ -238,12 +224,8 @@ impl TrendController {
 impl From<TrendTokenRow> for TrendToken {
     fn from(row: TrendTokenRow) -> Self {
         let mut market_id = row.market_id.clone();
-        if market_id.is_empty() {
-            if row.market_type == "CURVE" {
-                market_id = V1_BONDING_CURVE.clone();
-            } else if row.market_type == "V2_CURVE" {
-                market_id = V2_BONDING_CURVE.clone();
-            }
+        if market_id.is_empty() && row.market_type == MarketType::Curve {
+            market_id = BONDING_CURVE.clone();
         }
 
         let percent = calculate_price_change_percent(
@@ -272,16 +254,9 @@ impl From<TrendTokenRow> for TrendToken {
                     image_uri: row.creator_image_uri,
                 },
                 is_cto: row.is_cto,
-                x_verification: None,
             },
             market_info: MarketInfo {
-                market_type: match row.market_type.as_str() {
-                    "CURVE" => MarketType::Curve,
-                    "DEX" => MarketType::Dex,
-                    "V2_CURVE" => MarketType::V2Curve,
-                    "V2_DEX" => MarketType::V2Dex,
-                    _ => MarketType::Curve,
-                },
+                market_type: row.market_type,
                 market_id,
                 token_id: row.token_id,
                 quote_info: QuoteInfo {
@@ -308,14 +283,6 @@ impl From<TrendTokenRow> for TrendToken {
                 ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                 ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                 holder_count: row.holder_count,
-                fee_info: match row.market_type.as_str() {
-                    "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
-                        creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
-                        curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
-                        dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
-                    }),
-                    _ => None,
-                },
             },
             percent,
         }
@@ -327,21 +294,19 @@ mod tests {
     use super::*;
     use sqlx::PgPool;
 
-    // trend.token_id has no FK to `token` — any VARCHAR(42)-fitting string is
-    // valid storage-wise; checksum validation is a router-layer concern.
     const TOKEN_A: &str = "0xA000000000000000000000000000000000000A";
     const TOKEN_B: &str = "0xB000000000000000000000000000000000000B";
     const TOKEN_C: &str = "0xC000000000000000000000000000000000000C";
     const TOKEN_D: &str = "0xD000000000000000000000000000000000000D";
 
-    fn make_controller(pool: PgPool) -> TrendController {
+    fn controller(pool: PgPool) -> TrendController {
         TrendController::new(Arc::new(PostgresDatabase {
             write_pool: pool.clone(),
             read_pool: pool,
         }))
     }
 
-    async fn trend_rows(pool: &PgPool) -> Vec<(String, i32)> {
+    async fn rows(pool: &PgPool) -> Vec<(String, i32)> {
         sqlx::query_as("SELECT token_id, display_order FROM trend ORDER BY display_order")
             .fetch_all(pool)
             .await
@@ -350,89 +315,63 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_replaces_all_zero_based(pool: PgPool) {
-        let ctrl = make_controller(pool.clone());
-        ctrl.insert_trend_token(TrendRequest {
-            token_ids: vec![
-                TOKEN_A.to_string(),
-                TOKEN_B.to_string(),
-                TOKEN_C.to_string(),
-            ],
-        })
-        .await
-        .unwrap();
+        controller(pool.clone())
+            .insert_trend_token(TrendRequest {
+                token_ids: vec![TOKEN_A.into(), TOKEN_B.into(), TOKEN_C.into()],
+            })
+            .await
+            .unwrap();
 
-        let rows = trend_rows(&pool).await;
         assert_eq!(
-            rows,
+            rows(&pool).await,
             vec![
-                (TOKEN_A.to_string(), 0),
-                (TOKEN_B.to_string(), 1),
-                (TOKEN_C.to_string(), 2),
+                (TOKEN_A.into(), 0),
+                (TOKEN_B.into(), 1),
+                (TOKEN_C.into(), 2),
             ]
         );
     }
 
-    // Regression guard for the del/ins CTE split documented on
-    // `insert_trend_token`: resubmitting an overlapping-but-reordered set of
-    // token_ids must NOT hit `duplicate key value violates unique
-    // constraint`. A naive DELETE-all-then-INSERT-all CTE would try to
-    // delete AND (re)insert the same surviving keys (C, A) within a single
-    // statement, which errors under Postgres's data-modifying-CTE rules —
-    // this proves the disjoint upsert+delete implementation avoids that.
     #[sqlx::test(migrations = "./migrations")]
-    async fn insert_trend_reorder_with_overlap_does_not_duplicate_key(pool: PgPool) {
-        let ctrl = make_controller(pool.clone());
-        ctrl.insert_trend_token(TrendRequest {
-            token_ids: vec![
-                TOKEN_A.to_string(),
-                TOKEN_B.to_string(),
-                TOKEN_C.to_string(),
-            ],
-        })
-        .await
-        .unwrap();
-
-        let result = ctrl
+    async fn insert_trend_reorders_overlap_without_duplicate_key(pool: PgPool) {
+        let controller = controller(pool.clone());
+        controller
             .insert_trend_token(TrendRequest {
-                token_ids: vec![
-                    TOKEN_C.to_string(),
-                    TOKEN_A.to_string(),
-                    TOKEN_D.to_string(),
-                ],
+                token_ids: vec![TOKEN_A.into(), TOKEN_B.into(), TOKEN_C.into()],
             })
-            .await;
-        assert!(
-            result.is_ok(),
-            "reorder with overlap must not error: {:?}",
-            result.err()
-        );
+            .await
+            .unwrap();
+        controller
+            .insert_trend_token(TrendRequest {
+                token_ids: vec![TOKEN_C.into(), TOKEN_A.into(), TOKEN_D.into()],
+            })
+            .await
+            .unwrap();
 
-        let rows = trend_rows(&pool).await;
         assert_eq!(
-            rows,
+            rows(&pool).await,
             vec![
-                (TOKEN_C.to_string(), 0),
-                (TOKEN_A.to_string(), 1),
-                (TOKEN_D.to_string(), 2),
-            ],
-            "B dropped, C/A reordered, D added"
+                (TOKEN_C.into(), 0),
+                (TOKEN_A.into(), 1),
+                (TOKEN_D.into(), 2),
+            ]
         );
     }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn insert_trend_empty_list_clears_all(pool: PgPool) {
-        let ctrl = make_controller(pool.clone());
-        ctrl.insert_trend_token(TrendRequest {
-            token_ids: vec![TOKEN_A.to_string(), TOKEN_B.to_string()],
-        })
-        .await
-        .unwrap();
-
-        ctrl.insert_trend_token(TrendRequest { token_ids: vec![] })
+        let controller = controller(pool.clone());
+        controller
+            .insert_trend_token(TrendRequest {
+                token_ids: vec![TOKEN_A.into(), TOKEN_B.into()],
+            })
+            .await
+            .unwrap();
+        controller
+            .insert_trend_token(TrendRequest { token_ids: vec![] })
             .await
             .unwrap();
 
-        let rows = trend_rows(&pool).await;
-        assert!(rows.is_empty());
+        assert!(rows(&pool).await.is_empty());
     }
 }

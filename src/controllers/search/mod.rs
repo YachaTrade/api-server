@@ -5,10 +5,10 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     types::{
-        common::info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
+        common::info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
         search::{
             AccountSearchResponse, AccountSearchResult, SearchResponse, TokenSearchResponse,
             TokenSearchResult,
@@ -94,12 +94,8 @@ impl SearchController {
             .into_iter()
             .map(|row| {
                 let mut market_id = row.market_id.clone();
-                if market_id.is_empty() {
-                    if row.market_type == "CURVE" {
-                        market_id = V1_BONDING_CURVE.clone();
-                    } else if row.market_type == "V2_CURVE" {
-                        market_id = V2_BONDING_CURVE.clone();
-                    }
+                if market_id.is_empty() && row.market_type == MarketType::Curve {
+                    market_id = BONDING_CURVE.clone();
                 }
 
                 TokenSearchResult {
@@ -122,16 +118,9 @@ impl SearchController {
                             image_uri: row.creator_image_uri,
                         },
                         is_cto: row.is_cto,
-                        x_verification: None,
                     },
                     market_info: MarketInfo {
-                        market_type: match row.market_type.as_str() {
-                            "CURVE" => MarketType::Curve,
-                            "DEX" => MarketType::Dex,
-                            "V2_CURVE" => MarketType::V2Curve,
-                            "V2_DEX" => MarketType::V2Dex,
-                            _ => MarketType::Curve,
-                        },
+                        market_type: row.market_type,
                         token_id: row.token_id,
                         quote_info: QuoteInfo {
                             quote_id: row.quote_id.clone(),
@@ -158,14 +147,6 @@ impl SearchController {
                         ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                         ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                         holder_count: row.holder_count,
-                        fee_info: match row.market_type.as_str() {
-                            "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
-                                creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
-                                curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
-                                dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
-                            }),
-                            _ => None,
-                        },
                     },
                 }
             })
@@ -176,15 +157,9 @@ impl SearchController {
             .map(|row| AccountSearchResult {
                 account_info: AccountInfo {
                     account_id: row.account_id,
-                    nickname: match &row.x_handle {
-                        Some(handle) if !handle.is_empty() => handle.clone(),
-                        _ => row.nickname,
-                    },
+                    nickname: row.nickname,
                     bio: row.bio,
-                    image_uri: match &row.x_image_uri {
-                        Some(img) if !img.is_empty() => img.clone(),
-                        _ => row.image_uri,
-                    },
+                    image_uri: row.image_uri,
                 },
             })
             .collect::<Vec<_>>();
@@ -204,10 +179,6 @@ impl SearchController {
     fn analyze_search_pattern(&self, query: &str) -> SearchPattern {
         let trimmed_query = query.trim();
 
-        if trimmed_query.starts_with('@') {
-            return SearchPattern::TwitterHandle;
-        }
-
         if trimmed_query.len() == 42 && trimmed_query.starts_with("0x") {
             return SearchPattern::EvmAddress;
         }
@@ -223,7 +194,6 @@ impl SearchController {
         let pool = self.db.get_read_pool();
 
         match pattern {
-            SearchPattern::TwitterHandle => Ok(vec![]),
             SearchPattern::EvmAddress => {
                 let checksummed = valid_account_id(query).unwrap_or_else(|| query.to_string());
                 sqlx::query_as::<_, SearchTokenRow>(
@@ -243,9 +213,9 @@ impl SearchController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                        a.nickname as creator_nickname,
                         a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.image_uri as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
                     COALESCE(m.quote_id, '') as quote_id,
@@ -262,16 +232,11 @@ impl SearchController {
                         COALESCE(qt.name, '') as quote_name,
                         COALESCE(qt.symbol, '') as quote_symbol,
                         COALESCE(qt.decimals, 18) as quote_decimals,
-                        COALESCE(qt.image_uri, '') as quote_image_uri,
-                        fc.creator_fee_rate,
-                        fc.curve_protocol_fee_rate,
-                        fc.dex_protocol_fee_rate
+                        COALESCE(qt.image_uri, '') as quote_image_uri
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
                     JOIN quote_token qt ON m.quote_id = qt.quote_id
-                    LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -309,9 +274,9 @@ impl SearchController {
                             t.created_at,
                             t.creator,
                             t.token_holder_count as holder_count,
-                            COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                            a.nickname as creator_nickname,
                             a.bio as creator_bio,
-                            COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                            a.image_uri as creator_image_uri,
                             m.market_type,
                             COALESCE(m.pool_id, '') as market_id,
                     COALESCE(m.quote_id, '') as quote_id,
@@ -328,16 +293,11 @@ impl SearchController {
                             COALESCE(qt.name, '') as quote_name,
                             COALESCE(qt.symbol, '') as quote_symbol,
                             COALESCE(qt.decimals, 18) as quote_decimals,
-                            COALESCE(qt.image_uri, '') as quote_image_uri,
-                            fc.creator_fee_rate,
-                            fc.curve_protocol_fee_rate,
-                            fc.dex_protocol_fee_rate
+                            COALESCE(qt.image_uri, '') as quote_image_uri
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
-                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
                         JOIN quote_token qt ON m.quote_id = qt.quote_id
-                        LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                         LEFT JOIN LATERAL (
                             SELECT p.price
                             FROM price p
@@ -369,9 +329,9 @@ impl SearchController {
                             t.created_at,
                             t.creator,
                             t.token_holder_count as holder_count,
-                            COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                            a.nickname as creator_nickname,
                             a.bio as creator_bio,
-                            COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                            a.image_uri as creator_image_uri,
                             m.market_type,
                             COALESCE(m.pool_id, '') as market_id,
                     COALESCE(m.quote_id, '') as quote_id,
@@ -388,16 +348,11 @@ impl SearchController {
                             COALESCE(qt.name, '') as quote_name,
                             COALESCE(qt.symbol, '') as quote_symbol,
                             COALESCE(qt.decimals, 18) as quote_decimals,
-                            COALESCE(qt.image_uri, '') as quote_image_uri,
-                            fc.creator_fee_rate,
-                            fc.curve_protocol_fee_rate,
-                            fc.dex_protocol_fee_rate
+                            COALESCE(qt.image_uri, '') as quote_image_uri
                         FROM token t
                         JOIN account a ON t.creator = a.account_id
-                        LEFT JOIN account_x ax ON a.account_id = ax.account_id
                         JOIN market m ON t.token_id = m.token_id
                         JOIN quote_token qt ON m.quote_id = qt.quote_id
-                        LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                         LEFT JOIN LATERAL (
                             SELECT p.price
                             FROM price p
@@ -446,34 +401,6 @@ impl SearchController {
         let pool = self.db.get_read_pool();
 
         match pattern {
-            SearchPattern::TwitterHandle => sqlx::query_as::<_, SearchAccountRow>(
-                r#"
-                    SELECT
-                        a.account_id,
-                        a.nickname,
-                        a.bio,
-                        a.image_uri,
-                        ax.x_handle,
-                        ax.x_image_uri,
-                        ax.is_blue_label
-                    FROM account_x ax
-                    JOIN account a ON ax.account_id = a.account_id
-                    WHERE ax.x_handle ILIKE '%' || $1 || '%'
-                    ORDER BY
-                        CASE
-                            WHEN LOWER(ax.x_handle) = LOWER($1) THEN 0
-                            WHEN LOWER(ax.x_handle) LIKE LOWER($1) || '%' THEN 1
-                            ELSE 2
-                        END,
-                        LENGTH(ax.x_handle),
-                        a.follower_count DESC
-                    LIMIT 50
-                    "#,
-            )
-            .bind(query)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
             SearchPattern::EvmAddress => {
                 let checksummed = valid_account_id(query).unwrap_or_else(|| query.to_string());
                 sqlx::query_as::<_, SearchAccountRow>(
@@ -482,17 +409,8 @@ impl SearchController {
                         a.account_id,
                         a.nickname,
                         a.bio,
-                        a.image_uri,
-                        ax.x_handle,
-                        ax.x_image_uri,
-                        ax.is_blue_label
+                        a.image_uri
                     FROM account a
-                    LEFT JOIN LATERAL (
-                        SELECT x_handle, x_image_uri, is_blue_label
-                        FROM account_x
-                        WHERE account_id = a.account_id
-                        LIMIT 1
-                    ) ax ON true
                     WHERE a.account_id = $1
                     LIMIT 1
                     "#,
@@ -502,93 +420,30 @@ impl SearchController {
                 .await
                 .map_err(|e| anyhow::anyhow!("Database error: {}", e))
             }
-            SearchPattern::Universal => {
-                let (nickname_future, x_handle_future) = (
-                    sqlx::query_as::<_, SearchAccountRow>(
-                        r#"
-                        SELECT
-                            a.account_id,
-                            a.nickname,
-                            a.bio,
-                            a.image_uri,
-                            ax.x_handle,
-                            ax.x_image_uri,
-                            ax.is_blue_label
-                        FROM account a
-                        LEFT JOIN LATERAL (
-                            SELECT x_handle, x_image_uri, is_blue_label
-                            FROM account_x
-                            WHERE account_id = a.account_id
-                            LIMIT 1
-                        ) ax ON true
-                        WHERE a.nickname ILIKE '%' || $1 || '%'
-                        ORDER BY
-                            CASE
-                                WHEN LOWER(a.nickname) = LOWER($1) THEN 0
-                                WHEN LOWER(a.nickname) LIKE LOWER($1) || '%' THEN 1
-                                ELSE 2
-                            END,
-                            LENGTH(a.nickname),
-                            a.follower_count DESC
-                        LIMIT 5
-                        "#,
-                    )
-                    .bind(query)
-                    .fetch_all(pool),
-                    sqlx::query_as::<_, SearchAccountRow>(
-                        r#"
-                        SELECT
-                            a.account_id,
-                            a.nickname,
-                            a.bio,
-                            a.image_uri,
-                            ax.x_handle,
-                            ax.x_image_uri,
-                            ax.is_blue_label
-                        FROM account_x ax
-                        JOIN account a ON ax.account_id = a.account_id
-                        WHERE ax.x_handle ILIKE '%' || $1 || '%'
-                        ORDER BY
-                            CASE
-                                WHEN LOWER(ax.x_handle) = LOWER($1) THEN 0
-                                WHEN LOWER(ax.x_handle) LIKE LOWER($1) || '%' THEN 1
-                                ELSE 2
-                            END,
-                            LENGTH(ax.x_handle),
-                            a.follower_count DESC
-                        LIMIT 20
-                        "#,
-                    )
-                    .bind(query)
-                    .fetch_all(pool),
-                );
-
-                let (nickname_results, x_handle_results) =
-                    tokio::join!(nickname_future, x_handle_future);
-
-                let mut combined_results = Vec::new();
-                let mut seen_ids = HashSet::new();
-
-                for account in
-                    nickname_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))?
-                {
-                    if seen_ids.insert(account.account_id.clone()) {
-                        combined_results.push(account);
-                    }
-                }
-
-                for account in
-                    x_handle_results.map_err(|e| anyhow::anyhow!("Database error: {}", e))?
-                {
-                    if seen_ids.insert(account.account_id.clone()) && combined_results.len() < 40 {
-                        combined_results.push(account);
-                    }
-                }
-
-                // Results are already sorted by name similarity in the queries
-                combined_results.truncate(40);
-                Ok(combined_results)
-            }
+            SearchPattern::Universal => sqlx::query_as::<_, SearchAccountRow>(
+                r#"
+                    SELECT
+                        a.account_id,
+                        a.nickname,
+                        a.bio,
+                        a.image_uri
+                    FROM account a
+                    WHERE a.nickname ILIKE '%' || $1 || '%'
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(a.nickname) = LOWER($1) THEN 0
+                            WHEN LOWER(a.nickname) LIKE LOWER($1) || '%' THEN 1
+                            ELSE 2
+                        END,
+                        LENGTH(a.nickname),
+                        a.follower_count DESC
+                    LIMIT 5
+                    "#,
+            )
+            .bind(query)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Database error: {}", e)),
         }
     }
 }
@@ -612,7 +467,7 @@ struct SearchTokenRow {
     creator_nickname: String,
     creator_bio: String,
     creator_image_uri: String,
-    market_type: String,
+    market_type: MarketType,
     market_id: String,
     quote_id: String,
     token_price: BigDecimal,
@@ -629,9 +484,6 @@ struct SearchTokenRow {
     quote_symbol: String,
     quote_decimals: i32,
     quote_image_uri: String,
-    creator_fee_rate: Option<i16>,
-    curve_protocol_fee_rate: Option<i16>,
-    dex_protocol_fee_rate: Option<i16>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -640,14 +492,9 @@ struct SearchAccountRow {
     nickname: String,
     bio: String,
     image_uri: String,
-    x_handle: Option<String>,
-    x_image_uri: Option<String>,
-    #[allow(dead_code)]
-    is_blue_label: Option<bool>,
 }
 
 enum SearchPattern {
     EvmAddress,
-    TwitterHandle,
     Universal,
 }

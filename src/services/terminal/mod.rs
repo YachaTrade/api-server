@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 use tracing::error;
 
 use crate::{
-    config::{RPC_URL, V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::RPC_URL,
     controllers::terminal::TerminalController,
     db::postgres::PostgresDatabase,
     result::AppError,
@@ -26,61 +26,7 @@ fn to_truncated_string(value: &BigDecimal) -> String {
     truncated.normalized().to_plain_string()
 }
 
-/// LP fee on the NadSwap (NadFunPair) AMM — fixed 25 BPS (0.25%).
-/// Source: nadfun-contract-v2/src/dex/NadFunPair.sol `LP_FEE_RATE = 25`.
-const NADSWAP_LP_FEE_BPS: u32 = 25;
-
-/// V1 fixed trading fee, 1% = 100 BPS.
-const V1_FEE_BPS: u32 = 100;
-
-/// GeckoTerminal `dexKey` (trading venue identifier) for a market_type.
-fn dex_key_for(market_type: &str) -> &'static str {
-    match market_type {
-        "DEX" => "capricorn",
-        "V2_CURVE" => "nadfun-v2",
-        "V2_DEX" => "nadswap",
-        // "CURVE" and any unknown value fall back to the V1 bonding-curve key.
-        _ => "nadfun",
-    }
-}
-
-/// `pairId` for a market_type. DEX markets use the pool address; curve markets
-/// use the version's bonding-curve contract. Falls back to the bonding curve
-/// when a DEX market somehow has no pool id.
-fn pair_id_for(
-    market_type: &str,
-    pool_id: Option<&str>,
-    v1_bonding_curve: &str,
-    v2_bonding_curve: &str,
-) -> String {
-    match market_type {
-        "DEX" => pool_id.unwrap_or(v1_bonding_curve).to_string(),
-        "V2_DEX" => pool_id.unwrap_or(v2_bonding_curve).to_string(),
-        "V2_CURVE" => v2_bonding_curve.to_string(),
-        // "CURVE" and any unknown value map to the V1 bonding curve.
-        _ => v1_bonding_curve.to_string(),
-    }
-}
-
-/// Total trading fee in BPS for a market_type. V1 is fixed at 100. V2 sums the
-/// applicable `fee_config` rates; returns `None` when fee_config is missing so
-/// callers can omit `feeBps` rather than report a wrong 0%.
-fn fee_bps_for(
-    market_type: &str,
-    creator_fee_rate: Option<i16>,
-    curve_protocol_fee_rate: Option<i16>,
-    dex_protocol_fee_rate: Option<i16>,
-) -> Option<u32> {
-    let nonneg = |r: i16| r.max(0) as u32;
-    match market_type {
-        "V2_CURVE" => Some(nonneg(creator_fee_rate?) + nonneg(curve_protocol_fee_rate?)),
-        "V2_DEX" => {
-            Some(NADSWAP_LP_FEE_BPS + nonneg(creator_fee_rate?) + nonneg(dex_protocol_fee_rate?))
-        }
-        // "CURVE", "DEX", and any unknown value use the fixed V1 fee.
-        _ => Some(V1_FEE_BPS),
-    }
-}
+const DEX_KEY: &str = "nadswap";
 
 /// Order (token, quote) into (asset0, asset1) by ascending lowercase address,
 /// matching GeckoTerminal's alphabetical pairing. Returns
@@ -146,7 +92,7 @@ impl TerminalService {
     pub async fn get_asset(&self, token_id: &str) -> Result<AssetResponse, AppError> {
         // name/symbol/decimals are served from the chain itself (the source of
         // truth for ERC-20 metadata — DB copies can be missing or NULL for
-        // quote/whitelist assets). RpcMetaSource caches results for 1h and
+        // quote assets). RpcMetaSource caches results for 1h and
         // caches failures too, so this public (rate-limit-exempt) endpoint
         // can't be used to amplify outbound RPC traffic.
         //
@@ -168,9 +114,9 @@ impl TerminalService {
 
         // totalSupply: on-chain `IERC20.totalSupply()` first (10-min cache,
         // failures cached), human units = raw ÷ 10^decimals — reflects burns
-        // instead of a hard-coded figure, and works for quote/whitelist/
-        // external assets too. circulatingSupply can't be derived on-chain
-        // (locked/vault balances need interpretation), so it stays nadfun-only
+        // instead of a hard-coded figure, and works for quote/external assets
+        // too. circulatingSupply can't be derived on-chain
+        // (locked balances need interpretation), so it stays nadfun-only
         // from the DB row, which also serves as the totalSupply fallback when
         // the RPC is down.
         let onchain_total = match RpcMetaSource::total_supply(token_id).await {
@@ -199,7 +145,7 @@ impl TerminalService {
                 None => (None, None, None),
             };
         let total_supply = onchain_total.or(db_total);
-        // circulating을 못 구하는 자산(quote/whitelist/외부)은 totalSupply로 대신 채운다.
+        // circulating을 못 구하는 자산(quote/external)은 totalSupply로 대신 채운다.
         let circulating_supply = db_circulating.or_else(|| total_supply.clone());
 
         let asset = Asset {
@@ -217,8 +163,8 @@ impl TerminalService {
 
     pub async fn get_pair(&self, pool_id: &str) -> Result<PairResponse, AppError> {
         // Query by pool_id — the `id` GeckoTerminal sends back is the pairId we
-        // emitted from /events, which for DEX markets is the pool address
-        // (`pair_id_for`), NOT the token address.
+        // emitted from /events, which for DEX markets is the pool address,
+        // not the token address.
         let controller = TerminalController::new(self.postgres.clone());
         let pair_row = controller.get_pair_by_pool_id(pool_id).await.map_err(|e| {
             error!("Failed to get pair: {}", e);
@@ -240,25 +186,17 @@ impl TerminalService {
         let (asset0_id, asset1_id, _) = order_assets(&pair_row.token_id, &pair_row.quote_id);
 
         let pair = Pair {
-            id: pair_id_for(
-                &pair_row.market_type,
-                pair_row.pool_id.as_deref(),
-                &V1_BONDING_CURVE,
-                &V2_BONDING_CURVE,
-            ),
-            dex_key: dex_key_for(&pair_row.market_type).to_string(),
+            id: pair_row.pool_id.unwrap_or_else(|| pool_id.to_string()),
+            dex_key: DEX_KEY.to_string(),
             asset0_id,
             asset1_id,
             created_at_block_number: block_number,
             created_at_block_timestamp: Some(pair_row.created_at as u64),
             created_at_txn_id: Some(pair_row.transaction_hash),
             creator: Some(pair_row.creator),
-            fee_bps: fee_bps_for(
-                &pair_row.market_type,
-                pair_row.creator_fee_rate,
-                pair_row.curve_protocol_fee_rate,
-                pair_row.dex_protocol_fee_rate,
-            ),
+            // MarketInfo/fee_config was removed. Do not publish a guessed total
+            // fee: NadSwap's LP fee alone does not describe creator/protocol fees.
+            fee_bps: None,
         };
 
         Ok(PairResponse { pair })
@@ -297,11 +235,7 @@ impl TerminalService {
         let mut events: Vec<Event> = Vec::new();
 
         // Process swap events
-        events.extend(
-            swap_rows
-                .into_iter()
-                .map(|r| Self::convert_swap_event(r, &V1_BONDING_CURVE, &V2_BONDING_CURVE)),
-        );
+        events.extend(swap_rows.into_iter().map(Self::convert_swap_event));
 
         // Process mint events (join events)
         events.extend(mint_rows.into_iter().map(Self::convert_mint_event));
@@ -321,11 +255,7 @@ impl TerminalService {
         Ok(EventsResponse { events })
     }
 
-    fn convert_swap_event(
-        row: SwapEventRow,
-        v1_bonding_curve: &str,
-        v2_bonding_curve: &str,
-    ) -> Event {
+    fn convert_swap_event(row: SwapEventRow) -> Event {
         let decimals_divisor = BigDecimal::from(1_000_000_000_000_000_000u64);
 
         let quote_amount_decimalized = &row.quote_amount / &decimals_divisor;
@@ -398,12 +328,7 @@ impl TerminalService {
             txn_index: row.tx_index.unwrap_or(0) as u32,
             event_index: row.log_index as u32,
             maker: row.account_id,
-            pair_id: pair_id_for(
-                &row.market_type,
-                row.pool_id.as_deref(),
-                v1_bonding_curve,
-                v2_bonding_curve,
-            ),
+            pair_id: row.pool_id.unwrap_or_else(|| row.token_id.clone()),
             asset0_in,
             asset1_in,
             asset0_out,
@@ -540,176 +465,65 @@ impl TerminalService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::controllers::terminal::{BurnEventRow, MintEventRow, SwapEventRow};
-    use bigdecimal::BigDecimal;
 
-    const WMON_ADDR: &str = "0x4200000000000000000000000000000000000006";
-    const LVMON_ADDR: &str = "0xBe3fa50514D9617ce645a02B34F595541AF02b6b";
-    const V1_BC: &str = "0x0000000000000000000000000000000000000001";
-    const V2_BC: &str = "0x0000000000000000000000000000000000000002";
+    const QUOTE: &str = "0xBe3fa50514D9617ce645a02B34F595541AF02b6b";
     const POOL: &str = "0x00000000000000000000000000000000000000aa";
-    // Token whose lowercase address is greater than both quotes above.
-    const TOKEN_HI: &str = "0xff00000000000000000000000000000000000000";
+    const TOKEN: &str = "0xff00000000000000000000000000000000000000";
 
-    #[test]
-    fn dex_key_maps_all_market_types() {
-        assert_eq!(dex_key_for("CURVE"), "nadfun");
-        assert_eq!(dex_key_for("DEX"), "capricorn");
-        assert_eq!(dex_key_for("V2_CURVE"), "nadfun-v2");
-        assert_eq!(dex_key_for("V2_DEX"), "nadswap");
-        assert_eq!(dex_key_for("UNKNOWN"), "nadfun");
-    }
-
-    #[test]
-    fn pair_id_routes_by_market_type() {
-        assert_eq!(pair_id_for("CURVE", None, V1_BC, V2_BC), V1_BC);
-        assert_eq!(pair_id_for("V2_CURVE", None, V1_BC, V2_BC), V2_BC);
-        assert_eq!(pair_id_for("DEX", Some(POOL), V1_BC, V2_BC), POOL);
-        assert_eq!(pair_id_for("V2_DEX", Some(POOL), V1_BC, V2_BC), POOL);
-        // DEX with missing pool falls back to the version's bonding curve.
-        assert_eq!(pair_id_for("V2_DEX", None, V1_BC, V2_BC), V2_BC);
-        assert_eq!(pair_id_for("DEX", None, V1_BC, V2_BC), V1_BC);
-    }
-
-    #[test]
-    fn fee_bps_v1_is_fixed_100() {
-        assert_eq!(fee_bps_for("CURVE", None, None, None), Some(100));
-        assert_eq!(fee_bps_for("DEX", Some(500), Some(50), Some(30)), Some(100));
-    }
-
-    #[test]
-    fn fee_bps_v2_curve_is_creator_plus_curve() {
-        assert_eq!(
-            fee_bps_for("V2_CURVE", Some(500), Some(50), Some(30)),
-            Some(550)
-        );
-    }
-
-    #[test]
-    fn fee_bps_v2_dex_is_lp_plus_creator_plus_dex() {
-        // 25 (LP) + 500 (creator) + 30 (dex) = 555
-        assert_eq!(
-            fee_bps_for("V2_DEX", Some(500), Some(50), Some(30)),
-            Some(555)
-        );
-    }
-
-    #[test]
-    fn fee_bps_v2_missing_fee_config_is_none() {
-        assert_eq!(fee_bps_for("V2_CURVE", None, None, None), None);
-        assert_eq!(fee_bps_for("V2_DEX", None, None, None), None);
-        assert_eq!(fee_bps_for("V2_DEX", Some(500), Some(50), None), None);
+    fn e18(value: u64) -> BigDecimal {
+        BigDecimal::from(value) * BigDecimal::from(1_000_000_000_000_000_000u64)
     }
 
     #[test]
     fn order_assets_sorts_by_lowercase_address() {
-        // quote (WMON 0x3b...) < token (0xff...) => quote is asset0
-        let (a0, a1, quote0) = order_assets(TOKEN_HI, WMON_ADDR);
-        assert_eq!(a0, WMON_ADDR);
-        assert_eq!(a1, TOKEN_HI);
-        assert!(quote0);
-
-        // token (0x00..01) < quote (LVMON 0xbe..) => token is asset0
-        let low_token = "0x0000000000000000000000000000000000000abc";
-        let (b0, b1, quote0b) = order_assets(low_token, LVMON_ADDR);
-        assert_eq!(b0, low_token);
-        assert_eq!(b1, LVMON_ADDR);
-        assert!(!quote0b);
+        let (asset0, asset1, quote_is_asset0) = order_assets(TOKEN, QUOTE);
+        assert_eq!(asset0, QUOTE);
+        assert_eq!(asset1, TOKEN);
+        assert!(quote_is_asset0);
     }
 
-    fn e18(n: u64) -> BigDecimal {
-        BigDecimal::from(n) * BigDecimal::from(1_000_000_000_000_000_000u64)
-    }
-
-    fn swap_row(market_type: &str, quote_id: &str, is_buy: bool) -> SwapEventRow {
-        SwapEventRow {
+    #[test]
+    fn dex_swap_uses_pool_and_quote_order() {
+        let event = TerminalService::convert_swap_event(SwapEventRow {
             account_id: "0xmaker".to_string(),
-            token_id: TOKEN_HI.to_string(),
-            is_buy,
+            token_id: TOKEN.to_string(),
+            is_buy: true,
             quote_amount: e18(1),
             token_amount: e18(2),
             reserve_quote: Some(e18(100)),
             reserve_token: Some(e18(200)),
             created_at: 123,
-            transaction_hash: "0xs".to_string(),
+            transaction_hash: "0xswap".to_string(),
             block_number: 10,
             tx_index: Some(0),
             log_index: 0,
             pool_id: Some(POOL.to_string()),
             price: e18(1),
-            quote_id: quote_id.to_string(),
-            market_type: market_type.to_string(),
-        }
-    }
+            quote_id: QUOTE.to_string(),
+        });
 
-    #[test]
-    fn swap_v2_dex_lvmon_quote_buy_maps_quote_as_asset0() {
-        // TOKEN_HI (0xff..) > LVMON (0xbe..) => quote is asset0.
-        let ev =
-            TerminalService::convert_swap_event(swap_row("V2_DEX", LVMON_ADDR, true), V1_BC, V2_BC);
-        match ev {
+        match event {
             Event::Swap {
                 asset0_in,
-                asset1_in,
-                asset0_out,
                 asset1_out,
-                price_native,
+                pair_id,
                 reserves,
-                pair_id,
                 ..
             } => {
-                assert_eq!(asset0_in, Some("1".to_string())); // quote in
-                assert_eq!(asset1_out, Some("2".to_string())); // token out
-                assert_eq!(asset1_in, None);
-                assert_eq!(asset0_out, None);
-                assert_eq!(reserves.asset0, "100"); // reserve_quote
-                assert_eq!(reserves.asset1, "200"); // reserve_token
-                assert_eq!(price_native, "2"); // token/quote
-                assert_eq!(pair_id, POOL); // V2_DEX -> pool
+                assert_eq!(asset0_in.as_deref(), Some("1"));
+                assert_eq!(asset1_out.as_deref(), Some("2"));
+                assert_eq!(pair_id, POOL);
+                assert_eq!(reserves.asset0, "100");
+                assert_eq!(reserves.asset1, "200");
             }
-            _ => panic!("expected swap"),
+            _ => panic!("expected swap event"),
         }
     }
 
     #[test]
-    fn swap_pair_id_uses_per_event_market_type() {
-        // A graduated token's curve-era swap must reference the bonding curve,
-        // not the current pool.
-        let ev = TerminalService::convert_swap_event(
-            swap_row("V2_CURVE", LVMON_ADDR, true),
-            V1_BC,
-            V2_BC,
-        );
-        match ev {
-            Event::Swap { pair_id, .. } => assert_eq!(pair_id, V2_BC),
-            _ => panic!("expected swap"),
-        }
-    }
-
-    #[test]
-    fn swap_v1_wmon_quote_unchanged() {
-        // Regression: WMON quote keeps the legacy asset ordering/pricing.
-        let ev =
-            TerminalService::convert_swap_event(swap_row("CURVE", WMON_ADDR, true), V1_BC, V2_BC);
-        match ev {
-            Event::Swap {
-                asset0_in,
-                asset1_out,
-                pair_id,
-                ..
-            } => {
-                assert_eq!(asset0_in, Some("1".to_string()));
-                assert_eq!(asset1_out, Some("2".to_string()));
-                assert_eq!(pair_id, V1_BC);
-            }
-            _ => panic!("expected swap"),
-        }
-    }
-
-    #[test]
-    fn mint_v2_dex_lvmon_quote_orders_by_quote() {
-        let row = MintEventRow {
-            token_id: TOKEN_HI.to_string(),
+    fn dex_join_and_exit_keep_pool_and_quote_order() {
+        let mint = TerminalService::convert_mint_event(MintEventRow {
+            token_id: TOKEN.to_string(),
             account_id: "0xmaker".to_string(),
             market_id: POOL.to_string(),
             quote_amount: e18(1),
@@ -717,34 +531,28 @@ mod tests {
             reserve_quote: e18(100),
             reserve_token: e18(200),
             created_at: 123,
-            transaction_hash: "0xm".to_string(),
+            transaction_hash: "0xmint".to_string(),
             block_number: 10,
             tx_index: 0,
             log_index: 0,
-            quote_id: LVMON_ADDR.to_string(),
-        };
-        match TerminalService::convert_mint_event(row) {
+            quote_id: QUOTE.to_string(),
+        });
+        match mint {
             Event::Join {
                 amount0,
                 amount1,
-                reserves,
                 pair_id,
                 ..
             } => {
-                assert_eq!(amount0, "1"); // quote side
-                assert_eq!(amount1, "2"); // token side
-                assert_eq!(reserves.asset0, "100");
-                assert_eq!(reserves.asset1, "200");
-                assert_eq!(pair_id, POOL); // market_id preserved
+                assert_eq!(amount0, "1");
+                assert_eq!(amount1, "2");
+                assert_eq!(pair_id, POOL);
             }
-            _ => panic!("expected join"),
+            _ => panic!("expected join event"),
         }
-    }
 
-    #[test]
-    fn burn_v2_dex_lvmon_quote_orders_by_quote() {
-        let row = BurnEventRow {
-            token_id: TOKEN_HI.to_string(),
+        let burn = TerminalService::convert_burn_event(BurnEventRow {
+            token_id: TOKEN.to_string(),
             account_id: "0xmaker".to_string(),
             market_id: POOL.to_string(),
             quote_amount: e18(1),
@@ -752,13 +560,13 @@ mod tests {
             reserve_quote: e18(100),
             reserve_token: e18(200),
             created_at: 123,
-            transaction_hash: "0xb".to_string(),
+            transaction_hash: "0xburn".to_string(),
             block_number: 10,
             tx_index: 0,
             log_index: 0,
-            quote_id: LVMON_ADDR.to_string(),
-        };
-        match TerminalService::convert_burn_event(row) {
+            quote_id: QUOTE.to_string(),
+        });
+        match burn {
             Event::Exit {
                 amount0,
                 amount1,
@@ -769,7 +577,7 @@ mod tests {
                 assert_eq!(amount1, "2");
                 assert_eq!(pair_id, POOL);
             }
-            _ => panic!("expected exit"),
+            _ => panic!("expected exit event"),
         }
     }
 }

@@ -166,8 +166,7 @@ curl "https://api.nadapp.net/agent/market/0x1234..." \
     "ath_price_usd": "0.00015",
     "ath_price_native": "0.00005",
     "ath_price_quote": "0.00005",
-    "holder_count": 1234,
-    "fee_info": null
+    "holder_count": 1234
   }
 }
 ```
@@ -343,8 +342,7 @@ curl "https://api.nadapp.net/agent/holdings/0xabc...?page=1&limit=20" \
         "ath_price_usd": "0.00015",
         "ath_price_native": "0.00005",
         "ath_price_quote": "0.00005",
-        "holder_count": 1234,
-        "fee_info": null
+        "holder_count": 1234
       }
     }
   ],
@@ -480,8 +478,7 @@ curl "https://api.nadapp.net/agent/token/created/0xabc...?page=1&limit=10" \
           "bio": "",
           "image_uri": "https://..."
         },
-        "is_cto": false,
-        "version": "V1"
+        "is_cto": false
       },
       "market_info": {
         "market_type": "CURVE",
@@ -510,20 +507,13 @@ curl "https://api.nadapp.net/agent/token/created/0xabc...?page=1&limit=10" \
         "ath_price_usd": "0.00015",
         "ath_price_native": "0.00005",
         "ath_price_quote": "0.00005",
-        "holder_count": 150,
-        "fee_info": null
+        "holder_count": 150
       },
       "balance_info": {
         "balance": "100000000000000000000000",
         "token_price": "0.00006",
         "native_price": "3.0",
         "created_at": 1704067200
-      },
-      "reward_info": {
-        "amount": "5000000000000000000",
-        "claimed_amount": "1000000000000000000",
-        "proof": ["0x...", "0x..."],
-        "claimable": true
       }
     }
   ],
@@ -607,10 +597,8 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  version: TokenVersion;
 }
 
-type TokenVersion = "V1" | "V2";
 
 interface QuoteInfo {
   quote_id: string;
@@ -620,14 +608,8 @@ interface QuoteInfo {
   image_uri: string;
 }
 
-interface FeeInfo {
-  creator_protocol_fee_rate: number;
-  curve_protocol_fee_rate: number;
-  dex_protocol_fee_rate: number;
-}
-
 interface MarketInfo {
-  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
+  market_type: "CURVE" | "DEX";
   token_id: string;
   quote_info: QuoteInfo;
   market_id: string;
@@ -648,7 +630,6 @@ interface MarketInfo {
   ath_price_native: string;
   ath_price_quote: string;
   holder_count: number;
-  fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
 interface SwapInfo {
@@ -668,12 +649,6 @@ interface BalanceInfo {
   created_at: number;
 }
 
-interface RewardInfo {
-  amount: string;
-  claimed_amount: string;
-  proof: string[];
-  claimable: boolean;
-}
 
 // ==================== Responses ====================
 
@@ -766,7 +741,6 @@ interface CreatedTokensResponse {
     token_info: TokenInfo;
     market_info: MarketInfo;
     balance_info: BalanceInfo;
-    reward_info: RewardInfo;
   }>;
   total_count: number;
 }

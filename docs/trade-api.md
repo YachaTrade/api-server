@@ -165,12 +165,7 @@ Trade API는 토큰 거래 관련 정보를 조회하기 위한 API입니다.
     "ath_price_usd": "0.006",
     "ath_price_native": "0.000002",
     "ath_price_quote": "0.000002",
-    "holder_count": 150,
-    "fee_info": {
-      "creator_protocol_fee_rate": 100,
-      "curve_protocol_fee_rate": 100,
-      "dex_protocol_fee_rate": 100
-    }
+    "holder_count": 150
   }
 }
 ```
@@ -179,7 +174,7 @@ Trade API는 토큰 거래 관련 정보를 조회하기 위한 API입니다.
 
 | 필드 | 설명 |
 |------|------|
-| `market_type` | 마켓 타입 (`CURVE`, `DEX`, `V2_CURVE`, `V2_DEX`) |
+| `market_type` | 마켓 타입 (`CURVE`, `DEX`) |
 | `token_id` | 토큰 컨트랙트 주소 |
 | `quote_info` | Quote 토큰 메타데이터 (nested object) |
 | `market_id` | 마켓 컨트랙트 주소 |
@@ -200,7 +195,6 @@ Trade API는 토큰 거래 관련 정보를 조회하기 위한 API입니다.
 | `ath_price_native` | ATH 가격 (MON) |
 | `ath_price_quote` | ATH 가격 (Quote) |
 | `holder_count` | 보유자 수 |
-| `fee_info` | 수수료 설정 (V2 토큰만, V1은 없음) |
 
 #### 에러 응답
 - `400`: 잘못된 token_id
@@ -451,14 +445,8 @@ interface QuoteInfo {
   image_uri: string;
 }
 
-interface FeeInfo {
-  creator_protocol_fee_rate: number;
-  curve_protocol_fee_rate: number;
-  dex_protocol_fee_rate: number;
-}
-
 interface MarketInfo {
-  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
+  market_type: "CURVE" | "DEX";
   token_id: string;
   quote_info: QuoteInfo;
   market_id: string;
@@ -479,7 +467,6 @@ interface MarketInfo {
   ath_price_native: string;
   ath_price_quote: string;
   holder_count: number;
-  fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
 // GET /trade/chart/{token_id}
@@ -555,7 +542,7 @@ type ChartType = "price" | "price_usd" | "market_cap" | "market_cap_usd";
 type TimeFrame = "1" | "5" | "15" | "30" | "60" | "240" | "1D";
 
 // Market Type
-type MarketType = "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
+type MarketType = "CURVE" | "DEX";
 
 // Swap Type
 type SwapType = "BUY" | "SELL";

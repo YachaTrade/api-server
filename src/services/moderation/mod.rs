@@ -2,11 +2,9 @@
 //!
 //! Stateless (no postgres/redis/r2) — AWS config is loaded from env on every
 //! call, same as `R2Client`/`MetadataService` do for their own AWS clients.
-//! Callers decide the *policy* for a positive result: `/metadata/image` caches
-//! it as an `is_nsfw` flag and still uploads (`services::metadata`), while
-//! `/dev-post/image` rejects the upload outright
-//! (`router::dev_post::handler::upload_image`). This module only answers the
-//! judgment question.
+//! Callers decide the *policy* for a positive result. `/metadata/image` caches
+//! it as an `is_nsfw` flag and still uploads (`services::metadata`). This module
+//! only answers the judgment question.
 
 use std::env;
 use std::io::Cursor;

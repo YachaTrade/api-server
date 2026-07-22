@@ -7,7 +7,7 @@ This repository is the GIWA-facing Rust API service derived from the NADS Pump b
 - Runtime: Rust 2024, Tokio, Axum, and Utoipa/OpenAPI.
 - State: PostgreSQL through SQLx, one `RedisDatabase` connected through `REDIS_URL` for sessions plus trading/cache data, and in-process caches.
 - Integrations: EVM access through Alloy plus AWS S3 and Rekognition.
-- Active market wire/database values are `NADFUN`, `UNISWAPV3`, `V2_CURVE`, and `V2_DEX`, mapped respectively to `Curve`, `Dex`, `V2Curve`, and `V2Dex`.
+- Active market wire/database values are `CURVE` and `DEX`, mapped respectively to `Curve` and `Dex`.
 
 ## Structure
 
@@ -29,14 +29,14 @@ SQLX_OFFLINE=true cargo build --release
 cargo run -- --port 8080
 ```
 
-The release build mirrors the Docker build's SQLx offline mode. Running the service still requires its external PostgreSQL, Redis, RPC, and AWS configuration. `cargo run` is operator-only and destructive to the configured Redis server: startup unconditionally issues `FLUSHALL` through the single `REDIS_URL`, deleting every database and key on that server. Use only an explicitly authorized isolated Redis target.
+The release build mirrors the Docker build's SQLx offline mode. Running the service still requires its external PostgreSQL, Redis, RPC, and AWS configuration. Startup cleanup is a no-op when `REDIS_KEY_PREFIX` is empty and otherwise deletes only keys in that namespace. Use only an explicitly authorized Redis target.
 
 ## Project-Specific Rules
 
 - Keep transport parsing in `src/router/`, domain decisions in `src/controllers/` and `src/services/`, and persistence details in `src/db/`.
 - Preserve exact API field shapes and nullability; update Utoipa annotations and the relevant API document when a public response changes.
 - Use `BigDecimal` for persisted or returned financial quantities; do not introduce floating-point accounting.
-- Keep `NADFUN`, `UNISWAPV3`, `V2_CURVE`, and `V2_DEX` synchronized across Rust types, SQL, filters, caches, and API output.
+- Keep `CURVE` and `DEX` synchronized across Rust types, SQL, filters, caches, and API output.
 - When schema or SQLx queries change, edit the migrations repository, intentionally update its parent gitlink, and refresh this repository's tracked local `.sqlx/` metadata.
 - Treat cache-key, TTL, and invalidation changes as cross-layer changes; verify both the database source of truth and Redis behavior.
 - Do not treat old stress reports, logs, or handoff documents as current behavior when source and recent history disagree.
