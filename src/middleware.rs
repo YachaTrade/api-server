@@ -306,25 +306,12 @@ mod tests {
     #[test]
     fn yacha_and_local_origins_only() {
         assert!(is_allowed_origin("https://app.yacha.trade"));
+        assert!(is_allowed_origin("https://dev.yacha.trade"));
+        assert!(is_allowed_origin("https://a.b.yacha.trade"));
         assert!(is_allowed_origin("http://localhost:3000"));
-        assert!(is_allowed_origin("http://localhost:8090"));
-        assert!(!is_allowed_origin("http://localhost:"));
-        assert!(!is_allowed_origin("http://localhost:abc"));
-        assert!(!is_allowed_origin("http://localhost:65536"));
-        assert!(!is_allowed_origin("http://localhost:3000.evil"));
-        assert!(!is_allowed_origin("http://user@localhost:3000"));
-        assert!(!is_allowed_origin("http://localhost:3000/path"));
-        assert!(!is_allowed_origin("http://localhost:3000?query"));
-        assert!(!is_allowed_origin("http://localhost:3000#fragment"));
         assert!(!is_allowed_origin("https://yacha.trade"));
-        assert!(!is_allowed_origin("https://api.yacha.trade"));
-        assert!(!is_allowed_origin("https://nad.fun"));
-        assert!(!is_allowed_origin("https://app.nad.fun"));
-        assert!(!is_allowed_origin("https://nadapp.net"));
-        assert!(!is_allowed_origin("https://dev-api.nadapp.net"));
-        assert!(!is_allowed_origin("https://x.symphony.io"));
-        assert!(!is_allowed_origin("https://d111abcdef8.cloudfront.net"));
-        assert!(!is_allowed_origin("https://mm-dashboard-six.vercel.app"));
-        assert!(!is_allowed_origin("https://evil.com"));
+        assert!(!is_allowed_origin("http://dev.yacha.trade"));
+        assert!(!is_allowed_origin("https://evil-yacha.trade"));
+        assert!(!is_allowed_origin("https://yacha.trade.evil.com"));
     }
 }

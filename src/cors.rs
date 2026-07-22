@@ -7,26 +7,42 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use url::Url;
 
-const STATIC_ORIGINS: [&str; 1] = ["https://app.yacha.trade"];
+const YACHA_DOMAIN_SUFFIX: &str = ".yacha.trade";
 
-pub(crate) fn is_origin_allowed(origin: &str) -> bool {
-    if STATIC_ORIGINS.contains(&origin) {
-        return true;
-    }
-
-    let Ok(url) = Url::parse(origin) else {
-        return false;
-    };
-
-    url.scheme() == "http"
-        && url.host_str() == Some("localhost")
-        && url.port().is_some()
-        && url.username().is_empty()
+fn is_canonical_origin(origin: &str, url: &Url) -> bool {
+    url.username().is_empty()
         && url.password().is_none()
         && url.path() == "/"
         && url.query().is_none()
         && url.fragment().is_none()
         && origin == url.origin().ascii_serialization()
+}
+
+fn is_yacha_subdomain_origin(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let Some(subdomains) = host.strip_suffix(YACHA_DOMAIN_SUFFIX) else {
+        return false;
+    };
+
+    url.scheme() == "https"
+        && url.port().is_none()
+        && !subdomains.is_empty()
+        && subdomains.split('.').all(|label| !label.is_empty())
+}
+
+pub(crate) fn is_origin_allowed(origin: &str) -> bool {
+    let Ok(url) = Url::parse(origin) else {
+        return false;
+    };
+
+    if !is_canonical_origin(origin, &url) {
+        return false;
+    }
+
+    is_yacha_subdomain_origin(&url)
+        || (url.scheme() == "http" && url.host_str() == Some("localhost") && url.port().is_some())
 }
 
 pub fn get_cors() -> CorsLayer {
@@ -72,6 +88,9 @@ mod tests {
     fn origin_allow_rules() {
         let cases = [
             ("https://app.yacha.trade", true),
+            ("https://dev.yacha.trade", true),
+            ("https://api.yacha.trade", true),
+            ("https://a.b.yacha.trade", true),
             ("http://localhost:3000", true),
             ("http://localhost:8090", true),
             ("http://localhost:", false),
@@ -83,7 +102,19 @@ mod tests {
             ("http://localhost:3000?query", false),
             ("http://localhost:3000#fragment", false),
             ("https://yacha.trade", false),
-            ("https://api.yacha.trade", false),
+            ("http://dev.yacha.trade", false),
+            ("https://dev.yacha.trade:443", false),
+            ("https://dev.yacha.trade:8443", false),
+            ("https://user@dev.yacha.trade", false),
+            ("https://dev.yacha.trade/", false),
+            ("https://dev.yacha.trade/path", false),
+            ("https://dev.yacha.trade?query", false),
+            ("https://dev.yacha.trade#fragment", false),
+            ("https://.yacha.trade", false),
+            ("https://a..yacha.trade", false),
+            ("https://dev.yacha.trade.", false),
+            ("https://evil-yacha.trade", false),
+            ("https://yacha.trade.evil.com", false),
             ("https://nad.fun", false),
             ("https://app.nad.fun", false),
             ("https://nadapp.net", false),
