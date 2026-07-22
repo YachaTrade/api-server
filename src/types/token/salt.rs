@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::common::info::TokenVersion;
 use crate::types::metadata::{
     MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH,
 };
@@ -28,15 +27,6 @@ pub struct MineSaltRequest {
         example = "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
     )]
     pub metadata_uri: String,
-
-    /// Bonding curve version ("V1" or "V2", defaults to "V1")
-    #[serde(default = "default_version")]
-    #[schema(example = "V1")]
-    pub version: TokenVersion,
-}
-
-fn default_version() -> TokenVersion {
-    TokenVersion::V1
 }
 
 impl MineSaltRequest {
@@ -99,4 +89,25 @@ pub struct MineSaltError {
     /// Number of iterations attempted before giving up
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iterations_attempted: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn mine_salt_request_serializes_without_version() {
+        let request: MineSaltRequest = serde_json::from_value(json!({
+            "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
+            "name": "My Token",
+            "symbol": "MTK",
+            "metadata_uri": "https://storage.nadapp.net/metadata.json",
+            "version": "V2"
+        }))
+        .unwrap();
+
+        let serialized = serde_json::to_value(request).unwrap();
+        assert!(serialized.get("version").is_none());
+    }
 }

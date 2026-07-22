@@ -10,33 +10,18 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        DEVPOST_DETAIL_EXPIRATION, DEVPOST_FEED_EXPIRATION, DEVPOST_RANKING_EXPIRATION,
-        DEVPOST_TRENDING_EXPIRATION, GECKO_METADATA_EXPIRATION, GET_COMMUNITY_TREASURY_EXPIRATION,
-        GET_GIFT_FEE_RESPONSE_EXPIRATION, GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-        GET_QUOTE_TOKENS_RESPONSE_EXPIRATION, GET_REWARD_ADD_HISTORY_EXPIRATION,
-        GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
-        GET_TOKEN_VAULTS_RESPONSE_EXPIRATION, GET_TOTAL_HYPE_POINT_EXPIRATION,
-        GET_TREND_TOKEN_RESPONSE_EXPIRATION, HYPE_LEADERBOARD_RESPONSE_EXPIRATION,
-        MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION, NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION,
-        PNL_LEADERBOARD_RESPONSE_EXPIRATION, REDIS_KEY_PREFIX, SEARCH_EXPIRATION,
-        TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
+        GECKO_METADATA_EXPIRATION, GET_TOKEN_METADATA_EXPIRATION, GET_TOKEN_RESPONSE_EXPIRATION,
+        GET_TREND_TOKEN_RESPONSE_EXPIRATION, MESSAGE_EXPIRATION, NEW_CONTENT_EXPIRATION,
+        NSFW_STATUS_EXPIRATION, ORDER_EXPIRATION, PNL_LEADERBOARD_RESPONSE_EXPIRATION,
+        REDIS_KEY_PREFIX, SEARCH_EXPIRATION, TOKEN_CREATED_EXPIRATION, TOKEN_TRADE_EXPIRATION,
     },
     measure_redis,
     types::{
         common::{info::AccountInfo, pagination::PaginationParams},
-        dev_post::{DevPostResponse, FeedBase, RankingResponse},
-        hype::{
-            AmountResponse, HypeEpochResponse, HypePointResponse, HypeRewardAddHistoryResponse,
-            HypeTokenResponse, HypeVoteHistoryResponse,
-        },
-        leaderboard::{HypePointLeaderboardResponse, PnlLeaderboardResponse},
+        leaderboard::PnlLeaderboardResponse,
         metadata::TerminalMetadataResponse,
         new_event::NewEventResponse,
-        profile::PointHistoryResponse,
-        profile::{
-            CreatedTokensResponse, GiftFeeTokensResponse, HoldTokenResponse, SwapHistoryResponse,
-        },
-        quote_token::QuoteTokensResponse,
+        profile::{CreatedTokensResponse, HoldTokenResponse, SwapHistoryResponse},
         search::{AccountSearchResponse, SearchResponse, TokenSearchResponse},
         token::{
             TokenResponse,
@@ -49,57 +34,15 @@ use crate::{
             position::TokenHolderResponse,
             swap_history::{SwapQuery, TokenSwapResponse},
         },
-        vault::TokenVaultsResponse,
     },
 };
 
-/// Prepend the global `REDIS_KEY_PREFIX` to a Redis key.
-///
-/// Returns the key unchanged when the prefix is empty (legacy mode), so the
-/// behavior matches a deploy that hasn't set the env var. The trailing colon
-/// is part of `REDIS_KEY_PREFIX` itself (see `config.rs`).
 fn with_prefix(key: String) -> String {
     if REDIS_KEY_PREFIX.is_empty() {
         key
     } else {
         format!("{}{}", REDIS_KEY_PREFIX.as_str(), key)
     }
-}
-
-fn devpost_feed_legacy_key(scope: &str) -> String {
-    with_prefix(format!("devpost:feed:{scope}"))
-}
-
-fn devpost_feed_v2_key(scope: &str) -> String {
-    with_prefix(format!("devpost:feed:v2:{scope}"))
-}
-
-fn devpost_feed_v3_key(scope: &str) -> String {
-    with_prefix(format!("devpost:feed:v3:{scope}"))
-}
-
-fn devpost_detail_legacy_key(post_id: i64) -> String {
-    with_prefix(format!("devpost:detail:{post_id}"))
-}
-
-fn devpost_detail_v2_key(post_id: i64) -> String {
-    with_prefix(format!("devpost:detail:v2:{post_id}"))
-}
-
-fn devpost_trending_legacy_key() -> String {
-    with_prefix("devpost:trending".into())
-}
-
-fn devpost_trending_v2_key() -> String {
-    with_prefix("devpost:trending:v2".into())
-}
-
-fn devpost_ranking_generation_key() -> String {
-    with_prefix("devpost:ranking:generation".into())
-}
-
-fn devpost_ranking_v2_key(generation: i64, page: i64, limit: i64) -> String {
-    with_prefix(format!("devpost:ranking:v2:{generation}:{page}:{limit}"))
 }
 
 pub struct RedisDatabase {
@@ -125,26 +68,19 @@ impl RedisDatabase {
         }
     }
 
-    /// Wipe Redis state owned by this service via prefix-scoped SCAN + DEL.
-    ///
-    /// - When `REDIS_KEY_PREFIX` is empty: **no-op**. We never run FLUSHALL
-    ///   here — too dangerous on a shared Redis. If a full wipe is really
-    ///   needed, do it manually with `redis-cli FLUSHALL` outside the service.
-    /// - When `REDIS_KEY_PREFIX` is set: runs `SCAN MATCH <prefix>* COUNT 500`
-    ///   in a loop and `DEL`s only the matching keys, leaving everything
-    ///   else (including v1 keys on a shared Redis) untouched.
+    /// Delete only this service's prefixed keys. An empty prefix is a no-op;
+    /// startup never issues FLUSHALL against a potentially shared Redis.
     pub async fn flush_all(&self) -> Result<()> {
         if REDIS_KEY_PREFIX.is_empty() {
-            info!(
-                "Redis flush skipped: REDIS_KEY_PREFIX is empty (no FLUSHALL — too risky on shared Redis)"
-            );
+            info!("Redis startup cleanup skipped: REDIS_KEY_PREFIX is empty");
             return Ok(());
         }
 
         let mut conn = self.conn.as_ref().clone();
         let pattern = format!("{}*", REDIS_KEY_PREFIX.as_str());
-        let mut cursor: u64 = 0;
-        let mut deleted: u64 = 0;
+        let mut cursor = 0_u64;
+        let mut deleted = 0_u64;
+
         loop {
             let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
                 .arg(cursor)
@@ -155,18 +91,18 @@ impl RedisDatabase {
                 .query_async(&mut conn)
                 .await?;
             if !keys.is_empty() {
-                let n: u64 = redis::cmd("DEL").arg(&keys).query_async(&mut conn).await?;
-                deleted += n;
+                deleted += redis::cmd("DEL")
+                    .arg(&keys)
+                    .query_async::<u64>(&mut conn)
+                    .await?;
             }
             if next == 0 {
                 break;
             }
             cursor = next;
         }
-        info!(
-            "Redis prefix flush completed (pattern={}, deleted={})",
-            pattern, deleted
-        );
+
+        info!(pattern, deleted, "Redis prefix cleanup completed");
         Ok(())
     }
 
@@ -592,54 +528,6 @@ impl RedisDatabase {
         );
         Ok(response)
     }
-
-    pub async fn set_account_gift_fee(
-        &self,
-        address: &str,
-        pagination: &PaginationParams,
-        response: &GiftFeeTokensResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "gift_fee:{}:page:{}:limit:{}",
-            address, pagination.page, pagination.limit
-        ));
-        let response_json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_account_gift_fee",
-            conn.pset_ex::<_, _, ()>(key, response_json, *GET_GIFT_FEE_RESPONSE_EXPIRATION)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_account_gift_fee(address: {}, page: {}, limit: {}) completed in {:?}",
-            address, pagination.page, pagination.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_account_gift_fee(
-        &self,
-        address: &str,
-        pagination: &PaginationParams,
-    ) -> Result<GiftFeeTokensResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "gift_fee:{}:page:{}:limit:{}",
-            address, pagination.page, pagination.limit
-        ));
-        let response_json: String =
-            measure_redis!("redis.get_account_gift_fee", conn.get::<_, String>(key))?;
-        let response: GiftFeeTokensResponse = serde_json::from_str(&response_json)?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_account_gift_fee(address: {}, page: {}, limit: {}) completed in {:?}",
-            address, pagination.page, pagination.limit, elapsed
-        );
-        Ok(response)
-    }
 }
 
 impl RedisDatabase {
@@ -679,80 +567,6 @@ impl RedisDatabase {
         Ok(response_json)
     }
 
-    pub async fn set_token_vaults_response(
-        &self,
-        token_id: &str,
-        response: &TokenVaultsResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("token_vaults:{}", token_id));
-
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_token_vaults_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_TOKEN_VAULTS_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_token_vaults_response(token_id: {}) completed in {:?}",
-            token_id, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_token_vaults_response(&self, token_id: &str) -> Result<TokenVaultsResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("token_vaults:{}", token_id));
-
-        let json: String = measure_redis!(
-            "redis.get_token_vaults_response",
-            conn.get::<_, String>(key)
-        )?;
-        let response: TokenVaultsResponse = serde_json::from_str(&json)?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_token_vaults_response(token_id: {}) completed in {:?}",
-            token_id, elapsed
-        );
-        Ok(response)
-    }
-
-    pub async fn set_quote_tokens_response(&self, response: &QuoteTokensResponse) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "quote_tokens".to_string();
-
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_quote_tokens_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_QUOTE_TOKENS_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!("set_quote_tokens_response completed in {:?}", elapsed);
-        Ok(())
-    }
-
-    pub async fn get_quote_tokens_response(&self) -> Result<QuoteTokensResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "quote_tokens".to_string();
-
-        let json: String = measure_redis!(
-            "redis.get_quote_tokens_response",
-            conn.get::<_, String>(key)
-        )?;
-        let response: QuoteTokensResponse = serde_json::from_str(&json)?;
-
-        let elapsed = start_time.elapsed();
-        debug!("get_quote_tokens_response completed in {:?}", elapsed);
-        Ok(response)
-    }
-
     pub async fn set_token_metadata(
         &self,
         token_address: &str,
@@ -788,406 +602,6 @@ impl RedisDatabase {
             "get_token_metadata(token_address: {}) completed in {:?}",
             token_address, elapsed
         );
-        Ok(response)
-    }
-}
-
-// Hype cache methods
-impl RedisDatabase {
-    pub async fn set_hype_token_response(&self, response: &HypeTokenResponse) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "hype_token".to_string();
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_token_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!("set_hype_token_response() completed in {:?}", elapsed);
-        Ok(())
-    }
-
-    pub async fn get_hype_token_response(&self) -> Result<HypeTokenResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "hype_token".to_string();
-        let response_json: String =
-            measure_redis!("redis.get_hype_token_response", conn.get::<_, String>(key))?;
-        let elapsed = start_time.elapsed();
-        debug!("get_hype_token_response() completed in {:?}", elapsed);
-        let response_json: HypeTokenResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_hype_token_latest_response(&self, response: &HypeTokenResponse) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "hype_token_latest".to_string();
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_token_latest_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_token_latest_response() completed in {:?}",
-            elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_token_latest_response(&self) -> Result<HypeTokenResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "hype_token_latest".to_string();
-        let response_json: String = measure_redis!(
-            "redis.get_hype_token_latest_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_token_latest_response() completed in {:?}",
-            elapsed
-        );
-        let response_json: HypeTokenResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_hype_token_epoch_response(
-        &self,
-        epoch: i64,
-        response: &HypeTokenResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("hype_token_epoch:{}", epoch));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_token_epoch_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_token_epoch_response(epoch: {}) completed in {:?}",
-            epoch, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_token_epoch_response(&self, epoch: i64) -> Result<HypeTokenResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("hype_token_epoch:{}", epoch));
-        let response_json: String = measure_redis!(
-            "redis.get_hype_token_epoch_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_token_epoch_response(epoch: {}) completed in {:?}",
-            epoch, elapsed
-        );
-        let response: HypeTokenResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
-
-    pub async fn delete_hype_token_cache(&self) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-
-        let keys = vec!["hype_token", "hype_token_latest"];
-        measure_redis!(
-            "redis.delete_hype_token_cache",
-            conn.del::<&[&str], ()>(&keys)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!("delete_hype_token_cache() completed in {:?}", elapsed);
-        Ok(())
-    }
-
-    pub async fn set_total_hype_point_response(&self, response: &AmountResponse) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "total_hype_point".to_string();
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_total_hype_point_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_TOTAL_HYPE_POINT_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!("set_total_hype_point_response() completed in {:?}", elapsed);
-        Ok(())
-    }
-
-    pub async fn get_total_hype_point_response(&self) -> Result<AmountResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "total_hype_point".to_string();
-        let response_json: String = measure_redis!(
-            "redis.get_total_hype_point_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!("get_total_hype_point_response() completed in {:?}", elapsed);
-        let response_json: AmountResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_community_treasury_response(&self, response: &AmountResponse) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "community_treasury".to_string();
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_community_treasury_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_COMMUNITY_TREASURY_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_community_treasury_response() completed in {:?}",
-            elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_community_treasury_response(&self) -> Result<AmountResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "community_treasury".to_string();
-        let response_json: String = measure_redis!(
-            "redis.get_community_treasury_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_community_treasury_response() completed in {:?}",
-            elapsed
-        );
-        let response_json: AmountResponse = serde_json::from_str(&response_json)?;
-        Ok(response_json)
-    }
-
-    pub async fn set_hype_epoch_response(&self, response: &HypeEpochResponse) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "hype_epoch";
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_epoch_response",
-            conn.pset_ex::<String, String, ()>(
-                key.to_string(),
-                json,
-                *GET_HYPE_TOKEN_RESPONSE_EXPIRATION,
-            )
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!("set_hype_epoch_response() completed in {:?}", elapsed);
-        Ok(())
-    }
-
-    pub async fn get_hype_epoch_response(&self) -> Result<HypeEpochResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = "hype_epoch";
-        let response_json: String =
-            measure_redis!("redis.get_hype_epoch_response", conn.get::<_, String>(key))?;
-        let elapsed = start_time.elapsed();
-        debug!("get_hype_epoch_response() completed in {:?}", elapsed);
-        let response: HypeEpochResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
-
-    pub async fn set_hype_vote_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-        response: &HypeVoteHistoryResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "hype_vote_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        ));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_vote_history_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_vote_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-    ) -> Result<HypeVoteHistoryResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "hype_vote_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        ));
-        let response_json: String = measure_redis!(
-            "redis.get_hype_vote_history_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_vote_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        let response: HypeVoteHistoryResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
-
-    pub async fn set_hype_point_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-        response: &PointHistoryResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "hype_point_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        ));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_point_history_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_point_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-    ) -> Result<PointHistoryResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "hype_point_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        ));
-        let response_json: String = measure_redis!(
-            "redis.get_hype_point_history_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_point_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        let response: PointHistoryResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
-
-    pub async fn set_hype_point_response(
-        &self,
-        account_id: &str,
-        response: &HypePointResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("hype_point:{}", account_id));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_point_response",
-            conn.pset_ex::<String, String, ()>(key, json, *GET_HYPE_TOKEN_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_point_response(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_point_response(&self, account_id: &str) -> Result<HypePointResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("hype_point:{}", account_id));
-        let response_json: String =
-            measure_redis!("redis.get_hype_point_response", conn.get::<_, String>(key))?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_point_response(account_id: {}) completed in {:?}",
-            account_id, elapsed
-        );
-        let response: HypePointResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
-
-    pub async fn set_hype_reward_add_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-        response: &HypeRewardAddHistoryResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "hype_reward_add_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        ));
-        let serialized = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_reward_add_history_response",
-            conn.pset_ex::<String, String, ()>(key, serialized, *GET_REWARD_ADD_HISTORY_EXPIRATION)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_reward_add_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_reward_add_history_response(
-        &self,
-        account_id: &str,
-        params: &PaginationParams,
-    ) -> Result<HypeRewardAddHistoryResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "hype_reward_add_history:{}:{}:{}",
-            account_id, params.page, params.limit
-        ));
-        let response_json: String = measure_redis!(
-            "redis.get_hype_reward_add_history_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_reward_add_history_response(account_id: {}, page: {}, limit: {}) completed in {:?}",
-            account_id, params.page, params.limit, elapsed
-        );
-        let response: HypeRewardAddHistoryResponse = serde_json::from_str(&response_json)?;
         Ok(response)
     }
 }
@@ -1385,7 +799,7 @@ impl RedisDatabase {
     pub async fn get_new_event(&self) -> Result<NewEventResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = "new_event:latest";
+        let key = with_prefix("new_event:latest".to_string());
         let response_json: String =
             measure_redis!("redis.get_new_event", conn.get::<_, String>(key))?;
         let response: NewEventResponse = serde_json::from_str(&response_json)?;
@@ -1398,7 +812,7 @@ impl RedisDatabase {
     pub async fn set_new_event(&self, response: &NewEventResponse) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = "new_event:latest";
+        let key = with_prefix("new_event:latest".to_string());
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_new_event",
@@ -1570,7 +984,7 @@ impl RedisDatabase {
     ) -> Result<()> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = "trend:all";
+        let key = with_prefix("trend:all".to_string());
         let json = serde_json::to_string(response)?;
         measure_redis!(
             "redis.set_trend_response",
@@ -1589,7 +1003,7 @@ impl RedisDatabase {
     pub async fn get_trend_response(&self) -> Result<crate::types::trend::TrendResponse> {
         let start_time = Instant::now();
         let mut conn = self.conn.as_ref().clone();
-        let key = "trend:all";
+        let key = with_prefix("trend:all".to_string());
         let response_json: String =
             measure_redis!("redis.get_trend_response", conn.get::<_, String>(key))?;
         let elapsed = start_time.elapsed();
@@ -1648,56 +1062,6 @@ impl RedisDatabase {
 
 // Leaderboard cache
 impl RedisDatabase {
-    pub async fn set_hype_point_leaderboard_response(
-        &self,
-        page: i64,
-        limit: i64,
-        response: &HypePointLeaderboardResponse,
-    ) -> Result<()> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "leaderboard:hype_point:page:{}:limit:{}",
-            page, limit
-        ));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_hype_point_leaderboard_response",
-            conn.pset_ex::<String, String, ()>(key, json, *HYPE_LEADERBOARD_RESPONSE_EXPIRATION)
-        )?;
-
-        let elapsed = start_time.elapsed();
-        debug!(
-            "set_hype_point_leaderboard_response(page: {}, limit: {}) completed in {:?}",
-            page, limit, elapsed
-        );
-        Ok(())
-    }
-
-    pub async fn get_hype_point_leaderboard_response(
-        &self,
-        page: i64,
-        limit: i64,
-    ) -> Result<HypePointLeaderboardResponse> {
-        let start_time = Instant::now();
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "leaderboard:hype_point:page:{}:limit:{}",
-            page, limit
-        ));
-        let response_json: String = measure_redis!(
-            "redis.get_hype_point_leaderboard_response",
-            conn.get::<_, String>(key)
-        )?;
-        let elapsed = start_time.elapsed();
-        debug!(
-            "get_hype_point_leaderboard_response(page: {}, limit: {}) completed in {:?}",
-            page, limit, elapsed
-        );
-        let response: HypePointLeaderboardResponse = serde_json::from_str(&response_json)?;
-        Ok(response)
-    }
-
     pub async fn set_pnl_leaderboard_response(
         &self,
         page: i64,
@@ -1743,234 +1107,21 @@ impl RedisDatabase {
     }
 }
 
-// Chester cache
-const CHESTER_CACHE_EXPIRATION: u64 = 10_000; // 10 seconds in ms
-const CHESTER_REWARDS_CACHE_EXPIRATION: u64 = 60_000; // 60 seconds in ms
-
-impl RedisDatabase {
-    pub async fn set_chester_round(
-        &self,
-        response: &crate::types::chester::ChesterInfoResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = "chester:round";
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_chester_round",
-            conn.pset_ex::<String, String, ()>(key.to_string(), json, CHESTER_CACHE_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_chester_round(
-        &self,
-    ) -> Result<Option<crate::types::chester::ChesterInfoResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = "chester:round";
-        let json: Option<String> = measure_redis!(
-            "redis.get_chester_round",
-            conn.get::<_, Option<String>>(key)
-        )?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_chester_volume(
-        &self,
-        account_id: &str,
-        response: &crate::types::chester::ChesterVolumeResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:volume:{}", account_id));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_chester_volume",
-            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_chester_volume(
-        &self,
-        account_id: &str,
-    ) -> Result<Option<crate::types::chester::ChesterVolumeResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:volume:{}", account_id));
-        let json: Option<String> = measure_redis!(
-            "redis.get_chester_volume",
-            conn.get::<_, Option<String>>(key)
-        )?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_chester_rewards(
-        &self,
-        response: &crate::types::chester::ChesterRewardsResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = "chester:rewards";
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_chester_rewards",
-            conn.pset_ex::<String, String, ()>(
-                key.to_string(),
-                json,
-                CHESTER_REWARDS_CACHE_EXPIRATION
-            )
-        )?;
-        Ok(())
-    }
-
-    pub async fn set_chester_swap_history(
-        &self,
-        account_id: &str,
-        page: i64,
-        limit: i64,
-        response: &crate::types::profile::SwapHistoryResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "chester:swap_history:{}:{}:{}",
-            account_id, page, limit
-        ));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_chester_swap_history",
-            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_chester_swap_history(
-        &self,
-        account_id: &str,
-        page: i64,
-        limit: i64,
-    ) -> Result<Option<crate::types::profile::SwapHistoryResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "chester:swap_history:{}:{}:{}",
-            account_id, page, limit
-        ));
-        let json: Option<String> = measure_redis!(
-            "redis.get_chester_swap_history",
-            conn.get::<_, Option<String>>(key)
-        )?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_chester_box_rewards(
-        &self,
-        account_id: &str,
-        round: i64,
-        response: &crate::types::chester::ChesterBoxRewardsResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:box_rewards:{}:{}", account_id, round));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_chester_box_rewards",
-            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_chester_box_rewards(
-        &self,
-        account_id: &str,
-        round: i64,
-    ) -> Result<Option<crate::types::chester::ChesterBoxRewardsResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("chester:box_rewards:{}:{}", account_id, round));
-        let json: Option<String> = measure_redis!(
-            "redis.get_chester_box_rewards",
-            conn.get::<_, Option<String>>(key)
-        )?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_chester_reward_history(
-        &self,
-        account_id: &str,
-        page: i64,
-        limit: i64,
-        response: &crate::types::chester::ChesterRewardHistoryResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "chester:reward_history:{}:{}:{}",
-            account_id, page, limit
-        ));
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_chester_reward_history",
-            conn.pset_ex::<String, String, ()>(key, json, CHESTER_CACHE_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_chester_reward_history(
-        &self,
-        account_id: &str,
-        page: i64,
-        limit: i64,
-    ) -> Result<Option<crate::types::chester::ChesterRewardHistoryResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!(
-            "chester:reward_history:{}:{}:{}",
-            account_id, page, limit
-        ));
-        let json: Option<String> = measure_redis!(
-            "redis.get_chester_reward_history",
-            conn.get::<_, Option<String>>(key)
-        )?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn get_chester_rewards(
-        &self,
-    ) -> Result<Option<crate::types::chester::ChesterRewardsResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = "chester:rewards";
-        let json: Option<String> = measure_redis!(
-            "redis.get_chester_rewards",
-            conn.get::<_, Option<String>>(key)
-        )?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-}
-
 // API Key Rate Limiting
 impl RedisDatabase {
     /// Atomic INCR with EXPIRE (for rate limiting)
     /// Returns the current count after increment
     pub async fn incr_with_expire(&self, key: &str, ttl_secs: u64) -> Result<u64> {
         let mut conn = self.conn.as_ref().clone();
+        let key = with_prefix(key.to_string());
 
         // Use INCR command
-        let count: u64 = redis::cmd("INCR").arg(key).query_async(&mut conn).await?;
+        let count: u64 = redis::cmd("INCR").arg(&key).query_async(&mut conn).await?;
 
         // Set TTL only on first increment (when count == 1)
         if count == 1 {
             let _: () = redis::cmd("EXPIRE")
-                .arg(key)
+                .arg(&key)
                 .arg(ttl_secs)
                 .query_async(&mut conn)
                 .await?;
@@ -2069,18 +1220,23 @@ impl RedisDatabase {
         let mut conn = self.conn.as_ref().clone();
         let mut keys = Vec::new();
         let mut cursor: u64 = 0;
+        let pattern = with_prefix("apikey:usage:*".to_string());
 
         loop {
             let (new_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
                 .arg(cursor)
                 .arg("MATCH")
-                .arg("apikey:usage:*")
+                .arg(&pattern)
                 .arg("COUNT")
                 .arg(100)
                 .query_async(&mut conn)
                 .await?;
 
-            keys.extend(batch);
+            keys.extend(batch.into_iter().map(|key| {
+                key.strip_prefix(REDIS_KEY_PREFIX.as_str())
+                    .unwrap_or(&key)
+                    .to_string()
+            }));
             cursor = new_cursor;
 
             if cursor == 0 {
@@ -2136,15 +1292,11 @@ impl RedisDatabase {
         Ok(timestamp)
     }
 
-    /// Cache "this token_id exists in DB" for 1 week.
-    ///
-    /// Only the positive answer is cached — a missing key means "unknown,
-    /// fall through to DB". Non-existence is intentionally NOT cached so a
-    /// freshly-indexed token becomes visible without waiting for a TTL.
+    /// Cache only the positive "token exists" result for one week. Missing
+    /// tokens are deliberately not cached so newly indexed tokens appear at once.
     pub async fn set_token_exists(&self, token_id: &str) -> Result<()> {
         let mut conn = self.conn.as_ref().clone();
         let key = with_prefix(format!("token_exists:{}", token_id));
-        // 1 week TTL (in seconds)
         let _: () = redis::cmd("SETEX")
             .arg(&key)
             .arg(7 * 24 * 60 * 60)
@@ -2154,456 +1306,12 @@ impl RedisDatabase {
         Ok(())
     }
 
-    /// Read the cached "token exists" flag.
-    ///
-    /// Returns `Ok(true)` only when the positive flag is present. Anything
-    /// else (missing key, Redis error, malformed value) returns `Ok(false)`
-    /// so the caller falls through to a DB lookup — fail-open by design.
+    /// Return true only for the cached positive marker. A missing key falls
+    /// through to PostgreSQL in the caller.
     pub async fn get_token_exists(&self, token_id: &str) -> Result<bool> {
         let mut conn = self.conn.as_ref().clone();
         let key = with_prefix(format!("token_exists:{}", token_id));
         let value: Option<String> = redis::cmd("GET").arg(&key).query_async(&mut conn).await?;
         Ok(value.as_deref() == Some("1"))
-    }
-}
-
-// X (Twitter) verification: PKCE state + pending signals
-impl RedisDatabase {
-    pub async fn set_x_oauth_state(
-        &self,
-        state: &str,
-        payload: &crate::types::x_verification::XOAuthState,
-        ttl_ms: u64,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("x_oauth:state:{}", state));
-        let json = serde_json::to_string(payload)?;
-        measure_redis!(
-            "redis.set_x_oauth_state",
-            conn.pset_ex::<String, String, ()>(key, json, ttl_ms)
-        )?;
-        Ok(())
-    }
-
-    /// Atomically fetch + delete the PKCE state (one-time consume; anti-replay).
-    pub async fn get_and_delete_x_oauth_state(
-        &self,
-        state: &str,
-    ) -> Result<crate::types::x_verification::XOAuthState> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("x_oauth:state:{}", state));
-        let json: Option<String> = measure_redis!(
-            "redis.get_and_delete_x_oauth_state",
-            redis::cmd("GETDEL").arg(&key).query_async(&mut conn)
-        )?;
-        match json {
-            Some(j) => Ok(serde_json::from_str(&j)?),
-            None => Err(anyhow::anyhow!("state not found or already used")),
-        }
-    }
-
-    pub async fn set_x_pending(
-        &self,
-        account_id: &str,
-        pending: &crate::types::x_verification::XPending,
-        ttl_ms: u64,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("x_pending:{}", account_id));
-        let json = serde_json::to_string(pending)?;
-        measure_redis!(
-            "redis.set_x_pending",
-            conn.pset_ex::<String, String, ()>(key, json, ttl_ms)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_x_pending(
-        &self,
-        account_id: &str,
-    ) -> Result<Option<crate::types::x_verification::XPending>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("x_pending:{}", account_id));
-        let json: Option<String> =
-            measure_redis!("redis.get_x_pending", conn.get::<_, Option<String>>(key))?;
-        match json {
-            Some(j) => Ok(Some(serde_json::from_str(&j)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn delete_x_pending(&self, account_id: &str) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = with_prefix(format!("x_pending:{}", account_id));
-        measure_redis!("redis.delete_x_pending", conn.del::<String, ()>(key))?;
-        Ok(())
-    }
-}
-
-// Dev Post caching
-impl RedisDatabase {
-    pub async fn get_devpost_ranking_generation(&self) -> Result<i64> {
-        let mut conn = self.conn.as_ref().clone();
-        let value: Option<i64> = measure_redis!(
-            "redis.get_devpost_ranking_generation",
-            conn.get(devpost_ranking_generation_key())
-        )?;
-        Ok(value.unwrap_or(0))
-    }
-
-    pub async fn bump_devpost_ranking_generation(&self) -> Result<i64> {
-        let mut conn = self.conn.as_ref().clone();
-        Ok(measure_redis!(
-            "redis.bump_devpost_ranking_generation",
-            conn.incr(devpost_ranking_generation_key(), 1_i64)
-        )?)
-    }
-
-    pub async fn set_devpost_ranking_response_for_generation(
-        &self,
-        generation: i64,
-        page: i64,
-        limit: i64,
-        response: &RankingResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_ranking_v2_key(generation, page, limit);
-        let json = serde_json::to_string(response)?;
-        measure_redis!(
-            "redis.set_devpost_ranking_response_for_generation",
-            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_RANKING_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_devpost_ranking_response_for_generation(
-        &self,
-        generation: i64,
-        page: i64,
-        limit: i64,
-    ) -> Result<RankingResponse> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_ranking_v2_key(generation, page, limit);
-        let json: String = measure_redis!(
-            "redis.get_devpost_ranking_response_for_generation",
-            conn.get::<_, String>(key)
-        )?;
-        Ok(serde_json::from_str(&json)?)
-    }
-
-    pub async fn set_devpost_trending_base(&self, base: &Vec<DevPostResponse>) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_trending_v2_key();
-        let json = serde_json::to_string(base)?;
-        measure_redis!(
-            "redis.set_devpost_trending_base",
-            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_TRENDING_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_devpost_trending_base(&self) -> Result<Vec<DevPostResponse>> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_trending_v2_key();
-        let json: String = measure_redis!(
-            "redis.get_devpost_trending_base",
-            conn.get::<_, String>(key)
-        )?;
-        Ok(serde_json::from_str(&json)?)
-    }
-
-    pub async fn delete_devpost_trending(&self) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        measure_redis!(
-            "redis.delete_devpost_trending",
-            redis::pipe()
-                .atomic()
-                .del(devpost_trending_legacy_key())
-                .del(devpost_trending_v2_key())
-                .query_async::<()>(&mut conn)
-        )?;
-        Ok(())
-    }
-
-    pub async fn set_devpost_feed_base(&self, scope: &str, base: &FeedBase) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_feed_v3_key(scope);
-        let json = serde_json::to_string(base)?;
-        measure_redis!(
-            "redis.set_devpost_feed_base",
-            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_FEED_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_devpost_feed_base(&self, scope: &str) -> Result<FeedBase> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_feed_v3_key(scope);
-        let json: String =
-            measure_redis!("redis.get_devpost_feed_base", conn.get::<_, String>(key))?;
-        Ok(serde_json::from_str(&json)?)
-    }
-
-    pub async fn delete_devpost_feed(&self, scope: &str) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let legacy_key = devpost_feed_legacy_key(scope);
-        let v2_key = devpost_feed_v2_key(scope);
-        let v3_key = devpost_feed_v3_key(scope);
-        measure_redis!(
-            "redis.delete_devpost_feed",
-            redis::pipe()
-                .atomic()
-                .del(legacy_key)
-                .del(v2_key)
-                .del(v3_key)
-                .query_async::<()>(&mut conn)
-        )?;
-        Ok(())
-    }
-
-    pub async fn set_devpost_detail_base(
-        &self,
-        post_id: i64,
-        base: &DevPostResponse,
-    ) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_detail_v2_key(post_id);
-        let json = serde_json::to_string(base)?;
-        measure_redis!(
-            "redis.set_devpost_detail_base",
-            conn.pset_ex::<String, String, ()>(key, json, *DEVPOST_DETAIL_EXPIRATION)
-        )?;
-        Ok(())
-    }
-
-    pub async fn get_devpost_detail_base(&self, post_id: i64) -> Result<DevPostResponse> {
-        let mut conn = self.conn.as_ref().clone();
-        let key = devpost_detail_v2_key(post_id);
-        let json: String =
-            measure_redis!("redis.get_devpost_detail_base", conn.get::<_, String>(key))?;
-        Ok(serde_json::from_str(&json)?)
-    }
-
-    pub async fn delete_devpost_detail(&self, post_id: i64) -> Result<()> {
-        let mut conn = self.conn.as_ref().clone();
-        measure_redis!(
-            "redis.delete_devpost_detail",
-            redis::pipe()
-                .atomic()
-                .del(devpost_detail_legacy_key(post_id))
-                .del(devpost_detail_v2_key(post_id))
-                .query_async::<()>(&mut conn)
-        )?;
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod devpost {
-    use super::*;
-    use redis::AsyncCommands;
-
-    fn assert_test_redis_namespace() {
-        let raw = std::env::var("REDIS_KEY_PREFIX")
-            .expect("Redis tests require an explicit REDIS_KEY_PREFIX");
-        let trimmed = raw.trim_end_matches(':');
-        assert!(
-            trimmed.starts_with("test-") && trimmed.len() > 36,
-            "refusing to touch Redis outside a test namespace"
-        );
-        uuid::Uuid::parse_str(&trimmed[trimmed.len() - 36..])
-            .expect("REDIS_KEY_PREFIX must end in a per-process UUID");
-        assert!(!crate::config::REDIS_KEY_PREFIX.is_empty());
-        assert_eq!(
-            crate::config::REDIS_KEY_PREFIX.as_str(),
-            format!("{}:", trimmed)
-        );
-    }
-
-    async fn raw_set(key: &str, value: &str) {
-        let client = redis::Client::open(std::env::var("REDIS_URL").unwrap()).unwrap();
-        let mut conn = client.get_multiplexed_async_connection().await.unwrap();
-        conn.pset_ex::<_, _, ()>(key, value, 60_000_u64)
-            .await
-            .unwrap();
-    }
-
-    async fn seed_all_feed_versions(scope: &str) {
-        for key in [
-            devpost_feed_legacy_key(scope),
-            devpost_feed_v2_key(scope),
-            devpost_feed_v3_key(scope),
-        ] {
-            raw_set(&key, "seed").await;
-        }
-    }
-
-    async fn seed_all_detail_versions(post_id: i64) {
-        for key in [
-            devpost_detail_legacy_key(post_id),
-            devpost_detail_v2_key(post_id),
-        ] {
-            raw_set(&key, "seed").await;
-        }
-    }
-
-    async fn seed_all_trending_versions() {
-        for key in [devpost_trending_legacy_key(), devpost_trending_v2_key()] {
-            raw_set(&key, "seed").await;
-        }
-    }
-
-    async fn assert_all_exact_payload_versions_absent(scope: &str, post_id: i64) {
-        let redis = RedisDatabase::new().await;
-        let mut conn = redis.conn.as_ref().clone();
-        for key in [
-            devpost_feed_legacy_key(scope),
-            devpost_feed_v2_key(scope),
-            devpost_feed_v3_key(scope),
-            devpost_detail_legacy_key(post_id),
-            devpost_detail_v2_key(post_id),
-            devpost_trending_legacy_key(),
-            devpost_trending_v2_key(),
-        ] {
-            assert_eq!(conn.exists::<_, i64>(&key).await.unwrap(), 0, "{key}");
-        }
-    }
-
-    async fn delete_exact_generation_key() {
-        let redis = RedisDatabase::new().await;
-        let mut conn = redis.conn.as_ref().clone();
-        conn.del::<_, ()>(devpost_ranking_generation_key())
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test]
-    async fn title_payload_namespaces_ignore_old_shapes_and_delete_all_exact_versions() {
-        assert_test_redis_namespace();
-        let redis = RedisDatabase::new().await;
-        let scope = format!("scope-{}", uuid::Uuid::new_v4().simple());
-        let post_id = 5101_i64;
-        raw_set(
-            &devpost_feed_v2_key(&scope),
-            r#"{"posts":[],"total_count":99}"#,
-        )
-        .await;
-        raw_set(
-            &devpost_detail_legacy_key(post_id),
-            r#"{"body":"old combined"}"#,
-        )
-        .await;
-        raw_set(
-            &devpost_trending_legacy_key(),
-            r#"[{"body":"old combined"}]"#,
-        )
-        .await;
-        assert!(redis.get_devpost_feed_base(&scope).await.is_err());
-        assert!(redis.get_devpost_detail_base(post_id).await.is_err());
-        assert!(redis.get_devpost_trending_base().await.is_err());
-
-        seed_all_feed_versions(&scope).await;
-        seed_all_detail_versions(post_id).await;
-        seed_all_trending_versions().await;
-        redis.delete_devpost_feed(&scope).await.unwrap();
-        redis.delete_devpost_detail(post_id).await.unwrap();
-        redis.delete_devpost_trending().await.unwrap();
-        assert_all_exact_payload_versions_absent(&scope, post_id).await;
-    }
-
-    #[tokio::test]
-    async fn generation_missing_is_zero_and_concurrent_bumps_are_not_lost() {
-        assert_test_redis_namespace();
-        let redis = std::sync::Arc::new(RedisDatabase::new().await);
-        delete_exact_generation_key().await;
-        assert_eq!(redis.get_devpost_ranking_generation().await.unwrap(), 0);
-        let (a, b) = tokio::join!(
-            redis.bump_devpost_ranking_generation(),
-            redis.bump_devpost_ranking_generation(),
-        );
-        let mut values = vec![a.unwrap(), b.unwrap()];
-        values.sort_unstable();
-        assert_eq!(values, vec![1, 2]);
-    }
-
-    #[test]
-    fn ranking_v2_key_contains_generation_page_and_limit() {
-        assert_test_redis_namespace();
-        assert_eq!(
-            devpost_ranking_v2_key(17, 3, 25),
-            with_prefix("devpost:ranking:v2:17:3:25".to_string())
-        );
-        assert_ne!(
-            devpost_ranking_v2_key(17, 3, 25),
-            with_prefix("devpost:ranking:3:25".to_string())
-        );
-    }
-
-    #[tokio::test]
-    async fn captured_generation_write_cannot_populate_the_next_generation() {
-        assert_test_redis_namespace();
-        let redis = RedisDatabase::new().await;
-        let page = (uuid::Uuid::new_v4().as_u128() % 1_000_000) as i64 + 1_000;
-        let response = RankingResponse {
-            rankings: Vec::new(),
-            total_count: 7,
-        };
-        redis
-            .set_devpost_ranking_response_for_generation(41, page, 13, &response)
-            .await
-            .unwrap();
-        assert_eq!(
-            redis
-                .get_devpost_ranking_response_for_generation(41, page, 13)
-                .await
-                .unwrap()
-                .total_count,
-            7
-        );
-        assert!(
-            redis
-                .get_devpost_ranking_response_for_generation(42, page, 13)
-                .await
-                .is_err()
-        );
-    }
-
-    #[tokio::test]
-    async fn v3_feed_round_trip_ignores_legacy_and_delete_removes_every_version() {
-        assert_test_redis_namespace();
-        let redis = RedisDatabase::new().await;
-        let scope = format!("test-{}", uuid::Uuid::new_v4().simple());
-        let legacy_key = with_prefix(format!("devpost:feed:{scope}"));
-        let v2_key = with_prefix(format!("devpost:feed:v2:{scope}"));
-        let v3_key = with_prefix(format!("devpost:feed:v3:{scope}"));
-        let mut conn = redis.conn.as_ref().clone();
-        conn.pset_ex::<_, _, ()>(
-            &legacy_key,
-            r#"{"posts":[],"total_count":99}"#,
-            *DEVPOST_FEED_EXPIRATION,
-        )
-        .await
-        .unwrap();
-        let legacy_ttl_ms: i64 = conn.pttl(&legacy_key).await.unwrap();
-        assert!(legacy_ttl_ms > 0);
-
-        assert!(redis.get_devpost_feed_base(&scope).await.is_err());
-        let base = FeedBase {
-            pin: None,
-            posts: Vec::new(),
-            total_count: 7,
-        };
-        redis.set_devpost_feed_base(&scope, &base).await.unwrap();
-        let decoded = redis.get_devpost_feed_base(&scope).await.unwrap();
-        assert!(decoded.pin.is_none());
-        assert_eq!(decoded.total_count, 7);
-        assert_eq!(conn.exists::<_, i64>(&legacy_key).await.unwrap(), 1);
-        assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 0);
-        assert_eq!(conn.exists::<_, i64>(&v3_key).await.unwrap(), 1);
-
-        redis.delete_devpost_feed(&scope).await.unwrap();
-        assert_eq!(conn.exists::<_, i64>(&legacy_key).await.unwrap(), 0);
-        assert_eq!(conn.exists::<_, i64>(&v2_key).await.unwrap(), 0);
-        assert_eq!(conn.exists::<_, i64>(&v3_key).await.unwrap(), 0);
     }
 }

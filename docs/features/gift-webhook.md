@@ -58,5 +58,6 @@ consumer는 전부 정상이었고, 원인은 100% X-side(품질필터)로 확�
 - 품질필터 무관하게 모든 멘션 캐치, 지속 연결 없음(stateless API에 적합), App Bearer면 OAuth1 서명 불필요
 - consumer/parser/`gift_tweet` 로직은 git PR #102~#108에서 복구해 재사용
 
-`gift_tweet` 테이블은 공유 `Naddotfun/migrations` 서브모듈(`0020_gift_tweet.sql`)에 있고
-이번 제거에서 건드리지 않았다.
+> 역사적 참고: 이 문서를 작성할 당시에는 공유 migration에 `gift_tweet`가 남아 있었다.
+> GIWA의 2026-07 API 정리에서는 해당 테이블과 알림 트리거도 제거했으므로, 이 방식을
+> 복구하려면 스키마부터 다시 도입해야 한다.

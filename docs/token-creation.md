@@ -123,8 +123,7 @@ Step 1에서 받은 `image_uri`를 포함하여 토큰 메타데이터를 생성
   "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
   "name": "My Token",
   "symbol": "MTK",
-  "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json",
-  "version": "V2"
+  "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
 }
 ```
 
@@ -136,7 +135,6 @@ Step 1에서 받은 `image_uri`를 포함하여 토큰 메타데이터를 생성
 | `name` | string | O | 1-32자, 줄바꿈 불가 |
 | `symbol` | string | O | 1-10자, 영숫자만 |
 | `metadata_uri` | string | O | `https://storage.nadapp.net/`로 시작 |
-| `version` | string | X | `"V1"` 또는 `"V2"` (기본값: `"V1"`) |
 
 ### 응답
 
@@ -180,7 +178,7 @@ Client                          API Server                      R2 Storage
   |                                |                                |
   |  3. POST /token/salt           |                                |
   |  { creator, name, symbol,      |                                |
-  |    metadata_uri, version }     |                                |
+  |    metadata_uri }              |                                |
   |------------------------------->|                                |
   |                                |-- salt 연산 (vanity address)   |
   |  { salt, address }             |                                |
@@ -237,7 +235,6 @@ interface MineSaltRequest {
   name: string;
   symbol: string;
   metadata_uri: string;
-  version?: "V1" | "V2";  // default: "V1"
 }
 
 interface MineSaltResponse {

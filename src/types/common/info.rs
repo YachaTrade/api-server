@@ -2,17 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
-use crate::types::token::x_verification::TokenXVerification;
-
 // ==================== Core Info Structs ====================
-
-/// Token version enum matching DB CHECK constraint
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::Type, PartialEq)]
-#[sqlx(type_name = "VARCHAR")]
-pub enum TokenVersion {
-    V1,
-    V2,
-}
 
 /// Token information with metadata and creator
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
@@ -34,12 +24,6 @@ pub struct TokenInfo {
     pub created_at: i64,
     pub creator: AccountInfo,
     pub is_cto: bool,
-    /// Per-coin X verification signals. `None` (⇒ JSON null) when unverified.
-    /// NOTE: `TokenInfo` derives `FromRow`; this field is NOT a DB column, so
-    /// it must be excluded from row mapping.
-    #[serde(default)]
-    #[sqlx(default)]
-    pub x_verification: Option<TokenXVerification>,
 }
 
 /// Account information
@@ -77,12 +61,6 @@ impl AccountInfo {
 pub enum MarketType {
     Curve,
     Dex,
-    #[serde(rename = "V2_CURVE")]
-    #[sqlx(rename = "V2_CURVE")]
-    V2Curve,
-    #[serde(rename = "V2_DEX")]
-    #[sqlx(rename = "V2_DEX")]
-    V2Dex,
 }
 
 /// Quote token metadata
@@ -93,14 +71,6 @@ pub struct QuoteInfo {
     pub symbol: String,
     pub decimals: u32,
     pub image_uri: String,
-}
-
-/// Fee configuration info (V2 tokens only)
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct FeeInfo {
-    pub creator_protocol_fee_rate: i16,
-    pub curve_protocol_fee_rate: i16,
-    pub dex_protocol_fee_rate: i16,
 }
 
 /// Market information with pricing data
@@ -115,9 +85,9 @@ pub struct MarketInfo {
     pub reserve_token: String,
     /// Token/USD price
     pub token_price: String,
-    /// MON/USD price (legacy; for V2 non-WMON quote tokens, mirrors quote_price)
+    /// MON/USD price (legacy; for non-native quote tokens, mirrors quote_price)
     pub native_price: String,
-    /// Quote/USD price (equals native_price for V1/WMON tokens)
+    /// Quote/USD price (equals native_price for native-quoted tokens)
     pub quote_price: String,
     /// MON/Token price
     pub price: String,
@@ -125,7 +95,7 @@ pub struct MarketInfo {
     pub price_usd: String,
     /// MON/Token price (legacy alias)
     pub price_native: String,
-    /// Quote/Token price (canonical for V2)
+    /// Quote/Token price (canonical quote-denominated value)
     pub price_quote: String,
     /// Total supply (used for market cap calculation in bonding curve)
     pub total_supply: String,
@@ -135,14 +105,12 @@ pub struct MarketInfo {
     pub ath_price: String,
     /// Ath price(USD)
     pub ath_price_usd: String,
-    /// Ath price(Native) — legacy alias, equals ath_price_quote for V1/WMON tokens
+    /// Ath price(Native) — legacy alias, equals ath_price_quote for native-quoted tokens
     pub ath_price_native: String,
     /// Ath price(Quote) — quote asset denominated ATH
     pub ath_price_quote: String,
     /// Holder count (used for tokne total holder count)
     pub holder_count: i64,
-    /// Fee configuration (V2 tokens only, null for V1)
-    pub fee_info: Option<FeeInfo>,
 }
 
 /// Swap event type enum
@@ -204,25 +172,79 @@ pub struct TokenSwapInfo {
     pub swap_info: SwapInfo,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct RewardInfo {
-    pub amount: String,
-    pub claimed_amount: String,
-    pub proof: Vec<String>,
-    pub claimable: bool,
-}
 /// Token created information with market and balance
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenCreatedInfo {
     pub token_info: TokenInfo,
     pub market_info: MarketInfo,
     pub balance_info: BalanceInfo,
-    pub reward_info: RewardInfo,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn token_json() -> serde_json::Value {
+        json!({
+            "token_id": "0x0000000000000000000000000000000000000001",
+            "name": "Token",
+            "symbol": "TOK",
+            "image_uri": "https://example.com/token.png",
+            "description": null,
+            "is_graduated": false,
+            "is_nsfw": false,
+            "twitter": null,
+            "telegram": null,
+            "website": null,
+            "created_at": 1,
+            "creator": {
+                "account_id": "0x0000000000000000000000000000000000000002",
+                "nickname": "creator",
+                "bio": "",
+                "image_uri": "https://example.com/account.png"
+            },
+            "is_cto": false,
+            "x_verification": null
+        })
+    }
+
+    fn market_json() -> serde_json::Value {
+        json!({
+            "market_type": "CURVE",
+            "token_id": "0x0000000000000000000000000000000000000001",
+            "quote_info": {
+                "quote_id": "0x0000000000000000000000000000000000000003",
+                "name": "Wrapped GIWA",
+                "symbol": "WGIWA",
+                "decimals": 18,
+                "image_uri": "https://example.com/quote.png"
+            },
+            "market_id": "0x0000000000000000000000000000000000000004",
+            "reserve_native": "0",
+            "reserve_quote": "0",
+            "reserve_token": "0",
+            "token_price": "0",
+            "native_price": "0",
+            "quote_price": "0",
+            "price": "0",
+            "price_usd": "0",
+            "price_native": "0",
+            "price_quote": "0",
+            "total_supply": "0",
+            "volume": "0",
+            "ath_price": "0",
+            "ath_price_usd": "0",
+            "ath_price_native": "0",
+            "ath_price_quote": "0",
+            "holder_count": 0,
+            "fee_info": {
+                "creator_protocol_fee_rate": 1,
+                "curve_protocol_fee_rate": 2,
+                "dex_protocol_fee_rate": 3
+            }
+        })
+    }
 
     #[test]
     fn balance_info_serializes_lp_balance_quote_price_and_total_balance() {
@@ -240,5 +262,56 @@ mod tests {
         assert_eq!(v["total_balance"], "105");
         assert_eq!(v["quote_price"], "3");
         assert_eq!(v["quote_price"], v["native_price"]); // dual-field
+    }
+
+    #[test]
+    fn market_type_rejects_versioned_variants() {
+        assert_eq!(
+            serde_json::from_str::<MarketType>("\"CURVE\"").unwrap(),
+            MarketType::Curve
+        );
+        assert_eq!(
+            serde_json::from_str::<MarketType>("\"DEX\"").unwrap(),
+            MarketType::Dex
+        );
+        assert!(serde_json::from_str::<MarketType>("\"V2_CURVE\"").is_err());
+        assert!(serde_json::from_str::<MarketType>("\"V2_DEX\"").is_err());
+    }
+
+    #[test]
+    fn market_info_serializes_without_fee_info() {
+        let info: MarketInfo = serde_json::from_value(market_json()).unwrap();
+        let serialized = serde_json::to_value(info).unwrap();
+        assert!(serialized.get("fee_info").is_none());
+    }
+
+    #[test]
+    fn token_payloads_omit_retired_product_fields() {
+        let token: TokenInfo = serde_json::from_value(token_json()).unwrap();
+        let serialized_token = serde_json::to_value(token).unwrap();
+        assert!(serialized_token.get("x_verification").is_none());
+
+        let created: TokenCreatedInfo = serde_json::from_value(json!({
+            "token_info": token_json(),
+            "market_info": market_json(),
+            "balance_info": {
+                "balance": "0",
+                "lp_balance": "0",
+                "total_balance": "0",
+                "token_price": "0",
+                "native_price": "0",
+                "quote_price": "0",
+                "created_at": 0
+            },
+            "reward_info": {
+                "amount": "0",
+                "claimed_amount": "0",
+                "proof": [],
+                "claimable": false
+            }
+        }))
+        .unwrap();
+        let serialized_created = serde_json::to_value(created).unwrap();
+        assert!(serialized_created.get("reward_info").is_none());
     }
 }

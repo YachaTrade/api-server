@@ -53,7 +53,6 @@ src/
 │   ├── profile/         # 사용자 프로필
 │   ├── search/          # 검색 기능
 │   ├── bot/             # 봇 작업
-│   ├── hype/            # 트렌딩/하이프 토큰
 │   └── management/      # 관리자/관리 작업
 │
 └── types/               # 타입 정의 및 도메인 모델
@@ -230,15 +229,13 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 
 ### 계정 모듈 (`/account/*`)
 
-모든 엔드포인트는 인증이 필요합니다.
+`/account/image`는 공개이며 나머지 엔드포인트는 인증이 필요합니다.
 
 | 메서드 | 경로                       | 설명                    |
 | ------ | -------------------------- | ----------------------- |
 | PATCH  | `/account/update`          | 계정 프로필 업데이트    |
 | GET    | `/account/get_account`     | 현재 계정 정보 가져오기 |
-| PUT    | `/account/connect_x`       | X (트위터) 계정 연결    |
-| DELETE | `/account/disconnect_x`    | X 계정 연결 해제        |
-| GET    | `/account/x`               | 연결된 X 핸들 가져오기  |
+| POST   | `/account/image`           | 프로필 이미지 업로드    |
 | PATCH  | `/account/register_wallet` | 지갑 등록               |
 | GET    | `/account/wallet`          | 등록된 지갑 가져오기    |
 
@@ -261,6 +258,7 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 | ------ | ------------------------ | ------------------------ |
 | GET    | `/token/:token`          | 토큰 정보 가져오기       |
 | GET    | `/token/metadata/:token` | 토큰 메타데이터 가져오기 |
+| POST   | `/token/salt`            | 토큰 생성 salt 탐색      |
 
 ### 거래 모듈 (`/trade/*`)
 
@@ -272,8 +270,7 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 | GET    | `/trade/holder/:token_id`             | 토큰 보유자 가져오기      |
 | GET    | `/trade/market/:token_id`             | 시장 데이터 가져오기      |
 | GET    | `/trade/chart/:token_id`              | 차트 데이터 가져오기      |
-| GET    | `/trade/price/:token_id`              | 가격 데이터 가져오기      |
-| GET    | `/trade/management-history/:token_id` | 관리 기록 가져오기        |
+| GET    | `/trade/metrics/:token_id`            | 기간별 거래 지표 가져오기 |
 
 ### 주문 모듈 (`/order/*`)
 
@@ -291,46 +288,12 @@ pub type AppJsonResult<T> = AppResult<Json<T>>;
 | ------ | --------------- | -------------- |
 | GET    | `/search/:name` | 토큰/계정 검색 |
 
-### 팔로우 모듈 (`/follow/*`)
-
-| 메서드 | 경로                             | 설명             | 인증 필요 |
-| ------ | -------------------------------- | ---------------- | --------- |
-| PUT    | `/follow/add`                    | 팔로우 추가      | ✅        |
-| DELETE | `/follow/remove`                 | 팔로우 제거      | ✅        |
-| GET    | `/follow/check/:account_id`      | 팔로우 여부 확인 | ✅        |
-| GET    | `/follow/followers/:account_id`  | 팔로워 가져오기  | ❌        |
-| GET    | `/follow/followings/:account_id` | 팔로잉 가져오기  | ❌        |
-
-### 하이프 모듈
-
-| 메서드 | 경로           | 설명                 |
-| ------ | -------------- | -------------------- |
-| GET    | `/hype_token`  | 하이프 토큰 가져오기 |
-| GET    | `/honor_token` | 명예 토큰 가져오기   |
-
-### 봇 모듈 (`/bot/*`)
-
-| 메서드 | 경로            | 설명                                       |
-| ------ | --------------- | ------------------------------------------ |
-| POST   | `/bot/metadata` | 봇의 메타데이터 설정 (multipart/form-data) |
-
-### 관리 모듈 (`/management/*`)
-
-모든 엔드포인트는 인증이 필요합니다.
-
-| 메서드 | 경로                     | 설명                      |
-| ------ | ------------------------ | ------------------------- |
-| GET    | `/management/dev`        | 개발자 포지션 가져오기    |
-| GET    | `/management/hold_token` | 보유 토큰 관리 가져오기   |
-| GET    | `/management/lock`       | 계정 잠금 가져오기        |
-| GET    | `/management/withdraw`   | 출금 가능한 잠금 가져오기 |
-
 ### API 기능
 
 - **Swagger UI**: `/dev-sw`에서 사용 가능
 - **헬스 체크**: `/health`에서 사용 가능
 - **페이지네이션**: `PaginationParams` 쿼리 파라미터를 통해 지원
-- **파일 업로드**: 봇 모듈에서 지원 (multipart/form-data)
+- **파일 업로드**: 계정·메타데이터 모듈에서 지원 (multipart/form-data)
 - **응답 형식**: 모든 응답은 JSON
 
 ## 인증 및 보안

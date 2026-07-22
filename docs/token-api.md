@@ -47,8 +47,7 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
       "bio": "Creator bio",
       "image_uri": "https://storage.nadapp.net/profiles/uuid.png"
     },
-    "is_cto": false,
-    "version": "V1"
+    "is_cto": false
   }
 }
 ```
@@ -94,8 +93,7 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
       "bio": "Creator bio",
       "image_uri": "https://storage.nadapp.net/profiles/uuid.png"
     },
-    "is_cto": false,
-    "version": "V1"
+    "is_cto": false
   },
   "market_info": {
     "market_type": "CURVE",
@@ -124,8 +122,7 @@ Token API는 토큰 정보 조회 및 토큰 주소 생성을 위한 API입니�
     "ath_price_usd": "0.006",
     "ath_price_native": "0.000002",
     "ath_price_quote": "0.000002",
-    "holder_count": 150,
-    "fee_info": null
+    "holder_count": 150
   }
 }
 ```
@@ -252,7 +249,6 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  version: TokenVersion;
 }
 
 interface AccountInfo {
@@ -270,14 +266,9 @@ interface QuoteInfo {
   image_uri: string;
 }
 
-interface FeeInfo {
-  creator_protocol_fee_rate: number;
-  curve_protocol_fee_rate: number;
-  dex_protocol_fee_rate: number;
-}
 
 interface MarketInfo {
-  market_type: "CURVE" | "DEX" | "V2_CURVE" | "V2_DEX";
+  market_type: "CURVE" | "DEX";
   token_id: string;
   quote_info: QuoteInfo;
   market_id: string;
@@ -315,11 +306,8 @@ interface MarketInfo {
   ath_price_quote: string;
   /** 홀더 수 */
   holder_count: number;
-  /** 수수료 설정 (V2 토큰만, V1은 없음) */
-  fee_info: FeeInfo | null;  // V2 토큰만, V1은 null
 }
 
-type TokenVersion = "V1" | "V2";
 ```
 
 ---

@@ -126,19 +126,17 @@ impl NewEventController {
                 t.is_cto,
                 t.created_at as token_created_at,
                 t.creator,
-                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                a.nickname as creator_nickname,
                 a.bio as creator_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                a.image_uri as creator_image_uri,
                 s.account_id,
-                COALESCE(ax2.x_handle, a2.nickname) as account_nickname,
+                a2.nickname as account_nickname,
                 a2.bio as account_bio,
-                COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri
+                a2.image_uri as account_image_uri
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
-            LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN account a2 ON s.account_id = a2.account_id
-            LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
             WHERE s.is_buy = true AND s.quote_amount >= 1000000000000000000
             ORDER BY s.created_at DESC
             LIMIT $1
@@ -176,7 +174,6 @@ impl NewEventController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    x_verification: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,
@@ -207,19 +204,17 @@ impl NewEventController {
                 t.is_cto,
                 t.created_at as token_created_at,
                 t.creator,
-                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                a.nickname as creator_nickname,
                 a.bio as creator_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                a.image_uri as creator_image_uri,
                 s.account_id,
-                COALESCE(ax2.x_handle, a2.nickname) as account_nickname,
+                a2.nickname as account_nickname,
                 a2.bio as account_bio,
-                COALESCE(ax2.x_image_uri, a2.image_uri) as account_image_uri
+                a2.image_uri as account_image_uri
             FROM swap s
             JOIN token t ON s.token_id = t.token_id
             JOIN account a ON t.creator = a.account_id
-            LEFT JOIN account_x ax ON a.account_id = ax.account_id
             JOIN account a2 ON s.account_id = a2.account_id
-            LEFT JOIN account_x ax2 ON a2.account_id = ax2.account_id
             WHERE s.is_buy = false AND s.quote_amount >= 1000000000000000000
             ORDER BY s.created_at DESC
             LIMIT $1
@@ -257,7 +252,6 @@ impl NewEventController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    x_verification: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,
@@ -286,16 +280,15 @@ impl NewEventController {
                 t.is_cto,
                 t.created_at as token_created_at,
                 t.creator,
-                COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                a.nickname as creator_nickname,
                 a.bio as creator_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                a.image_uri as creator_image_uri,
                 t.creator as account_id,
-                COALESCE(ax.x_handle, a.nickname) as account_nickname,
+                a.nickname as account_nickname,
                 a.bio as account_bio,
-                COALESCE(ax.x_image_uri, a.image_uri) as account_image_uri
+                a.image_uri as account_image_uri
             FROM token t
             JOIN account a ON t.creator = a.account_id
-            LEFT JOIN account_x ax ON a.account_id = ax.account_id
             ORDER BY t.created_at DESC
             LIMIT $1
         "#;
@@ -332,7 +325,6 @@ impl NewEventController {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    x_verification: None,
                 },
                 account_info: AccountInfo {
                     account_id: row.account_id,

@@ -41,15 +41,14 @@ impl SessionController {
                 )
                 SELECT
                     a.account_id,
-                    COALESCE(ax.x_handle, a.nickname) as nickname,
-                    COALESCE(ax.x_image_uri, a.image_uri) as image_uri,
+                    a.nickname as nickname,
+                    a.image_uri as image_uri,
                     a.bio
                 -- Read from the account_upsert CTE, not the base `account` table:
                 -- data-modifying CTEs run under the statement's start snapshot, so a
                 -- just-inserted brand-new account is invisible to `FROM account` and
                 -- the query would return 0 rows (RowNotFound) on first login.
                 FROM account_upsert a
-                LEFT JOIN account_x ax ON a.account_id = ax.account_id
                 CROSS JOIN session_upsert
                 WHERE a.account_id = $2
                 "#,

@@ -6,27 +6,17 @@ use crate::{
     controllers::token::create::TokenCreatedController,
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
-    services::capricorn::{CAPRICORN_UNION_CAP, CapricornClient, lp_amounts_by_token},
     types::{common::pagination::PaginationParams, profile::CreatedTokensResponse},
 };
 
 pub struct TokenCreatedService {
     postgres: Arc<PostgresDatabase>,
     redis: Arc<RedisDatabase>,
-    capricorn: Arc<CapricornClient>,
 }
 
 impl TokenCreatedService {
-    pub fn new(
-        postgres: Arc<PostgresDatabase>,
-        redis: Arc<RedisDatabase>,
-        capricorn: Arc<CapricornClient>,
-    ) -> Self {
-        Self {
-            postgres,
-            redis,
-            capricorn,
-        }
+    pub fn new(postgres: Arc<PostgresDatabase>, redis: Arc<RedisDatabase>) -> Self {
+        Self { postgres, redis }
     }
 
     pub async fn get_tokens_created(
@@ -42,19 +32,9 @@ impl TokenCreatedService {
             return Ok(cached);
         }
 
-        let positions = self.capricorn.cached_fetch_by_owner(account_id).await;
-        let mut v1_lp = lp_amounts_by_token(&positions);
-        if v1_lp.len() > CAPRICORN_UNION_CAP {
-            tracing::warn!(
-                "capricorn owner LP rows {} exceed cap; V1 LP omitted for this response",
-                v1_lp.len()
-            );
-            v1_lp.clear();
-        }
-
         let controller = TokenCreatedController::new(self.postgres.clone());
         let response = controller
-            .get_tokens_created(account_id, pagination, &v1_lp)
+            .get_tokens_created(account_id, pagination)
             .await
             .map_err(|err| {
                 error!(

@@ -7,14 +7,9 @@ use std::time::Instant;
 use tracing::{error, info};
 
 use crate::{
-    config::{
-        V1_BONDING_CURVE, V1_TOKEN_IMPL, V2_BONDING_CURVE, V2_TOKEN_IMPL, VANITY_ADDRESS_SUFFIX,
-    },
+    config::{BONDING_CURVE, TOKEN_IMPL, VANITY_ADDRESS_SUFFIX},
     result::AppError,
-    types::{
-        common::info::TokenVersion,
-        token::salt::{MineSaltRequest, MineSaltResponse},
-    },
+    types::token::salt::{MineSaltRequest, MineSaltResponse},
     utils::valid_account_id,
 };
 
@@ -55,7 +50,7 @@ impl SaltService {
     ///
     /// # 동작 순서
     /// 1. 요청 데이터 검증 (creator 주소가 유효한지)
-    /// 2. 환경 변수에서 설정 로드 (BONDING_CURVE, TOKEN_IMPLEMENT, VANITY_ADDRESS_SUFFIX)
+    /// 2. 환경 변수에서 설정 로드 (BONDING_CURVE, TOKEN_IMPL, VANITY_ADDRESS_SUFFIX)
     /// 3. 고유한 UUID 생성 (여러 사용자가 동시 마이닝 시 충돌 방지)
     /// 4. 마이닝 실행 (병렬 처리로 빠르게 탐색)
     /// 5. 결과 처리 및 반환
@@ -64,7 +59,7 @@ impl SaltService {
         self.validate_request(&request)?;
 
         // 2단계: 환경 변수에서 deployer, implementation, suffix 로드
-        let config = MiningConfig::load(request.version.clone())?;
+        let config = MiningConfig::load()?;
 
         // 3단계: 이 마이닝 요청의 고유 식별자 생성 (256비트 랜덤)
         let random_bytes: [u8; 32] = rand::random();
@@ -82,17 +77,6 @@ impl SaltService {
 
         // 5단계: 결과 처리 (성공 or 실패)
         self.process_result(result, &config.suffix, mining_time)
-    }
-
-    /// Recompute the deterministic CREATE2 token address for a known salt +
-    /// version. Used by finalize to verify a client-supplied `token_id` (§7.1).
-    pub fn compute_token_address(version: TokenVersion, salt: B256) -> Result<Address, AppError> {
-        let config = MiningConfig::load(version)?;
-        Ok(Self::compute_create2_address(
-            config.deployer,
-            config.implementation,
-            salt,
-        ))
     }
 
     /// 요청 데이터 검증
@@ -241,11 +225,7 @@ impl SaltService {
     /// - salt를 바꾸면 주소가 달라짐
     /// - deployer, implementation이 같으면 salt만으로 주소 결정
     /// - 배포 전에 주소를 미리 계산할 수 있음!
-    pub(crate) fn compute_create2_address(
-        deployer: Address,
-        implementation: Address,
-        salt: B256,
-    ) -> Address {
+    fn compute_create2_address(deployer: Address, implementation: Address, salt: B256) -> Address {
         // EIP-1167 minimal proxy bytecode 구성 (총 55바이트)
         let mut init_code = Vec::with_capacity(55);
 
@@ -432,7 +412,7 @@ impl SaltService {
 /// 환경 변수에서 로드하는 설정값들
 struct MiningConfig {
     deployer: Address,       // 토큰 팩토리 주소 (BONDING_CURVE)
-    implementation: Address, // 토큰 구현 주소 (TOKEN_IMPLEMENT)
+    implementation: Address, // 토큰 구현 주소 (TOKEN_IMPL)
     suffix: String,          // 원하는 주소 suffix (VANITY_ADDRESS_SUFFIX, 예: "143")
 }
 
@@ -441,18 +421,13 @@ impl MiningConfig {
     ///
     /// # 필수 환경 변수
     /// - BONDING_CURVE: 토큰을 배포할 팩토리 컨트랙트 주소
-    /// - TOKEN_IMPLEMENT: 토큰 구현 컨트랙트 주소 (EIP-1167 proxy가 참조)
+    /// - TOKEN_IMPL: 토큰 구현 컨트랙트 주소 (EIP-1167 proxy가 참조)
     /// - VANITY_ADDRESS_SUFFIX: 원하는 주소 suffix (hex 문자열, 예: "143")
-    fn load(version: TokenVersion) -> Result<Self, AppError> {
-        let (deployer_str, impl_str) = match version {
-            TokenVersion::V2 => (V2_BONDING_CURVE.as_str(), V2_TOKEN_IMPL.as_str()),
-            TokenVersion::V1 => (V1_BONDING_CURVE.as_str(), V1_TOKEN_IMPL.as_str()),
-        };
-
-        let deployer = Address::from_str(deployer_str).map_err(|e| {
+    fn load() -> Result<Self, AppError> {
+        let deployer = Address::from_str(BONDING_CURVE.as_str()).map_err(|e| {
             AppError::InternalError(format!("Failed to parse bonding curve address: {}", e))
         })?;
-        let implementation = Address::from_str(impl_str).map_err(|e| {
+        let implementation = Address::from_str(TOKEN_IMPL.as_str()).map_err(|e| {
             AppError::InternalError(format!("Failed to parse token implement address: {}", e))
         })?;
         let suffix = VANITY_ADDRESS_SUFFIX.clone();

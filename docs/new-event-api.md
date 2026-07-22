@@ -45,8 +45,7 @@ New Event API는 실시간으로 발생하는 최신 이벤트(매수/매도/토
           "bio": "Creator bio",
           "image_uri": "https://storage.nadapp.net/profiles/..."
         },
-        "is_cto": false,
-        "version": "V1"
+        "is_cto": false
       },
       "account_info": {
         "account_id": "0xabcdef1234567890...",
@@ -131,10 +130,8 @@ interface TokenInfo {
   created_at: number;
   creator: AccountInfo;
   is_cto: boolean;
-  version: TokenVersion;
 }
 
-type TokenVersion = "V1" | "V2";
 
 interface AccountInfo {
   account_id: string;

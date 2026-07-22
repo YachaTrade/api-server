@@ -1,10 +1,9 @@
 use api_server::{
-    config::{self, HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS, REDIS_KEY_PREFIX},
+    config::{HTTP_GET_TIMEOUT_MS, HTTP_POST_TIMEOUT_MS},
     cors::get_cors,
     router::{
-        self, account, agent, api_key, auth, chester, cms, dev_post, dex, dividend, health, hype,
-        leaderboard, metadata, metrics, new_event, order, profile, quote_token, raffle, search,
-        terminal, token, trade, trend, vault, x_verification,
+        self, account, agent, api_key, auth, cms, health, leaderboard, metadata, metrics,
+        new_event, order, profile, search, terminal, token, trade, trend,
     },
     state::AppState,
     types,
@@ -32,152 +31,66 @@ use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 use tracing::{info, warn};
 use utoipa::OpenApi;
-
 use utoipa_scalar::{Scalar, Servable as ScalarServable};
 use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(OpenApi)]
 #[openapi(
-
     paths(
-        // ----------------Auth----------------
         router::auth::handler::auth_nonce,
         router::auth::handler::auth_session,
         router::auth::handler::auth_delete_session,
-        // ----------------Account----------------
+
         router::account::handler::update_account,
         router::account::handler::get_account,
-        router::account::handler::connect_x,
-        router::account::handler::disconnect_x,
-        router::account::handler::update_x,
         router::account::handler::upload_image,
         router::account::handler::register_wallet,
         router::account::handler::get_wallet,
 
-        // ----------------X Verification----------------
-        router::x_verification::handler::oauth_login,
-        router::x_verification::handler::oauth_logout,
-        router::x_verification::handler::oauth_callback,
-        router::x_verification::handler::add_followed_by,
-        router::x_verification::handler::delete_followed_by,
-        router::x_verification::handler::get_status,
-        router::x_verification::handler::reserve,
-        router::x_verification::handler::finalize,
-
-        // ----------------Profile----------------
         router::profile::handler::get_profile,
         router::profile::handler::get_hold_token,
         router::profile::handler::get_token_created,
-        router::profile::handler::get_gift_fee,
         router::profile::handler::get_swap_history,
-        router::profile::handler::get_point_history,
 
-        // ----------------Search----------------
         router::search::handler::search,
 
-        // ----------------Token----------------
         router::token::handler::get_token,
         router::token::handler::get_token_metadata,
         router::token::handler::salt,
 
-        // ----------------Vault----------------
-        router::vault::handler::get_token_vaults,
-
-        // ----------------Dividend----------------
-        router::dividend::handler::get_dividend_holders,
-        router::dividend::handler::get_profile_dividends,
-        router::dividend::handler::get_dividend_tokens,
-
-        // ----------------Dex----------------
-        router::dex::positions::get_positions,
-        router::dex::pool::get_pool,
-        router::dex::tokens::get_tokens,
-        router::dex::reserves::get_reserves,
-
-        // ----------------QuoteToken----------------
-        router::quote_token::handler::list_quote_tokens,
-
-        // ----------------Hype----------------
-        router::hype::handler::get_hype_token,
-        router::hype::handler::get_hype_token_latest,
-        router::hype::handler::get_hype_point,
-        router::hype::handler::get_hype_epoch,
-        router::hype::handler::get_hype_vote_history,
-        router::hype::handler::get_hype_reward_add_history,
-        router::hype::handler::vote,
-        router::hype::handler::get_total_hype_point,
-        router::hype::handler::get_community_treasury,
-
-        // ----------------Trade----------------
         router::trade::handler::get_swap_history,
         router::trade::handler::get_market,
         router::trade::handler::get_prices,
         router::trade::handler::get_holder,
         router::trade::handler::get_metrics,
-        router::trade::handler::get_xinfo,
 
-        // ----------------Search----------------
-        router::search::handler::search,
-
-        // ----------------Order----------------
         router::order::handler::get_creation_time_order,
         router::order::handler::get_market_cap_order,
         router::order::handler::get_latest_trade_order,
 
-
-        // ----------------New Event----------------
         router::new_event::handler::get_new_event,
 
-        // ----------------Chester----------------
-        router::chester::handler::get_volume,
-        router::chester::handler::get_round,
-        router::chester::handler::get_rewards,
-        router::chester::handler::get_swap_history,
-        router::chester::handler::get_box_rewards,
-        router::chester::handler::get_reward_history,
-
-        // ----------------Raffle----------------
-        router::raffle::handler::get_eligible,
-        router::raffle::handler::check_raffle,
-        router::raffle::handler::get_round,
-
-        // ----------------Metadata----------------
         router::metadata::handler::upload_image,
         router::metadata::handler::upload_metadata,
 
-        // ----------------Terminal----------------
         router::terminal::handler::get_latest_block,
         router::terminal::handler::get_asset,
         router::terminal::handler::get_pair,
         router::terminal::handler::get_events,
         router::terminal::handler::get_terminal_metadata,
 
-        // ----------------Trend----------------
         router::trend::handler::get_trend,
-
-        // ----------------Leaderboard----------------
-        router::leaderboard::handler::get_hype_point_leaderboard,
         router::leaderboard::handler::get_pnl_leaderboard,
 
-        // ----------------CMS----------------
         router::cms::handler::set_nsfw,
         router::cms::handler::insert_trend,
         router::cms::handler::update_metadata,
-        router::cms::handler::upload_dex_token_image,
-        router::cms::handler::upsert_whitelist_token,
-        router::cms::handler::list_whitelist_token,
-        router::cms::handler::delete_dev_post,
-        router::cms::handler::restore_dev_post,
 
-        // ----------------CMS Analytics----------------
         router::cms::analytics::handler::get_churned_users,
         router::cms::analytics::handler::get_active_users,
         router::cms::analytics::handler::get_new_users,
         router::cms::analytics::handler::get_user_roi,
-        router::cms::analytics::handler::get_chester_retention,
-        router::cms::analytics::handler::get_creator_fee,
 
-        // ----------------Agent----------------
         router::agent::handler::get_chart,
         router::agent::handler::get_swap_history,
         router::agent::handler::get_market,
@@ -188,69 +101,34 @@ use utoipa_swagger_ui::SwaggerUi;
         router::agent::handler::upload_metadata,
         router::agent::handler::get_tokens_created,
         router::agent::handler::salt,
-
-        // ----------------DevPost----------------
-        router::dev_post::handler::get_feed,
-        router::dev_post::handler::get_detail,
-        router::dev_post::handler::get_trending,
-        router::dev_post::handler::get_ranking,
-        router::dev_post::handler::upload_image,
-        router::dev_post::handler::create_post,
-        router::dev_post::handler::edit_post,
-        router::dev_post::handler::delete_post,
-        router::dev_post::handler::like,
-        router::dev_post::handler::unlike,
-        router::dev_post::handler::vote,
-        router::dev_post::handler::pin_post,
-        router::dev_post::handler::unpin_post,
-
     ),
     components(
         schemas(
-            // Common
             types::common::info::TokenInfo,
             types::common::info::AccountInfo,
             types::common::info::MarketInfo,
             types::common::info::MarketType,
             types::common::info::QuoteInfo,
-            types::common::info::FeeInfo,
             types::common::info::BalanceInfo,
             types::common::info::SwapInfo,
             types::common::info::SwapType,
-            types::common::info::RewardInfo,
             types::common::info::TokenWithBalanceInfo,
             types::common::info::TokenSwapInfo,
             types::common::info::TokenCreatedInfo,
-            types::token::x_verification::TokenXVerification,
-            types::token::x_verification::XFollowedByEntry,
             types::common::pagination::PaginationParams,
             types::common::identifier::Identifier,
-            // Auth
+
             types::auth::AuthNonceRequest,
             types::auth::AuthNonceResponse,
             types::auth::AuthSessionRequest,
             types::auth::AuthSessionResponse,
 
-            // Account
             types::account::AccountResponse,
             types::account::UpdateAccountRequest,
-            types::account::ConnectXRequest,
-            types::account::UpdateXRequest,
             types::account::UploadImageResponse,
             types::account::RegisterWalletRequest,
             types::account::GetWalletResponse,
 
-            // X Verification
-            types::x_verification::OAuthLoginResponse,
-            types::x_verification::FollowedByRequest,
-            types::x_verification::FollowedByResponse,
-            types::x_verification::StatusResponse,
-            types::x_verification::ReserveRequest,
-            types::x_verification::ReserveResponse,
-            types::x_verification::FinalizeRequest,
-            types::x_verification::FinalizeResponse,
-
-            // Token
             types::token::TokenResponse,
             types::token::order::TokenOrderType,
             types::token::order::OrderToken,
@@ -261,44 +139,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::token::salt::MineSaltResponse,
             types::token::salt::MineSaltError,
 
-            // Vault
-            types::vault::VaultType,
-            types::vault::TokenVaultsResponse,
-            types::vault::VaultEntry,
-            types::vault::VaultStats,
-            types::vault::BurnStats,
-            types::vault::LpStats,
-            types::vault::CreatorFeeStats,
-            types::vault::GiftStats,
-            types::vault::EmptyStats,
-            types::vault::DividendStats,
-            types::vault::DividendVaultTokenStat,
-
-            // Dividend
-            types::dividend::DividendTokensResponse,
-            types::dividend::DividendTokenInfo,
-            types::dividend::DividendReward,
-            types::dividend::DividendHoldersResponse,
-            types::dividend::DividendRatioInfo,
-            types::dividend::DividendHolderInfo,
-
-            // Dex
-            types::dex::position::LpPositionsResponse,
-            types::dex::position::LpPositionEntry,
-            types::dex::position::LpPositionTokenSide,
-            types::dex::pool::PoolDetailResponse,
-            types::dex::pool::PoolTokenSide,
-            types::dex::pool::FeeConfigInfo,
-            types::dex::pool_info::PoolInfo,
-            types::dex::tokens::DexTokenListResponse,
-            types::dex::tokens::DexTokenEntry,
-            types::dex::tokens::DexTokenType,
-            types::dex::reserves::ReservesResponse,
-
-            // QuoteToken
-            types::quote_token::QuoteTokensResponse,
-
-            // Metadata
             types::metadata::UploadImageMultipart,
             types::metadata::UploadImageResponse,
             types::metadata::UploadMetadataRequest,
@@ -306,7 +146,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::metadata::TokenMetadata,
             types::metadata::TerminalMetadataResponse,
 
-            // Terminal
             types::terminal::Block,
             types::terminal::LatestBlockResponse,
             types::terminal::Asset,
@@ -320,21 +159,6 @@ use utoipa_swagger_ui::SwaggerUi;
             types::terminal::EventsResponse,
             types::terminal::EventsQuery,
 
-            //Hype
-            types::hype::HypeToken,
-            types::hype::HypeTokenResponse,
-            types::hype::HypeInfo,
-            types::hype::HypePointResponse,
-            types::hype::HypeEpochResponse,
-            types::hype::HypeVoteHistory,
-            types::hype::HypeVoteHistoryResponse,
-            types::hype::HypeVoteRequest,
-            types::hype::HypeVoteResponse,
-            types::hype::RewardAdd,
-            types::hype::HypeRewardAddHistoryResponse,
-            types::hype::AmountResponse,
-
-            //Trading
             types::trading::chart::Chart,
             types::trading::chart::ChartResponse,
             types::trading::position::TokenHolder,
@@ -350,143 +174,69 @@ use utoipa_swagger_ui::SwaggerUi;
             types::trading::metrics::MakerCount,
             types::trading::metrics::MetricItem,
             types::trading::metrics::MetricsBatchResponse,
-            types::trading::xinfo::XInfoResponse,
 
-            //Profile
             types::profile::ProfileResponse,
             types::profile::HoldTokenResponse,
             types::profile::SwapHistoryResponse,
             types::profile::CreatedTokensResponse,
-            types::profile::GiftFeeTokensResponse,
-            types::profile::PointRecord,
-            types::profile::PointRecordTotal,
-            types::profile::PointHistoryResponse,
 
-            //Search
             types::search::TokenSearchResult,
             types::search::TokenSearchResponse,
             types::search::AccountSearchResult,
             types::search::AccountSearchResponse,
             types::search::SearchResponse,
 
-            // New Event
             types::new_event::NewEventResponse,
             types::new_event::NewEvent,
             types::new_event::EventType,
 
-            // Chester
-            types::chester::ChesterVolumeResponse,
-            types::chester::ChesterInfoResponse,
-            types::chester::ChesterRewardItem,
-            types::chester::ChesterRewardsResponse,
-            types::chester::ChesterBoxRewardItem,
-            types::chester::ChesterBoxRewardsResponse,
-            types::chester::ChesterBoxRewardsQuery,
-            types::chester::RewardHistoryItem,
-            types::chester::ChesterRewardHistoryResponse,
-
-            // Raffle
-            types::raffle::RaffleRoundResponse,
-            types::raffle::RaffleStatusResponse,
-            types::raffle::RaffleCheckQuery,
-            types::raffle::RaffleCheckResponse,
-            types::raffle::RaffleRound,
-            types::raffle::RafflePrizes,
-
-            // Trend
             types::trend::TrendToken,
             types::trend::TrendResponse,
             types::trend::TrendRequest,
             types::trend::TrendActionResponse,
 
-            // Leaderboard
-            types::leaderboard::HypePointLeaderboardEntry,
-            types::leaderboard::HypePointLeaderboardResponse,
             types::leaderboard::LeaderboardQuery,
             types::leaderboard::Pnl,
             types::leaderboard::PnlLeaderboardEntry,
             types::leaderboard::PnlLeaderboardResponse,
 
-            // CMS
             types::cms::SetNsfwRequest,
             types::cms::InsertTrendRequest,
             types::cms::CmsActionResponse,
             types::cms::UpdateMetadataRequest,
             types::cms::UpdateMetadataResponse,
-            types::cms::DexTokenImageResponse,
-            types::cms::WhitelistTokenEntry,
-            types::cms::WhitelistTokenListResponse,
             router::cms::handler::UpdateMetadataMultipart,
-            router::cms::handler::UploadDexTokenImageMultipart,
-            router::cms::handler::UpsertWhitelistTokenMultipart,
 
-            // CMS Analytics
             types::cms::analytics::TopHeldToken,
             types::cms::analytics::UserActivityResponse,
             types::cms::analytics::NewUsersResponse,
             types::cms::analytics::UserRoiResponse,
-            types::cms::analytics::ChesterRetentionRound,
-            types::cms::analytics::ChesterRetentionResponse,
-            types::cms::analytics::CreatorFeeResponse,
-
-            // DevPost
-            types::dev_post::CreateDevPostRequest,
-            types::dev_post::CreatePollRequest,
-            types::dev_post::CreatePollOptionRequest,
-            types::dev_post::EditDevPostRequest,
-            types::dev_post::VoteRequest,
-            types::dev_post::DevPostResponse,
-            types::dev_post::TokenSummary,
-            types::dev_post::AuthorSummary,
-            types::dev_post::PollResponse,
-            types::dev_post::PollOptionResponse,
-            types::dev_post::DevPostListResponse,
-            types::dev_post::TrendingResponse,
-            types::dev_post::RankingRow,
-            types::dev_post::RankingResponse,
-            types::dev_post::LikeResponse,
-            types::dev_post::VoteResponse,
-            types::dev_post::UploadImageResponse,
-
         )
     ),
     tags(
-        (name="Auth",description = "Authentication endpoints"),
-        (name="Account",description="Account management endpoints"),
-        (name="Follow",description="Follow management endpoints"),
-        (name="Token",description="Token management endpoints"),
-        (name="Vault",description="V2 token fee vault endpoints (Buyback & Burn / LP / Creator / Gift)"),
-        (name="Dividend",description="V2 token dividend endpoints (profile claimable / holder ranking / vault summary)"),
-        (name="Dex", description="V2 DEX LP positions, pools, and token list"),
-        (name="QuoteToken",description="Quote token endpoints"),
-        (name="Profile",description="Profile management endpoints"),
-        (name="Search",description="Search endpoints"),
-        (name="Order",description="Order endpoints"),
-        (name="Hype",description="Hype Token endpoints"),
-        (name="New Event",description="New Event endpoints"),
-        (name="Chester",description="Chester round endpoints"),
-        (name="Raffle",description="Raffle endpoints"),
-        (name="Metadata",description="Metadata upload endpoints"),
-        (name="Terminal",description="Gecko Terminal API endpoints"),
-        (name="Trend",description="Trend token endpoints"),
-        (name="Leaderboard",description="Leaderboard endpoints"),
-        (name="CMS",description="CMS admin endpoints"),
-        (name="CMS Analytics",description="CMS analytics dashboard endpoints"),
-        (name="Agent",description="Agent API endpoints for AI integrations"),
-        (name="DevPost",description="Dev post feed, trending, ranking, likes, and polls"),
+        (name="Auth", description="Authentication endpoints"),
+        (name="Account", description="Account management endpoints"),
+        (name="Token", description="Token management endpoints"),
+        (name="Profile", description="Profile management endpoints"),
+        (name="Search", description="Search endpoints"),
+        (name="Order", description="Order endpoints"),
+        (name="New Event", description="New Event endpoints"),
+        (name="Metadata", description="Metadata upload endpoints"),
+        (name="Terminal", description="Gecko Terminal API endpoints"),
+        (name="Trend", description="Trend token endpoints"),
+        (name="Leaderboard", description="Leaderboard endpoints"),
+        (name="CMS", description="CMS admin endpoints"),
+        (name="CMS Analytics", description="CMS analytics dashboard endpoints"),
+        (name="Agent", description="Agent API endpoints for AI integrations"),
     ),
-    security(
-        ("session_cookie" = [])
-    )
+    security(("session_cookie" = []))
 )]
 pub struct ApiDoc;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Port number for the server. If unset, falls back to PORT env, then
-    /// HTTP_PORT env. If none of the three are set, the server panics on
-    /// startup — no silent default. Set PORT explicitly per environment.
+    /// Port number. Falls back to PORT and then HTTP_PORT when omitted.
     #[arg(short, long)]
     port: Option<u16>,
 }
@@ -499,83 +249,48 @@ async fn main() -> Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    config::validate_current_devpost_cache_ttls()
-        .expect("invalid Dev Post cache TTL configuration");
-
     let args = Args::parse();
-
     let ip = env::var("IP").unwrap_or_else(|_| "127.0.0.1".to_string());
-    // 우선순위: 1) --port CLI 2) PORT env 3) HTTP_PORT env (legacy 호환).
-    // 셋 다 없으면 panic — 무음 fallback 없음.
     let port = args
         .port
-        .map(|p| p.to_string())
+        .map(|port| port.to_string())
         .or_else(|| env::var("PORT").ok())
         .or_else(|| env::var("HTTP_PORT").ok())
-        .expect(
-            "PORT must be set: pass --port, or set the PORT (or HTTP_PORT) env var \
-             — likely missing from .env",
-        );
+        .expect("PORT must be set with --port, PORT, or HTTP_PORT");
 
-    info!("Server will start on {}:{} - v2 deployment test", ip, port);
+    info!("Server will start on {}:{}", ip, port);
 
     let app_state = AppState::new().await;
     info!("AppState initialized");
 
-    // Redis startup flush — prefix-scoped SCAN + DEL only.
-    // No-op when REDIS_KEY_PREFIX is empty (we never run FLUSHALL).
-    if !REDIS_KEY_PREFIX.is_empty() {
-        info!(
-            "Flushing Redis keys matching prefix {}* ...",
-            REDIS_KEY_PREFIX.as_str()
-        );
-    }
-    if let Err(e) = app_state.redis.flush_all().await {
-        warn!("Failed to flush Redis: {}", e);
+    if let Err(error) = app_state.redis.flush_all().await {
+        warn!("Failed to flush Redis: {}", error);
     }
 
-    // Background task: API Key 사용량 주기적 DB 동기화 (5분마다)
     let sync_state = app_state.clone();
     tokio::spawn(async move {
         use api_server::services::api_key::sync_api_key_usage_to_db;
-        let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
         loop {
             interval.tick().await;
             match sync_api_key_usage_to_db(&sync_state.postgres, &sync_state.redis).await {
-                Ok(count) => {
-                    if count > 0 {
-                        info!("API key usage synced to DB: {} keys", count);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to sync API key usage: {:?}", e);
-                }
+                Ok(count) if count > 0 => info!("API key usage synced to DB: {} keys", count),
+                Ok(_) => {}
+                Err(error) => warn!("Failed to sync API key usage: {:?}", error),
             }
         }
     });
 
-    let cookie_manager_layer = CookieManagerLayer::new();
-    let root = Router::new().route("/", get(|| async { "Hello, World!" }));
     let app = Router::new()
-        .merge(root)
+        .merge(Router::new().route("/", get(|| async { "Hello, World!" })))
         .merge(health::router())
         .merge(auth::router(app_state.clone()))
         .merge(account::router(app_state.clone()))
-        .merge(x_verification::router(app_state.clone()))
-        .merge(raffle::router(app_state.clone()))
         .merge(token::router())
-        .merge(vault::router())
-        .merge(dividend::router())
-        .merge(dex::router())
-        .merge(quote_token::router())
         .merge(search::router())
         .merge(trade::router())
-        .merge(profile::router(app_state.clone()))
-        .merge(dev_post::router(app_state.clone()))
+        .merge(profile::router())
         .merge(order::router())
-        .merge(hype::router(app_state.clone()))
-        // .merge(bot::router()) // bot 모듈이 존재하지 않음
-        .merge(chester::router(app_state.clone()))
         .merge(new_event::router())
         .merge(metadata::router())
         .merge(metrics::router())
@@ -587,33 +302,29 @@ async fn main() -> Result<()> {
         .merge(agent::router())
         .merge(SwaggerUi::new("/dev-sw").url("/dev-sw/openapi.json", ApiDoc::openapi()))
         .merge(Scalar::with_url("/dev-scalar", ApiDoc::openapi()))
-        .layer(DefaultBodyLimit::max(100_000)) // 100KB global limit (image upload has separate 5MB limit)
+        .layer(DefaultBodyLimit::max(100_000))
         .layer(axum_middleware::from_fn(method_based_timeout))
         .layer(axum_middleware::from_fn_with_state(
             app_state.clone(),
             api_server::middleware::api_key_gate,
         ))
         .layer(ServiceBuilder::new().layer(get_cors()).into_inner())
-        .layer(cookie_manager_layer)
-        // .layer(GovernorLayer {
-        //     config: governor_conf,
-        // })
+        .layer(CookieManagerLayer::new())
         .with_state(app_state)
         .fallback(handler_404);
 
     let ip_addr = IpAddr::from_str(ip.as_str())
-        .map_err(|e| anyhow::anyhow!("Invalid IP address '{}': {}", ip, e))?;
+        .map_err(|error| anyhow::anyhow!("Invalid IP address '{}': {}", ip, error))?;
     let port_num: u16 = port
         .parse()
-        .map_err(|e| anyhow::anyhow!("Invalid port '{}': {}", port, e))?;
+        .map_err(|error| anyhow::anyhow!("Invalid port '{}': {}", port, error))?;
     let addr = SocketAddr::from((ip_addr, port_num));
 
-    info!("Listening on {} Server port{}", addr, port);
-
+    info!("Listening on {}", addr);
     axum_server::bind(addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
-        .map_err(|e| anyhow::anyhow!("Server failed to start: {}", e))?;
+        .map_err(|error| anyhow::anyhow!("Server failed to start: {}", error))?;
     Ok(())
 }
 
@@ -621,28 +332,23 @@ async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "nothing to see here")
 }
 
-// 메서드별 타임아웃 미들웨어
 async fn method_based_timeout(
     method: Method,
     req: Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
-    // Exempt upload endpoints from timeout restrictions
     let path = req.uri().path();
     let is_upload_endpoint = path.starts_with("/metadata/image")
         || path.starts_with("/metadata/metadata")
-        || path.starts_with("/agent/token/image")
-        || path.starts_with("/cms/dex-token/image")
-        || path.starts_with("/dev-post/image");
+        || path.starts_with("/agent/token/image");
 
     if is_upload_endpoint {
-        // No timeout for upload endpoints
         return Ok(next.run(req).await);
     }
 
     let timeout_duration = match method {
         Method::GET => Duration::from_millis(*HTTP_GET_TIMEOUT_MS),
-        _ => Duration::from_millis(*HTTP_POST_TIMEOUT_MS), // POST, PUT, DELETE 등
+        _ => Duration::from_millis(*HTTP_POST_TIMEOUT_MS),
     };
 
     match tokio::time::timeout(timeout_duration, next.run(req)).await {
@@ -652,246 +358,61 @@ async fn method_based_timeout(
 }
 
 #[cfg(test)]
-mod openapi_tests {
-    use super::ApiDoc;
-    use utoipa::OpenApi;
-
-    /// token_type의 가능한 값이 swagger(OpenAPI)에 enum으로 명시되는지 검증.
-    #[test]
-    fn dex_token_type_enum_documented_in_openapi() {
-        let spec = ApiDoc::openapi();
-        let json = serde_json::to_value(&spec).unwrap();
-        let schema = &json["components"]["schemas"]["DexTokenType"];
-        assert!(
-            !schema.is_null(),
-            "DexTokenType schema가 OpenAPI components에 등록돼야 함"
-        );
-        let vals: Vec<&str> = schema["enum"]
-            .as_array()
-            .expect("DexTokenType는 string enum이어야 함")
-            .iter()
-            .map(|v| v.as_str().unwrap())
-            .collect();
-        assert_eq!(
-            vals,
-            vec!["whitelist", "nadfun_v2", "external"],
-            "token_type 가능한 값이 swagger에 명시돼야 함"
-        );
-        // $ref 필드는 example을 못 가지므로(OpenAPI 3.0), example은 컴포넌트에 있어야
-        // swagger Example Value의 token_type이 "string"이 아닌 실제 값으로 렌더됨.
-        assert_eq!(
-            schema["example"].as_str(),
-            Some("whitelist"),
-            "DexTokenType 컴포넌트에 example이 있어야 Example Value에 반영됨"
-        );
-        // DexTokenEntry.token_type이 DexTokenType을 참조하는지(=enum이 필드에 연결됨).
-        let field = &json["components"]["schemas"]["DexTokenEntry"]["properties"]["token_type"];
-        assert_eq!(
-            field["$ref"].as_str(),
-            Some("#/components/schemas/DexTokenType"),
-            "token_type 필드가 DexTokenType을 참조해야 함"
-        );
-    }
+mod tests {
+    use super::*;
 
     #[test]
-    fn dev_post_pin_paths_and_nullable_feed_pin_are_documented() {
-        let json = serde_json::to_value(ApiDoc::openapi()).unwrap();
-        let pin_path = &json["paths"]["/dev-post/{post_id}/pin"];
-        assert!(pin_path["put"].is_object());
-        assert!(pin_path["delete"].is_object());
-        for unsupported in ["get", "post", "patch"] {
-            assert!(
-                pin_path[unsupported].is_null(),
-                "{unsupported} must not be documented on the pin route"
-            );
-        }
-        assert!(pin_path["put"]["responses"]["204"].is_object());
-        assert!(pin_path["delete"]["responses"]["204"].is_object());
-        for operation in ["put", "delete"] {
-            for error_status in ["400", "401", "403", "404", "500"] {
-                assert!(
-                    pin_path[operation]["responses"][error_status].is_object(),
-                    "{operation} must document {error_status}"
-                );
-            }
-        }
-        let pin_schema = &json["components"]["schemas"]["DevPostListResponse"]["properties"]["pin"];
-        assert!(!pin_schema.is_null());
-        assert_eq!(pin_schema["nullable"], true);
-        let required = json["components"]["schemas"]["DevPostListResponse"]["required"]
-            .as_array()
-            .unwrap();
-        assert!(required.iter().any(|field| field.as_str() == Some("pin")));
-    }
+    fn openapi_exposes_only_giwa_product_routes() {
+        let openapi = ApiDoc::openapi();
 
-    #[test]
-    fn dev_post_api_reference_documents_pin_contract() {
-        let docs = include_str!("../docs/dev-post-api.md");
-        for required in [
-            "pin: DevPostResponse | null;",
-            "`PUT /dev-post/{post_id}/pin`",
-            "`DELETE /dev-post/{post_id}/pin`",
-            "빈 body의 `204 No Content`",
-            "2페이지부터는 `pin: null`",
-            "전체 피드는 항상 `pin: null`",
-            "소프트 삭제와 pin 제거는 하나의 트랜잭션",
-            "viewer-neutral",
-            "v2 키",
-            "60초",
+        for path in [
+            "/hype/token",
+            "/chester/round",
+            "/raffle/round",
+            "/dev-post",
+            "/dex/tokens",
+            "/vault/{token_id}",
+            "/dividend/tokens",
+            "/quote_token",
+            "/profile/point-history",
+            "/profile/gift-fee/{account_id}",
+            "/leaderboard/hype_point",
+            "/cms/analytics/chester-retention",
+            "/account/update_x",
+            "/x/oauth/login",
+            "/trade/xinfo/{token_id}",
         ] {
             assert!(
-                docs.contains(required),
-                "missing Dev Post API contract: {required}"
+                !openapi.paths.paths.contains_key(path),
+                "retired path remains: {path}"
             );
         }
 
-        let v2_changes = include_str!("../docs/V2_API_CHANGES.md");
-        for required in [
-            "| PUT | `/dev-post/{post_id}/pin` | O (current creator + current-creator-authored live post) | 최초/반복/교체 pin, 빈 204 |",
-            "| DELETE | `/dev-post/{post_id}/pin` | O (current creator only) | exact-post/반복 pin 해제, 빈 204 |",
-            "`GET/POST/PUT/PATCH/DELETE /dev-post*` (13개 엔드포인트)",
+        for path in [
+            "/profile/{account_id}",
+            "/leaderboard/pnl",
+            "/cms/analytics/new-users",
         ] {
             assert!(
-                v2_changes.contains(required),
-                "missing V2 API changes contract: {required}"
+                openapi.paths.paths.contains_key(path),
+                "retained path missing: {path}"
             );
         }
-    }
 
-    #[test]
-    fn openapi_requires_title_and_registers_exact_moderation_contract() {
-        let json = serde_json::to_value(ApiDoc::openapi()).unwrap();
-        let schemas = &json["components"]["schemas"];
-        assert!(
-            schemas["CreateDevPostRequest"]["required"]
-                .as_array()
-                .unwrap()
-                .contains(&serde_json::json!("title"))
-        );
-        assert_eq!(
-            schemas["CreateDevPostRequest"]["properties"]["title"]["type"],
-            "string"
-        );
-        assert!(
-            schemas["CreateDevPostRequest"]["properties"]["title"]
-                .get("maxLength")
-                .is_none()
-        );
-        assert!(
-            !schemas["EditDevPostRequest"]["required"]
-                .as_array()
-                .is_some_and(|fields| fields.contains(&serde_json::json!("title")))
-        );
-        assert_eq!(
-            schemas["EditDevPostRequest"]["properties"]["title"]["type"],
-            "string"
-        );
-        assert_ne!(
-            schemas["EditDevPostRequest"]["properties"]["title"]["nullable"],
-            true
-        );
-        assert!(
-            schemas["DevPostResponse"]["required"]
-                .as_array()
-                .unwrap()
-                .contains(&serde_json::json!("title"))
-        );
-        assert!(json["paths"]["/cms/dev-post/{post_id}"]["delete"].is_object());
-        assert!(json["paths"]["/cms/dev-post/{post_id}/restore"]["post"].is_object());
-        assert!(json["paths"]["/dev-post"]["post"]["responses"]["413"].is_object());
-        assert!(json["paths"]["/dev-post/{post_id}"]["patch"]["responses"]["413"].is_object());
-        for operation in ["delete", "post"] {
-            let path = if operation == "delete" {
-                "/cms/dev-post/{post_id}"
-            } else {
-                "/cms/dev-post/{post_id}/restore"
-            };
-            assert!(json["paths"][path][operation]["responses"]["204"]["content"].is_null());
-        }
-        for (path, method, statuses) in [
-            ("/dev-post", "post", vec!["400", "413"]),
-            ("/dev-post/{post_id}", "patch", vec!["400", "413"]),
-            (
-                "/cms/dev-post/{post_id}",
-                "delete",
-                vec!["204", "400", "401", "403", "404", "500"],
-            ),
-            (
-                "/cms/dev-post/{post_id}/restore",
-                "post",
-                vec!["204", "400", "401", "403", "404", "409", "500"],
-            ),
-        ] {
-            for status in statuses {
-                assert!(
-                    json["paths"][path][method]["responses"][status].is_object(),
-                    "missing {path} {status}"
-                );
-            }
-        }
-        let mut dev = 0;
-        let mut cms = 0;
-        for item in json["paths"].as_object().unwrap().values() {
-            for op in item.as_object().unwrap().values() {
-                if op["tags"]
-                    .as_array()
-                    .is_some_and(|t| t.iter().any(|x| x == "DevPost"))
-                {
-                    dev += 1;
-                }
-                if op["tags"]
-                    .as_array()
-                    .is_some_and(|t| t.iter().any(|x| x == "CMS"))
-                    && (op["operationId"]
-                        .as_str()
-                        .unwrap_or("")
-                        .contains("dev_post"))
-                {
-                    cms += 1;
-                }
-            }
-        }
-        assert_eq!(dev, 13);
-        assert_eq!(cms, 2);
-    }
-
-    #[test]
-    fn documentation_contract() {
-        let docs = [
-            include_str!("../docs/dev-post-api.md"),
-            include_str!("../docs/V2_API_CHANGES.md"),
-        ]
-        .join("\n");
-        for required in ["title", "description only", "point of no return", "13", "2"] {
-            assert!(docs.contains(required), "missing {required}");
-        }
-        for banned in [
-            "X-DevPost-Capability",
-            "/v3/dev-post",
-            "title + body",
-            "body + title",
-        ] {
-            assert!(!docs.contains(banned), "stale contract {banned}");
-        }
-    }
-
-    #[test]
-    fn dev_post_api_reference_documents_pin_rollout_and_rollback() {
-        let docs = include_str!("../docs/dev-post-api.md");
-        for required in [
-            "## Pin 기능 롤아웃 및 롤백",
-            "API보다 먼저 additive migration",
-            "`DEVPOST_FEED_EXPIRATION <= 60000`",
-            "기존 API 노드가 모두 drain",
-            "Redis 전체 purge를 하지 않는다",
-            "pin endpoint의 4xx/5xx 비율",
-            "API binary만 롤백",
-            "dev_post_pin 테이블과 mapping은 유지",
-            "git fetch origin v2:v2",
+        let tags = openapi.tags.unwrap_or_default();
+        for name in [
+            "Hype",
+            "Chester",
+            "Raffle",
+            "DevPost",
+            "Dex",
+            "Vault",
+            "Dividend",
+            "XVerification",
         ] {
             assert!(
-                docs.contains(required),
-                "missing Dev Post rollout contract: {required}"
+                !tags.iter().any(|tag| tag.name == name),
+                "retired tag remains: {name}"
             );
         }
     }
