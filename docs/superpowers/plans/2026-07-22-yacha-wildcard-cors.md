@@ -40,6 +40,8 @@ let cases = [
     ("https://dev.yacha.trade", true),
     ("https://api.yacha.trade", true),
     ("https://a.b.yacha.trade", true),
+    ("https://foo-bar.yacha.trade", true),
+    ("https://xn--bcher-kva.yacha.trade", true),
     ("http://localhost:3000", true),
     ("http://localhost:8090", true),
     ("http://localhost:", false),
@@ -61,9 +63,17 @@ let cases = [
     ("https://dev.yacha.trade#fragment", false),
     ("https://.yacha.trade", false),
     ("https://a..yacha.trade", false),
+    ("https://foo_bar.yacha.trade", false),
+    ("https://-foo.yacha.trade", false),
+    ("https://foo-.yacha.trade", false),
     ("https://dev.yacha.trade.", false),
     ("https://evil-yacha.trade", false),
     ("https://yacha.trade.evil.com", false),
+    ("https://dev%2eyacha.trade", false),
+    ("https://dev。yacha。trade", false),
+    ("https://dev.yacha.trade\\@evil.com", false),
+    ("blob:https://dev.yacha.trade/id", false),
+    ("null", false),
     ("https://nad.fun", false),
     ("https://app.nad.fun", false),
     ("https://nadapp.net", false),
@@ -73,6 +83,12 @@ let cases = [
     ("https://mm-dashboard-six.vercel.app", false),
     ("https://evil.com", false),
 ];
+
+let oversized_label = format!("https://{}.yacha.trade", "a".repeat(64));
+assert!(!is_origin_allowed(&oversized_label));
+
+let oversized_hostname = format!("https://{}.yacha.trade", vec!["a".repeat(63); 4].join("."));
+assert!(!is_origin_allowed(&oversized_hostname));
 ```
 
 Update the middleware's representative shared-policy assertions so the wrapper expects the same wildcard behavior without duplicating the full edge-case matrix:
@@ -91,12 +107,87 @@ fn yacha_and_local_origins_only() {
 }
 ```
 
+Import `get_cors`, Axum's test router types, and `tower::ServiceExt`, then add this response-level preflight test:
+
+```rust
+use super::{get_cors, is_origin_allowed};
+use axum::{
+    Router,
+    body::Body,
+    http::{
+        Method, Request,
+        header::{
+            ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_ORIGIN,
+            ACCESS_CONTROL_REQUEST_METHOD, ORIGIN,
+        },
+    },
+    routing::get,
+};
+use tower::ServiceExt;
+
+#[tokio::test]
+async fn cors_layer_only_echoes_trusted_origin() {
+    let app = Router::new()
+        .route("/", get(|| async { "ok" }))
+        .layer(get_cors());
+
+    let trusted = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::OPTIONS)
+                .uri("/")
+                .header(ORIGIN, "https://dev.yacha.trade")
+                .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        trusted
+            .headers()
+            .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+            .and_then(|value| value.to_str().ok()),
+        Some("https://dev.yacha.trade")
+    );
+    assert_eq!(
+        trusted
+            .headers()
+            .get(ACCESS_CONTROL_ALLOW_CREDENTIALS)
+            .and_then(|value| value.to_str().ok()),
+        Some("true")
+    );
+
+    let rejected = app
+        .oneshot(
+            Request::builder()
+                .method(Method::OPTIONS)
+                .uri("/")
+                .header(ORIGIN, "https://evil-yacha.trade")
+                .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        rejected
+            .headers()
+            .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none()
+    );
+}
+```
+
 - [ ] **Step 2: Run the focused test and verify the red state**
 
 Run:
 
 ```bash
-cargo test cors::tests::origin_allow_rules
+cargo test cors::tests
 cargo test middleware::tests::yacha_and_local_origins_only
 ```
 
@@ -118,6 +209,20 @@ fn is_canonical_origin(origin: &str, url: &Url) -> bool {
         && origin == url.origin().ascii_serialization()
 }
 
+fn is_valid_dns_label(label: &str) -> bool {
+    let bytes = label.as_bytes();
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+
+    bytes.len() <= 63
+        && first.is_ascii_alphanumeric()
+        && last.is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+}
+
 fn is_yacha_subdomain_origin(url: &Url) -> bool {
     let Some(host) = url.host_str() else {
         return false;
@@ -128,8 +233,8 @@ fn is_yacha_subdomain_origin(url: &Url) -> bool {
 
     url.scheme() == "https"
         && url.port().is_none()
-        && !subdomains.is_empty()
-        && subdomains.split('.').all(|label| !label.is_empty())
+        && host.len() <= 253
+        && subdomains.split('.').all(is_valid_dns_label)
 }
 
 pub(crate) fn is_origin_allowed(origin: &str) -> bool {
@@ -153,7 +258,7 @@ pub(crate) fn is_origin_allowed(origin: &str) -> bool {
 Run:
 
 ```bash
-cargo test cors::tests::origin_allow_rules
+cargo test cors::tests
 cargo test middleware::tests::yacha_and_local_origins_only
 ```
 
@@ -165,7 +270,7 @@ Run:
 
 ```bash
 cargo fmt --all
-cargo test cors::tests::origin_allow_rules
+cargo test cors::tests
 cargo test middleware::tests::yacha_and_local_origins_only
 ```
 
@@ -230,7 +335,7 @@ gh pr create \
   --base dev \
   --head fix/yacha-wildcard-cors \
   --title "fix: allow Yacha subdomain origins" \
-  --body $'## Summary\n- allow canonical HTTPS origins on all non-apex `yacha.trade` subdomains\n- preserve port-qualified HTTP localhost origins and reject lookalike or non-canonical origins\n- keep CORS, CSRF validation, and API-key/rate-limit bypass on one shared trust decision\n\n## Security\nEvery `*.yacha.trade` hostname is now inside the cookie-authentication and API-key-bypass trust boundary. The parser still rejects the apex, HTTP, explicit ports, userinfo, paths, queries, fragments, empty labels, trailing dots, suffix lookalikes, and superdomains.\n\n## Validation\n- [x] `cargo test cors::tests::origin_allow_rules`\n- [x] `cargo fmt --all -- --check`\n- [x] `cargo test`\n- [x] `SQLX_OFFLINE=true cargo build --release`\n- [x] `git diff --check`'
+  --body $'## Summary\n- allow canonical HTTPS origins on all non-apex `yacha.trade` subdomains\n- preserve port-qualified HTTP localhost origins and reject lookalike or non-canonical origins\n- keep CORS, CSRF validation, and API-key/rate-limit bypass on one shared trust decision\n\n## Security\nEvery `*.yacha.trade` hostname is now inside the cookie-authentication and API-key-bypass trust boundary. The parser still rejects the apex, HTTP, explicit ports, userinfo, paths, queries, fragments, invalid DNS labels, trailing dots, suffix lookalikes, and superdomains. Origin-based API-key/rate-limit exemption remains a pre-existing spoofable trust signal and needs separate remediation because changing it would alter frontend authentication behavior.\n\n## Validation\n- [x] `cargo test cors::tests`\n- [x] `cargo test middleware::tests::yacha_and_local_origins_only`\n- [x] `cargo fmt --all -- --check`\n- [x] non-DB tests: 34 passed\n- [x] `SQLX_OFFLINE=true cargo build --release`\n- [x] `git diff --check`\n\nFull `cargo test`: 33 tests passed; 15 PostgreSQL integration tests could not start because `DATABASE_URL` is unavailable.'
 ```
 
 Expected: the branch push succeeds and GitHub returns a pull request URL targeting `dev`.

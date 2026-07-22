@@ -39,7 +39,7 @@ The policy must reject:
 Continue parsing origins with `url::Url`; do not match the raw header with a regex. A parsed origin is trusted as a Yacha frontend only when all of the following hold:
 
 1. Its scheme is exactly `https`.
-2. Its hostname has a non-empty, valid label prefix followed by the exact boundary `.yacha.trade`.
+2. Its hostname has a non-empty, valid DNS label prefix followed by the exact boundary `.yacha.trade`. Each label uses only ASCII letters, digits, or internal hyphens, is at most 63 bytes, and the complete hostname is at most 253 bytes. Canonical punycode labels are valid.
 3. It has no explicit non-default port.
 4. It has no username or password.
 5. It has no path beyond the parser's root, query, or fragment.
@@ -73,7 +73,7 @@ The hostname boundary and canonical serialization checks prevent suffix confusio
 
 ## Testing
 
-Extend the existing table-driven `src/cors.rs` unit test before changing the implementation. The red test must demonstrate the new trusted origins and preserve rejection cases for the apex, HTTP, explicit ports, malformed origins, lookalike domains, and URL components.
+Extend the existing table-driven `src/cors.rs` unit test before changing the implementation. The red test must demonstrate the new trusted origins and preserve rejection cases for the apex, HTTP, explicit ports, malformed origins, invalid DNS labels, lookalike domains, and URL components. Add a response-level preflight test proving that `Access-Control-Allow-Origin` echoes a trusted origin and is absent for a rejected origin; credential support is asserted on the trusted response.
 
 After implementation, run:
 
