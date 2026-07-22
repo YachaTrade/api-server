@@ -1,1 +1,0 @@
-../migrations/0019_quote_token.sql

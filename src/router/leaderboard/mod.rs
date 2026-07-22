@@ -6,13 +6,8 @@ use axum::{Router, routing::get};
 use path::LeaderboardPath;
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route(
-            LeaderboardPath::GetHypePointLeaderboard.as_str(),
-            get(handler::get_hype_point_leaderboard),
-        )
-        .route(
-            LeaderboardPath::GetPnlLeaderboard.as_str(),
-            get(handler::get_pnl_leaderboard),
-        )
+    Router::new().route(
+        LeaderboardPath::GetPnlLeaderboard.as_str(),
+        get(handler::get_pnl_leaderboard),
+    )
 }

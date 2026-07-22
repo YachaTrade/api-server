@@ -34,10 +34,6 @@ pub fn router(app_state: AppState) -> Router<AppState> {
             get(handler::get_account).layer(auth_layer.clone()),
         )
         .route(
-            AccountPath::UpdateX.as_str(),
-            patch(handler::update_x).layer(auth_layer.clone()),
-        )
-        .route(
             AccountPath::RegisterWallet.as_str(),
             patch(handler::register_wallet).layer(auth_layer.clone()),
         )

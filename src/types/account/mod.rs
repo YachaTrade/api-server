@@ -8,7 +8,6 @@ pub const NICKNAME_MIN_LENGTH: usize = 1;
 pub const NICKNAME_MAX_LENGTH: usize = 15;
 pub const MAX_BIO_LENGTH: usize = 200;
 pub const MAX_IMAGE_URI_LENGTH: usize = 500;
-pub const MAX_X_HANDLE_LENGTH: usize = 100;
 
 // ==================== Common Response ====================
 
@@ -18,31 +17,6 @@ pub struct AccountResponse {
 }
 
 // ==================== Requests ====================
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct ConnectXRequest {
-    pub is_blue_label: bool,
-    pub x_handle: String,
-    pub x_image_uri: String,
-}
-
-impl ConnectXRequest {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.x_handle.len() > MAX_X_HANDLE_LENGTH {
-            return Err(format!(
-                "x_handle must be at most {} characters",
-                MAX_X_HANDLE_LENGTH
-            ));
-        }
-        if self.x_image_uri.len() > MAX_IMAGE_URI_LENGTH {
-            return Err(format!(
-                "x_image_uri must be at most {} characters",
-                MAX_IMAGE_URI_LENGTH
-            ));
-        }
-        Ok(())
-    }
-}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RegisterWalletRequest {
@@ -105,23 +79,6 @@ impl UpdateAccountRequest {
         {
             return Err(format!(
                 "image_uri must be at most {} characters",
-                MAX_IMAGE_URI_LENGTH
-            ));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdateXRequest {
-    pub x_image_uri: String,
-}
-
-impl UpdateXRequest {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.x_image_uri.len() > MAX_IMAGE_URI_LENGTH {
-            return Err(format!(
-                "x_image_uri must be at most {} characters",
                 MAX_IMAGE_URI_LENGTH
             ));
         }

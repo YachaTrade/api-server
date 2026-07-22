@@ -5,11 +5,11 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
-        common::info::{FeeInfo, MarketInfo, MarketType, QuoteInfo},
+        common::info::{MarketInfo, MarketType, QuoteInfo},
         trading::market::MarketResponse,
     },
     utils::single_flight::{GLOBAL_CACHE, with_cache},
@@ -17,7 +17,7 @@ use crate::{
 
 #[derive(sqlx::FromRow)]
 struct MarketRow {
-    market_type: String,
+    market_type: MarketType,
     token_id: String,
     market_id: String,
     quote_id: String,
@@ -36,9 +36,6 @@ struct MarketRow {
     quote_symbol: String,
     quote_decimals: i32,
     quote_image_uri: String,
-    creator_fee_rate: Option<i16>,
-    curve_protocol_fee_rate: Option<i16>,
-    dex_protocol_fee_rate: Option<i16>,
 }
 
 pub struct MarketController {
@@ -85,14 +82,10 @@ impl MarketController {
                     COALESCE(qt.name, '') as quote_name,
                     COALESCE(qt.symbol, '') as quote_symbol,
                     COALESCE(qt.decimals, 18) as quote_decimals,
-                    COALESCE(qt.image_uri, '') as quote_image_uri,
-                    fc.creator_fee_rate,
-                    fc.curve_protocol_fee_rate,
-                    fc.dex_protocol_fee_rate
+                    COALESCE(qt.image_uri, '') as quote_image_uri
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 JOIN quote_token qt ON m.quote_id = qt.quote_id
-                LEFT JOIN fee_config fc ON m.token_id = fc.token_id
                 LEFT JOIN LATERAL (
                     SELECT p.price
                     FROM price p
@@ -109,23 +102,13 @@ impl MarketController {
         .map_err(|err| anyhow!("Failed to fetch market by token: {}", err))?;
 
         let mut market_id = row.market_id;
-        if market_id.is_empty() {
-            if row.market_type == "CURVE" {
-                market_id = V1_BONDING_CURVE.clone();
-            } else if row.market_type == "V2_CURVE" {
-                market_id = V2_BONDING_CURVE.clone();
-            }
+        if market_id.is_empty() && row.market_type == MarketType::Curve {
+            market_id = BONDING_CURVE.clone();
         }
 
         Ok(MarketResponse {
             market_info: MarketInfo {
-                market_type: match row.market_type.as_str() {
-                    "CURVE" => MarketType::Curve,
-                    "DEX" => MarketType::Dex,
-                    "V2_CURVE" => MarketType::V2Curve,
-                    "V2_DEX" => MarketType::V2Dex,
-                    _ => MarketType::Curve,
-                },
+                market_type: row.market_type,
                 token_id: row.token_id,
                 quote_info: QuoteInfo {
                     quote_id: row.quote_id.clone(),
@@ -152,14 +135,6 @@ impl MarketController {
                 ath_price_usd: row.ath_price.normalized().to_plain_string(),
                 ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                 ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
-                fee_info: match row.market_type.as_str() {
-                    "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
-                        creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
-                        curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
-                        dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
-                    }),
-                    _ => None,
-                },
             },
         })
     }

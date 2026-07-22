@@ -143,7 +143,7 @@ mod tests {
     /// Cross-region replication lag: GET /nonce wrote the row on another node, so it is
     /// not yet visible when POST /session consumes it here. get_and_delete_nonce must wait
     /// and retry instead of rejecting with a spurious "Invalid nonce".
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn nonce_replicated_late_is_recovered_by_retry(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
 
@@ -162,7 +162,7 @@ mod tests {
     }
 
     /// Genuinely missing nonce: still rejected after the retry (replication is not magic).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn take_nonce_still_fails_when_absent_after_retry(pool: PgPool) {
         let ctrl = make_controller(pool);
         let res = ctrl
@@ -172,7 +172,7 @@ mod tests {
     }
 
     /// Present on the first read: consumed immediately and deleted (reuse prevention).
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn take_nonce_consumes_existing_nonce(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
         insert_nonce(&pool, "5 minutes").await;
@@ -189,7 +189,7 @@ mod tests {
     }
 
     /// Expired nonce stays rejected — the retry must not resurrect it.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn take_nonce_rejects_expired_nonce(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
         insert_nonce(&pool, "-1 minute").await; // already expired
@@ -203,7 +203,7 @@ mod tests {
     /// Regression (codex P2): if a *newer* nonce is issued for the same address during the
     /// retry window, the consume must NOT eat it. We only consume the exact message the
     /// client signed; the unrelated newer nonce stays put for its own login attempt.
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn retry_does_not_consume_a_different_nonce(pool: PgPool) {
         let ctrl = make_controller(pool.clone());
         // Only a different (newer) nonce exists; our request signed MESSAGE.

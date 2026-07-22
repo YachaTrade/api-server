@@ -3,12 +3,11 @@ use std::{str::FromStr, sync::Arc};
 use alloy::primitives::Address;
 
 use crate::{
-    controllers::account::{AccountController, wallet::WalletController, x::AccountXController},
+    controllers::account::{AccountController, wallet::WalletController},
     db::{postgres::PostgresDatabase, redis::RedisDatabase},
     result::AppError,
     types::account::{
-        AccountResponse, ConnectXRequest, GetWalletResponse, RegisterWalletRequest,
-        UpdateAccountRequest, UpdateXRequest,
+        AccountResponse, GetWalletResponse, RegisterWalletRequest, UpdateAccountRequest,
     },
 };
 
@@ -57,44 +56,6 @@ impl AccountService {
             .set_account_info(account_id, &account_info)
             .await
             .ok(); // Ignore cache errors, don't fail the request
-
-        Ok(AccountResponse { account_info })
-    }
-
-    pub async fn connect_x(
-        &self,
-        account_id: &str,
-        req: ConnectXRequest,
-    ) -> Result<AccountResponse, AppError> {
-        let controller = AccountXController::new(self.postgres.clone());
-        let account_info = controller
-            .connect_x(account_id, req)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        Ok(AccountResponse { account_info })
-    }
-
-    pub async fn disconnect_x(&self, account_id: String) -> Result<AccountResponse, AppError> {
-        let controller = AccountXController::new(self.postgres.clone());
-        let account_info = controller
-            .disconnect_x(account_id)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
-
-        Ok(AccountResponse { account_info })
-    }
-
-    pub async fn update_x(
-        &self,
-        account_id: String,
-        req: UpdateXRequest,
-    ) -> Result<AccountResponse, AppError> {
-        let controller = AccountXController::new(self.postgres.clone());
-        let account_info = controller
-            .update_x(account_id, req)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
 
         Ok(AccountResponse { account_info })
     }

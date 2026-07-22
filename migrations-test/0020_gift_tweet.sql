@@ -1,1 +1,0 @@
-../migrations/0020_gift_tweet.sql

@@ -10,9 +10,7 @@ use bytes::Bytes;
 use tracing::{error, info};
 
 /// Public custom-domain base every object uploaded here is served from.
-/// `dev_post` validates submitted image URIs against this prefix.
 pub const PUBLIC_BASE_URL: &str = "https://storage.nadapp.net/";
-pub const DEVPOST_IMAGE_KEY_PREFIX: &str = "devpost/";
 
 // R2Client struct for managing AWS R2 and CloudFront operations
 // Handles file uploads, downloads, and CDN cache invalidation
@@ -153,49 +151,6 @@ impl R2Client {
         }
     }
 
-    // Uploads whitelist token image to R2 and returns the CDN URL
-    // Key: whitelist/{symbol} (caller must sanitize symbol)
-    pub async fn upload_whitelist_image_file(
-        &self,
-        symbol: &str,
-        body: &Bytes,
-        content_type: &str,
-    ) -> Result<String> {
-        let key = format!("whitelist/{}", symbol);
-        info!(
-            "Uploading whitelist image to R2: key={}, content_type={}",
-            key, content_type
-        );
-
-        let result = self
-            .client
-            .put_object()
-            .bucket(&self.bucket_name)
-            .key(&key)
-            .body(ByteStream::from(body.clone()))
-            .content_type(content_type)
-            .send()
-            .await;
-
-        match result {
-            Ok(output) => {
-                info!(
-                    "Successfully uploaded whitelist image to R2: key={}, output={:?}",
-                    key, output
-                );
-                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
-                Ok(r2_url)
-            }
-            Err(err) => {
-                error!(
-                    "Failed to upload whitelist image to R2: key={}, error={:?}",
-                    key, err
-                );
-                Err(anyhow!("Upload whitelist image failed. Error: {}", err))
-            }
-        }
-    }
-
     // Uploads account profile image to R2 and returns the CDN URL
     // Parameters:
     // - image_id: Unique identifier (UUID) for the image
@@ -240,61 +195,6 @@ impl R2Client {
                     key, err
                 );
                 Err(anyhow!("Upload account image failed. Error: {}", err))
-            }
-        }
-    }
-
-    // Uploads dev post image to R2 and returns the CDN URL
-    // Parameters:
-    // - image_id: Unique identifier (UUID) for the image
-    // - body: Image file contents
-    // - content_type: MIME type of the image
-    pub async fn upload_devpost_image_file(
-        &self,
-        image_id: &str,
-        body: &Bytes,
-        content_type: &str,
-    ) -> Result<String> {
-        let key = format!("{DEVPOST_IMAGE_KEY_PREFIX}{image_id}");
-        info!(
-            "Uploading devpost image to R2: key={}, content_type={}",
-            key, content_type
-        );
-
-        let mut request = self
-            .client
-            .put_object()
-            .bucket(&self.bucket_name)
-            .key(&key)
-            .body(ByteStream::from(body.clone()))
-            .content_type(content_type);
-
-        // SVG can carry a <script>, which runs if the object is opened directly in a
-        // browser tab; attachment forces a download there instead. <img src> rendering
-        // in a post is unaffected by this header, so only SVG needs it.
-        if content_type == "image/svg+xml" {
-            request = request.content_disposition("attachment");
-        }
-
-        let result = request.send().await;
-
-        match result {
-            Ok(output) => {
-                info!(
-                    "Successfully uploaded devpost image to R2: key={}, output={:?}",
-                    key, output
-                );
-
-                // R2 Custom Domain URL
-                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
-                Ok(r2_url)
-            }
-            Err(err) => {
-                error!(
-                    "Failed to upload devpost image to R2: key={}, error={:?}",
-                    key, err
-                );
-                Err(anyhow!("Upload devpost image failed. Error: {}", err))
             }
         }
     }

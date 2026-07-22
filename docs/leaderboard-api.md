@@ -4,77 +4,13 @@
 
 Leaderboard API는 사용자 순위 조회를 위한 API입니다.
 
-- **Hype Point 리더보드**: 사용자의 Hype Point 순위 조회
 - **PnL 리더보드**: 사용자의 손익(Profit and Loss) 순위 조회
 
 ---
 
 ## API 엔드포인트
 
-### 1. Hype Point 리더보드 조회 (`GET /leaderboard/hype_point`)
-
-사용자의 Hype Point 순위를 조회합니다.
-
-#### 요청
-- **Method**: `GET`
-- **인증**: 불필요
-
-#### Query Parameters
-
-| 파라미터 | 타입 | 기본값 | 설명 |
-|----------|------|--------|------|
-| `page` | integer | 1 | 페이지 번호 (최소 1) |
-| `limit` | integer | 10 | 페이지당 항목 수 (최소 1, 최대 100) |
-
-#### 응답
-```json
-{
-  "ranks": [
-    {
-      "rank": 1,
-      "account_info": {
-        "account_id": "0x1234567890abcdef...",
-        "nickname": "TopPlayer",
-        "bio": "Crypto enthusiast",
-        "image_uri": "https://storage.nadapp.net/profiles/uuid.png"
-      },
-      "hype_point": "1500000"
-    },
-    {
-      "rank": 2,
-      "account_info": {
-        "account_id": "0xabcdef1234567890...",
-        "nickname": "Player2",
-        "bio": "DeFi trader",
-        "image_uri": "https://storage.nadapp.net/profiles/uuid2.png"
-      },
-      "hype_point": "1200000"
-    }
-  ],
-  "total_count": 1000,
-  "total_hype_point": "50000000",
-  "last_updated_at": 1706534400
-}
-```
-
-#### 필드 설명
-
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `ranks` | array | 순위 목록 |
-| `ranks[].rank` | integer | 순위 |
-| `ranks[].account_info` | object | 계정 정보 |
-| `ranks[].hype_point` | string | Hype Point (문자열로 표현된 숫자) |
-| `total_count` | integer | 전체 참여자 수 |
-| `total_hype_point` | string | 전체 Hype Point 총합 |
-| `last_updated_at` | integer | 마지막 업데이트 시간 (Unix timestamp) |
-
-#### 에러 응답
-- `500`: 내부 서버 에러
-
----
-
-### 2. PnL 리더보드 조회 (`GET /leaderboard/pnl`)
+### 1. PnL 리더보드 조회 (`GET /leaderboard/pnl`)
 
 사용자의 손익(Profit and Loss) 순위를 조회합니다.
 
@@ -171,7 +107,7 @@ Leaderboard API는 사용자 순위 조회를 위한 API입니다.
 ### 요청 타입
 
 ```typescript
-// GET /leaderboard/hype_point, GET /leaderboard/pnl
+// GET /leaderboard/pnl
 interface LeaderboardQuery {
   page?: number;   // default: 1, minimum: 1
   limit?: number;  // default: 10, minimum: 1, maximum: 100
@@ -181,20 +117,6 @@ interface LeaderboardQuery {
 ### 응답 타입
 
 ```typescript
-// GET /leaderboard/hype_point
-interface HypePointLeaderboardResponse {
-  ranks: HypePointLeaderboardEntry[];
-  total_count: number;
-  total_hype_point: string;
-  last_updated_at: number;
-}
-
-interface HypePointLeaderboardEntry {
-  rank: number;
-  account_info: AccountInfo;
-  hype_point: string;
-}
-
 // GET /leaderboard/pnl
 interface PnlLeaderboardResponse {
   ranks: PnlLeaderboardEntry[];
@@ -253,5 +175,5 @@ interface AccountInfo {
 
 ### 숫자 표현
 
-- 금액 및 포인트 관련 값은 정밀도를 위해 문자열로 반환됩니다.
+- 금액 관련 값은 정밀도를 위해 문자열로 반환됩니다.
 - 클라이언트에서 적절한 파싱 및 포맷팅이 필요합니다.

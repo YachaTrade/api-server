@@ -5,13 +5,13 @@ use bigdecimal::BigDecimal;
 
 use crate::{
     cache_key,
-    config::{V1_BONDING_CURVE, V2_BONDING_CURVE},
+    config::BONDING_CURVE,
     db::postgres::PostgresDatabase,
     measure_postgres,
     types::{
         common::{
             CountRow,
-            info::{AccountInfo, FeeInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
+            info::{AccountInfo, MarketInfo, MarketType, QuoteInfo, TokenInfo},
             pagination::PaginationParams,
         },
         token::order::{OrderToken, OrderTokenResponse, TokenOrderType},
@@ -41,7 +41,7 @@ struct OrderTokenRow {
     creator_nickname: String,
     creator_bio: String,
     creator_image_uri: String,
-    market_type: String,
+    market_type: MarketType,
     market_id: String,
     quote_id: String,
     token_price: BigDecimal,
@@ -59,9 +59,6 @@ struct OrderTokenRow {
     quote_decimals: i32,
     quote_image_uri: String,
     price_24h_ago: BigDecimal,
-    creator_fee_rate: Option<i16>,
-    curve_protocol_fee_rate: Option<i16>,
-    dex_protocol_fee_rate: Option<i16>,
 }
 
 /// latest_trade 더스트 필터 임계값: swap.quote_amount(네이티브/MON 측)이
@@ -136,9 +133,9 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                        a.nickname as creator_nickname,
                         a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.image_uri as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
                     COALESCE(m.quote_id, '') as quote_id,
@@ -156,9 +153,6 @@ impl OrderController {
                         COALESCE(qt.symbol, '') as quote_symbol,
                         COALESCE(qt.decimals, 18) as quote_decimals,
                         COALESCE(qt.image_uri, '') as quote_image_uri,
-                        fc.creator_fee_rate,
-                        fc.curve_protocol_fee_rate,
-                        fc.dex_protocol_fee_rate,
                         COALESCE(
                             (
                                 SELECT ph.price
@@ -184,10 +178,8 @@ impl OrderController {
                         ) as price_24h_ago
                     FROM token t
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN market m ON t.token_id = m.token_id
                     JOIN quote_token qt ON m.quote_id = qt.quote_id
-                    LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -257,9 +249,9 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                        a.nickname as creator_nickname,
                         a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.image_uri as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
                         COALESCE(m.quote_id, '') as quote_id,
@@ -277,9 +269,6 @@ impl OrderController {
                         COALESCE(qt.symbol, '') as quote_symbol,
                         COALESCE(qt.decimals, 18) as quote_decimals,
                         COALESCE(qt.image_uri, '') as quote_image_uri,
-                        fc.creator_fee_rate,
-                        fc.curve_protocol_fee_rate,
-                        fc.dex_protocol_fee_rate,
                         COALESCE(
                             (
                                 SELECT ph.price
@@ -309,9 +298,7 @@ impl OrderController {
                     JOIN token t        ON t.token_id = r.token_id
                     JOIN market m       ON m.token_id = r.token_id
                     JOIN account a      ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN quote_token qt ON m.quote_id = qt.quote_id
-                    LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -357,9 +344,9 @@ impl OrderController {
                         t.created_at,
                         t.creator,
                         t.token_holder_count as holder_count,
-                        COALESCE(ax.x_handle, a.nickname) as creator_nickname,
+                        a.nickname as creator_nickname,
                         a.bio as creator_bio,
-                        COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
+                        a.image_uri as creator_image_uri,
                         m.market_type,
                         COALESCE(m.pool_id, '') as market_id,
                     COALESCE(m.quote_id, '') as quote_id,
@@ -377,9 +364,6 @@ impl OrderController {
                         COALESCE(qt.symbol, '') as quote_symbol,
                         COALESCE(qt.decimals, 18) as quote_decimals,
                         COALESCE(qt.image_uri, '') as quote_image_uri,
-                        fc.creator_fee_rate,
-                        fc.curve_protocol_fee_rate,
-                        fc.dex_protocol_fee_rate,
                         COALESCE(
                             (
                                 SELECT ph.price
@@ -413,9 +397,7 @@ impl OrderController {
                     ) m
                     JOIN token t ON m.token_id = t.token_id
                     JOIN account a ON t.creator = a.account_id
-                    LEFT JOIN account_x ax ON a.account_id = ax.account_id
                     JOIN quote_token qt ON m.quote_id = qt.quote_id
-                    LEFT JOIN fee_config fc ON t.token_id = fc.token_id
                     LEFT JOIN LATERAL (
                         SELECT p.price
                         FROM price p
@@ -481,12 +463,8 @@ impl OrderController {
 impl From<OrderTokenRow> for OrderToken {
     fn from(row: OrderTokenRow) -> Self {
         let mut market_id = row.market_id.clone();
-        if market_id.is_empty() {
-            if row.market_type == "CURVE" {
-                market_id = V1_BONDING_CURVE.clone();
-            } else if row.market_type == "V2_CURVE" {
-                market_id = V2_BONDING_CURVE.clone();
-            }
+        if market_id.is_empty() && row.market_type == MarketType::Curve {
+            market_id = BONDING_CURVE.clone();
         }
 
         let percent = calculate_price_change_percent(
@@ -515,16 +493,9 @@ impl From<OrderTokenRow> for OrderToken {
                     image_uri: row.creator_image_uri,
                 },
                 is_cto: row.is_cto,
-                x_verification: None,
             },
             market_info: MarketInfo {
-                market_type: match row.market_type.as_str() {
-                    "CURVE" => MarketType::Curve,
-                    "DEX" => MarketType::Dex,
-                    "V2_CURVE" => MarketType::V2Curve,
-                    "V2_DEX" => MarketType::V2Dex,
-                    _ => MarketType::Curve,
-                },
+                market_type: row.market_type,
                 token_id: row.token_id,
                 quote_info: QuoteInfo {
                     quote_id: row.quote_id.clone(),
@@ -551,14 +522,6 @@ impl From<OrderTokenRow> for OrderToken {
                 ath_price_native: row.ath_price_quote.normalized().to_plain_string(),
                 ath_price_quote: row.ath_price_quote.normalized().to_plain_string(),
                 holder_count: row.holder_count,
-                fee_info: match row.market_type.as_str() {
-                    "V2_CURVE" | "V2_DEX" => Some(FeeInfo {
-                        creator_protocol_fee_rate: row.creator_fee_rate.unwrap_or(0),
-                        curve_protocol_fee_rate: row.curve_protocol_fee_rate.unwrap_or(0),
-                        dex_protocol_fee_rate: row.dex_protocol_fee_rate.unwrap_or(0),
-                    }),
-                    _ => None,
-                },
             },
             percent,
         }
@@ -621,7 +584,7 @@ mod tests {
 
         sqlx::query(
             "INSERT INTO market (market_type, token_id, price, quote_id, latest_trade_at, created_at)
-             VALUES ('V2_DEX', $1, 1, $2, 0, 0)
+             VALUES ('DEX', $1, 1, $2, 0, 0)
              ON CONFLICT (token_id) DO NOTHING",
         )
         .bind(token_id)
@@ -643,7 +606,7 @@ mod tests {
             "INSERT INTO swap
                 (account_id, token_id, market_type, is_buy, quote_amount, token_amount,
                  created_at, transaction_hash, tx_index, log_index)
-             VALUES ($1, $2, 'V2_DEX', true, $3::NUMERIC, 0, $4, $5, 0, 0)",
+             VALUES ($1, $2, 'DEX', true, $3::NUMERIC, 0, $4, $5, 0, 0)",
         )
         .bind(account_id)
         .bind(token_id)
@@ -673,7 +636,7 @@ mod tests {
     /// - 자격 swap이 있는 토큰만 노출(없으면 제외)
     /// - 더스트(임계 미만) swap은 "최근 거래"로 치지 않음 → 정렬에 영향 없음
     /// - total_count도 동일 기준으로 재계산
-    #[sqlx::test(migrations = "./migrations-test")]
+    #[sqlx::test(migrations = "./migrations")]
     async fn latest_trade_filters_by_quote_amount_and_orders_by_qualifying_swap(pool: PgPool) {
         let acc = addr("acc1");
         let quote = addr("9011");
