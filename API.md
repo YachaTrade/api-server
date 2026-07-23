@@ -44,7 +44,7 @@ This document provides the complete API specification for the NADS Pump API Serv
     "token_id": "0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c",
     "name": "NadEarth",
     "symbol": "NAT",
-    "image_uri": "https://storage.nadapp.net/coin/4e80d518-0533-4925-a8ef-cdf2c5ca56b8",
+    "image_uri": "https://storage.yacha.trade/coin/4e80d518-0533-4925-a8ef-cdf2c5ca56b8",
     "description": "Around the world!",
     "is_graduated": false,
     "is_nsfw": false,
@@ -56,7 +56,7 @@ This document provides the complete API specification for the NADS Pump API Serv
       "account_id": "0x9b834355d9EbcDFb291eAba6809B9E8D2C6b88d1",
       "nickname": "Creator Name",
       "bio": "Token creator",
-      "image_uri": "https://storage.nadapp.net/profile/..."
+      "image_uri": "https://storage.yacha.trade/profile/..."
     }
   },
   "market_info": {
@@ -478,7 +478,7 @@ GET /trade/metrics/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c?timeframes=1,5,15,
 ```json
 {
   "is_nsfw": false,
-  "image_uri": "https://storage.nadapp.net/coin/550e8400-e29b-41d4-a716-446655440000.png"
+  "image_uri": "https://storage.yacha.trade/coin/550e8400-e29b-41d4-a716-446655440000.png"
 }
 ```
 
@@ -574,7 +574,7 @@ The following content categories are detected with respective confidence thresho
 
 ```json
 {
-  "image_uri": "https://storage.nadapp.net/coin/550e8400-e29b-41d4-a716-446655440000.png",
+  "image_uri": "https://storage.yacha.trade/coin/550e8400-e29b-41d4-a716-446655440000.png",
   "name": "Sample Token",
   "symbol": "SAMPLE",
   "description": "A sample token for demonstration purposes",
@@ -588,7 +588,7 @@ The following content categories are detected with respective confidence thresho
 
 | Field       | Type   | Required | Validation Rules                                          | Description                           |
 | ----------- | ------ | -------- | --------------------------------------------------------- | ------------------------------------- |
-| image_uri   | String | Yes      | Must be from https://storage.nadapp.net/, cannot be empty | Image URL from /metadata/image upload |
+| image_uri   | String | Yes      | Must be from https://storage.yacha.trade/, cannot be empty | Image URL from /metadata/image upload |
 | name        | String | Yes      | Cannot be empty or whitespace                             | Token name                            |
 | symbol      | String | Yes      | Cannot be empty or whitespace                             | Token symbol                          |
 | description | String | Yes      | Cannot be empty or whitespace                             | Token description                     |
@@ -602,12 +602,12 @@ The following content categories are detected with respective confidence thresho
 
 ```json
 {
-  "metadata_uri": "https://storage.nadapp.net/metadata/550e8400-e29b-41d4-a716-446655440000.json",
+  "metadata_uri": "https://storage.yacha.trade/metadata/550e8400-e29b-41d4-a716-446655440000.json",
   "metadata": {
     "name": "Sample Token",
     "symbol": "SAMPLE",
     "description": "A sample token for demonstration purposes",
-    "image_uri": "https://storage.nadapp.net/coin/550e8400-e29b-41d4-a716-446655440000.png",
+    "image_uri": "https://storage.yacha.trade/coin/550e8400-e29b-41d4-a716-446655440000.png",
     "website": "https://example.com",
     "twitter": "https://x.com/example",
     "telegram": "https://t.me/example",
@@ -637,7 +637,7 @@ Invalid Image URI (Status: 400)
 
 ```json
 {
-  "error": "Invalid image URI - must be from https://storage.nadapp.net/"
+  "error": "Invalid image URI - must be from https://storage.yacha.trade/"
 }
 ```
 
@@ -702,7 +702,7 @@ Upload Failed (Status: 500)
   "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
   "name": "My Token",
   "symbol": "MTK",
-  "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+  "metadata_uri": "https://storage.yacha.trade/metadata/94a412d2-b599-4bb0-b026-b14c4036c58c.json"
 }
 ```
 
@@ -782,7 +782,7 @@ curl -X POST https://api.nadapp.net/token/salt \
     "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
     "name": "My Token",
     "symbol": "MTK",
-    "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+    "metadata_uri": "https://storage.yacha.trade/metadata/94a412d2-b599-4bb0-b026-b14c4036c58c.json"
   }'
 ```
 
@@ -853,7 +853,7 @@ curl -X POST https://api.nadapp.net/token/salt \
 #### Upload Metadata API (`/metadata/metadata`)
 
 - **Added** strict validation for required fields (name, symbol, description cannot be empty)
-- **Added** domain validation for image_uri (must be from storage.nadapp.net)
+- **Added** domain validation for image_uri (must be from storage.yacha.trade)
 - **Added** URL format validation (HTTPS only, specific domain requirements)
 - **Changed** Twitter validation to require `x.com` domain
 - **Added** NSFW status inheritance from image upload

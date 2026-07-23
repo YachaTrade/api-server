@@ -76,7 +76,7 @@ const data = await response.json();
 
 ```json
 {
-  "image_uri": "https://storage.nadapp.net/image-94a412d2-b599-4bb0-b026-b14c4036c58c.png",
+  "image_uri": "https://storage.yacha.trade/coin/94a412d2-b599-4bb0-b026-b14c4036c58c",
   "is_nsfw": false
 }
 ```
@@ -122,7 +122,7 @@ POST /metadata/metadata
 
 ```json
 {
-  "image_uri": "https://storage.nadapp.net/image-94a412d2-b599-4bb0-b026-b14c4036c58c.png",
+  "image_uri": "https://storage.yacha.trade/coin/94a412d2-b599-4bb0-b026-b14c4036c58c",
   "name": "My Token",
   "symbol": "MTK",
   "description": "An awesome token for the NAD community",
@@ -150,7 +150,7 @@ POST /metadata/metadata
 - All URLs must use HTTPS
 - Twitter URLs must contain `x.com`
 - Telegram URLs must contain `t.me`
-- Image URI must be from the allowed domain (e.g., `https://storage.nadapp.net/`)
+- Image URI must be from the configured R2 public domain (default: `https://storage.yacha.trade/`)
 
 **Example (cURL)**:
 
@@ -158,7 +158,7 @@ POST /metadata/metadata
 curl -X POST https://api.nad.fun/metadata/metadata \
   -H "Content-Type: application/json" \
   -d '{
-    "image_uri": "https://storage.nadapp.net/image-94a412d2-b599-4bb0-b026-b14c4036c58c.png",
+    "image_uri": "https://storage.yacha.trade/coin/94a412d2-b599-4bb0-b026-b14c4036c58c",
     "name": "My Token",
     "symbol": "MTK",
     "description": "An awesome token for the NAD community",
@@ -198,12 +198,12 @@ const data = await response.json();
 
 ```json
 {
-  "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json",
+  "metadata_uri": "https://storage.yacha.trade/metadata/94a412d2-b599-4bb0-b026-b14c4036c58c.json",
   "metadata": {
     "name": "My Token",
     "symbol": "MTK",
     "description": "An awesome token for the NAD community",
-    "image_uri": "https://storage.nadapp.net/image-94a412d2-b599-4bb0-b026-b14c4036c58c.png",
+    "image_uri": "https://storage.yacha.trade/coin/94a412d2-b599-4bb0-b026-b14c4036c58c",
     "website": "https://mytoken.com",
     "twitter": "https://x.com/mytoken",
     "telegram": "https://t.me/mytoken",
@@ -228,7 +228,7 @@ const data = await response.json();
 
 ```json
 {
-  "error": "Invalid image URI - must be from https://storage.nadapp.net/"
+  "error": "Invalid image URI - must be from https://storage.yacha.trade/"
 }
 ```
 
@@ -255,7 +255,7 @@ POST /token/salt
   "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
   "name": "My Token",
   "symbol": "MTK",
-  "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+  "metadata_uri": "https://storage.yacha.trade/metadata/94a412d2-b599-4bb0-b026-b14c4036c58c.json"
 }
 ```
 
@@ -277,7 +277,7 @@ curl -X POST https://api.nad.fun/token/salt \
     "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
     "name": "My Token",
     "symbol": "MTK",
-    "metadata_uri": "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+    "metadata_uri": "https://storage.yacha.trade/metadata/94a412d2-b599-4bb0-b026-b14c4036c58c.json"
   }'
 ```
 

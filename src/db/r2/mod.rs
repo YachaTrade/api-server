@@ -9,8 +9,7 @@ use bytes::Bytes;
 
 use tracing::{error, info};
 
-/// Public custom-domain base every object uploaded here is served from.
-pub const PUBLIC_BASE_URL: &str = "https://storage.nadapp.net/";
+use crate::config::R2_PUBLIC_BASE_URL;
 
 // R2Client struct for managing AWS R2 and CloudFront operations
 // Handles file uploads, downloads, and CDN cache invalidation
@@ -85,7 +84,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
+                let r2_url = format!("{}{key}", R2_PUBLIC_BASE_URL.as_str());
                 Ok(r2_url)
             }
             Err(err) => {
@@ -138,7 +137,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
+                let r2_url = format!("{}{key}", R2_PUBLIC_BASE_URL.as_str());
                 Ok(r2_url)
             }
             Err(err) => {
@@ -186,7 +185,7 @@ impl R2Client {
                 );
 
                 // R2 Custom Domain URL
-                let r2_url = format!("{PUBLIC_BASE_URL}{key}");
+                let r2_url = format!("{}{key}", R2_PUBLIC_BASE_URL.as_str());
                 Ok(r2_url)
             }
             Err(err) => {
