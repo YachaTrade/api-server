@@ -61,10 +61,8 @@ struct OrderTokenRow {
     price_24h_ago: BigDecimal,
 }
 
-/// latest_trade 더스트 필터 임계값: swap.quote_amount(네이티브/MON 측)이
-/// 이 값(0.1 MON = 10^17 wei) 이상인 거래만 "최근 거래"로 인정한다.
-/// 미만만 있는(또는 거래가 없는) 토큰은 latest_trade 목록에서 제외된다.
-const LATEST_TRADE_MIN_QUOTE_AMOUNT: i64 = 100_000_000_000_000_000;
+/// latest_trade에서 최근 거래로 인정할 최소 swap.quote_amount.
+const LATEST_TRADE_MIN_QUOTE_AMOUNT: i64 = 10;
 
 pub struct OrderController {
     db: Arc<PostgresDatabase>,
@@ -220,9 +218,8 @@ impl OrderController {
                         FROM market m
                         JOIN token t ON t.token_id = m.token_id
                         JOIN LATERAL (
-                            -- 최근 거래 = swap 기준. quote_amount(네이티브/MON 측)이
-                            -- 0.1 MON(10^17 wei) 이상인 swap만 "거래"로 인정한다.
-                            -- 자격 swap이 없는 토큰은 INNER JOIN이라 목록에서 제외된다.
+                            -- quote_amount가 10 wei 이상인 가장 최근 swap을
+                            -- "최근 거래"로 인정한다. 자격 swap이 없는 토큰은 제외된다.
                             SELECT s.created_at AS last_trade_at
                             FROM swap s
                             WHERE s.token_id = t.token_id
@@ -430,10 +427,10 @@ impl OrderController {
         order_type: &TokenOrderType,
         is_nsfw: bool,
     ) -> Result<i64> {
-        // NOTE: latest_trade는 listing에서 swap 기준(quote_amount >= 0.1 MON)으로 토큰을
-        // 추가 필터하지만, total_count는 비싼 COUNT(DISTINCT swap)(수백 ms) 대신 denormalized
-        // token_count(트리거 유지, O(1))를 그대로 쓴다. 자격 미달 토큰(~2.6%)만큼 약간
-        // 과대계상되나 페이지네이션 용도로 충분하다.
+        // NOTE: latest_trade는 quote_amount >= 10 wei인 swap이 없는 토큰을 제외하지만,
+        // total_count는 비싼 COUNT(DISTINCT swap) 대신 denormalized token_count
+        // (트리거 유지, O(1))를 그대로 쓴다. 자격 거래가 없는 토큰만큼
+        // 과대계상될 수 있다.
         match order_type {
             _ => {
                 // is_nsfw = true: return all tokens (total_count)
@@ -632,32 +629,32 @@ mod tests {
         .unwrap();
     }
 
-    /// latest_trade는 swap 기준(quote_amount >= 0.1 MON = 10^17 wei):
+    /// latest_trade는 swap.quote_amount >= 10 wei 기준으로:
     /// - 자격 swap이 있는 토큰만 노출(없으면 제외)
-    /// - 더스트(임계 미만) swap은 "최근 거래"로 치지 않음 → 정렬에 영향 없음
-    /// - total_count도 동일 기준으로 재계산
+    /// - 가장 최근 자격 swap 시각으로 정렬
+    /// - total_count는 swap 필터와 무관한 token_count 값을 사용
     #[sqlx::test(migrations = "./migrations")]
-    async fn latest_trade_filters_by_quote_amount_and_orders_by_qualifying_swap(pool: PgPool) {
+    async fn latest_trade_filters_by_minimum_amount_and_orders_by_qualifying_swap(pool: PgPool) {
         let acc = addr("acc1");
         let quote = addr("9011");
-        let t_big = addr("b161"); // 자격 거래 created_at=1000, 이후 더스트 created_at=5000
-        let t_big2 = addr("b162"); // 자격 거래 created_at=2000 (더 최신)
-        let t_dust = addr("d057"); // 더스트만 → 제외
+        let t_big = addr("b161"); // 자격 거래 created_at=1000, 이후 9 wei 거래
+        let t_big2 = addr("b162"); // 자격 거래 created_at=2000
+        let t_small = addr("d057"); // 9 wei 거래만 있어 제외
         let t_none = addr("0e0e"); // 거래 없음 → 제외
 
         seed_account(&pool, &acc).await;
         seed_quote(&pool, &quote).await;
-        for t in [&t_big, &t_big2, &t_dust, &t_none] {
+        for t in [&t_big, &t_big2, &t_small, &t_none] {
             seed_token_market(&pool, t, &acc, &quote).await;
         }
         // 반환되는 토큰만 price_history 필요 (price_24h_ago는 non-Option 디코드).
         seed_price_history(&pool, &t_big, 1).await;
         seed_price_history(&pool, &t_big2, 2).await;
 
-        seed_swap(&pool, &acc, &t_big, "100000000000000000", 1000, "big_q").await; // == 임계 → 자격
-        seed_swap(&pool, &acc, &t_big, "50000000000000000", 5000, "big_d").await; // 더스트(최신이나 무시)
-        seed_swap(&pool, &acc, &t_big2, "200000000000000000", 2000, "big2_q").await; // 자격
-        seed_swap(&pool, &acc, &t_dust, "90000000000000000", 9000, "dust").await; // 더스트만
+        seed_swap(&pool, &acc, &t_big, "10", 1000, "big_q").await;
+        seed_swap(&pool, &acc, &t_big, "9", 5000, "big_small").await;
+        seed_swap(&pool, &acc, &t_big2, "2000", 2000, "big2_q").await;
+        seed_swap(&pool, &acc, &t_small, "9", 9000, "small").await;
 
         let controller = make_controller(pool);
         let pagination = PaginationParams {
@@ -677,13 +674,17 @@ mod tests {
             .map(|r| r.token_info.token_id.as_str())
             .collect();
 
-        // 자격 거래 시각 DESC: t_big2(2000) → t_big(1000). 더스트 created_at=5000은 무시.
+        // 최근 자격 거래 시각 DESC: t_big2(2000) → t_big(1000).
+        // 9 wei 거래는 더 최신이어도 무시한다.
         assert_eq!(
             ids,
             vec![t_big2.as_str(), t_big.as_str()],
-            "자격 거래(>=0.1 MON) 있는 토큰만, 그 거래 시각 DESC로 정렬"
+            "10 wei 이상 swap이 있는 토큰을 최근 자격 거래 시각 DESC로 정렬"
         );
-        assert!(!ids.contains(&t_dust.as_str()), "더스트만 있는 토큰은 제외");
+        assert!(
+            !ids.contains(&t_small.as_str()),
+            "10 wei 미만 거래만 있으면 제외"
+        );
         assert!(!ids.contains(&t_none.as_str()), "거래 없는 토큰은 제외");
 
         // total_count는 denormalized token_count(sfw_count) — listing의 swap 필터와
