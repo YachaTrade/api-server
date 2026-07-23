@@ -7,7 +7,7 @@ use bytes::Bytes;
 use tracing::{error, info};
 
 use crate::{
-    config::RPC_URL,
+    config::{R2_PUBLIC_BASE_URL, RPC_URL},
     controllers::cms::CmsController,
     db::{postgres::PostgresDatabase, r2::R2Client},
     result::AppError,
@@ -28,6 +28,8 @@ sol! {
         function tokenURI() external view returns (string);
     }
 }
+
+const LEGACY_R2_METADATA_PREFIX: &str = "https://storage.nadapp.net/metadata/";
 
 pub struct CmsService {
     postgres: Arc<PostgresDatabase>,
@@ -291,9 +293,11 @@ impl CmsService {
         metadata_uri: &str,
         metadata: &TokenMetadata,
     ) -> Result<(), AppError> {
-        // Extract metadata_id from URI (e.g., https://storage.nadapp.net/metadata/UUID.json)
+        // Extract metadata_id from the configured public R2 metadata URL.
+        let metadata_prefix = format!("{}metadata/", R2_PUBLIC_BASE_URL.as_str());
         let metadata_id = metadata_uri
-            .strip_prefix("https://storage.nadapp.net/metadata/")
+            .strip_prefix(&metadata_prefix)
+            .or_else(|| metadata_uri.strip_prefix(LEGACY_R2_METADATA_PREFIX))
             .and_then(|s| s.strip_suffix(".json"))
             .ok_or_else(|| AppError::BadRequest("Invalid metadata URI format".to_string()))?;
 

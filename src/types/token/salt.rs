@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::types::metadata::{
-    MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH,
-};
 use crate::utils::valid_account_id;
+use crate::{
+    config::R2_PUBLIC_BASE_URL,
+    types::metadata::{MAX_NAME_LENGTH, MAX_SYMBOL_LENGTH, MIN_NAME_LENGTH, MIN_SYMBOL_LENGTH},
+};
 
 /// Request parameters for mining a salt to generate a vanity token address
 /// Matches Solidity's TokenCreationParams struct
@@ -24,7 +25,7 @@ pub struct MineSaltRequest {
 
     /// Token metadata URI
     #[schema(
-        example = "https://storage.nadapp.net/metadata-94a412d2-b599-4bb0-b026-b14c4036c58c.json"
+        example = "https://storage.yacha.trade/metadata/94a412d2-b599-4bb0-b026-b14c4036c58c.json"
     )]
     pub metadata_uri: String,
 }
@@ -56,12 +57,10 @@ impl MineSaltRequest {
             return Err("Symbol must be alphanumeric".to_string());
         }
         // metadata_uri domain validation
-        let allowed_domain = std::env::var("ALLOWED_IMAGE_DOMAIN")
-            .unwrap_or_else(|_| "https://storage.nadapp.net/".to_string());
-        if !self.metadata_uri.starts_with(&allowed_domain) {
+        if !self.metadata_uri.starts_with(R2_PUBLIC_BASE_URL.as_str()) {
             return Err(format!(
                 "Invalid metadata URI domain, must start with {}",
-                allowed_domain
+                R2_PUBLIC_BASE_URL.as_str()
             ));
         }
         Ok(())
@@ -102,7 +101,7 @@ mod tests {
             "creator": "0x742d35Cc6634C0532925a3b844Bc9e7595f70143",
             "name": "My Token",
             "symbol": "MTK",
-            "metadata_uri": "https://storage.nadapp.net/metadata.json",
+            "metadata_uri": "https://storage.yacha.trade/metadata/token.json",
             "version": "V2"
         }))
         .unwrap();

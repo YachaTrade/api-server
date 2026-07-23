@@ -417,7 +417,7 @@ curl "https://api.nad.fun/events?fromBlock=$FROM&toBlock=$LATEST"
 
 ```json
 {
-  "image": "https://storage.nadapp.net/coin/4e80d518-0533-4925-a8ef-cdf2c5ca56b8",
+  "image": "https://storage.yacha.trade/coin/4e80d518-0533-4925-a8ef-cdf2c5ca56b8",
   "description": "Around the world!",
   "website": "https://testnet.nad.fun/v3/tokens/0xF716AE57Ce5fAf803D021c81E2Bbe1AD622fE85c",
   "twitter": "https://x.com/nadearth",
