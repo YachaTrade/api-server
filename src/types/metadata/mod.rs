@@ -1,6 +1,5 @@
-use crate::result::AppError;
+use crate::{config::R2_PUBLIC_BASE_URL, result::AppError};
 use serde::{Deserialize, Serialize};
-use std::env;
 use utoipa::ToSchema;
 
 // Validation constants
@@ -113,13 +112,10 @@ impl TokenMetadata {
         }
 
         // Validate image URL domain
-        let allowed_image_domain = env::var("ALLOWED_IMAGE_DOMAIN")
-            .unwrap_or_else(|_| "https://storage.nadapp.net/".to_string());
-
-        if !self.image_uri.starts_with(&allowed_image_domain) {
+        if !self.image_uri.starts_with(R2_PUBLIC_BASE_URL.as_str()) {
             return Err(AppError::BadRequest(format!(
                 "Invalid image URI - must be from {}",
-                allowed_image_domain
+                R2_PUBLIC_BASE_URL.as_str()
             )));
         }
 

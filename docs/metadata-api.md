@@ -23,7 +23,7 @@ Metadata API는 토큰 생성에 필요한 이미지와 메타데이터를 처�
 ```json
 {
   "is_nsfw": false,
-  "image_url": "https://storage.nadapp.net/coin/uuid-v4-string"
+  "image_url": "https://storage.yacha.trade/coin/uuid-v4-string"
 }
 ```
 
@@ -49,7 +49,7 @@ Metadata API는 토큰 생성에 필요한 이미지와 메타데이터를 처�
 - **Body**:
 ```json
 {
-  "image_url": "https://storage.nadapp.net/coin/uuid-v4-string",  // 필수: 이미지 업로드 API에서 반환된 URL
+  "image_url": "https://storage.yacha.trade/coin/uuid-v4-string",  // 필수: 이미지 업로드 API에서 반환된 URL
   "name": "Token Name",                                          // 필수: 토큰 이름
   "symbol": "SYMBOL",                                           // 필수: 토큰 심볼
   "description": "Token description",                           // 필수: 토큰 설명
@@ -76,8 +76,8 @@ Metadata API는 토큰 생성에 필요한 이미지와 메타데이터를 처�
 - HTTP로 시작하는 URL은 거부됨
 
 **이미지 URL 제한:**
-- `image_url`은 반드시 환경 변수 `ALLOWED_IMAGE_DOMAIN`에 설정된 도메인으로 시작해야 함
-- 기본값: `https://storage.nadapp.net/`
+- `image_url`은 반드시 환경 변수 `R2_PUBLIC_BASE_URL`에 설정된 도메인으로 시작해야 함
+- 기본값: `https://storage.yacha.trade/`
 
 **API 호출 순서:**
 1. 먼저 `/metadata/image`로 이미지 업로드
@@ -87,12 +87,12 @@ Metadata API는 토큰 생성에 필요한 이미지와 메타데이터를 처�
 #### 응답
 ```json
 {
-  "metadata_url": "https://storage.nadapp.net/metadata/uuid-v4-string",
+  "metadata_url": "https://storage.yacha.trade/metadata/uuid-v4-string",
   "metadata": {
     "name": "Token Name",
     "symbol": "SYMBOL",
     "description": "Token description",
-    "image_url": "https://storage.nadapp.net/coin/uuid-v4-string",
+    "image_url": "https://storage.yacha.trade/coin/uuid-v4-string",
     "website": "https://example.com",
     "twitter": "https://x.com/username",
     "telegram": "https://t.me/username",
@@ -119,7 +119,7 @@ Metadata API는 토큰 생성에 필요한 이미지와 메타데이터를 처�
 - `name`: 공백이 아닌 문자열
 - `symbol`: 공백이 아닌 문자열
 - `description`: 공백이 아닌 문자열
-- `image_url`: 공백이 아니며 `ALLOWED_IMAGE_DOMAIN`으로 시작
+- `image_url`: 공백이 아니며 `R2_PUBLIC_BASE_URL`로 시작
 
 ### URL 검증 규칙
 - **Website**: `https://`로 시작 (보안상 HTTPS만 허용)
@@ -137,7 +137,7 @@ Metadata API는 토큰 생성에 필요한 이미지와 메타데이터를 처�
 
 ```env
 # 허용된 이미지 도메인
-ALLOWED_IMAGE_DOMAIN=https://storage.nadapp.net/
+R2_PUBLIC_BASE_URL=https://storage.yacha.trade/
 
 # NSFW 캐시 만료 시간 (초)
 NSFW_STATUS_EXPIRATION=180
@@ -169,7 +169,7 @@ CLOUDFLARE_ACCOUNT_ID=your-account-id
    curl -X POST http://localhost:8000/metadata/metadata \
      -H "Content-Type: application/json" \
      -d '{
-       "image_url": "https://storage.nadapp.net/coin/12345",
+       "image_url": "https://storage.yacha.trade/coin/12345",
        "name": "My Token",
        "symbol": "MTK",
        "description": "This is my awesome token",

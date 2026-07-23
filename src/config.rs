@@ -67,6 +67,15 @@ lazy_static! {
     pub static ref RPC_URL: String = env::var("RPC_URL")
         .expect("RPC_URL must be set");
 
+    // Public custom domain used for every object uploaded to R2.
+    pub static ref R2_PUBLIC_BASE_URL: String = {
+        let raw = env::var("R2_PUBLIC_BASE_URL")
+            .unwrap_or_else(|_| "https://storage.yacha.trade/".to_string());
+        let trimmed = raw.trim().trim_end_matches('/');
+        assert!(!trimmed.is_empty(), "R2_PUBLIC_BASE_URL must not be empty");
+        format!("{trimmed}/")
+    };
+
     pub static ref BONDING_CURVE: String = env::var("BONDING_CURVE")
         .expect("BONDING_CURVE must be set");
     pub static ref TOKEN_IMPL: String = env::var("TOKEN_IMPL")
