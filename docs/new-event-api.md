@@ -151,6 +151,14 @@ interface AccountInfo {
 | `SELL` | 토큰 매도 이벤트 |
 | `CREATE` | 새 토큰 생성 이벤트 |
 
+### BUY/SELL 노출 기준
+
+- 각 market의 `quote_token.decimals`를 기준으로 `0.0001 quote token` 이상인
+  BUY/SELL 이벤트만 노출됩니다.
+- 예: WETH(18 decimals)는 raw `100000000000000` 이상, 6-decimal quote
+  token은 raw `100` 이상입니다.
+- 응답의 `amount`는 기존과 같이 raw quote amount 문자열입니다.
+
 ---
 
 ## 캐싱
