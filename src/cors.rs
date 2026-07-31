@@ -7,6 +7,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use url::Url;
 
+const YACHA_APEX_DOMAIN: &str = "yacha.trade";
 const YACHA_DOMAIN_SUFFIX: &str = ".yacha.trade";
 
 fn is_canonical_origin(origin: &str, url: &Url) -> bool {
@@ -32,18 +33,16 @@ fn is_valid_dns_label(label: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
 }
 
-fn is_yacha_subdomain_origin(url: &Url) -> bool {
+fn is_yacha_origin(url: &Url) -> bool {
     let Some(host) = url.host_str() else {
         return false;
     };
-    let Some(subdomains) = host.strip_suffix(YACHA_DOMAIN_SUFFIX) else {
-        return false;
+    let host_allowed = match host.strip_suffix(YACHA_DOMAIN_SUFFIX) {
+        Some(subdomains) => subdomains.split('.').all(is_valid_dns_label),
+        None => host == YACHA_APEX_DOMAIN,
     };
 
-    url.scheme() == "https"
-        && url.port().is_none()
-        && host.len() <= 253
-        && subdomains.split('.').all(is_valid_dns_label)
+    url.scheme() == "https" && url.port().is_none() && host.len() <= 253 && host_allowed
 }
 
 pub(crate) fn is_origin_allowed(origin: &str) -> bool {
@@ -55,7 +54,7 @@ pub(crate) fn is_origin_allowed(origin: &str) -> bool {
         return false;
     }
 
-    is_yacha_subdomain_origin(&url)
+    is_yacha_origin(&url)
         || (url.scheme() == "http" && url.host_str() == Some("localhost") && url.port().is_some())
 }
 
@@ -130,7 +129,12 @@ mod tests {
             ("http://localhost:3000/path", false),
             ("http://localhost:3000?query", false),
             ("http://localhost:3000#fragment", false),
-            ("https://yacha.trade", false),
+            ("https://yacha.trade", true),
+            ("http://yacha.trade", false),
+            ("https://yacha.trade:443", false),
+            ("https://yacha.trade:8443", false),
+            ("https://user@yacha.trade", false),
+            ("https://yacha.trade/path", false),
             ("http://dev.yacha.trade", false),
             ("https://dev.yacha.trade:443", false),
             ("https://dev.yacha.trade:8443", false),
